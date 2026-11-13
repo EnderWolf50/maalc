@@ -40,7 +40,7 @@ const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).inc
 /** Whether a problem's path is the field's or under it: what the field's frame marks ("teams/1" marks "teams/1/name"). */
 const within = (path: string, field: string) => path === field || path.startsWith(field + "/");
 /** While the field at settings path `at` is typed in: `p` with the fields it marked before the last keystroke (`before`, the
- * problems shown then), or nothing for a problem the typing made. A problem is the one of its kind it was by a field it marks
+ * problems taken as shown then), or nothing for a problem the typing made. A problem is the one of its kind it was by a field it marks
  * outside the typed one, not by its words, which name what the user is typing: the typed field's own mark may now be another
  * problem of the kind (TEAMS #1 typed into #12, one clash for another). A problem of the typed field alone is matched by it. */
 function asBefore(p: Problem, at: string, before: Problem[]): Problem[] {
@@ -63,9 +63,9 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  // The field being typed in, its settings path ("" for none) and the problems shown before its last keystroke: a mark the
-  // typing makes waits until the field loses focus, a save is tried or another writer changes the file (asBefore); null: every
-  // problem shows (#717).
+  // The field being typed in, its settings path ("" for none) and the problems taken as shown before its last keystroke
+  // (remember): a mark the typing makes waits until the field loses focus, a save is tried or another writer changes the file
+  // (asBefore); null: every problem shows (#717).
   const [typed, setTyped] = useState<{ field: EventTarget; at: string; before: Problem[] } | null>(null);
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
@@ -198,6 +198,12 @@ export default function App() {
   // in it (Enter closes its box) fires no blur.
   const held = typed && typed.field === document.activeElement ? typed : null;
   const shown = held ? problems.flatMap((p) => asBefore(p, held.at, held.before)) : problems;
+  /** What the hold takes as shown from now on: `now`, and while a schema error stops the checks across objects (validate),
+   * what they showed before it, so that they show again at once when it is typed away. */
+  const remember = (now: Problem[]) => {
+    const stopped = held && problems.some((p) => p.say.key === "problem.schema");
+    return [...(stopped ? held.before.filter((p) => p.say.key !== "problem.schema") : []), ...now];
+  };
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -241,7 +247,8 @@ export default function App() {
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
-    setTyped(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
+    // a save tried shows every problem, also one still being typed (Ctrl+S in the field), and the hold takes them as shown
+    setTyped(held && { ...held, before: remember(problems) });
     setFailed(false);
     setRefused(false);
     try {
@@ -364,10 +371,7 @@ export default function App() {
         onChange={(e) => {
           if (!(e.target === document.activeElement && typesText(e.target))) return;
           const at = (e.target as HTMLElement).closest<HTMLElement>("[data-path]")?.dataset.path ?? "";
-          // a schema error stops the checks across objects (validate): what they showed is kept for when it is typed away
-          const crossHidden = held && problems.some((p) => p.say.key === "problem.schema")
-            ? held.before.filter((p) => p.say.key !== "problem.schema") : [];
-          setTyped({ field: e.target, at, before: [...crossHidden, ...shown] });
+          setTyped({ field: e.target, at, before: remember(shown) });
         }}
         onBlur={() => setTyped(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>

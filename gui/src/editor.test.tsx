@@ -236,6 +236,20 @@ describe("a problem shows while editing, before any save", () => {
     expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
   });
 
+  test("so it does after a save the schema error refused, typed in the same field", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 4 });
+    const user = await openOn(s, zh["tab.teams"]);
+    await pickInList(user, "Tc");
+    await user.type(slot(), "5");
+    expect(ctrlS()).toBe(true);
+    await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
+    expect(slot()).toHaveAttribute("aria-invalid", "true"); // the save shows the schema error
+    await user.keyboard("{Backspace}");
+    expect(bad()).toEqual([true, true, false]);
+  });
+
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
     const s = settings();
     s.teams.push({ ...newTeam(3, "Tc"), id: "c" });
