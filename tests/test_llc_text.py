@@ -6,7 +6,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {"gift_search": ROOT / "assets/resource/base/data/gift_search.json",
-         "gift_recipes": ROOT / "assets/resource/base/data/gift_recipes.json", "graces": ROOT / "gui/src/graces.json"}
+         "gift_recipes": ROOT / "assets/resource/base/data/gift_recipes.json", "graces": ROOT / "gui/src/graces.json",
+         "gift_effects": ROOT / "gui/src/gift_effects.json"}
 DATA = {k: json.loads(p.read_text(encoding="utf-8")) for k, p in FILES.items()}
 
 
@@ -22,6 +23,25 @@ def test_every_gift_and_grace_has_a_chinese_name_and_the_graces_their_effects():
     for g in graces:
         assert g["zh"] and set(g["effects"]) == {"base", "plus", "plus2"}, g["en"]
         assert all(g["effects"][level] and all(g["effects"][level]) for level in g["effects"]), g["en"]
+
+
+def test_every_gift_search_gift_has_its_effect_in_english_and_chinese_as_plain_text():
+    effects = DATA["gift_effects"]["effects"]
+    assert list(effects) == [str(g["id"]) for g in DATA["gift_search"]["gifts"]]
+    for gid, e in effects.items():
+        assert e["en"] and e["zh"], gid
+        for text in e.values():
+            # no markup and no keyword left as the game's tag ([Combustion] is shown as its name, Burn / 燒傷)
+            assert "<" not in text and "[Combustion]" not in text and "[Laceration]" not in text, gid
+    assert effects["9053"]["en"].startswith("First Turn Start of a wave: inflict 5 Burn Potency and +3 Burn Count")
+    assert "燒傷" in effects["9053"]["zh"]
+
+
+def test_effect_text_names_the_keywords_drops_markup_and_keeps_a_bracketed_note():
+    import llc_text
+    names = {"Combustion": "Burn"}
+    assert llc_text.effect_text("inflict 5 [Combustion] Potency\n\n<noparse>Dawn Office</noparse> [Cannot Stack]", names) == (
+        "inflict 5 Burn Potency\n\nDawn Office [Cannot Stack]")
 
 
 def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_the_wiki():
@@ -62,6 +82,17 @@ def test_an_effect_missing_a_value_its_template_needs_is_an_error():
     import llc_text
     with pytest.raises(ValueError):
         llc_text.effect_line("获得{0}层", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"})
+
+
+def test_the_gift_effects_match_the_llc_release_and_the_client_text_when_both_are_there():
+    import llc_text
+    from local_dir import local_dir
+    zip_path = local_dir("llc") / f"{DATA['gift_effects']['zh_release']}.zip"
+    unpack = local_dir("unpack")
+    if not (zip_path.is_file() and (unpack / "raw/Localize/en").is_dir()):
+        pytest.skip("release zip or unpacked client data missing")
+    ids = [g["id"] for g in DATA["gift_search"]["gifts"]]
+    assert llc_text.gift_effects(zipfile.ZipFile(zip_path), unpack, ids) == DATA["gift_effects"]["effects"]
 
 
 def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_there():

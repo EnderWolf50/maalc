@@ -1,6 +1,8 @@
-// Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons.
+// Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons
+// (and, for the Gift Search page's, their effect text).
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
+import effects from "./gift_effects.json";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { SEARCH_GIFTS, SHOP_GIFTS, VESTIGES, parseThemePacks } from "./model";
 
@@ -30,6 +32,11 @@ export const wantable = (g: CatalogGift) => g.kind === "buyable" || g.kind === "
 
 /** The gift's name in the GUI's language, English when the data has no Chinese one. */
 export const giftName = (g: CatalogGift, zh: boolean) => (zh && g.zh ? g.zh : g.en);
+
+const EFFECTS: Record<string, { en: string; zh: string }> = effects.effects;
+/** The gift's effect text in the GUI's language: the game's, for the Gift Search page's gifts (gift_effects.json, #721); none
+ * for the others. */
+export const giftEffect = (id: number, zh: boolean): string | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
 
 const ICONS = import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" });
 /** The icon's URL (assets/.../gift_icons/<id>.webp). */

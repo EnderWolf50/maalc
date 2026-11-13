@@ -3,7 +3,8 @@
 Usage: uv run --group unpack python tools/gift_icons.py
 Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"). One icon per gift id (the GUI lists all but the extra gifts): the 320 of gift_search.json,
 the 60 fusion gifts, 12 recipe materials and 67 extra gifts (#332) of gift_recipes.json and the 5 vestiges (9991-9995). The icon is the game's EgoGiftIcon
-sprite with its transparency (the image/GiftSearch templates are green-filled for matching and stay as they are), 56 px, WebP.
+sprite with its transparency (the image/GiftSearch templates are green-filled for matching and stay as they are), 112 px, WebP:
+the GUI shows a tile's icon at 52 CSS px, 104 device px on a 2x screen, which a 56 px icon left soft (#721).
 `index.json` lists the ids ({id: file}). Run it as a `bench` ticket (tools/live/queue.py): it opens the UnityCache bundles
 (the first run indexes them, ~12 GB; the quarterly rerun is docs/spec/05-game-data.md section 8).
 """
@@ -17,7 +18,7 @@ from local_dir import local_dir
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "gift_icons"
-SIZE = 56
+SIZE = 112
 QUALITY = 72
 
 

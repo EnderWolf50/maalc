@@ -15,6 +15,7 @@ import { sayProblem, validate, type Problem } from "./validate";
 
 export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
+  ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -22,13 +23,13 @@ export const TABS = [
   ["themepacks", "tab.themepacks", ThemePackTab, ["theme_pack_plans"]],
   ["events", "tab.events", EventsTab, ["event_overrides"]],
   ["trials", "tab.trials", TrialsTab, ["trial_risk_overrides"]],
-  ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
 
-/** The tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): the tabs that start a group. */
-const GROUP_STARTS = new Set<TabId>(["deployment", "events", "daily"]);
+/** The tabs in groups (what the bot runs: the run and the daily tasks; the team and its gift list; the plans; the overrides):
+ * the tabs that start a group. */
+const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 /** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
 type Leave = "close" | "reload";
@@ -552,9 +553,13 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
             label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
             onChange={(v) => set({ team: v || null })} />
         </Field>
-        <Field label={t("lux.consecutive")} path={`${path}/consecutive`} note={t("lux.consecutive_note")}>
-          <Input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
-        </Field>
+        {/* a switch as on the other tabs: the label's text the size of theirs, the note under it (#721) */}
+        <Mark className="toggle" path={`${path}/consecutive`}>
+          <label className="check">
+            <Input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />{t("lux.consecutive")}
+          </label>
+          <small>{withBreaks(t("lux.consecutive_note"))}</small>
+        </Mark>
         <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
           <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
         </Field>

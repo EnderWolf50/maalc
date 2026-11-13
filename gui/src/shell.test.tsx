@@ -41,12 +41,23 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   expect(gifts).toHaveAttribute("aria-selected", "true");
   expect(gifts).toHaveFocus();
   await user.keyboard("{ArrowLeft}{ArrowLeft}");
-  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveFocus();
+  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveFocus();
   await user.keyboard("{End}");
-  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: zh["tab.trials"] })).toHaveAttribute("aria-selected", "true");
   await user.keyboard("{Home}");
   expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.run"] }).id);
+});
+
+test("the tabs come in four groups: what the bot runs (the run, the daily tasks), the team, the plans, the overrides (#721)", async () => {
+  render(<App />);
+  await screen.findByRole("tab", { name: zh["tab.teams"] });
+  // a separator between two groups shows as "|"
+  const row = [...screen.getByRole("tablist").children].map((x) => (x.getAttribute("role") === "tab" ? x.textContent : "|"));
+  expect(row).toEqual([
+    zh["tab.run"], zh["tab.daily"], "|", zh["tab.teams"], zh["tab.gifts"], "|",
+    zh["tab.deployment"], zh["tab.starlight"], zh["tab.themepacks"], "|", zh["tab.events"], zh["tab.trials"],
+  ]);
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

@@ -34,6 +34,17 @@ test("count mode enables that task's count alone, and the number typed is saved"
   expect(screen.getAllByText(zh["lux.count_unused"])).toHaveLength(1);
 });
 
+test("連戰 is a switch as on the other tabs: the box in its label, its note under them, not a field's label (#721)", () => {
+  renderEditor(<DailyTab />, newSettings());
+  const boxes = screen.getAllByRole("checkbox", { name: zh["lux.consecutive"] });
+  expect(boxes).toHaveLength(2);
+  for (const box of boxes) {
+    expect(box.closest("label")).toHaveClass("check");
+    expect(box.closest(".field")).toBeNull();
+    expect(box.closest(".toggle")!.querySelector(":scope > small")).toHaveTextContent(zh["lux.consecutive_note"].split("\n")[0]);
+  }
+});
+
 test("the tab's notes show one topic to a line, Lunacy's cost on the first", () => {
   renderEditor(<DailyTab />, newSettings());
   for (const key of ["daily.note", "lux.exp_note", "lux.thread_note", "lux.consecutive_note", "charge.note"] as const) expectLines(zh[key]);
