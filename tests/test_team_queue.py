@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import actions
+import run_start_actions
 import settings
 import test_actions
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
@@ -189,7 +190,7 @@ def test_a_team_the_difficulty_skips_keeps_its_place_and_only_the_claimed_team_g
         teams.insert(0, teams.pop(1))
     entry_page(context, queue_b_a_c)  # auto, no weekly bonus left: a normal run
     actions.TASK.update(runs=0, done=None, modules=20)
-    assert actions.PlanRun().run(context, None) is True
+    assert run_start_actions.PlanRun().run(context, None) is True
     assert (actions.RUN["team"]["id"], actions.RUN["difficulty"]) == ("a", "normal")
     assert queue(actions.ROOT) == ["b", "a", "c"]
     claim(context, monkeypatch)

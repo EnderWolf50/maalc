@@ -1,6 +1,6 @@
 """The theme pack cards told by their cover art (#274), and every read path on real pages.
 
-The page tests run actions.pack_titles inside a MaaFramework task on the committed screenshots (a child process, as
+The page tests run run_start_actions.pack_titles inside a MaaFramework task on the committed screenshots (a child process, as
 test_shop_cells does: the pytest process holds MaaFramework in AgentServer mode), then run_start.rank_packs with
 pack_cover.read_cover as the agent's PickThemePack does.
 """
@@ -109,7 +109,7 @@ def composed_hands(floor):
 
 
 def read_pages():
-    """Every page of PAGES through actions.pack_titles and run_start.rank_packs as PickThemePack ranks them, for each of
+    """Every page of PAGES through run_start_actions.pack_titles and run_start.rank_packs as PickThemePack ranks them, for each of
     READS; print {"<read>:<page>": [[pack, how], ...]}."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
@@ -122,7 +122,7 @@ def read_pages():
                                                 "custom_recognition": staticmethod(lambda name: lambda c: c)})
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
-    import actions  # noqa: PLC0415
+    import run_start_actions  # noqa: PLC0415
 
     class Still(CustomController):
         def connect(self):
@@ -144,7 +144,7 @@ def read_pages():
             try:
                 for key, (page, blank) in {**{p: (p, None) for p in PAGES}, **{k: v[:2] for k, v in BLANKED.items()}}.items():
                     image = np.ascontiguousarray(np.asarray(Image.open(SCREENS / f"{page}.png").convert("RGB"))[:, :, ::-1])
-                    cards = actions.pack_titles(context, image)
+                    cards = run_start_actions.pack_titles(context, image)
                     if blank is not None:
                         cards[blank] = (cards[blank][0], ["WOPIS"])
                     for reading, (names, art) in READS.items():
@@ -155,7 +155,7 @@ def read_pages():
                     _, names, art = rs.floor_reads(YAML["packs"], PLAN["weights"], ART, floor)
                     for k, (hand, _) in enumerate(composed_hands(floor)):
                         image = composed_page(hand)
-                        cards = actions.pack_titles(context, image)
+                        cards = run_start_actions.pack_titles(context, image)
                         ranked = rs.rank_packs([lines for _, lines in cards], names, PLAN, art,
                                                lambda i, allowed: pc.read_cover(image, cards[i][0], allowed))
                         out[f"composed:{floor}:{k}"] = [[title, how.split()[0]] for title, _, how in ranked]

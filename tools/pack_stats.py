@@ -59,6 +59,7 @@ def read_ocr(images):
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import run_start_actions
 
     class Still(CustomController):
         def connect(self):
@@ -79,12 +80,12 @@ def read_ocr(images):
         def run(self, context, argv):
             for path in images:
                 page = np.ascontiguousarray(np.asarray(Image.open(path).convert("RGB").resize((1280, 720)))[:, :, ::-1])
-                x, y, w, h = actions.PACK_TITLES
+                x, y, w, h = run_start_actions.PACK_TITLES
                 key = hashlib.md5(page[y - 20:y + h + 100, x:x + w].tobytes()).hexdigest()
                 if key in seen:
                     continue  # the same pixels again: a refresh that changed nothing
                 seen[key] = path
-                out[str(path)] = [[t, list(b)] for t, b in actions.ocr(context, page, actions.PACK_TITLES)]
+                out[str(path)] = [[t, list(b)] for t, b in actions.ocr(context, page, run_start_actions.PACK_TITLES)]
             return True
 
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()

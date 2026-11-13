@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import actions
+import run_start_actions
 import battle_actions
 import test_actions
 from test_actions import argv, page
@@ -85,8 +86,8 @@ def test_auto_with_a_target_above_floor_5_begins_hard_so_the_queues_hard_team_is
 def test_the_team_the_bot_picks_on_the_team_page_is_known(resumed, monkeypatch):
     # A run paused before its team page: the bot picks the slot itself, here b's TEAMS #2, so the run is b's.
     edit_settings(b_first)
-    page(resumed, {tuple(actions.TEAM_TITLE): "TEAMS #2"})
-    assert actions.SelectTeam().run(resumed, argv())
+    page(resumed, {tuple(run_start_actions.TEAM_TITLE): "TEAMS #2"})
+    assert run_start_actions.SelectTeam().run(resumed, argv())
     claim(resumed, monkeypatch)
     assert queue() == ["a", "b"] and last_line()["team"] == "b"
 
@@ -115,7 +116,7 @@ def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, mo
     assert (last_line()["team"], last_line()["result"]) == (None, "stop")
 
 
-@pytest.mark.parametrize("action", [actions.SelectTeam, actions.ConfirmStarlight, battle_actions.Wipe])
+@pytest.mark.parametrize("action", [run_start_actions.SelectTeam, run_start_actions.ConfirmStarlight, battle_actions.Wipe])
 def test_a_restart_mid_run_on_a_broken_settings_file_stops_and_says_why(resumed, monkeypatch, action):
     # #668: the first page action after the restart makes the run plan up from the file, which no longer loads.
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})

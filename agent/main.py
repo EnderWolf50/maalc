@@ -17,6 +17,7 @@ import battle_actions  # noqa: E402,F401  registers custom actions
 import event_actions  # noqa: E402,F401  registers custom actions
 import lux_actions  # noqa: E402,F401  registers custom actions
 import map_actions  # noqa: E402,F401  registers custom actions
+import run_start_actions  # noqa: E402,F401  registers custom actions
 import shop_actions  # noqa: E402,F401  registers custom actions
 
 

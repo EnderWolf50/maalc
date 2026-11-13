@@ -3,9 +3,9 @@ split off it. A page module that does `from actions import tap` holds a binding 
 actions.tap alone is never called by it, and a test that asserts no tap still passes. patch_all and rebind set the name
 in every actions module that binds the same object.
 
-Only these modules: a name actions imports from another agent file (load_settings from settings.py, pick_team) stays
-as it is in the file that defines it, as monkeypatch.setattr(actions, ...) left it. tests/test_agent_patch.py fails on
-a test or tool that sets a name on one of them directly.
+Only these modules: a name actions imports from another agent file (load_settings from settings.py, want_kind from
+gifts.py) stays as it is in the file that defines it, as monkeypatch.setattr(actions, ...) left it.
+tests/test_agent_patch.py fails on a test or tool that sets a name on one of them directly.
 """
 
 import importlib

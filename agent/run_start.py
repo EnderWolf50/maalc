@@ -1,6 +1,6 @@
 """Run-start decisions, free of MaaFramework (docs/spec/03-decisions.md sections 1, 2, 4, 6).
 
-actions.py reads the screen and taps; everything here is plain data in, plain data out.
+run_start_actions.py reads the screen and taps; everything here is plain data in, plain data out.
 """
 
 import re
