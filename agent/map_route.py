@@ -1,6 +1,6 @@
 """Map routing decisions, free of MaaFramework (docs/spec/03-decisions.md section 7).
 
-actions.RouteMap reads the marks with pipeline nodes and taps; everything here is plain data in,
+map_actions.RouteMap reads the marks with pipeline nodes and taps; everything here is plain data in,
 plain data out, plus the link reading, which works on the screenshot array.
 """
 
@@ -48,7 +48,7 @@ def boss_after_shop(before, column):
     """Type every node of column, the one right after before's, as the boss when before holds a shop, in place (#279).
 
     The map's last two columns are the shop, then the boss, one node each (22 floors read; the game data's
-    fixedEncounters target sector -2). The shop is told by its shape (actions.shop_icon: 0.47-1.0 on the shops
+    fixedEncounters target sector -2). The shop is told by its shape (map_actions.shop_icon: 0.47-1.0 on the shops
     it finds, 0.42 at most on any other of 1187 slots of 98 shop captures; the "+" variant has its own templates, #287); the boss' red glow is not: 722-850 red pixels on a
     dark one against 842 on a node that is not the boss.
     So the shop decides and the glow only helps (a node reading as the boss stays one). Both columns are rank's:

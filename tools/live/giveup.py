@@ -55,18 +55,18 @@ BATTLE_GEAR = (1235, 40)  # the pause menu's gear, top right of the planning pha
 GIVE_UP = (640, 428)  # the pause menu's Give Up bar (BattleMenu.png)
 ACCEPT_RESULTS, WIPE_CONFIRM = (790, 446), (645, 527)  # the DEFEAT dialog's card and Confirm (actions.DEFEAT_OPTIONS, DEFEAT_CONFIRM)
 FORMATION_BACK = (98, 43)  # actions.FORMATION_BACK
-MAP_GEAR = (1232, 45)  # actions.GEAR
-FORFEIT = (541, 435)  # the Dungeon Progress panel's Forfeit (actions.FORFEIT)
-FORFEIT_CONFIRM = (760, 488)  # actions.FORFEIT_CONFIRM
-FORFEIT_DIALOG = [450, 335, 380, 40]  # actions.FORFEIT_DIALOG
+MAP_GEAR = (1232, 45)  # map_actions.GEAR
+FORFEIT = (541, 435)  # the Dungeon Progress panel's Forfeit (map_actions.FORFEIT)
+FORFEIT_CONFIRM = (760, 488)  # map_actions.FORFEIT_CONFIRM
+FORFEIT_DIALOG = [450, 335, 380, 40]  # map_actions.FORFEIT_DIALOG
 DEFEAT_CONFIRM = (1127, 568)  # the centre of DefeatScreen's target
 CLAIM_REWARDS = (1135, 597)  # the centre of ExplorationComplete's target
 GIVE_UP_REWARDS = (393, 544)  # actions.GIVE_UP
 DIALOG_TEXT = [360, 280, 560, 140]  # actions.DIALOG_TEXT
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)  # actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM
-# Copied, not imported: agent/actions.py imports MaaFramework's AgentServer, and a process that has loaded it runs no
-# Tasker of its own (the tests run theirs in a child process, tests/test_hub_text_screens.py). tests/test_live_giveup.py
-# checks that they match.
+# Copied, not imported: agent/actions.py and its page modules import MaaFramework's AgentServer, and a process that has
+# loaded it runs no Tasker of its own (the tests run theirs in a child process, tests/test_hub_text_screens.py).
+# tests/test_live_giveup.py checks that they match.
 
 
 class Key(NamedTuple):

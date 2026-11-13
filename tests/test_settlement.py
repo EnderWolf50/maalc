@@ -17,6 +17,7 @@ from agent_patch import patch_all
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
+    import map_actions
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 
@@ -478,8 +479,8 @@ def mirror_task(context, monkeypatch, runs):
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     reads = {"formation": "3/3", "defeat": "All participating Sinners have been killed.", "panel": "Dungeon Progress", "quit": "Quit exploring the dungeon?",
              "reward": "Floor 1 [NORMAL] 0/6", "giveup": "End expedition without claiming rewards?", "cleared": "Floor 5 [NORMAL] 6/6"}
-    leads = {("formation", actions.FORMATION_BACK): "map", ("defeat", actions.DEFEAT_CONFIRM): "map", ("map", actions.GEAR): "panel", ("panel", actions.FORFEIT): "quit",
-             ("quit", actions.FORFEIT_CONFIRM): "reward", ("reward", actions.GIVE_UP): "giveup",
+    leads = {("formation", actions.FORMATION_BACK): "map", ("defeat", actions.DEFEAT_CONFIRM): "map", ("map", map_actions.GEAR): "panel", ("panel", map_actions.FORFEIT): "quit",
+             ("quit", map_actions.FORFEIT_CONFIRM): "reward", ("reward", actions.GIVE_UP): "giveup",
              ("giveup", actions.DIALOG_CONFIRM): "entry", ("cleared", actions.CLAIM): "entry"}
     plan, page, started, logged = iter(runs), ["entry"], [], []
 
@@ -502,7 +503,7 @@ def mirror_task(context, monkeypatch, runs):
         actions.PlanRun().run(context, None)
         if run != "C":
             (actions.Formation if run == "F" else actions.Wipe)().run(context, None)
-            actions.RouteMap().run(context, None)
+            map_actions.RouteMap().run(context, None)
         actions.Settle().run(context, None)
     actions.TASK["modules"] = 20
     result = actions.PlanRun().run(context, None)
