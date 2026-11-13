@@ -194,6 +194,17 @@ export function floorBadges(floors: PackFloors, sep: string): { mode: keyof Pack
   });
 }
 
+/** Sort a lane's packs by the first floor each shows on (INFINITY from 6, EXTREME from 11), then by name; a pack the data
+ * file lacks goes last. Only the view: the plan's weights do not depend on it. */
+export function byFirstFloor(packs: Record<string, PackFloors>) {
+  const first = (name: string) => {
+    const f = packs[name];
+    if (!f) return Infinity;
+    return Math.min(...(f.N ?? []), ...(f.H ?? []), f.I ? MODE_BANDS.I[0] : Infinity, f.X ? MODE_BANDS.X[0] : Infinity);
+  };
+  return (a: string, b: string) => first(a) - first(b) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
 /** A pack's weight: its own, else the plan's unlisted weight (the agent's rule, spec 03 section 6). */
 export const weightOf = (plan: PackPlanValues, name: string) => plan.weights[name] ?? plan.unlisted;
 

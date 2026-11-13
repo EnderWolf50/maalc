@@ -2,7 +2,7 @@
 import { expect, test } from "vitest";
 import {
   FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
-  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
+  byFirstFloor, importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
   weightOf, type GiftList, type StarlightValues,
 } from "./model";
 import { validate } from "./validate";
@@ -51,6 +51,12 @@ test("a pack's floors become badges: ranges for runs, the rest listed, only the 
   expect(floorBadges({ H: [5], I: true, X: true }, "、")).toEqual([{ mode: "H", text: "5" }, { mode: "I", text: "6–10" }, { mode: "X", text: "11–15" }]);
   expect(floorBadges({ X: true }, "、")).toEqual([{ mode: "X", text: "11–15" }]);
   expect(floorBadges({}, "、")).toEqual([]);
+});
+
+test("a lane lists its packs by the first floor they show on, then by name; a pack the data lacks goes last", () => {
+  const packs = { Late: { X: true as const }, Mid: { I: true as const, H: [5] }, Two: { N: [2] }, One: { H: [3], N: [1] }, Also: { N: [1] } };
+  expect(["Late", "Gone", "Mid", "Two", "One", "Also"].sort(byFirstFloor(packs))).toEqual(["Also", "One", "Two", "Mid", "Late", "Gone"]);
+  expect(["Infinity", "Extreme"].sort(byFirstFloor({ Infinity: { I: true }, Extreme: { X: true } }))).toEqual(["Infinity", "Extreme"]);
 });
 
 test("lanes are the weights in use and 0, highest first; the line sits under the lanes at or over the threshold", () => {

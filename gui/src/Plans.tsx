@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
+  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, byFirstFloor, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
@@ -318,7 +318,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
           <div className="lane" {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
-              {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
+              {shown.filter((n) => weightOf(plan, n) === w).sort(byFirstFloor(data.packs)).map(chip)}
               {w === plan.unlisted && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED, plan.unlisted)}>

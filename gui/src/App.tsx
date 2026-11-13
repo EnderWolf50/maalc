@@ -364,8 +364,8 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
 }
 
 /** One editable table for both override lists (spec 04 sections 10 and 11). */
-function OverrideTable<R extends Record<string, string | number>>({ listKey, cols, blank }: {
-  listKey: "event_overrides" | "trial_risk_overrides";
+function OverrideTable<R extends Record<string, string | number>>({ listKey, cols, blank, note }: {
+  listKey: "event_overrides" | "trial_risk_overrides"; note?: string;
   cols: { key: keyof R & string; label: Key; number?: boolean }[];
   blank: R;
 }) {
@@ -374,6 +374,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
   return (
     <div className="card">
+      {note && <p className="muted">{withBreaks(note)}</p>}
       {rows.length ? (
         <table className="overrides">
           <thead><tr>{cols.map((c) => <th key={c.key}>{t(c.label)}</th>)}<th /></tr></thead>
@@ -387,7 +388,8 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                       : <input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
                   </td>
                 ))}
-                <td><button type="button" className="danger" onClick={() => set((l) => { l.splice(i, 1); })}>{t("remove")}</button></td>
+                <td><span className="moves"><button type="button" className="icon remove" aria-label={t("remove")} title={t("remove")}
+                  onClick={() => set((l) => { l.splice(i, 1); })}><Icon name="remove" /></button></span></td>
               </tr>
             ))}
           </tbody>
@@ -406,10 +408,7 @@ function EventsTab() {
 function TrialsTab() {
   const { t } = useEditor();
   return (
-    <>
-      <p className="muted">{withBreaks(t("trial.note"))}</p>
-      <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
-        cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
-    </>
+    <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }} note={t("trial.note")}
+      cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
   );
 }

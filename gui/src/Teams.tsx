@@ -1,11 +1,11 @@
 // Teams (spec 04 section 9): the list order is the team queue (#501).
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { resetTeamTimes } from "./api";
 import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill } from "./i18n";
 import {
-  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, starlightCost, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
@@ -47,6 +47,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState("");
+  const page = useRef<HTMLDivElement>(null);
+  const inView = useInView(page);
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -68,8 +70,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
     d.teams[i].starlight = { plan: id };
   });
 
-  const planSelect = (value: string, plans: { id: string; name: string }[], onChange: (id: string) => void) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
+  const planSelect = (label: string, value: string, plans: { id: string; name: string }[], onChange: (id: string) => void) => (
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">{t("custom")}</option>
       {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       {missing(value, plans)}
@@ -78,7 +80,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
   // Laid out like AALC's team page: who and what on top, the sinner grid, starlight, then the rest.
   return (
-    <div className="team">
+    <div className="team" ref={page}>
       <div className="bar">
         <Field label={t("name")} path={`${path}/name`}>
           <input value={team.name} onChange={(e) => set({ name: e.target.value })} />
@@ -101,7 +103,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {SECTIONS.map(([key, title, fields]) => {
           const wrong = badIn(bad, path, [...fields]) !== "";
           return (
-            <button type="button" key={key} className={wrong ? "bad" : ""} onClick={(e) => jumpTo(e.currentTarget, key)}>
+            <button type="button" key={key} className={wrong ? "bad" : ""} aria-current={inView === key ? "location" : undefined}
+              onClick={(e) => jumpTo(e.currentTarget, key)}>
               {t(title).replace(/[（(].*$/, "")}<ProblemMark on={wrong} />
             </button>
           );
@@ -109,9 +112,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </div>
 
       {/* What the shop buys and which packs the team takes: chosen here, near the top, edited on their own tabs. Every section
-          of the team is a panel that starts open, so one header style runs down the page and a long one (starlight) folds away. */}
+          is a panel with one header style; the short ones and the sinner grid and starlight start open, Gift Search, shop sales
+          and skill replacement closed (their summaries say what they hold). */}
       <details className="panel" open data-sec="lists">
-        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}<ProblemMark on={badIn(bad, path, ["gift_list", "theme_pack_plan"]) !== ""} /></summary>
+        <summary className={badIn(bad, path, ["gift_list", "theme_pack_plan"])}>{t("team.lists")}<Holds>{listName(team.gift_list, s.gift_lists, t("defaultPlan"))} · {listName(team.theme_pack_plan, s.theme_pack_plans, t("defaultPlan"))}</Holds><ProblemMark on={badIn(bad, path, ["gift_list", "theme_pack_plan"]) !== ""} /></summary>
         <div className="rows">
           <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
             <span className="inline">
@@ -122,7 +126,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               </select>
               <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
             </span>
-            {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
+            {main && <small>{t("team.main_keyword")}{s.language === "zh_tw" ? "：" : ": "}<b>{t(kwText(main))}</b></small>}
           </Field>
           <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
             <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
@@ -135,9 +139,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </details>
 
       <details className="panel" open data-sec="deployment">
-        <summary className={badIn(bad, path, ["deployment_order"])}>{t("team.deployment_order")}<ProblemMark on={badIn(bad, path, ["deployment_order"]) !== ""} /></summary>
+        <summary className={badIn(bad, path, ["deployment_order"])}>{t("team.deployment_order")}<Holds>{orderSource ? listName(orderSource, s.deployment_order_plans, t("defaultPlan")) : t("custom")}</Holds><ProblemMark on={badIn(bad, path, ["deployment_order"]) !== ""} /></summary>
         <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}>
-          {planSelect(orderSource, s.deployment_order_plans, (id) => set({
+          {planSelect(t("team.deployment_order"), orderSource, s.deployment_order_plans, (id) => set({
             deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
           }))}
           {"custom" in team.deployment_order && <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>}
@@ -152,9 +156,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </details>
 
       <details className="panel" open data-sec="starlight">
-        <summary className={badIn(bad, path, ["starlight"])}>{t("team.starlight")}<ProblemMark on={badIn(bad, path, ["starlight"]) !== ""} /></summary>
+        <summary className={badIn(bad, path, ["starlight"])}>{t("team.starlight")}<Holds>{starSource ? listName(starSource, s.starlight_plans, t("defaultPlan")) : t("custom")}{star && ` · ★ ${starlightCost(star.levels)}`}</Holds><ProblemMark on={badIn(bad, path, ["starlight"]) !== ""} /></summary>
         <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")}>
-          {planSelect(starSource, s.starlight_plans, (id) => set({
+          {planSelect(t("team.starlight"), starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
               custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
             },
@@ -182,7 +186,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               <input type="checkbox" checked={team.guard_turns > 0} onChange={(e) => set({ guard_turns: e.target.checked ? 1 : 0 })} />
               {t("team.guard_turns")}
             </label>
-            <select value={team.guard_turns || 1} disabled={!team.guard_turns} onChange={(e) => set({ guard_turns: Number(e.target.value) })}>
+            <select aria-label={t("team.guard_turns")} value={team.guard_turns || 1} disabled={!team.guard_turns} onChange={(e) => set({ guard_turns: Number(e.target.value) })}>
               {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} {t("team.turns")}</option>)}
             </select>
             <small>{t("team.guard_turns_note")}</small>
@@ -201,7 +205,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               <input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />
               {t("team.usage")}
             </label>
-            <select value={team.usage === "any" ? "hard_only" : team.usage} disabled={team.usage === "any"}
+            <select aria-label={t("team.usage")} value={team.usage === "any" ? "hard_only" : team.usage} disabled={team.usage === "any"}
               onChange={(e) => set({ usage: e.target.value })}>
               {teamEnum("usage").filter((u) => u !== "any").map((u) => <option key={u} value={u}>{tv("usage", u)}</option>)}
             </select>
@@ -292,12 +296,12 @@ function KeepPanel({ i }: { i: number }) {
   return (
     <details className="panel" data-sec="keep">
       {/* The summary, not the details: `.bad input` would outline every field of the panel (as in SkillPanel). */}
-      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}<ProblemMark on={badIn(bad, path, ["sell_max_tier", "sell_vestiges"]) !== ""} /></summary>
+      <summary className={badIn(bad, path, ["sell_max_tier", "sell_vestiges"])}>{t("keep.title")}<Holds>≤ {TIERS[team.sell_max_tier]}</Holds><ProblemMark on={badIn(bad, path, ["sell_max_tier", "sell_vestiges"]) !== ""} /></summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="rows">
         <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")}>
-          <span>{t("keep.sell_max_tier")}</span>
-          <select value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
+          <label htmlFor={`sell-max-${i}`}>{t("keep.sell_max_tier")}</label>
+          <select id={`sell-max-${i}`} value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{TIERS[n]}</option>)}
           </select>
           <small>{t("keep.sell_max_tier_note")}</small>
@@ -366,6 +370,32 @@ const SECTIONS = [
   ["skill", "skill.title", ["skill_replacement"]],
   ["more", "team.more", MORE],
 ] as const;
+
+/** A panel summary's note of what the panel holds (a plan's name, ★ cost), quiet beside its title. */
+const Holds = ({ children }: { children: ReactNode }) => <span className="holds">{children}</span>;
+
+/** A named list's name by id ("default" is the read-only default), or "? id" when the list is gone. */
+function listName(id: string, lists: { id: string; name: string }[], fallback: string) {
+  return id === "default" ? fallback : lists.find((x) => x.id === id)?.name || `? ${id}`;
+}
+
+/** The data-sec of the team page's panel nearest the top of the scrolling tab, for the jump bar. */
+function useInView(page: RefObject<HTMLDivElement | null>) {
+  const [key, setKey] = useState<string>();
+  useEffect(() => {
+    const root = page.current?.closest("main");
+    if (!root || typeof IntersectionObserver === "undefined") return;
+    const panels = [...page.current!.querySelectorAll<HTMLElement>("details[data-sec]")];
+    const seen = new Map<Element, boolean>();
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) seen.set(e.target, e.isIntersecting);
+      setKey(panels.find((el) => seen.get(el))?.dataset.sec);
+    }, { root, rootMargin: "-48px 0px -55% 0px" }); // under the jump bar, in the top half
+    panels.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [page]);
+  return key;
+}
 
 /** Open a team page's section and scroll it to the top, under the jump bar. */
 function jumpTo(from: Element, key: string) {

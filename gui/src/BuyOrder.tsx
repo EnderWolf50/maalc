@@ -85,7 +85,7 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
             before += gifts.length;
             return (
               <section key={k} className="gl-agrp">
-                <div className="gl-sortrow gl-ahead" {...dragItem(k, "kw")}>
+                <div className={"gl-sortrow gl-ahead" + (gifts.length ? "" : " empty")} {...dragItem(k, "kw")}>
                   <Grip className="grip gl-grip" />
                   <button type="button" className="gl-dnb" aria-expanded={isOpen}
                     onClick={() => setOpen((o) => { const n = new Set(o); if (!n.delete(k)) n.add(k); return n; })}>
