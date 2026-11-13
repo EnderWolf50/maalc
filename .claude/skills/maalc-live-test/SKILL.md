@@ -26,7 +26,7 @@ Log statistics: `tools/wait_spans.py` (Now Loading and other waiting screens), `
 
 Recording and annotation come from two global skills: `screen-record` and `evidence-annotate`. Read each before its step.
 
-Resolve the main checkout's `.local/` once, before starting a process: `uv run python -c "import sys; sys.path.insert(0, 'tools'); from local_dir import local_dir; print(local_dir().as_posix())"` (from any worktree), and write the printed absolute path wherever the steps say `<local>`. A relative `.local/...` in a command run from your worktree lands in the worktree's own `.local/`, which `queue.py resume` and `pause` never read (`queue.py:407`). New probe scripts and cache go in `<local>/scratch/`; `.local/probe/` holds the migrated historical scripts, environments and captures. See `docs/agents/local-dev.md` before migrating or removing old compatibility paths; another task's recording must finish first.
+Resolve the main checkout's `.local/` once, before starting a process: `uv run python -c "import sys; sys.path.insert(0, 'tools'); from local_dir import local_dir; print(local_dir().as_posix())"` (from any worktree), and write the printed absolute path wherever the steps say `<local>`. A relative `.local/...` in a command run from your worktree lands in the worktree's own `.local/`, which `queue.py resume` and `pause` never read (`queue.py:406`). New probe scripts and cache go in `<local>/scratch/`; `.local/probe/` holds the migrated historical scripts, environments and captures. See `docs/agents/local-dev.md` before migrating or removing old compatibility paths; another task's recording must finish first.
 
 ## Steps
 

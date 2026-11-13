@@ -199,10 +199,9 @@ class TicketGone(SystemExit):
 @contextmanager
 def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=alive, poll: float = 5.0,
          sleep=time.sleep, on_wait=lambda ahead: None):
-    """Hold this process's ticket in `qdir` from when it is first until the block ends; the block gets its path. When
-    it has to wait, `on_wait` is called once with (pid, command) of each ticket ahead of it that is still there; when
-    none is, it waits a poll and looks again. When its own ticket is removed while it waits, it raises TicketGone and
-    the block does not run."""
+    """Hold this process's ticket in `qdir` from when it is first until the block ends. When it has to wait, `on_wait`
+    is called once with (pid, command) of each ticket ahead of it that is still there; when none is, it waits a poll
+    and looks again. When its own ticket is removed while it waits, it raises TicketGone and the block does not run."""
     qdir.mkdir(parents=True, exist_ok=True)
     me = place(qdir, ticket_name(name), cmd, first, is_alive)
     try:
@@ -217,7 +216,7 @@ def turn(qdir: Path, name: str, cmd: list[str], first: bool = False, is_alive=al
                     on_wait(ahead)
                     said = True
             sleep(poll)
-        yield me
+        yield me  # the block gets its ticket: run hands it to its command
     finally:
         me.unlink(missing_ok=True)
 
