@@ -37,6 +37,11 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
+/** A problem across edits: its kind and the fields it marks, not its words, which name what the user is typing. */
+const problemKey = (p: Problem) => `${p.say.key} ${p.paths.join(" ")}`;
+/** The controls a value is typed into, not picked from (a select, a switch, a drag). */
+const TYPED = new Set(["text", "search", "url", "email", "tel", "password", "number"]);
+const typesText = (el: EventTarget) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && TYPED.has(el.type));
 
 export default function App() {
   const [s, setS] = useState<Settings | null>(null);
@@ -47,7 +52,9 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  const [checked, setChecked] = useState(false); // marks show after the first save attempt
+  // While a field is typed in: the problems (problemKey) that showed before its last keystroke. A problem the typing makes
+  // waits until the field loses focus, or a save is tried; null: every problem shows (#717).
+  const [typing, setTyping] = useState<Set<string> | null>(null);
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
   const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
@@ -173,6 +180,8 @@ export default function App() {
   }, [jump]);
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
+  // what the marks, the tab markers, the problems block and the save plate show; a fix shows at once, typing or not
+  const shown = typing ? problems.filter((p) => typing.has(problemKey(p))) : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -200,8 +209,8 @@ export default function App() {
   }
   if (!s) return bare;
 
-  // marks show after the first save attempt; a marked field's controls are described by the problems' text (#695)
-  const problemIds = (path: string) => (checked ? problems : [])
+  // a marked field's controls are described by the problems' text (#695)
+  const problemIds = (path: string) => shown
     .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
     s, problemIds, giftList, picked, setPicked,
@@ -216,7 +225,7 @@ export default function App() {
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
-    setChecked(true);
+    setTyping(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
     setFailed(false);
     setRefused(false);
     try {
@@ -285,14 +294,13 @@ export default function App() {
   };
 
   const Current = TABS.find((x) => x[0] === tab)![2];
-  const blocked = checked && problems.length > 0; // the marks and the problems block show, from the first save attempt on
-  // The save state plate: problems to fix (a refused save, or problems a save would meet: the plate tells them before the
-  // fields are marked), a write that failed, unsaved, saved, or a note. Save takes the crimson frame while problems stop it
-  // or after a write failed, the caution stripe while unsaved changes can go through.
-  const state = problems.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  // The save state plate: problems to fix (a refused save, or problems a save would meet), a write that failed, unsaved,
+  // saved, or a note. Save takes the crimson frame while problems stop it or after a write failed, the caution stripe while
+  // unsaved changes can go through. It counts the problems the fields show, so it waits for a field being typed in too.
+  const state = shown.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
   const stateText = [
-    problems.length > 0 && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: problems.length }),
-    dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!problems.length && t("saveState.clean")),
+    shown.length > 0 && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: shown.length }),
+    dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!shown.length && t("saveState.clean")),
   ].filter(Boolean).join(" · ");
   const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
   const canRevert = dirty && savedText !== ""; // a file to go back to: a new one has none
@@ -334,15 +342,19 @@ export default function App() {
           </Fragment>
         ))}
       </nav>
-      <main inert={!!asking}>
+      {/* A keystroke in the focused field (onChange runs after the field's own, in one render) keeps what shows now: half a
+          word does not turn red. Leaving the field shows what waited. A select, a switch or a drag marks at once. */}
+      <main inert={!!asking}
+        onChange={(e) => { if (e.target === document.activeElement && typesText(e.target)) setTyping(new Set(shown.map(problemKey))); }}
+        onBlur={() => setTyping(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
           <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
-          {blocked && (
+          {shown.length > 0 && (
             <div className="problems" role="alert">
               <p>{t("saveBlocked")}</p>
-              <ul>{problems.map((p, i) => (
+              <ul>{shown.map((p, i) => (
                 // the editor's words; the bot's own (English) text stays on hover, as the log and a bug report have it
                 <li key={i} id={problemId(i)} title={p.text}>
                   {tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{sayProblem(p, lang)}</button> : sayProblem(p, lang)}

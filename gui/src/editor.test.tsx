@@ -1,10 +1,10 @@
-// The editor shell (App.tsx) around the tabs: what a tab switch keeps, the problems a refused save lists, and Ctrl+S.
+// The editor shell (App.tsx) around the tabs: what a tab switch keeps, the problems it marks and lists while editing, and Ctrl+S.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
-import { TEXT, type Key } from "./i18n";
+import { TEXT, fill, type Key } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0, reloaded: 0 }));
@@ -65,16 +65,106 @@ describe("a tab switch", () => {
   });
 });
 
-/** The editor on `s`, the tab `start` open, Save clicked: the problems show. */
+/** The editor on `s` with the tab `start` open, no save tried: the problems the file has show from the start. */
 async function blocked(s: Settings, start: string) {
   file.text = JSON.stringify(s);
   const user = userEvent.setup();
   render(<App />);
   await user.click(await screen.findByRole("tab", { name: start }));
-  await user.click(screen.getByRole("button", { name: zh.save }));
   return user;
 }
 const problem = (text: string | RegExp) => within(screen.getByRole("alert")).getByRole("button", { name: text });
+const plate = () => document.querySelector(".status")!;
+/** Press Ctrl+S on the focused element; true when the editor kept the browser from its own Save page. */
+const ctrlS = (more: KeyboardEventInit = {}) => {
+  const e = new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true, cancelable: true, ...more });
+  act(() => { (document.activeElement ?? document.body).dispatchEvent(e); });
+  return e.defaultPrevented;
+};
+
+describe("a problem shows while editing, before any save", () => {
+  /** What shows of a problem: the field marked, its tab marked, and the problems block. */
+  const marked = (field: HTMLElement, tabName: string) => {
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(tab(tabName)).toHaveClass("bad");
+    expect(screen.getByRole("alert")).toHaveTextContent(zh.saveBlocked);
+  };
+  const unmarked = (field: HTMLElement, tabName: string) => {
+    expect(field).not.toHaveAttribute("aria-invalid");
+    expect(tab(tabName)).not.toHaveClass("bad");
+    expect(screen.queryByRole("alert")).toBeNull();
+  };
+  const slot = () => screen.getByRole("spinbutton", { name: zh["team.game_team"] });
+
+  test("one the file has, as it opens", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    await blocked(s, zh["tab.teams"]);
+    marked(slot(), zh["tab.teams"]);
+    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+    expect(file.saved).toEqual([]);
+  });
+
+  test("a choice made wrong, at once; put right, every mark goes at once", async () => {
+    const s = settings();
+    s.run.target_floor = 10;
+    s.run.difficulty = "hard";
+    s.teams.forEach((x) => { x.hard_from_floor = 1; });
+    const user = await blocked(s, zh["tab.run"]);
+    const difficulty = screen.getByRole("combobox", { name: zh["run.difficulty"] });
+    unmarked(difficulty, zh["tab.run"]);
+    await user.selectOptions(difficulty, "normal");
+    marked(difficulty, zh["tab.run"]);
+    expect(problem(/但難度是普通/)).toBeInTheDocument();
+    expect(plate()).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
+    await user.selectOptions(difficulty, "hard");
+    unmarked(difficulty, zh["tab.run"]);
+  });
+
+  test("a text field is marked once it loses focus, not while it is typed in; a letter typed back clears it at once", async () => {
+    const user = await blocked(settings(), zh["tab.teams"]);
+    await user.clear(nameBox()); // the team's name emptied
+    expect(nameBox()).toHaveFocus();
+    unmarked(nameBox(), zh["tab.teams"]);
+    expect(plate()).toHaveAttribute("data-state", "dirty"); // the save plate waits too: nothing turns red while typing
+    await user.tab();
+    marked(nameBox(), zh["tab.teams"]);
+    expect(plate()).toHaveAttribute("data-state", "blocked");
+    await user.type(nameBox(), "x");
+    unmarked(nameBox(), zh["tab.teams"]);
+  });
+
+  test("a number typed into a clash with another team is marked once the field loses focus", async () => {
+    const s = settings();
+    s.teams[1].game_team = 12;
+    const user = await blocked(s, zh["tab.teams"]);
+    await user.type(slot(), "2"); // TEAMS #1 becomes #12, the second team's
+    expect(slot()).toHaveValue(12);
+    unmarked(slot(), zh["tab.teams"]);
+    await user.tab();
+    marked(slot(), zh["tab.teams"]);
+    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #12/)).toBeInTheDocument();
+  });
+
+  test("a problem the field already showed stays while it is typed in", async () => {
+    const s = settings();
+    s.teams[0].name = "";
+    const user = await blocked(s, zh["tab.teams"]);
+    marked(nameBox(), zh["tab.teams"]);
+    await user.click(nameBox());
+    await user.keyboard("{Backspace}");
+    marked(nameBox(), zh["tab.teams"]);
+  });
+
+  test("a save refuses a problem still being typed, writes nothing and shows it", async () => {
+    const user = await blocked(settings(), zh["tab.teams"]);
+    await user.clear(nameBox());
+    expect(ctrlS()).toBe(true);
+    await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
+    marked(nameBox(), zh["tab.teams"]);
+    expect(file.saved).toEqual([]);
+  });
+});
 
 describe("the problems block", () => {
   test("sits inside the tab panel, below the tab bar", async () => {
@@ -444,13 +534,6 @@ describe("reloading the page (F5, Ctrl+R)", () => {
 });
 
 describe("Ctrl+S", () => {
-  /** Press Ctrl+S on the focused element; true when the editor kept the browser from its own Save page. */
-  const ctrlS = (more: KeyboardEventInit = {}) => {
-    const e = new KeyboardEvent("keydown", { key: "s", code: "KeyS", ctrlKey: true, bubbles: true, cancelable: true, ...more });
-    act(() => { (document.activeElement ?? document.body).dispatchEvent(e); });
-    return e.defaultPrevented;
-  };
-
   test("saves as the Save button does, also while typing in a field", async () => {
     file.text = JSON.stringify(settings());
     const user = userEvent.setup();
@@ -462,14 +545,15 @@ describe("Ctrl+S", () => {
     expect(await screen.findByText(zh.saved)).toBeInTheDocument();
   });
 
-  test("shows the problems when saving is blocked, and writes nothing", async () => {
+  test("is refused while a problem stands, and writes nothing", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
     file.text = JSON.stringify(s);
     render(<App />);
     await screen.findByRole("tab", { name: zh["tab.run"] });
     expect(ctrlS()).toBe(true);
-    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
+    expect(screen.getByRole("alert")).toHaveTextContent(zh.saveBlocked);
     expect(file.saved).toEqual([]);
   });
 
