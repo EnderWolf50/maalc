@@ -45,7 +45,10 @@ def test_a_loaded_resource_serves_every_custom_name_the_pipeline_uses():
     # #676: load() imports main, which imports every module split off actions.py; actions alone registers only its own
     from test_agent_modules import pipeline_names  # not at the top: the child (this file as a script) has no use for it
 
-    assert run_child(__file__)["registered"] == pipeline_names()
+    registered, used = run_child(__file__)["registered"], pipeline_names()
+    lacks = {kind: sorted(set(names) - set(registered[kind])) for kind, names in used.items()}
+    extra = {kind: sorted(set(registered[kind]) - set(names)) for kind, names in used.items()}
+    assert registered == used, f"the child's resource lacks {lacks} and has {extra} besides"
 
 
 if __name__ == "__main__":
