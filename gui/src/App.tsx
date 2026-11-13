@@ -57,7 +57,7 @@ export default function App() {
   const past = useRef<Settings[]>([]);
   const [undoDepth, setUndoDepth] = useState(0);
   const lastEdit = useRef<{ at: number; field: EventTarget | null }>({ at: 0, field: null });
-  const forget = () => { past.current = []; setUndoDepth(0); };
+  const forget = () => { past.current = []; setUndoDepth(0); lastEdit.current = { at: 0, field: null }; };
   const undo = () => {
     const before = past.current.pop();
     if (!before) return;
@@ -397,7 +397,7 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
             onChange={(v) => set({ team: v || null })} />
         </Field>
         {/* A switch sits in the label column, as on the other tabs. */}
-        <div className={"toggle" + (bad(`${path}/consecutive`) ? " bad" : "")}>
+        <div className={"toggle" + (bad(`${path}/consecutive`) ? " bad" : "")} data-path={`${path}/consecutive`}>
           <label className="check">
             <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
             {t("lux.consecutive")}

@@ -303,7 +303,7 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 .jump button[aria-current] { color: var(--fg); text-decoration-color: var(--accent); }
 .jump button.bad { color: var(--bad); }
 .jump button.bad::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--bad); vertical-align: 2px; }
-.team > details.panel { scroll-margin-top: 36px; } /* the sticky .jump bar's height; Teams.tsx useInView's rootMargin too */
+.team > details.panel { scroll-margin-top: 44px; } /* the sticky .jump bar's height (44 px); Teams.tsx useInView's rootMargin too */
 /* A plan's grid or starlight on a team: the plan's, so it reads as a view, not a control. */
 p.from-plan { font-size: 12.5px; }
 .plan-view { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }

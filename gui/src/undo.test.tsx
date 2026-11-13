@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import { TEXT } from "./i18n";
+import { TEXT, fill } from "./i18n";
 import { newSettings, type Settings } from "./model";
 
 const file = vi.hoisted(() => ({ text: "" as string | null }));
@@ -52,6 +52,15 @@ describe("undo", () => {
     expect(screen.getByDisplayValue("Bleed order")).toBeInTheDocument();
     expect(within(screen.getByRole("banner")).getByRole("status")).not.toHaveTextContent(zh.unsaved);
     expect(undoButton()).toBeDisabled();
+  });
+
+  test("once the header's 復原 put a deleted plan back, the list's note does not offer to put it back again", async () => {
+    const user = await open(zh["tab.deployment"]);
+    await user.click(screen.getByRole("button", { name: zh.remove }));
+    expect(screen.getByText(fill(zh["undo.deleted"], { name: "Bleed order" }))).toBeInTheDocument();
+    await user.click(undoButton());
+    expect(screen.getAllByDisplayValue("Bleed order")).toHaveLength(1);
+    expect(screen.queryByText(fill(zh["undo.deleted"], { name: "Bleed order" }))).toBeNull();
   });
 
   test("Ctrl+Z outside a text field takes back a deleted override row, one edit per press", async () => {

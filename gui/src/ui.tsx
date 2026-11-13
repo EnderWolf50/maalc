@@ -45,10 +45,11 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
  * shows an item), and the note names it with an Undo button until the next delete or until the tab closes. Undo puts it back
  * before the item that followed it, which stays right when the Agent reorders the list meanwhile (#501). A confirmation
  * would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
-export function useUndo() {
+export function useUndo(present: { id: string }[]) {
   const { t } = useEditor();
-  const [last, setLast] = useState<{ name: string; undo: () => void } | null>(null);
-  const note = last && (
+  const [last, setLast] = useState<{ id: string; name: string; undo: () => void } | null>(null);
+  // The item can be back already: the header's 復原 (Ctrl+Z) takes back the delete too. Then the note has nothing to offer.
+  const note = last && !present.some((x) => x.id === last.id) && (
     <p className="notice" role="status">
       {fill(t("undo.deleted"), { name: last.name })}{" "}
       <button type="button" onClick={() => { last.undo(); setLast(null); }}>{t("undo")}</button>
@@ -60,9 +61,13 @@ export function useUndo() {
     edit((list) => { list.splice(i, 1); });
     pick(items[i - 1]?.id ?? next);
     setLast({
-      name: item.name || "—",
+      id: item.id, name: item.name || "—",
       undo: () => {
-        edit((list) => { const at = list.findIndex((x) => x.id === next); list.splice(at < 0 ? Math.min(i, list.length) : at, 0, item); });
+        edit((list) => {
+          if (list.some((x) => x.id === item.id)) return; // back already: never a second copy
+          const at = list.findIndex((x) => x.id === next);
+          list.splice(at < 0 ? Math.min(i, list.length) : at, 0, item);
+        });
         pick(item.id);
       },
     });

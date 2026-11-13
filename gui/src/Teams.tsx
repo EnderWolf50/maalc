@@ -5,7 +5,7 @@ import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill } from "./i18n";
 import {
-  GRACES, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, buyOrder, defaultStarlight, freeName, graceName, newId, newTeam, starlightCost, teamEnum,
+  GRACES, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, buyOrder, defaultStarlight, freeName, localName, newId, newTeam, starlightCost, teamEnum,
   toggleGift, type Order, type StarlightValues,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
@@ -16,7 +16,7 @@ import { Field, Holds, Num, ProblemMark, ReorderList, Select, ToggleNum, tabKeys
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
-  const [undoNote, removeAt] = useUndo();
+  const [undoNote, removeAt] = useUndo(s.teams);
   const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
   return (
     <div className="split">
@@ -281,7 +281,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
                   disabled={!m && full} title={!m && full ? t("gift.full") : undefined}
                   onClick={() => onToggle({ keyword: g.keyword, tier: g.tier, name: g.en })}>
                   {m && <span className="rank">{m}</span>}
-                  <span className="name">{zh && g.zh ? g.zh : g.en}</span>
+                  <span className="name">{localName(g, zh)}</span>
                   {zh && g.zh && <small>{g.en}</small>}
                 </button>
               );
@@ -366,8 +366,6 @@ function GiftSearchPanel({ i }: { i: number }) {
 const MORE = ["guard_turns", "hard_from_floor", "allow_white_gossypium", "usage", "heal", "reserve_cost", "shop_refresh_keyword",
   "shop_refresh_normal", "min_alive", "reward_cards"];
 
-/** "bad" when a check failed on any of these fields of the team at `path`: the panel's summary shows it while the panel is closed. */
-
 /** The team page's panels, top to bottom (their `data-sec`), the title each shows and the fields it holds. */
 const SECTIONS = [
   ["lists", "team.lists", ["gift_list", "theme_pack_plan"]],
@@ -419,7 +417,7 @@ function StarLine({ value }: { value: StarlightValues }) {
   return (<>
     <span className="tag-word">★ {starlightCost(value.levels)}</span>
     {buyOrder(value).map((n, j) => (
-      <span key={n}><b>{j + 1}</b> {graceName(GRACES[n - 1], zh)}{plus[value.levels[n - 1]]}</span>
+      <span key={n}><b>{j + 1}</b> {localName(GRACES[n - 1], zh)}{plus[value.levels[n - 1]]}</span>
     ))}
   </>);
 }
@@ -442,7 +440,7 @@ function useInView(page: RefObject<HTMLDivElement | null>) {
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) seen.set(e.target, e.isIntersecting);
       setKey(panels.find((el) => seen.get(el))?.dataset.sec);
-    }, { root, rootMargin: "-48px 0px -55% 0px" }); // under the jump bar (about 40 px, index.css .jump), in the top half
+    }, { root, rootMargin: "-44px 0px -55% 0px" }); // under the jump bar (44 px, as .team > details.panel's scroll-margin-top), in the top half
     panels.forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [page]);

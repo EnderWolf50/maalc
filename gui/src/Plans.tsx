@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, byFirstFloor, clickCard, graceName, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
+  EVENT_MODES, GRACES, LEVELS, SINNERS, buyOrder, byFirstFloor, clickCard, localName, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
@@ -55,14 +55,14 @@ export function StarlightEditor({ value, onChange, path }: {
           const rank = order.indexOf(n) + 1;
           const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
-            <div key={g.en} className={`grace ${level}`} role="group" aria-label={graceName(g, zh)} title={`${n}. ${g.en} (${tv("level", level)})`}>
+            <div key={g.en} className={`grace ${level}`} role="group" aria-label={localName(g, zh)} title={`${n}. ${g.en} (${tv("level", level)})`}>
               {/* The whole card is its select button; + and ++ sit above it. */}
               <button type="button" className="pick" aria-pressed={rank > 0} disabled={!onChange}
-                aria-label={`${graceName(g, zh)} ★ ${gracePrice(n, level === "none" ? "base" : level)}`}
+                aria-label={`${localName(g, zh)} ★ ${gracePrice(n, level === "none" ? "base" : level)}`}
                 onClick={() => set((v) => clickCard(v, n))} />
               {rank > 0 && <span className="rank">{rank}</span>}
               <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
-              <span className="name">{graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}</span>
+              <span className="name">{localName(g, zh)}{zh && g.zh && <small>{g.en}</small>}</span>
               {zh && <ul>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
@@ -102,7 +102,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
   const { s, update, t, bad } = useEditor();
   const plans = s[planKey] as unknown as P[];
   const [i, setSel] = usePick(planKey, plans, lead?.id); // -1: the lead
-  const [undoNote, removeAt] = useUndo();
+  const [undoNote, removeAt] = useUndo(plans);
   const set = (fn: (list: P[]) => void) => update((d) => fn(d[planKey] as unknown as P[]));
   const remove = () => removeAt(plans, i, set, setSel);
   const add = () => {
