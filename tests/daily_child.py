@@ -50,9 +50,10 @@ def live_frame(image):
 
 
 def load():
-    """(actions, resource): MaaFramework's Resource first, then actions under a stand-in AgentServer that records what
-    the agent registers; every custom action and recognition goes on the resource, as the agent serves them. ROOT is a
-    new temporary folder (the settings, the stop procedure's evidence and log).
+    """(actions, resource): MaaFramework's Resource first, then the agent's main.py under a stand-in AgentServer that
+    records what the agent registers: main imports actions and every module split off it (#676), and every custom action
+    and recognition goes on the resource, as the agent serves them. ROOT is a new temporary folder in each of those
+    modules (the settings, the stop procedure's evidence and log).
 
     Every node's pre_delay and post_delay is 0 (#480): a game model shows the next screen at the tap, and those waits
     were half of a child's time (test_exp_luxcavation 285 s, 136 s without them, its 21 scenarios ending the same)."""
@@ -68,6 +69,7 @@ def load():
     stub.AgentServer = type("AgentServer", (), {"custom_action": record("action"), "custom_recognition": record("recognition")})
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
+    import main  # noqa: F401  registers what the agent registers
     import actions
 
     for kind, name, cls in found:
