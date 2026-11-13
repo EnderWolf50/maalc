@@ -1,6 +1,6 @@
 # Evidence style
 
-How an evidence still or clip looks. A rule below is the user's own word, or the version the user accepted, with its date. `tools/live/evidence.py` (`draw_map`) is the code that draws it; where this file and the code differ, the code is what the user accepted. `tools/live/reel.py` builds a review reel; it refuses a chapter with an unwritten draft, a caption that breaks the language or duration rule below, boxes with no named grid or a box outside it, and warns about log text.
+How an evidence still or clip looks. A rule below is the user's own word, or the version the user accepted, with its date. `tools/live/evidence_map.py` (`draw_map`) is the code that draws it; where this file and the code differ, the code is what the user accepted. `tools/live/reel.py` builds a review reel; it refuses a chapter with an unwritten draft, a caption that breaks the language or duration rule below, boxes with no named grid or a box outside it, and warns about log text.
 
 ## What goes in a report
 

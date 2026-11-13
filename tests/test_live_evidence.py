@@ -6,6 +6,8 @@ import pytest
 from PIL import Image
 
 from live import evidence as ev
+from live import evidence_map as em
+from live import evidence_packs as ep
 
 # A run.log as `bot.py run` writes it: the bot's stdout, a wall time per line.
 RUN = """\
@@ -104,10 +106,10 @@ def test_frames_and_clip_seek_into_the_right_piece(tmp_path, monkeypatch):
 
 
 def test_map_block_reads_columns_costs_drags_and_path(log):
-    stages, drags, path = ev.parse_map(ev.floor_block(ev.maalc(log), 1))
+    stages, drags, path = em.parse_map(em.floor_block(ev.maalc(log), 1))
     assert drags == [(ev.secs("15:52:59.245"), 510, 3)]
     assert path == ([("up", "event"), ("mid", "risky"), ("up", "event"), ("mid", "shop")], 22)
-    nodes = ev.node_table(stages, drags)
+    nodes = em.node_table(stages, drags)
     read = lambda key: {k: nodes[key][k] for k in ("type", "first", "cost", "stage")}  # noqa: E731
     assert read((1, "mid")) == {"type": "battle", "first": "battle", "cost": "75", "stage": 0}
     assert read((3, "up")) == {"type": "event", "first": "battle", "cost": "120", "stage": 1}  # read again after the drag
@@ -131,10 +133,11 @@ def footage(monkeypatch):
             out.append(np.full((720, 1280), v, np.uint8))
         return times, np.array(out)
 
-    monkeypatch.setattr(ev, "frames", fake_frames)
-    monkeypatch.setattr(ev, "grab", lambda f, t: Image.new("RGB", (1280, 720), (20, 20, 20)))
-    monkeypatch.setattr(ev, "masks_path", lambda a: None)
-    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    for page in (ev, em, ep):  # evidence's own (annotated_clip's masks_path), and the copy each page imported
+        monkeypatch.setattr(page, "frames", fake_frames)
+        monkeypatch.setattr(page, "grab", lambda f, t: Image.new("RGB", (1280, 720), (20, 20, 20)))
+        monkeypatch.setattr(page, "masks_path", lambda a: None)
+        monkeypatch.setattr(page, "load_masks", lambda path: ([1280, 720], []))
     return ["--video", "rec.mp4@15:50:00"]
 
 
@@ -210,7 +213,7 @@ def test_map_picks_the_still_map_each_reading_saw_not_the_drag_back():
              + grey(190, 3) + grey(30, 10))  # the drag back (40-42), the map as it was after drag 1
     times = [100 + i / 10 for i in range(len(grays))]
     # the readings: the floor's first (100.5), after drag 1 (log 101.9), after drag 2 (log 103.8, the drag back starts at 104.0)
-    idx = ev.pick_shots(times, ev.motion(grays), [100.5, 101.9, 103.8])
+    idx = em.pick_shots(times, em.motion(grays), [100.5, 101.9, 103.8])
     assert [int(grays[i][0, 0]) for i in idx] == [0, 10, 20]
 
 
@@ -221,9 +224,9 @@ def noise(w, seed=1):
 def test_map_measures_the_slide_between_two_still_frames():
     world = noise(2000)
     prev, cur = world[:, 0:1280], world[:, 507:1787]
-    shift, score = ev.measure_shift(prev, cur, 512)
+    shift, score = em.measure_shift(prev, cur, 512)
     assert shift == 507 and score > 0.95
-    assert ev.measure_shift(prev, noise(1280, 2), 512) is None  # unrelated frames: nothing to trust
+    assert em.measure_shift(prev, noise(1280, 2), 512) is None  # unrelated frames: nothing to trust
 
 
 def test_map_stitches_by_the_measured_slide_and_the_still_frames(tmp_path, monkeypatch):
@@ -245,17 +248,17 @@ def test_map_stitches_by_the_measured_slide_and_the_still_frames(tmp_path, monke
         times = [t0 + i / fps for i in range(round((t1 - t0) * fps))]
         return times, np.array([frame(t) for t in times])
 
-    monkeypatch.setattr(ev, "frames", fake_frames)
-    monkeypatch.setattr(ev, "grab", lambda f, t: Image.fromarray(np.repeat(frame(t)[..., None], 3, axis=2)))
-    monkeypatch.setattr(ev, "masks_path", lambda a: None)
-    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    monkeypatch.setattr(em, "frames", fake_frames)
+    monkeypatch.setattr(em, "grab", lambda f, t: Image.fromarray(np.repeat(frame(t)[..., None], 3, axis=2)))
+    monkeypatch.setattr(em, "masks_path", lambda a: None)
+    monkeypatch.setattr(em, "load_masks", lambda path: ([1280, 720], []))
     (tmp_path / "run.log").write_text(MULTI_DRAG, encoding="utf-8")
     ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "r"), "--video", "x.mp4@12:00:00"])
     route = json.loads((tmp_path / "r/route.json").read_text(encoding="utf-8"))
     assert [d["px"] for d in route["drags"]] == [512, 512] and [d["measured"] for d in route["drags"]] == [512, 480]
     stitched = np.asarray(Image.open(tmp_path / "r/stitched.png").convert("RGB"))
     assert stitched.shape[1] == world.shape[1]  # 1280 + 512 + 480
-    assert (stitched[ev.TOP:ev.TOP + 80, :, 0] == world[:80]).all()  # the world seamless, rows above the boxes
+    assert (stitched[em.TOP:em.TOP + 80, :, 0] == world[:80]).all()  # the world seamless, rows above the boxes
     assert len(set(route["shots"])) == 3
 
 
@@ -288,7 +291,7 @@ NOTES = """\
 
 
 def test_map_notes_come_from_the_log():
-    nodes = ev.node_table(*ev.parse_map(ev.floor_block(ev.maalc(ev.parse_log(NOTES.splitlines())), 1, 0.0))[:2])
+    nodes = em.node_table(*em.parse_map(em.floor_block(ev.maalc(ev.parse_log(NOTES.splitlines())), 1, 0.0))[:2])
     notes = lambda key: sorted(tag for tag, _ in nodes[key]["notes"])  # noqa: E731
     assert notes((1, "mid")) == ["cost_none"]  # a coin seen, no number read
     assert notes((1, "down")) == ["cost_miss", "cost_none"]  # the OCR's reason is kept
@@ -303,8 +306,8 @@ def test_map_draw_boxes_every_read_node_and_marks_a_fix():
     nodes = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "75", "stage": 0, "notes": []},
              (2, "down"): {"type": "risky", "first": "event", "cost": "20", "stage": 1, "notes": []}}
     fix = {"c2/down": ["cost", "讀成 20（畫面是 120）"], "c3/up": ["missed", "沒讀到的 event"]}
-    im = ev.draw_map(shots, [0, 510], [(0, 510, 3)], nodes, ([("mid", "battle"), ("down", "risky")], 7), fix, 1)
-    assert im.size == (1790, ev.TOP + 720 + ev.LINE)  # a header line above the map, a legend line below it
+    im = em.draw_map(shots, [0, 510], [(0, 510, 3)], nodes, ([("mid", "battle"), ("down", "risky")], 7), fix, 1)
+    assert im.size == (1790, em.TOP + 720 + em.LINE)  # a header line above the map, a legend line below it
     px = np.asarray(im)
     assert ring(px, 357, 328) == ev.GREEN  # read right
     assert ring(px, 570, 583) == ev.ORANGE  # Cost read wrong
@@ -313,15 +316,15 @@ def test_map_draw_boxes_every_read_node_and_marks_a_fix():
 
 def ring(px, y, x):
     """The colour of the box edge above map point (x, y): boxes are see-through, so the palette colour nearest."""
-    edge = px[ev.TOP + y - ev.EDGE + 1, x].astype(int)
+    edge = px[em.TOP + y - em.EDGE + 1, x].astype(int)
     palette = [ev.GREEN, ev.RED, ev.ORANGE, ev.VIOLET, ev.MAGENTA, ev.WHITE, ev.CYAN]
     return min(palette, key=lambda c: int(np.abs(edge - np.array(c) * 210 / 255).sum()))
 
 
 def test_map_draw_puts_a_missed_node_where_the_shot_that_shows_its_column_has_it():
     shots = [Image.new("RGB", (1280, 720)), Image.new("RGB", (1280, 720))]
-    im = ev.draw_map(shots, [0, 480], [(0, 512, 3)], {}, None, {"c5/mid": ["missed", "x"]}, 1)  # the drag moved 480, not 512
-    assert ring(np.asarray(im), 357, ev.COLX(5) - 512 + 480) == ev.ORANGE
+    im = em.draw_map(shots, [0, 480], [(0, 512, 3)], {}, None, {"c5/mid": ["missed", "x"]}, 1)  # the drag moved 480, not 512
+    assert ring(np.asarray(im), 357, em.COLX(5) - 512 + 480) == ev.ORANGE
 
 
 def test_map_command_survives_a_floor_block_with_no_reading(tmp_path, footage):
@@ -337,10 +340,10 @@ def test_map_draw_gives_each_special_read_its_own_colour_and_a_legend():
              "boss_glow": ev.CYAN, "boss_shop": ev.CYAN}
     nodes = {(k, row): {"type": "battle", "first": "battle", "cost": None, "stage": 0, "notes": [(tag, "x")]}
              for k, (tag, row) in enumerate(zip(kinds, ["up", "mid", "down", "up", "mid", "down"]), 1)}
-    im = np.asarray(ev.draw_map(shots, [0, 512], [(0, 512, 3)], nodes, None, {}, 1))
+    im = np.asarray(em.draw_map(shots, [0, 512], [(0, 512, 3)], nodes, None, {}, 1))
     for (k, row), n in nodes.items():
-        assert ring(im, ev.ROWY[row], ev.COLX(k)) == kinds[n["notes"][0][0]]
-    legend = im[ev.TOP + 720:]
+        assert ring(im, em.ROWY[row], em.COLX(k)) == kinds[n["notes"][0][0]]
+    legend = im[em.TOP + 720:]
     colours = {tuple(c) for c in legend.reshape(-1, 3)}
     assert {ev.VIOLET, ev.MAGENTA, ev.WHITE, ev.CYAN} <= colours  # the colours this picture uses
     assert not {ev.GREEN, ev.RED, ev.ORANGE} & colours  # and no other
@@ -349,13 +352,13 @@ def test_map_draw_gives_each_special_read_its_own_colour_and_a_legend():
 def test_map_draw_labels_each_node_with_its_route_weight_by_difficulty():
     normal = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "75", "stage": 0, "notes": []}}
     hard = {(1, "mid"): {"type": "battle", "first": "battle", "cost": "85", "stage": 0, "notes": []}}
-    assert ev.map_weights(normal)["risky"] == 6 and ev.map_weights(hard)["risky"] == 8
+    assert em.map_weights(normal)["risky"] == 6 and em.map_weights(hard)["risky"] == 8
     shared = {(1, "mid"): {"type": "risky", "first": "risky", "cost": "120", "stage": 0, "notes": []}}  # 120: both difficulties
-    assert ev.map_weights(shared, hard=True)["risky"] == 8  # what the log said wins over the Costs
+    assert em.map_weights(shared, hard=True)["risky"] == 8  # what the log said wins over the Costs
 
     msgs = [(10.0, "floor 2: NORMAL"), (20.0, "map: path mid battle, score 2"), (30.0, "floor 2: HARD")]
-    assert ev.logged_hard(msgs, 2, 25.0) is False and ev.logged_hard(msgs, 2, 35.0) is True  # the run the map is in
-    assert ev.logged_hard(msgs, 3, 35.0) is None
+    assert em.logged_hard(msgs, 2, 25.0) is False and em.logged_hard(msgs, 2, 35.0) is True  # the run the map is in
+    assert em.logged_hard(msgs, 3, 35.0) is None
 
 
 def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the_width():
@@ -364,27 +367,27 @@ def test_map_draw_puts_the_legend_note_on_its_own_line_when_the_legend_fills_the
     nodes = {(k, "mid"): {"type": "battle", "first": "event", "cost": None, "stage": 0, "notes": [(tag, None)]}
              for k, tag in enumerate(kinds, 1)}
     fix = {"c5/mid": ["missed", "x"], "c5/up": ["missed", "y"]}
-    wide = ev.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"]}, 1)
-    narrow = ev.draw_map(shots, [0], [], {}, None, {}, 1)
+    wide = em.draw_map(shots, [0], [], nodes, ([("mid", "battle")], 2), {**fix, "c1/mid": ["risky"]}, 1)
+    narrow = em.draw_map(shots, [0], [], {}, None, {}, 1)
     # (how many lines the legend takes depends on the font: CI has no CJK font; the right edge below does not)
-    assert wide.size[1] >= ev.TOP + 720 + ev.LINE and narrow.size == (1280, ev.TOP + 720 + ev.LINE)
+    assert wide.size[1] >= em.TOP + 720 + em.LINE and narrow.size == (1280, em.TOP + 720 + em.LINE)
     plain = {(4, "up"): {"type": "battle", "first": "battle", "cost": None, "stage": 0, "notes": []}}  # green
-    every = np.asarray(ev.draw_map(shots, [0], [], {**nodes, **plain}, ([("mid", "battle")], 2),
+    every = np.asarray(em.draw_map(shots, [0], [], {**nodes, **plain}, ([("mid", "battle")], 2),
                                    {**fix, "c1/mid": ["risky"], "c2/mid": ["cost", "z"]}, 1))
-    legend = every[ev.TOP + 720:]
-    assert (legend[:, -12:] == ev.BG).all()  # all eight colours: the legend flows over lines instead of running off the edge
+    legend = every[em.TOP + 720:]
+    assert (legend[:, -12:] == em.BG).all()  # all eight colours: the legend flows over lines instead of running off the edge
 
 
 def test_map_draw_widens_a_missed_nodes_plate_to_its_label():
     shots = [Image.new("RGB", (1280, 720))]
-    right = ev.COLX(3) + ev.EDGE + 30, ev.TOP + ev.ROWY["mid"] + ev.EDGE + 12  # right of the box, on the label's row
-    short, long = (np.asarray(ev.draw_map(shots, [0], [], {}, None, {"c3/mid": ["missed", text]}, 1))[right[1], right[0]]
+    right = em.COLX(3) + em.EDGE + 30, em.TOP + em.ROWY["mid"] + em.EDGE + 12  # right of the box, on the label's row
+    short, long = (np.asarray(em.draw_map(shots, [0], [], {}, None, {"c3/mid": ["missed", text]}, 1))[right[1], right[0]]
                    for text in ("x", "x" * 60))  # ASCII: wide in any font, CI's included
     assert tuple(short) == (0, 0, 0) and tuple(long) != (0, 0, 0)
 
 
 def test_packs_reading_names_weights_event_and_pull(log):
-    [r] = ev.pack_readings(ev.maalc(log), 1)
+    [r] = ep.pack_readings(ev.maalc(log), 1)
     assert r["cards"] == [("Flat-broke Gamblers", 0, False), ("Nagel und Hammer", 0, False), ("Automated Factory", -2, True)]
     assert (r["threshold"], r["pull"]) == (0, "Flat-broke Gamblers")
 
@@ -397,16 +400,16 @@ def test_packs_pull_after_other_lines_belongs_to_its_reading_only():
             (4.1, "floor 5 card reads: Yield My Flesh <- name, Line 4 - Section #3 <- name, Line 4 - Section #4 <- name"),
             (4.1, "floor 5: no free refresh left"),
             (4.1, "floor 5: pull 'Yield My Flesh' (-5, below the threshold)")]
-    assert [r["pull"] for r in ev.pack_readings(msgs, 5)] == [None, "Yield My Flesh"]
+    assert [r["pull"] for r in ep.pack_readings(msgs, 5)] == [None, "Yield My Flesh"]
 
 
 def test_packs_settle_runs_from_the_deal_to_eight_still_frames():
     rows = [(0, 0)] * 5 + [(30, 9)] * 20 + [(40, 1)] * 20  # empty, dealing and swinging, standing still
-    assert ev.settle(rows, k_log=30) == (5, 25, False)
-    assert ev.settle([(40, 1)] * 20, k_log=5) == (0, 0, True)  # the deal started before the footage
+    assert ep.settle(rows, k_log=30) == (5, 25, False)
+    assert ep.settle([(40, 1)] * 20, k_log=5) == (0, 0, True)  # the deal started before the footage
     # floor 1 of 2026-10-22: the screen fades in, then the cards leave a starfield of mean 6.7 before the deal
     rows = [(0.4, 0)] * 3 + [(35, 3)] * 10 + [(6.7, 9)] * 4 + [(30, 9)] * 20 + [(40, 1)] * 20
-    assert ev.settle(rows, k_log=50)[0] == 17
+    assert ep.settle(rows, k_log=50)[0] == 17
 
 
 REFRESH = """\
@@ -442,10 +445,10 @@ def test_packs_after_a_refresh_draws_the_new_hand_once_it_stands_still(tmp_path,
         grabbed.append(t)
         return Image.new("RGB", (1280, 720))
 
-    monkeypatch.setattr(ev, "frames", fake_frames)
-    monkeypatch.setattr(ev, "grab", fake_grab)
-    monkeypatch.setattr(ev, "masks_path", lambda a: None)
-    monkeypatch.setattr(ev, "load_masks", lambda path: ([1280, 720], []))
+    monkeypatch.setattr(ep, "frames", fake_frames)
+    monkeypatch.setattr(ep, "grab", fake_grab)
+    monkeypatch.setattr(ep, "masks_path", lambda a: None)
+    monkeypatch.setattr(ep, "load_masks", lambda path: ([1280, 720], []))
     (tmp_path / "run.log").write_text(REFRESH, encoding="utf-8")
     ev.main(["packs", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "packs"), "--video", "rec.mp4@15:50:00"])
     first, second = json.loads((tmp_path / "packs/packs.json").read_text(encoding="utf-8"))
@@ -456,15 +459,15 @@ def test_packs_after_a_refresh_draws_the_new_hand_once_it_stands_still(tmp_path,
 
 def test_packs_settle_takes_the_deal_from_a_refresh_swap():
     rows = [(0, 0)] * 5 + [(30, 9)] * 20 + [(40, 1)] * 20 + [(8.3, 21.5)] + [(30, 9)] * 20 + [(40, 1)] * 20
-    assert ev.settle(rows, k_log=80) == (46, 66, False)  # the Refresh at 45 deals again; the old hand stood at 25
-    assert ev.settle(rows, k_log=40) == (5, 25, False)  # a read before the Refresh keeps the first hand
+    assert ep.settle(rows, k_log=80) == (46, 66, False)  # the Refresh at 45 deals again; the old hand stood at 25
+    assert ep.settle(rows, k_log=40) == (5, 25, False)  # a read before the Refresh keeps the first hand
 
 
 def test_packs_draw_puts_a_thick_border_on_the_pulled_card():
     r = {"cards": [("A", 0, False), ("B", 3, True)], "pull": "B"}
-    px = np.asarray(ev.draw_packs(Image.new("RGB", (1280, 720)), r, "banner"))
-    x_b = int(ev.centres(2)[1])
-    assert tuple(px[300, x_b - 105 + 6]) == ev.GREEN and tuple(px[300, int(ev.centres(2)[0]) - 105 + 6]) != ev.YELLOW
+    px = np.asarray(ep.draw_packs(Image.new("RGB", (1280, 720)), r, "banner"))
+    x_b = int(ep.centres(2)[1])
+    assert tuple(px[300, x_b - 105 + 6]) == ev.GREEN and tuple(px[300, int(ep.centres(2)[0]) - 105 + 6]) != ev.YELLOW
 
 
 def test_mask_blacks_out_boxes_where_the_template_matches(tmp_path):
