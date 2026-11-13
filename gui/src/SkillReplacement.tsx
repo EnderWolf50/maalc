@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { useEditor, withBreaks } from "./ui";
+import { Choice, Input, Mark, useEditor, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -102,18 +102,18 @@ export function SkillPanel({ i }: { i: number }) {
       </ol>
       <p className="muted skill-rest">{t("skill.rest")}{rest.join(t("skill.sep")) || t("skill.rest_none")}</p>
       <p className="muted">{t("skill.uptie")}</p>
-      <div className={"toggle" + (bad(`${path}/id_skill_search`) ? " bad" : "")} data-path={`${path}/id_skill_search`}>
+      <Mark className="toggle" path={`${path}/id_skill_search`}>
         <label className="check">
-          <input type="checkbox" checked={search.enabled} onChange={(e) => edit((d) => { d.id_skill_search.enabled = e.target.checked; })} />
+          <Input type="checkbox" checked={search.enabled} onChange={(e) => edit((d) => { d.id_skill_search.enabled = e.target.checked; })} />
           {t("skill.id_search")}
         </label>
-        <select aria-label={t("skill.pay")} value={search.pay} disabled={!search.enabled}
+        <Choice aria-label={t("skill.pay")} value={search.pay} disabled={!search.enabled}
           onChange={(e) => edit((d) => { d.id_skill_search.pay = e.target.value as SkillPay; })}>
           {SKILL_PAYMENTS.map((v) => <option key={v} value={v}>{tv("skill_pay", v)}</option>)}
-        </select>
+        </Choice>
         <small>{t("skill.id_search_note")}</small>
         <small>{search.pay === "starlight" ? t("skill.pay_starlight_note") : t("skill.pay_cost_note")}</small>
-      </div>
+      </Mark>
     </details>
   );
 }

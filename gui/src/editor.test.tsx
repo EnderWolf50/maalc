@@ -2,18 +2,21 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
-import { TEXT } from "./i18n";
+import { TEXT, type Key } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
   saveSettings: (text: string) => { file.saved.push(text); file.text = text; return Promise.resolve(); },
   rootDir: () => Promise.resolve("root"),
+  onCloseRequested: (keepOpen: () => boolean) => { file.keepOpen = keepOpen; return () => {}; },
+  closeWindow: () => { file.closed++; return Promise.resolve(); },
 }));
-beforeEach(() => { file.saved = []; });
+beforeEach(() => { file.saved = []; file.keepOpen = undefined; file.closed = 0; });
 
 const zh = TEXT.zh_tw;
 const two = (prefix: string) => [1, 2].map((n) => ({ id: `${prefix}${n}`, name: `${prefix.toUpperCase()}${n}` }));
@@ -78,6 +81,41 @@ describe("the problems block", () => {
     s.teams[1].game_team = 1;
     await blocked(s, zh["tab.run"]);
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
+  });
+});
+
+describe("a field marked red", () => {
+  const box = (role: "combobox" | "checkbox" | "textbox", label: Key) => () => screen.getByRole(role, { name: zh[label] });
+  test.each([
+    ["a choice of a team", (s: Settings) => { s.teams[0].theme_pack_plan = "gone"; }, "tab.teams", /teams\/0\/theme_pack_plan/,
+      box("combobox", "team.theme_pack_plan")],
+    ["a choice of the run options", (s: Settings) => { s.run.target_floor = 10; s.run.difficulty = "normal"; s.teams.forEach((x) => { x.hard_from_floor = 1; }); },
+      "tab.run", /run\/difficulty/, box("combobox", "run.difficulty")],
+    ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, "tab.teams", /teams\/0\/guard_turns/, box("checkbox", "team.guard_turns")],
+    ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; }, "tab.run",
+      /run\/auto_download/, box("checkbox", "run.auto_download")],
+    ["a cell of an override table", (s: Settings) => { s.event_overrides = [{ question: "q", option: "a" }, { question: "q", option: "b" }]; },
+      "tab.events", /event_overrides: question/, () => screen.getAllByDisplayValue("q")[1]],
+    ["a team's on switch", (s: Settings) => { Object.assign(s.teams[0], { enabled: "yes" }); }, "tab.teams", /teams\/0\/enabled/,
+      box("checkbox", "team.enabled")],
+    ["the gift search switch", (s: Settings) => { Object.assign(s.teams[0].gift_search, { enabled: "yes" }); }, "tab.teams",
+      /teams\/0\/gift_search\/enabled/, box("checkbox", "gift.enabled")],
+    ["a starlight plan's leftover switch", (s: Settings) => { Object.assign(s.starlight_plans[0], { convert_leftover: "yes" }); },
+      "tab.starlight", /starlight_plans\/0\/convert_leftover/, box("checkbox", "starlight.convert_leftover")],
+  ] as const)("%s is invalid to a screen reader, which reads the problem", async (_, change, start, text, control) => {
+    const s = settings();
+    change(s);
+    await blocked(s, zh[start]);
+    expect(control()).toHaveAttribute("aria-invalid", "true");
+    expect(control()).toHaveAccessibleDescription(problem(text).textContent!);
+  });
+
+  test("a field the checks pass is not", async () => {
+    const s = settings();
+    s.teams[0].theme_pack_plan = "gone";
+    await blocked(s, zh["tab.teams"]);
+    expect(nameBox()).not.toHaveAttribute("aria-invalid");
+    expect(nameBox()).not.toHaveAttribute("aria-describedby");
   });
 });
 
@@ -164,6 +202,109 @@ describe("clicking a problem", () => {
   });
 });
 
+/** The user closes the window (its ✕, Alt+F4); true when the editor keeps it open. */
+const requestClose = () => {
+  let kept = false;
+  act(() => { kept = file.keepOpen!(); });
+  return kept;
+};
+/** The editor with the first team's name changed and not saved. */
+const edited = async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  return user;
+};
+
+describe("closing the window", () => {
+  beforeEach(() => { file.text = JSON.stringify(settings()); });
+
+  test("with unsaved changes, asks first and keeps the window open", async () => {
+    await edited();
+    expect(requestClose()).toBe(true);
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(zh.closeAsk);
+    expect(file.closed).toBe(0);
+  });
+
+  test("with nothing unsaved, closes without asking, also after a save", async () => {
+    const user = await edited();
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await screen.findByText(zh.saved);
+    expect(requestClose()).toBe(false);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("Close without saving closes it and writes nothing", async () => {
+    const user = await edited();
+    requestClose();
+    await user.click(screen.getByRole("button", { name: zh.closeDiscard }));
+    expect(file.closed).toBe(1);
+    expect(file.saved).toEqual([]);
+  });
+
+  test.each([
+    ["Cancel", (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole("button", { name: zh.cancel }))],
+    ["Esc", (user: ReturnType<typeof userEvent.setup>) => user.keyboard("{Escape}")],
+  ])("%s keeps the window open, the edits and the field the user was typing in", async (_, dismiss) => {
+    const user = await edited();
+    requestClose();
+    await dismiss(user);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(file.closed).toBe(0);
+    expect(nameBox()).toHaveValue("Ta!");
+    await waitFor(() => expect(nameBox()).toHaveFocus());
+  });
+
+  test("starts on Save and close, and the page behind it takes no click or key", async () => {
+    await edited();
+    requestClose();
+    expect(screen.getByRole("button", { name: zh.closeSave })).toHaveFocus();
+    const behind = document.querySelectorAll("header, nav, main");
+    expect(behind).toHaveLength(3);
+    for (const el of behind) expect(el).toHaveAttribute("inert");
+  });
+
+  test("the window may destroy itself: without the permission no close goes through, with unsaved changes or none", () => {
+    // Tauri 2 lets the page close the window once it listens to the close (manager/window.rs); core:default lacks destroy
+    expect(capability.permissions).toContain("core:window:allow-destroy");
+  });
+
+  test("Save and close saves, then closes", async () => {
+    const user = await edited();
+    requestClose();
+    await user.click(screen.getByRole("button", { name: zh.closeSave }));
+    await waitFor(() => expect(file.closed).toBe(1));
+    expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
+  });
+
+  test("Save and close with a save the checks refuse stays open and shows the problems", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    file.text = JSON.stringify(s);
+    const user = await edited();
+    requestClose();
+    await user.click(screen.getByRole("button", { name: zh.closeSave }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(file.closed).toBe(0);
+    expect(file.saved).toEqual([]);
+  });
+
+  test("the gift list tab's keys wait while it asks: a number picks no state, Esc closes only the prompt", async () => {
+    const user = await edited();
+    await user.click(tab(zh["tab.gifts"]));
+    await user.type(screen.getByRole("searchbox", { name: zh["gl.search"] }), "Burn");
+    const states = () => screen.getAllByRole("radio").map((r) => r.getAttribute("aria-checked"));
+    const before = states();
+    requestClose();
+    await user.keyboard("2");
+    expect(states()).toEqual(before);
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByRole("searchbox", { name: zh["gl.search"] })).toHaveValue("Burn");
+  });
+});
+
 describe("Ctrl+S", () => {
   /** Press Ctrl+S on the focused element; true when the editor kept the browser from its own Save page. */
   const ctrlS = (more: KeyboardEventInit = {}) => {
@@ -204,6 +345,16 @@ describe("Ctrl+S", () => {
     await waitFor(() => expect(file.saved).toHaveLength(1));
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(file.saved).toHaveLength(1);
+  });
+
+  test("while the close prompt asks, saves nothing: its buttons decide", async () => {
+    file.text = JSON.stringify(settings());
+    await edited();
+    requestClose();
+    expect(ctrlS()).toBe(true); // still not the browser's Save page
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(file.saved).toEqual([]);
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   test("on a Dvorak keyboard, the key that types O does not save", async () => {
