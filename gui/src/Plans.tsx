@@ -106,6 +106,24 @@ function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
   return <p className="muted">{names.length ? fill(t("plan.usedBy"), { names: names.join(t("gl.sep")) }) : t("plan.unused")}</p>;
 }
 
+/** A starlight plan on one line, for a team that uses it: the picks in buying order with their level, and the total. */
+export function StarlightReceipt({ value }: { value: StarlightValues }) {
+  const { s, t } = useEditor();
+  const zh = s.language === "zh_tw";
+  const order = buyOrder(value);
+  return (
+    <div className="receipt">
+      <ol>
+        {order.map((n, i) => {
+          const g = GRACES[n - 1], level = value.levels[n - 1];
+          return <li key={n}><b>{i + 1}</b>{zh && g.zh ? g.zh : g.en}{level !== "base" && <i>{level === "plus" ? "+" : "++"}</i>}</li>;
+        })}
+      </ol>
+      <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
+    </div>
+  );
+}
+
 /** A list of named plans on the left, the selected plan's editor on the right; `lead`, a read-only plan above the list. */
 function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, editor, lead }: {
   planKey: PlanKey; tab: "tab.deployment" | "tab.starlight" | "tab.themepacks"; make: () => Omit<P, "id" | "name">;

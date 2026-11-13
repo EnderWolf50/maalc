@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, SEARCH_TABS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
+import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
@@ -157,6 +157,32 @@ test("the team page's long notes show one topic to a line", () => {
   renderEditor(<TeamsTab />, settings());
   const keys = ["team.gift_list_note", "team.hard_from_floor_note", "team.min_alive_note", "keep.sell_vestiges_note", "skill.note"] as const;
   for (const key of keys) expectLines(zh[key]);
+});
+
+describe("a team on a starlight plan", () => {
+  const levels = GRACES.map(() => "none");
+  levels[2] = "plus";
+  levels[0] = "base";
+  const onPlan = (): Settings => {
+    const s = settings();
+    s.starlight_plans = [{ id: "p1", name: "Cheap", levels, priority: [3, 1, 2, 4, 5, 6, 7, 8, 9, 10], convert_leftover: false }];
+    s.teams[0].starlight = { plan: "p1" };
+    return s;
+  };
+
+  test("shows the plan's picks in buying order with their level and the total; the cards are folded away", () => {
+    renderEditor(<TeamsTab />, onPlan());
+    const receipt = document.querySelector(".receipt")!;
+    expect([...receipt.querySelectorAll("li")].map((li) => li.textContent)).toEqual([`1${GRACES[2].zh}+`, `2${GRACES[0].zh}`]);
+    expect(receipt).toHaveTextContent(`★ ${starlightCost(levels)}`);
+    expect(document.querySelector(".starlight")!.closest("details")).not.toHaveAttribute("open");
+  });
+
+  test("a team's own starlight shows the cards to edit, no receipt", () => {
+    renderEditor(<TeamsTab />, settings());
+    expect(document.querySelector(".receipt")).toBeNull();
+    expect(document.querySelector(".starlight")!.closest("details")).toBeNull();
+  });
 });
 
 describe("the E.G.O Gift Search keyword tabs", () => {

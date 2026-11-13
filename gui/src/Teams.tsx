@@ -7,7 +7,7 @@ import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
-import { SinnerGrid, StarlightEditor } from "./Plans";
+import { SinnerGrid, StarlightEditor, StarlightReceipt } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
 import { Field, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
@@ -150,7 +150,14 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
-        ) : starPlan && <StarlightEditor value={starPlan} path={`${path}/starlight`} />}
+        ) : starPlan && <>
+          {/* a plan is edited on its own tab: here its picks on one line, the cards folded away */}
+          <StarlightReceipt value={starPlan} />
+          <details className="hint">
+            <summary>{t("starlight.cards")}</summary>
+            <StarlightEditor value={starPlan} path={`${path}/starlight`} />
+          </details>
+        </>}
       </fieldset>
 
       <GiftSearchPanel i={i} />
@@ -335,7 +342,7 @@ function GiftSearchPanel({ i }: { i: number }) {
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
             render={(g, j) => (
               <>
-                {j + 1}. {refName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small>{" "}
+                {j + 1}. {refName(g, zh)} <small className="muted">{t(kwText(g.keyword))} {TIERS[g.tier]}</small>{" "}
                 <button type="button" className="icon" aria-label={t("remove")} title={t("remove")}
                   onClick={(e) => { e.stopPropagation(); set({ gifts: toggleGift(search.gifts, g) }); }}>×</button>
               </>

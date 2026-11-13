@@ -1,7 +1,7 @@
 /* The settings window drawn in the Mirror Dungeon's own UI language: a warm near-black ground, bronze rules, chamfered frames,
- * condensed numerals, amber for what is in use, teal for what is kept, crimson for errors. Dark is the primary theme; the light
- * theme inverts lightness and keeps every colour's job. The game-styled panels (sinner grid, Grace of the Star, E.G.O Gift
- * Search) stay dark in both, as the game draws them. */
+ * condensed numerals, amber for what is in use, teal for what is kept, crimson for errors, the caution stripe for what needs
+ * care. Dark is the primary theme; the light theme inverts lightness and keeps every colour's job, the game-styled panels'
+ * too. Grace of the Star alone wears the season's colours. */
 :root {
   color-scheme: dark;
   --bg: #120e0b;
@@ -191,6 +191,8 @@ nav button {
   color: var(--muted); font-weight: 600; border-radius: 8px 8px 0 0; corner-shape: bevel;
 }
 nav button:hover:not(:disabled) { color: var(--fg); background: var(--hov); border-color: transparent; }
+/* the tabs in groups: what a run plays with, the plans, the overrides, the daily tasks */
+nav button:nth-child(4), nav button:nth-child(7), nav button:nth-child(9) { margin-left: 18px; }
 nav button.selected { color: var(--fg); background: var(--bg); border-color: var(--line-2); }
 nav button.selected::after { content: ""; position: absolute; left: 12px; right: 12px; top: 0; height: 3px; background: var(--accent-line); }
 nav button.bad { color: var(--bad); }
@@ -223,7 +225,7 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
   background: repeating-linear-gradient(-45deg, var(--hazard) 0 3px, var(--hazard-2) 3px 6px);
 }
 p.caution { margin: 0; max-width: 56em; }
-.toggle small.caution { padding-left: 23px; }
+.toggle small.caution { padding-left: 23px; color: var(--fg); }
 .toggle small.caution::before { left: 0; }
 p.muted { margin: 0; max-width: 56em; }
 .notice { color: var(--accent-ink); margin: 4px 0; }
@@ -249,7 +251,8 @@ aside > p.muted { font-size: 12.5px; }
 .field:has(> input[type="checkbox"]) > input { grid-row: 1; grid-column: 1; }
 .field:has(> input[type="checkbox"]) > small { grid-column: 1 / -1; }
 .field small { color: var(--muted); font-size: 12px; line-height: 1.45; }
-.check { display: flex; align-items: center; gap: 8px; }
+.check { display: flex; align-items: flex-start; gap: 8px; }
+.check > input[type="checkbox"] { margin-top: 3px; }
 
 .bad > select, .bad > input, .bad input, .bad select, ol.reorder li.bad, table.bad, .bad > .reorder {
   border-color: var(--bad) !important; outline: 1px solid var(--bad);
@@ -307,11 +310,11 @@ ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--mute
 /* The team list is the queue: its place shows as the game's TEAMS number plate does. */
 .queue ol.reorder { counter-reset: q; }
 .queue ol.reorder li { counter-increment: q; }
-.queue ol.reorder li::before {
-  content: counter(q); min-width: 22px; text-align: center; font: 700 15px/20px var(--font-display); color: var(--fg);
-  background: var(--line); border-radius: 3px; corner-shape: bevel;
+.queue ol.reorder li::before { content: counter(q) "."; min-width: 18px; text-align: right; font: 600 15px/20px var(--font-display); color: var(--muted); }
+.queue ol.reorder li.selected::before { color: var(--fg); }
+.queue ol.reorder .item small {
+  margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
 }
-.queue ol.reorder li.selected::before { background: var(--accent); color: var(--on-accent); }
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }
 
 table { border-collapse: collapse; background: var(--panel); }
@@ -326,6 +329,7 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 
 .load-error { padding: 24px; }
 .team, .stack { display: flex; flex-direction: column; gap: 14px; }
+.stack > button { align-self: flex-start; }
 
 /* Team page, laid out like AALC's: the name plate, the sinner grid, starlight selectors, then the rest. */
 .team > fieldset { align-items: stretch; min-width: 0; }
@@ -423,6 +427,17 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .grace-side .total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; color: var(--season-ink-2); }
 .grace-side .total b { font: 700 26px/1 var(--font-display); color: var(--season-ink); }
 .grace-side .check { color: var(--season-ink); font-size: 12.5px; }
+/* A team on a starlight plan: the plan's picks on one line, in the season's plate colour. */
+.receipt {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; padding: 8px 12px; background: var(--raise);
+  border: 1px solid var(--season-plate); border-radius: 8px 0 8px 0; corner-shape: bevel;
+}
+.receipt ol { display: flex; flex-wrap: wrap; gap: 6px 16px; list-style: none; margin: 0; padding: 0; }
+.receipt li { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.receipt li b { min-width: 20px; text-align: center; font: 700 15px/20px var(--font-display); background: var(--gold); color: #1a1406; }
+.receipt li i { font: 700 15px/1 var(--font-display); font-style: normal; color: var(--accent-ink); }
+.receipt .total { margin-left: auto; color: var(--fg-2); }
+.receipt .total b { font: 700 20px/1 var(--font-display); color: var(--fg); }
 
 /* Skill replacement (#454), the layout the user adopted on 2026-11-06: one line per listed sinner, in priority order. */
 details.skill-panel > * + * { margin-top: 8px; }
@@ -493,22 +508,21 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
   background: var(--gold); color: #1a1406; font: 700 16px/1 var(--font-display);
 }
 
-/* Theme pack plan, design A of #240: lanes of weights, the refresh threshold between them as the game's caution stripe. */
+/* Theme pack plan, design A of #240: lanes of weights, the refresh threshold between them as a double rule. */
 /* Filters: difficulty, then the view switch at the right; the floors on a row of their own. */
 .packbar { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; align-items: center; }
 .packbar .seg { display: flex; flex-wrap: wrap; gap: 4px; }
 .packbar .floors { grid-column: 1 / -1; }
 .lanes + .field { max-width: 320px; }
 .chip { padding: 2px 10px; font: 600 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg-2); background: var(--panel); border-color: var(--line); }
-.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-hi); border-color: var(--accent-hi); }
+.chip[aria-pressed="true"] { background: var(--sel); border-color: var(--accent-line); color: var(--fg); box-shadow: inset 0 -2px var(--accent-line); }
+.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--sel); border-color: var(--accent-line); }
 /* A difficulty chip carries its badge's colour, as the legend under it does. */
 .chip.mode { --c: var(--fl-n); display: inline-flex; align-items: center; gap: 6px; }
 .chip.mode.hard { --c: var(--fl-h); }
 .chip.mode.inf { --c: var(--fl-i); }
 .chip.mode.ext { --c: var(--fl-x); }
 .chip.mode::before { content: ""; width: 8px; height: 8px; transform: rotate(45deg); background: var(--c); }
-.chip.mode[aria-pressed="true"]::before { box-shadow: 0 0 0 1px var(--on-accent); }
 .lanes { display: flex; flex-direction: column; padding: 4px 14px; }
 .lane { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); min-height: 40px; }
 .lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }

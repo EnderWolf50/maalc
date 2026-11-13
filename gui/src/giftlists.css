@@ -181,7 +181,7 @@
 .gl-ico { width: 24px; height: 24px; object-fit: contain; flex: none; pointer-events: none; }
 .gl-gr small { color: var(--gl-muted); }
 /* The arrow buttons are small, as in the mockup. */
-.gl .gl-mini { padding: 0 4px; min-width: 20px; font-size: 9px; line-height: 15px; border-radius: 5px; }
+.gl .gl-mini { padding: 0 4px; min-width: 20px; font-size: 9px; line-height: 15px; border-radius: 3px; corner-shape: bevel; }
 .gl .gl-accbar .gl-mini { font-size: 12px; padding: 0 8px; }
 /* List options menu (GiftListOptions.tsx): a popover under its button. */
 .gl-opts { position: relative; }
