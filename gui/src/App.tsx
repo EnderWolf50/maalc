@@ -249,7 +249,7 @@ export default function App() {
         <button type="button" className="undo" disabled={!undoDepth} title={`${t("undo")} (Ctrl+Z)`} onClick={undo}>
           <Icon name="undo" />{t("undo")}
         </button>
-        <button type="button" className="primary" onClick={save}>{t("save")}</button>
+        <button type="button" className="primary" title={`${t("save")} (Ctrl+S)`} onClick={save}>{t("save")}</button>
       </header>
       {/* What a tab's red dot says to a screen reader, as the tab's description (its name stays the label). */}
       <span id="has-problem" hidden>{t("hasProblem")}</span>
