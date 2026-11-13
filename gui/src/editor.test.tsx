@@ -223,6 +223,19 @@ describe("a problem shows while editing, before any save", () => {
     marked(slot(), zh["tab.teams"]);
   });
 
+  test("a shown clash that a schema error typed for a moment hid comes back at once when the error is typed away", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
+    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 4 });
+    const user = await openOn(s, zh["tab.teams"]);
+    await pickInList(user, "Tc");
+    await user.type(slot(), "5"); // #45: above the game's 40, so the checks across teams wait for it
+    expect(bad()).toEqual([false, false, false]);
+    await user.keyboard("{Backspace}"); // #4 again
+    expect(bad()).toEqual([true, true, false]);
+    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+  });
+
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
     const s = settings();
     s.teams.push({ ...newTeam(3, "Tc"), id: "c" });

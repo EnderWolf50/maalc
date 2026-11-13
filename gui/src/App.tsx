@@ -37,12 +37,14 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
+/** Whether a problem's path is the field's or under it: what the field's frame marks ("teams/1" marks "teams/1/name"). */
+const within = (path: string, field: string) => path === field || path.startsWith(field + "/");
 /** While the field at settings path `at` is typed in: `p` with the fields it marked before the last keystroke (`before`, the
  * problems shown then), or nothing for a problem the typing made. A problem is the one of its kind it was by a field it marks
  * outside the typed one, not by its words, which name what the user is typing: the typed field's own mark may now be another
  * problem of the kind (TEAMS #1 typed into #12, one clash for another). A problem of the typed field alone is matched by it. */
 function asBefore(p: Problem, at: string, before: Problem[]): Problem[] {
-  const inField = (m: string) => at !== "" && (m === at || m.startsWith(at + "/"));
+  const inField = (m: string) => at !== "" && within(m, at);
   const outside = p.paths.every(inField) ? p.paths : p.paths.filter((m) => !inField(m));
   const was = before.filter((q) => q.say.key === p.say.key && q.paths.some((m) => outside.includes(m)));
   const paths = p.paths.filter((m) => was.some((q) => q.paths.includes(m)));
@@ -225,7 +227,7 @@ export default function App() {
 
   // a marked field's controls are described by the problems' text (#695)
   const problemIds = (path: string) => shown
-    .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
+    .flatMap((p, i) => (p.paths.some((m) => within(m, path)) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
     s, problemIds, giftList, picked, setPicked,
     // any edit makes the edits that the revert (放棄變更) dropped no longer the newest: its Undo goes
@@ -362,7 +364,10 @@ export default function App() {
         onChange={(e) => {
           if (!(e.target === document.activeElement && typesText(e.target))) return;
           const at = (e.target as HTMLElement).closest<HTMLElement>("[data-path]")?.dataset.path ?? "";
-          setTyped({ field: e.target, at, before: shown });
+          // a schema error stops the checks across objects (validate): what they showed is kept for when it is typed away
+          const crossHidden = held && problems.some((p) => p.say.key === "problem.schema")
+            ? held.before.filter((p) => p.say.key !== "problem.schema") : [];
+          setTyped({ field: e.target, at, before: [...crossHidden, ...shown] });
         }}
         onBlur={() => setTyped(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
