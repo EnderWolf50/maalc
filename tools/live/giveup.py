@@ -53,8 +53,8 @@ from live import screen_probe  # noqa: E402
 
 BATTLE_GEAR = (1235, 40)  # the pause menu's gear, top right of the planning phase (tests/screens/BattleTurn.png)
 GIVE_UP = (640, 428)  # the pause menu's Give Up bar (BattleMenu.png)
-ACCEPT_RESULTS, WIPE_CONFIRM = (790, 446), (645, 527)  # the DEFEAT dialog's card and Confirm (actions.DEFEAT_OPTIONS, DEFEAT_CONFIRM)
-FORMATION_BACK = (98, 43)  # actions.FORMATION_BACK
+ACCEPT_RESULTS, WIPE_CONFIRM = (790, 446), (645, 527)  # the DEFEAT dialog's card and Confirm (battle_actions.DEFEAT_OPTIONS, DEFEAT_CONFIRM)
+FORMATION_BACK = (98, 43)  # battle_actions.FORMATION_BACK
 MAP_GEAR = (1232, 45)  # map_actions.GEAR
 FORFEIT = (541, 435)  # the Dungeon Progress panel's Forfeit (map_actions.FORFEIT)
 FORFEIT_CONFIRM = (760, 488)  # map_actions.FORFEIT_CONFIRM

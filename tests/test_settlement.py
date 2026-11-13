@@ -17,6 +17,7 @@ from agent_patch import patch_all
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
+    import battle_actions
     import map_actions
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
@@ -479,7 +480,7 @@ def mirror_task(context, monkeypatch, runs):
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     reads = {"formation": "3/3", "defeat": "All participating Sinners have been killed.", "panel": "Dungeon Progress", "quit": "Quit exploring the dungeon?",
              "reward": "Floor 1 [NORMAL] 0/6", "giveup": "End expedition without claiming rewards?", "cleared": "Floor 5 [NORMAL] 6/6"}
-    leads = {("formation", actions.FORMATION_BACK): "map", ("defeat", actions.DEFEAT_CONFIRM): "map", ("map", map_actions.GEAR): "panel", ("panel", map_actions.FORFEIT): "quit",
+    leads = {("formation", battle_actions.FORMATION_BACK): "map", ("defeat", battle_actions.DEFEAT_CONFIRM): "map", ("map", map_actions.GEAR): "panel", ("panel", map_actions.FORFEIT): "quit",
              ("quit", map_actions.FORFEIT_CONFIRM): "reward", ("reward", actions.GIVE_UP): "giveup",
              ("giveup", actions.DIALOG_CONFIRM): "entry", ("cleared", actions.CLAIM): "entry"}
     plan, page, started, logged = iter(runs), ["entry"], [], []
@@ -495,14 +496,14 @@ def mirror_task(context, monkeypatch, runs):
     patch_all(monkeypatch, "tap", tap)
     patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False: [(reads[page[0]], (0, 0, 9, 9))] if page[0] in reads else [])
     patch_all(monkeypatch, "toggles", lambda context, image: [False] * 3)
-    patch_all(monkeypatch, "dead_sinners", lambda image: set(actions.battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
+    patch_all(monkeypatch, "dead_sinners", lambda image: set(battle_actions.battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
     patch_all(monkeypatch, "log", logged.append)
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     for run in runs:
         actions.TASK["modules"] = 20  # what OpenDrive read on the way to the entry page (#369)
         actions.PlanRun().run(context, None)
         if run != "C":
-            (actions.Formation if run == "F" else actions.Wipe)().run(context, None)
+            (battle_actions.Formation if run == "F" else battle_actions.Wipe)().run(context, None)
             map_actions.RouteMap().run(context, None)
         actions.Settle().run(context, None)
     actions.TASK["modules"] = 20
