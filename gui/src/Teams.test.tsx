@@ -12,9 +12,10 @@ import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
 
 // The editor reads its settings through api.ts, which falls back to the browser's localStorage; the tests give it a file's text.
-const file = vi.hoisted(() => ({ text: "" }));
+const file = vi.hoisted(() => ({ text: "", resets: [] as string[] }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
+  resetTeamTimes: (id: string) => { file.resets.push(id); return Promise.resolve(); },
   loadSettings: () => Promise.resolve(file.text),
   saveSettings: () => Promise.resolve(),
   rootDir: () => Promise.resolve("root"),
@@ -32,6 +33,25 @@ const settings = (ref = "mine", language: Settings["language"] = "zh_tw"): Setti
 });
 const choice = () => screen.getByRole("combobox", { name: new RegExp(zh["team.gift_list"]) });
 const mainOf = () => screen.getByText(zh["team.main_keyword"], { exact: false }).closest("small")!;
+
+describe("Reset time records", () => {
+  beforeEach(() => { file.resets = []; });
+
+  test("asks in the page, not in a browser dialog; Cancel writes nothing, the confirm writes the marker", async () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const r = renderEditor(<TeamsTab />, settings());
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByRole("group", { name: zh.resetTimes })).toHaveTextContent(zh.resetConfirm);
+    await r.user.click(screen.getByRole("button", { name: zh.cancel }));
+    expect(file.resets).toEqual([]);
+    expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    await r.user.click(screen.getByRole("button", { name: zh.resetGo }));
+    expect(file.resets).toEqual([r.settings().teams[0].id]);
+    expect(await screen.findByText(zh.resetDone)).toBeInTheDocument();
+  });
+});
 
 describe("the gift list choice", () => {
   test("the dropdown offers the default and the user's lists, with the team's chosen", () => {

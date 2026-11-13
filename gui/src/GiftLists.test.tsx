@@ -1,5 +1,5 @@
 // Component tests of the gift list tab: what the user sees and does, and what the settings hold afterwards.
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { CATALOG, GIFT_BY_ID, iconUrl, keywordIconUrl } from "./giftCatalog";
@@ -207,6 +207,18 @@ describe("locked gifts", () => {
     await r.user.click(t);
     expect(flash()).toBe(say(zh["gl.lock_why"], { name: g.zh, by: nameOf(fixed.id) }));
     expect(list(r)).toMatchObject({ want: [fixed.id], keep: [] });
+  });
+
+  test("the fusion note shows once per keyword: the later tiers with fusions only say they hold some", async () => {
+    await open([mine()]);
+    for (const tab of screen.getAllByRole("tab")) {
+      fireEvent.click(tab);
+      const notes = [...document.querySelectorAll(".gl-tier h4 small")].map((x) => x.textContent!);
+      const full = notes.filter((x) => x.includes(zh["gl.tier_fusion"])).length;
+      const short = notes.filter((x) => x.includes(zh["gl.tier_fusion_short"])).length;
+      expect(full).toBeLessThanOrEqual(1);
+      if (short) expect(full).toBe(1);
+    }
   });
 
   test("a locked material is no gift the list set: the tab count and the heading's kept count leave it out", async () => {

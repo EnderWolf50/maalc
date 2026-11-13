@@ -38,7 +38,7 @@
 .gl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
 .gl-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 4px; corner-shape: bevel; color: var(--gl-muted); }
 .gl-tab:hover { color: var(--gl-fg); }
-.gl .gl-tab.on { color: var(--gl-fg); font-weight: 700; background: var(--gl-sel); }
+.gl .gl-tab.on { color: var(--gl-fg); font-weight: 700; background: var(--gl-sel); border-color: var(--accent-line); } /* as the team page's keyword tabs */
 .gl-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; background: var(--muted); }
 .gl-dot.big { width: 22px; height: 22px; }
 .gl-kwi { width: 16px; height: 16px; object-fit: contain; flex: none; }

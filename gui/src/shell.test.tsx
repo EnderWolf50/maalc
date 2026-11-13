@@ -1,7 +1,7 @@
 // The editor's shell (App.tsx): the main tabs from the keyboard, and the save state in the header when a save is refused.
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam } from "./model";
@@ -116,4 +116,62 @@ test("an edit after a refused save still shows the refusal, with the unsaved cha
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked");
   expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 }));
   expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
+});
+
+test("a problem made before any save already says Save must wait, on the plate and on Save; the fields are not marked yet", async () => {
+  const ok = newSettings();
+  ok.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+  file.text = JSON.stringify(ok, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  const save = await screen.findByRole("button", { name: zh.save });
+  await user.click(screen.getAllByRole("listitem")[1]);
+  const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
+  fireEvent.change(slot, { target: { value: "1" } });
+  const plate = document.querySelector(".status")!;
+  expect(plate).toHaveAttribute("data-state", "blocked");
+  expect(plate).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
+  expect(save).toHaveClass("refused");
+  expect(save).not.toHaveClass("armed");
+  expect(slot).not.toHaveAttribute("aria-invalid");
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+describe("Revert", () => {
+  const edited = async () => {
+    const ok = newSettings();
+    ok.teams = [newTeam(1, "Ta")];
+    file.text = JSON.stringify(ok, null, 2) + "\n";
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+    return user;
+  };
+
+  test("shows only while there are unsaved changes", async () => {
+    render(<App />);
+    await screen.findByRole("button", { name: zh.save });
+    expect(screen.queryByRole("button", { name: zh.revert })).toBeNull();
+  });
+
+  test("puts the file's settings back, says so, and Undo brings the edits back", async () => {
+    const user = await edited();
+    await user.click(screen.getByRole("button", { name: zh.revert }));
+    expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Ta");
+    const plate = document.querySelector(".status")!;
+    expect(plate).toHaveTextContent(zh.reverted);
+    expect(plate).not.toHaveTextContent(zh.unsaved);
+    await user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Ta!");
+    expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
+    expect(file.saved).toEqual([]);
+  });
+
+  test("an edit after it drops the Undo: the edits it would bring back are no longer the newest", async () => {
+    const user = await edited();
+    await user.click(screen.getByRole("button", { name: zh.revert }));
+    await user.type(screen.getByRole("textbox", { name: zh.name }), "?");
+    expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
+    expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Ta?");
+  });
 });

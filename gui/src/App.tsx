@@ -48,6 +48,8 @@ export default function App() {
   // The window was closed, or the page asked to reload (F5, Ctrl+R), with unsaved changes: the prompt for that shows (#695, #702).
   const [asking, setAsking] = useState<false | Leave>(false);
   const [maximized, setMaximized] = useState(false); // the window fills the screen: the title bar offers Restore
+  // The edits Revert dropped: Undo puts them back while the editor still holds the file's settings.
+  const [revertedFrom, setRevertedFrom] = useState<Settings | null>(null);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -190,7 +192,8 @@ export default function App() {
   });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
-  const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
+  // shown beside "unsaved" too (a refused save, the file read again), but not what an edit since has made stale
+  const note = status === "saved" || status === "reverted" ? "" : said;
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
@@ -239,6 +242,19 @@ export default function App() {
       onDiscard={() => { setAsking(false); leave(asking); }} />
   );
 
+  /** Back to the file's settings, every unsaved edit dropped; Undo, beside the plate, brings them back until the next edit. */
+  const revert = () => {
+    setRevertedFrom(s);
+    setS(JSON.parse(savedText) as Settings);
+    setFailed(false);
+    setStatus("reverted");
+  };
+  const undoRevert = () => {
+    setS(revertedFrom);
+    setRevertedFrom(null);
+    setStatus("");
+  };
+
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
     const [section, index] = path.split("/");
@@ -250,16 +266,18 @@ export default function App() {
   };
 
   const Current = TABS.find((x) => x[0] === tab)![2];
-  const blocked = checked && problems.length > 0; // the marks show: a save cannot go through until they are fixed
-  // The save state plate: problems to fix (a refused save, or problems made after the checks first ran), a write that failed,
-  // unsaved, saved, or a note. Save takes the crimson frame while the marked problems stop it or after a write failed, the
-  // caution stripe while unsaved changes can go through, neither while a problem not yet marked would stop it.
-  const state = blocked ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  const blocked = checked && problems.length > 0; // the marks and the problems block show, from the first save attempt on
+  // The save state plate: problems to fix (a refused save, or problems a save would meet: the plate tells them before the
+  // fields are marked), a write that failed, unsaved, saved, or a note. Save takes the crimson frame while problems stop it
+  // or after a write failed, the caution stripe while unsaved changes can go through.
+  const state = problems.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
   const stateText = [
-    blocked && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: problems.length }),
-    dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!blocked && t("saveState.clean")),
+    problems.length > 0 && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: problems.length }),
+    dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!problems.length && t("saveState.clean")),
   ].filter(Boolean).join(" · ");
-  const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" && !problems.length ? " armed" : "";
+  const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
+  const canRevert = dirty && savedText !== ""; // a file to go back to: a new one has none
+  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty;
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: ReactKeyboardEvent) => {
     const next = nextTab(TABS.map((x) => x[0]), tab, e.key);
@@ -282,6 +300,8 @@ export default function App() {
           </select>
         </label>
         <span className="status" data-state={state} aria-live="polite">{stateText}</span>
+        {canRevert && <button type="button" className="quiet" title={t("revert.note")} onClick={revert}>{t("revert")}</button>}
+        {canUndoRevert && <button type="button" className="quiet" onClick={undoRevert}>{t("undo")}</button>}
         <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
         <WindowButtons maximized={maximized} onError={(e) => setStatus(String(e))} />
       </header>
@@ -294,6 +314,8 @@ export default function App() {
       </nav>
       <main inert={!!asking}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+          {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
+          <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
           {blocked && (
             <div className="problems" role="alert">
@@ -523,15 +545,24 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
 }
 
 function EventsTab() {
-  return <OverrideTable listKey="event_overrides" blank={{ question: "", option: "" }}
-    cols={[{ key: "question", label: "event.question" }, { key: "option", label: "event.option" }]} />;
+  const { t } = useEditor();
+  return (
+    <div className="stack">
+      <p className="muted">{withBreaks(t("event.note"))}</p>
+      <OverrideTable listKey="event_overrides" blank={{ question: "", option: "" }}
+        cols={[{ key: "question", label: "event.question" }, { key: "option", label: "event.option" }]} />
+    </div>
+  );
 }
 
 function TrialsTab() {
   const { t } = useEditor();
   return (
     <div className="stack">
-      <p className="muted">{withBreaks(t("trial.note"))}</p>
+      <details className="hint">
+        <summary>{t("trial.help")}</summary>
+        <p>{withBreaks(t("trial.note"))}</p>
+      </details>
       <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
         cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
     </div>

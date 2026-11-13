@@ -114,10 +114,13 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
         {c.keep > 0 && <span className="gl-tag keep">{fill(t("gl.n_keep"), { n: c.keep })}</span>}
         {c.fusion > 0 && <span className="gl-tag fusion">{fill(t("gl.n_fusion"), { n: c.fusion })}</span>}
       </h3>
-      {blocks.map(({ tier, ids }) => {
+      {blocks.map(({ tier, ids }, b) => {
         const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
         const set = ids.filter((id) => state(list, id) !== "drop").length;
-        const note = kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
+        // the fusion note in full once, at the keyword's highest tier with fusions; a lower one only says it holds some
+        const fusionAbove = blocks.slice(0, b).some((x) => x.ids.some((id) => GIFT_BY_ID.get(id)!.kind === "fusion"));
+        const note = kinds.includes("fusion") ? t(fusionAbove ? "gl.tier_fusion_short" : "gl.tier_fusion")
+          : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>

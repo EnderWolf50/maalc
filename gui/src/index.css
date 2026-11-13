@@ -110,7 +110,9 @@ body { margin: 0; }
 #root { display: flex; flex-direction: column; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 h1 { font-size: 16px; margin: 0; }
-h4 { margin: 0 0 6px; font-size: 13.5px; color: var(--fg-2); }
+h3, h4 { margin: 0 0 6px; font-size: 13.5px; color: var(--fg-2); }
+/* There for a screen reader's list of headings, not for the eye. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 * { scrollbar-color: var(--line-2) var(--bg); }
 
 /* Controls: standard ones, in the game's chamfered plates. */
@@ -160,9 +162,11 @@ header h1 {
 header .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 header .lang { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
 header button { white-space: nowrap; } /* a long status wraps, not Save */
+/* Revert and its Undo: beside the plate, quieter than Save */
+header button.quiet { padding: 4px 12px; font-size: 13px; color: var(--fg-2); background: none; }
 /* The save state: a plate whose mark and colour say clean, unsaved, saved or blocked; the text is the app's own. */
 header .status {
-  display: inline-flex; align-items: center; gap: 8px; max-width: 34em; padding: 3px 10px; font-size: 13px; color: var(--fg-2);
+  display: inline-flex; align-items: center; gap: 8px; min-width: 10em; max-width: 34em; padding: 3px 10px; font-size: 13px; color: var(--fg-2);
   border: 1px solid transparent; border-radius: 4px; corner-shape: bevel;
 }
 header .status::before { content: ""; flex: none; width: 9px; height: 9px; transform: rotate(45deg); background: var(--muted); }
@@ -233,8 +237,8 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 /* The close prompt (App.tsx ClosePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ask {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; width: min(440px, 100%);
-  box-shadow: 0 12px 40px #0005;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px 0 12px 0; corner-shape: bevel; padding: 16px 18px;
+  width: min(440px, 100%); box-shadow: 0 12px 40px #0005;
 }
 .ask p { margin: 0 0 14px; font-weight: 600; }
 .ask-buttons { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
@@ -250,6 +254,10 @@ p.caution { margin: 0; max-width: 56em; }
 .toggle small.caution::before { left: 0; }
 p.muted { margin: 0; max-width: 56em; }
 .notice { color: var(--accent-ink); margin: 4px 0; }
+/* A question asked in the page (Reset time records): the question, then its buttons. */
+.notice.confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; color: var(--fg);
+  background: var(--raise); border: 1px solid var(--line-2); border-radius: 6px 0 6px 0; corner-shape: bevel; }
+.notice.confirm span { flex: 1 1 24em; }
 .split aside .notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 10px; margin: 0;
   color: var(--fg-2); font-size: 12.5px; background: var(--raise); border: 1px dashed var(--line-2); }
 .split aside .notice button { padding: 1px 10px; }
@@ -281,7 +289,7 @@ aside > p.muted { font-size: 12.5px; }
 .bad > select, .bad > input, .bad input, .bad select, ol.reorder li.bad, table.bad, .bad > .reorder {
   border-color: var(--bad) !important; outline: 1px solid var(--bad);
 }
-h4.bad, p.bad, .check.bad { color: var(--bad); }
+h3.bad, h4.bad, p.bad, .check.bad { color: var(--bad); }
 
 /* Frames: fieldset, collapsible panels, bars. A chamfer at two corners, a bronze rule, the title as a plate. */
 fieldset, details.panel, .bar, .lanes {
@@ -523,7 +531,7 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .gift-tabs button:hover:not(:disabled) { color: var(--fg); }
 .gift-tabs button.selected { background: var(--sel); border-color: var(--accent-line); color: var(--fg); font-weight: 700; }
 .gift-tabs b { padding: 0 5px; background: var(--accent); color: var(--on-accent); font: 700 13px/16px var(--font-display); border-radius: 2px; }
-.gift-tier h4 { margin: 0 0 6px; padding: 2px 10px; background: var(--raise); color: var(--accent-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
+.gift-tier h3 { margin: 0 0 6px; padding: 2px 10px; background: var(--raise); color: var(--accent-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
 .gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .gift {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
@@ -610,6 +618,7 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
   main { padding: 14px 14px 24px; }
   .split { gap: 14px; }
   .split aside { width: 190px; }
+  .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */
   .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
   .sinner .num { font-size: 28px; left: 7px; }
   .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }

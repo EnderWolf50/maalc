@@ -52,6 +52,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState("");
+  const [askReset, setAskReset] = useState(false); // Reset time records asks first, in the page
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -95,12 +96,20 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}
         </Mark>
         <span className="spacer" />
-        <button type="button" onClick={async () => {
-          if (!confirm(t("resetConfirm"))) return;
-          try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
-        }}>{t("resetTimes")}</button>
+        <button type="button" onClick={() => setAskReset(true)}>{t("resetTimes")}</button>
         <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>
       </div>
+      {askReset && (
+        // asked in the page, not in a browser dialog: the window has no system frame for one to match
+        <div className="notice confirm" role="group" aria-label={t("resetTimes")}>
+          <span>{t("resetConfirm")}</span>
+          <button type="button" autoFocus onClick={async () => {
+            setAskReset(false);
+            try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
+          }}>{t("resetGo")}</button>
+          <button type="button" onClick={() => setAskReset(false)}>{t("cancel")}</button>
+        </div>
+      )}
       {notice && <p className="notice">{notice}</p>}
       {/* What the team plays with, under its name: read and changed without scrolling past the grids. */}
       <div className="bar lists">
@@ -224,7 +233,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           </Field>
         </div>
         <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")} data-path={`${path}/reward_cards`}>
-          <h4>{t("team.reward_cards")}</h4>
+          <h3>{t("team.reward_cards")}</h3>
           <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
             render={(x, j) => <>{j + 1}. {x}</>} />
         </div>
@@ -270,7 +279,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
       </div>
       {[3, 2, 1].map((tier) => (
         <div key={tier} className="gift-tier">
-          <h4>{TIERS[tier]}</h4>
+          <h3>{TIERS[tier]}</h3>
           <div className="gifts">
             {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
               const m = mark(g);
@@ -345,7 +354,7 @@ function GiftSearchPanel({ i }: { i: number }) {
       <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>
-        <h4>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h4>
+        <h3>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
