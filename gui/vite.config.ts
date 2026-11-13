@@ -14,5 +14,6 @@ export default defineConfig({
     watch: { ignored: ["**/src-tauri/**"] },
   },
   // Component tests (src/*.test.tsx) render into jsdom; the pure-function tests do not care which environment they run in.
-  test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"] },
+  // index.css is processed so a test can read what a rule sets (`import css from "./index.css?raw"`; unprocessed, it is "").
+  test: { environment: "jsdom", setupFiles: ["./src/test-setup.ts"], css: { include: [/index\.css/] } },
 });

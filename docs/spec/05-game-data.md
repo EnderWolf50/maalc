@@ -23,6 +23,7 @@
 | 觀測飾品表 `gift_search.json` 與圖示 `image/GiftSearch/<id>.png` | E.G.O Gift Search 頁找飾品（位置預測、圖示比對）；GUI 的飾品清單 | 開發者每季依遊戲客戶端的觀測表重新產生（產生方式寫在檔頭 `note` 與 [04-settings.md](04-settings.md) 第 9 節） | 1.118.1 的 321 個（9302 是新的），另有 5 個殘影圖示（9991–9995，#161） | #54 |
 | 合成飾品表 `gift_recipes.json` 與圖示 `image/GiftRecipe/<id>.png` | 飾品清單把合成品標成想要時，查它的配方與材料（固定配方、月之記憶的 N 選 K） | 開發者每季跑 `tools/gift_recipes.py`（中文名取自 LLC release）（用法寫在工具檔頭與 `note`，要 `bench` 號碼牌） | 1.118.1 的 61 個合成品（60 個固定配方共 68 條，月之記憶 1 條 N 選 K；9301 是新的），其中 40 條固定配方（`isSpecific`）用到主題包專屬飾品，該合成品帶 `specific: true` 與 `packs`（那些主題包的 id，取自各包 `specificEgoGiftPool`）；另有 13 個 `gift_search.json` 沒有的材料，與 `extra_gifts`（遊戲資料 9000–9999 其餘有名字的 id，466 個減去商店、合成、殘影已列的，共 66 個：不賣、不當配方材料，逐格辨識當候選，飾品清單只能保留或不要；9247 不收：遊戲資料裡它是 LCB Regular Check-up 復刻組的一筆（暴怒、燒傷、III 階、售價 255），但英、日、韓、簡中語言檔與灰機 wiki 都沒有它的名字與圖示，候選表認不出它，#332），140 個圖示 | #277、#286、#332 |
 | 預設飾品清單 `gift_lists.yaml` 與 GUI 圖示 `gift_icons/<id>.webp` | 飾品清單的「預設」；GUI 顯示 466 個飾品的圖示（第 9 節） | 開發者每季確認 id 還在、重跑 `tools/gift_icons.py` | 預設清單 57 個想要、70 個保留；466 個圖示（含 66 個 `extra_gifts`） | #291、#293 |
+| 罪人卡面 `sinner_cards/<人格 id>.webp` | 設定 GUI 出戰順序格子的底圖：每位罪人的預設人格（LCB 罪人） | 開發者每季重跑 `tools/sinner_cards.py` | 1.118.1 的 12 張（10101–11201），寬 240，共 179,394 位元組 | #718 |
 
 ## 2. 主題包方案
 
@@ -240,6 +241,7 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
    - 重產合成飾品表（連 `extra_gifts`，和每個主題包的專屬飾品池 `pack_gifts`：主題包 id → 它的 `specificEgoGiftPool`，想要類別 `want_kind` 用它，#417；換季先看遊戲資料 9000–9999 的飾品 id 有沒有新增，重產後 `tests/test_gift_cells.py` 會對照）：`uv run python tools/live/queue.py run --resource bench --name gift_recipes -- uv run --group unpack python tools/gift_recipes.py`（用法見工具檔頭）。（#277）
    - 更新中文名：`uv run --group unpack python tools/llc_text.py --release <LLC 最新 release>`，改寫 `gift_search.json`、`gift_recipes.json`、`gui/src/graces.json` 的中文名與星之恩惠效果文字，並記下所用 release；NOTICE.md 的 release 一併更新。（#280）
    - 預設飾品清單：確認 `gift_lists.yaml` 的 id 都還在 `gift_search.json`、`gift_recipes.json`、殘影裡（`tests/test_gift_lists.py` 會檢查，也檢查內容符合第 9 節）；重產 GUI 圖示：`uv run python tools/live/queue.py run --resource bench --name gift_icons -- uv run --group unpack python tools/gift_icons.py`。（#293）
+   - 罪人卡面：`uv run python tools/live/queue.py run --resource bench --name sinner_cards -- uv run --group unpack python tools/sinner_cards.py`（要 `bench` 號碼牌：bundle 索引沒有的版本資料夾要讀過）。預設人格是靜態資料 `personality` 裡 `unitKeywordList` 有 `BASE_APPEARANCE` 的那一個，罪人照 `EN_Characters` 的英文名稱對到設定的罪人名稱；卡面是人格清單用的 `Sprite/Unit/Info/Normal/<id>_normal_info.png`（537 × 827，和遊戲人格清單的卡面相同；`UnitCgThumbnail` 是 256 × 144 的橫幅、`Unit/CG` 是 1920 × 1080 的全身圖，都不是），縮成寬 240（格子最寬 120 px 的兩倍）、WebP quality 80，`index.json` 是罪人名稱 → 檔名。找不到預設人格或精靈圖時工具直接報錯。`tests/test_sinner_cards.py` 檢查 12 位罪人都有、尺寸與總量（600 KB 以內）。（#718）
 6. 重截約 20 個關鍵畫面加進測試，跑 `maa-tools test`；分數餘裕小於 0.05 的節點標出來檢查。（#13）
 7. 截圖必須經 MaaFramework 控制器縮到短邊 720，遮掉 UID 與帳號名稱。（#13）
 

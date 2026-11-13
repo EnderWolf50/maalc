@@ -289,6 +289,16 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack: 辟｡髯
   expect(chip("EXTREME")).toBeInTheDocument();
 });
 
+test("the deployment order plan's grid shows each sinner's default identity card, the ones left out darkened (#718)", () => {
+  const order = ["Ryﾅ行hﾅｫ", "Yi Sang", "Faust", "Hong Lu", "Ishmael", "Rodion", "Outis", "Heathcliff", "Sinclair"];
+  renderEditor(<DeploymentTab />, settings({ deployment_order_plans: [{ id: "p", name: "P", order }] }));
+  const tile = (name: string) => within(document.querySelector<HTMLElement>(".sinners")!).getByRole("button", { name: new RegExp(name) });
+  expect(tile("Gregor")).toHaveClass("out");
+  expect(tile("Ryﾅ行hﾅｫ")).not.toHaveClass("out");
+  expect(tile("Ryﾅ行hﾅｫ").querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/10401\.webp$/); // Ryﾅ行hﾅｫ's LCB Sinner
+  expect(tile("Gregor").querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/11201\.webp$/);
+});
+
 describe("deleting a plan", () => {
   test("can be undone: the plan comes back in its place, in the editor", async () => {
     const plans = ["D1", "D2", "D3"].map((name) => ({ id: name.toLowerCase(), name, order: [...SINNERS] }));
