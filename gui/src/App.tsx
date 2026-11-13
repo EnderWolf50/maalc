@@ -37,10 +37,11 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
-/** A problem across edits: its kind and the fields it marks, not its words, which name what the user is typing. */
-const problemKey = (p: Problem) => `${p.say.key} ${p.paths.join(" ")}`;
+/** A problem's marks across edits: its kind at each field it marks, not its words, which name what the user is typing. Two
+ * of three teams left on one TEAMS # still share a mark with the problem all three were. */
+const problemMarks = (p: Problem) => p.paths.map((m) => `${p.say.key} ${m}`);
 /** The controls a value is typed into, not picked from (a select, a switch, a drag). */
-const TYPED = new Set(["text", "search", "url", "email", "tel", "password", "number"]);
+const TYPED = new Set(["text", "search", "url", "number"]);
 const typesText = (el: EventTarget) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && TYPED.has(el.type));
 
 export default function App() {
@@ -52,9 +53,9 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  // While a field is typed in: the problems (problemKey) that showed before its last keystroke. A problem the typing makes
-  // waits until the field loses focus, or a save is tried; null: every problem shows (#717).
-  const [typing, setTyping] = useState<Set<string> | null>(null);
+  // The field being typed in, and the marks (problemMarks) that showed before its last keystroke: a problem the typing makes
+  // waits until the field loses focus, a save is tried or another writer changes the file; null: every problem shows (#717).
+  const [typed, setTyped] = useState<{ field: EventTarget; marks: Set<string> } | null>(null);
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
   const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
@@ -87,6 +88,7 @@ export default function App() {
     const next = rebase(base ? JSON.parse(base) : newSettings(), draft, data); // no base: a new file, not saved yet
     latest.current = { s: next, savedText: toText(data) }; // now, not at the render: a save's sync may run before it
     setS(next);
+    setTyped(null); // what the other writer brought shows at once, also while a field is typed in
     setSavedText(toText(data));
     setStatus("diskChanged");
     return next;
@@ -180,8 +182,10 @@ export default function App() {
   }, [jump]);
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
-  // what the marks, the tab markers, the problems block and the save plate show; a fix shows at once, typing or not
-  const shown = typing ? problems.filter((p) => typing.has(problemKey(p))) : problems;
+  // What the marks, the tab markers, the problems block and the save plate show; a fix shows at once, typing or not. The
+  // hold is the field's only while it has the focus: a field that goes with the focus in it (Enter closes its box) fires no blur.
+  const held = typed && typed.field === document.activeElement ? typed.marks : null;
+  const shown = held ? problems.filter((p) => problemMarks(p).some((m) => held.has(m))) : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -225,7 +229,7 @@ export default function App() {
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
-    setTyping(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
+    setTyped(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
     setFailed(false);
     setRefused(false);
     try {
@@ -345,8 +349,10 @@ export default function App() {
       {/* A keystroke in the focused field (onChange runs after the field's own, in one render) keeps what shows now: half a
           word does not turn red. Leaving the field shows what waited. A select, a switch or a drag marks at once. */}
       <main inert={!!asking}
-        onChange={(e) => { if (e.target === document.activeElement && typesText(e.target)) setTyping(new Set(shown.map(problemKey))); }}
-        onBlur={() => setTyping(null)}>
+        onChange={(e) => {
+          if (e.target === document.activeElement && typesText(e.target)) setTyped({ field: e.target, marks: new Set(shown.flatMap(problemMarks)) });
+        }}
+        onBlur={() => setTyped(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
           <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>

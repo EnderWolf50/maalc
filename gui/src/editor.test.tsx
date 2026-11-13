@@ -1,5 +1,5 @@
 // The editor shell (App.tsx) around the tabs: what a tab switch keeps, the problems it marks and lists while editing, and Ctrl+S.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
@@ -66,7 +66,7 @@ describe("a tab switch", () => {
 });
 
 /** The editor on `s` with the tab `start` open, no save tried: the problems the file has show from the start. */
-async function blocked(s: Settings, start: string) {
+async function openOn(s: Settings, start: string) {
   file.text = JSON.stringify(s);
   const user = userEvent.setup();
   render(<App />);
@@ -83,11 +83,14 @@ const ctrlS = (more: KeyboardEventInit = {}) => {
 };
 
 describe("a problem shows while editing, before any save", () => {
-  /** What shows of a problem: the field marked, its tab marked, and the problems block. */
+  /** What shows of a problem: the field marked and described by the problem's words, its tab marked, and the problems block. */
   const marked = (field: HTMLElement, tabName: string) => {
     expect(field).toHaveAttribute("aria-invalid", "true");
+    const block = screen.getByRole("alert");
+    expect(block).toHaveTextContent(zh.saveBlocked);
+    expect(block).toHaveTextContent(field.getAttribute("aria-describedby")!.split(" ")
+      .map((id) => document.getElementById(id)!.textContent).join(""));
     expect(tab(tabName)).toHaveClass("bad");
-    expect(screen.getByRole("alert")).toHaveTextContent(zh.saveBlocked);
   };
   const unmarked = (field: HTMLElement, tabName: string) => {
     expect(field).not.toHaveAttribute("aria-invalid");
@@ -99,7 +102,7 @@ describe("a problem shows while editing, before any save", () => {
   test("one the file has, as it opens", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await blocked(s, zh["tab.teams"]);
+    await openOn(s, zh["tab.teams"]);
     marked(slot(), zh["tab.teams"]);
     expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
     expect(file.saved).toEqual([]);
@@ -110,7 +113,7 @@ describe("a problem shows while editing, before any save", () => {
     s.run.target_floor = 10;
     s.run.difficulty = "hard";
     s.teams.forEach((x) => { x.hard_from_floor = 1; });
-    const user = await blocked(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.run"]);
     const difficulty = screen.getByRole("combobox", { name: zh["run.difficulty"] });
     unmarked(difficulty, zh["tab.run"]);
     await user.selectOptions(difficulty, "normal");
@@ -122,7 +125,7 @@ describe("a problem shows while editing, before any save", () => {
   });
 
   test("a text field is marked once it loses focus, not while it is typed in; a letter typed back clears it at once", async () => {
-    const user = await blocked(settings(), zh["tab.teams"]);
+    const user = await openOn(settings(), zh["tab.teams"]);
     await user.clear(nameBox()); // the team's name emptied
     expect(nameBox()).toHaveFocus();
     unmarked(nameBox(), zh["tab.teams"]);
@@ -137,7 +140,7 @@ describe("a problem shows while editing, before any save", () => {
   test("a number typed into a clash with another team is marked once the field loses focus", async () => {
     const s = settings();
     s.teams[1].game_team = 12;
-    const user = await blocked(s, zh["tab.teams"]);
+    const user = await openOn(s, zh["tab.teams"]);
     await user.type(slot(), "2"); // TEAMS #1 becomes #12, the second team's
     expect(slot()).toHaveValue(12);
     unmarked(slot(), zh["tab.teams"]);
@@ -146,10 +149,50 @@ describe("a problem shows while editing, before any save", () => {
     expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #12/)).toBeInTheDocument();
   });
 
+  test("what another writer puts in the file shows at once, also while a field is typed in", async () => {
+    const user = await openOn(settings(), zh["tab.teams"]);
+    await user.clear(nameBox());
+    unmarked(nameBox(), zh["tab.teams"]);
+    const other = settings();
+    other.teams[0].hard_from_floor = 3; // the Agent's change, away from the name
+    file.text = JSON.stringify(other);
+    act(() => { window.dispatchEvent(new Event("focus")); }); // the editor reads the file again
+    await waitFor(() => marked(nameBox(), zh["tab.teams"]));
+    expect(nameBox()).toHaveFocus();
+  });
+
+  test("a field gone with the focus in it holds nothing back: a gift list renamed with Enter, then a team switched on", async () => {
+    const s = settings();
+    s.gift_lists = [{ id: "g1", name: "G1", order: [...GIFT_KEYWORDS], want: [], keep: [], gorder: defaultGorder(), fusion_condition: "any" }];
+    s.teams[0].game_team = 2;
+    s.teams[0].enabled = false;
+    const user = await openOn(s, zh["tab.gifts"]);
+    await user.selectOptions(screen.getByRole("combobox", { name: zh["gl.list"] }), "g1");
+    await user.click(screen.getByRole("button", { name: new RegExp("^" + zh["gl.opts"]) }));
+    await user.click(screen.getByRole("menuitem", { name: new RegExp("^" + zh["gl.opt_rename"]) }));
+    await user.type(screen.getByRole("textbox", { name: zh["gl.opt_rename"] }), "x{Enter}");
+    expect(screen.queryByRole("textbox", { name: zh["gl.opt_rename"] })).toBeNull(); // gone, and no blur said so
+    await user.click(tab(zh["tab.teams"])); // the focus goes to the tab bar, outside the editor's panel: no blur there either
+    // a change that moves no focus: Ta switched on, now on Tb's TEAMS #2
+    fireEvent.click(screen.getByRole("checkbox", { name: zh["team.enabled"] }));
+    marked(slot(), zh["tab.teams"]);
+  });
+
+  test("a problem already shown stays while typing takes one of its fields out of it", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(3, "Tc"), id: "c" });
+    s.teams.forEach((x) => { x.game_team = 1; });
+    const user = await openOn(s, zh["tab.teams"]);
+    await user.type(slot(), "2"); // the first team leaves TEAMS #1 for #12; the other two still share #1
+    const rows = [...document.querySelectorAll("aside li")];
+    expect(rows.map((r) => r.classList.contains("bad"))).toEqual([false, true, true]);
+    expect(problem(/隊伍「Tb」、「Tc」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+  });
+
   test("a problem the field already showed stays while it is typed in", async () => {
     const s = settings();
     s.teams[0].name = "";
-    const user = await blocked(s, zh["tab.teams"]);
+    const user = await openOn(s, zh["tab.teams"]);
     marked(nameBox(), zh["tab.teams"]);
     await user.click(nameBox());
     await user.keyboard("{Backspace}");
@@ -157,7 +200,7 @@ describe("a problem shows while editing, before any save", () => {
   });
 
   test("a save refuses a problem still being typed, writes nothing and shows it", async () => {
-    const user = await blocked(settings(), zh["tab.teams"]);
+    const user = await openOn(settings(), zh["tab.teams"]);
     await user.clear(nameBox());
     expect(ctrlS()).toBe(true);
     await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
@@ -170,14 +213,14 @@ describe("the problems block", () => {
   test("sits inside the tab panel, below the tab bar", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await blocked(s, zh["tab.run"]);
+    await openOn(s, zh["tab.run"]);
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
   });
 
   test("says each problem in the editor's language, with the teams' names; the bot's own words stay on hover", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await blocked(s, zh["tab.run"]);
+    await openOn(s, zh["tab.run"]);
     const item = problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/).closest("li")!;
     expect(item).not.toHaveTextContent("teams:");
     expect(item).toHaveAttribute("title", "teams: enabled teams 'Ta', 'Tb' all use TEAMS #1");
@@ -205,7 +248,7 @@ describe("a field marked red", () => {
   ] as const)("%s is invalid to a screen reader, which reads the problem", async (_, change, start, text, control) => {
     const s = settings();
     change(s);
-    await blocked(s, zh[start]);
+    await openOn(s, zh[start]);
     expect(control()).toHaveAttribute("aria-invalid", "true");
     expect(control()).toHaveAccessibleDescription(problem(text).textContent!);
   });
@@ -213,7 +256,7 @@ describe("a field marked red", () => {
   test("a wrong team row says so without its colour: a cross, and words a screen reader reads, also while picked", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await blocked(s, zh["tab.run"]);
+    await openOn(s, zh["tab.run"]);
     await userEvent.setup().click(tab(zh["tab.teams"]));
     const rows = [...document.querySelectorAll("aside li")] as HTMLElement[];
     expect(rows[0]).toHaveClass("selected");
@@ -226,7 +269,7 @@ describe("a field marked red", () => {
   test("a field the checks pass is not", async () => {
     const s = settings();
     s.teams[0].theme_pack_plan = "gone";
-    await blocked(s, zh["tab.teams"]);
+    await openOn(s, zh["tab.teams"]);
     expect(nameBox()).not.toHaveAttribute("aria-invalid");
     expect(nameBox()).not.toHaveAttribute("aria-describedby");
   });
@@ -236,7 +279,7 @@ describe("clicking a problem", () => {
   test("opens its team on the teams tab and focuses the field", async () => {
     const s = settings();
     s.teams[1].theme_pack_plan = "gone";
-    const user = await blocked(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.run"]);
     await user.click(problem(/隊伍「Tb」用的主題包方案已經不在了/));
     expect(tab(zh["tab.teams"])).toHaveAttribute("aria-selected", "true");
     expect(nameBox()).toHaveValue("Tb");
@@ -246,7 +289,7 @@ describe("clicking a problem", () => {
   test("focuses the plan choice of a team's deployment order", async () => {
     const s = settings();
     s.teams[1].deployment_order = { plan: "gone" };
-    const user = await blocked(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.run"]);
     await user.click(problem(/隊伍「Tb」用的出戰順序方案已經不在了/));
     expect(nameBox()).toHaveValue("Tb");
     expect(document.activeElement).toHaveValue("gone");
@@ -255,7 +298,7 @@ describe("clicking a problem", () => {
   test("opens the closed panel that holds it", async () => {
     const s = settings();
     s.teams[0].skill_replacement.sinners = [{ sinner: "Yi Sang", target: { s1: 3, s2: 2, s3: 2 }, s1_s3_first: true }];
-    const user = await blocked(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.run"]);
     await user.click(problem(/Yi Sang：三個技能的目標合計 7/));
     expect(screen.getByText(new RegExp(zh["skill.title"]), { selector: "summary" }).closest("details")).toHaveAttribute("open");
     // the row itself: its first enabled control is its delete button, which Space would press
@@ -265,7 +308,7 @@ describe("clicking a problem", () => {
   test("with no field of its own, focuses its team's first field, not the list beside it", async () => {
     const s = settings();
     s.teams[1].id = "a"; // two teams with one id
-    const user = await blocked(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.run"]);
     await user.click(problem(/隊伍裡有 2 個用同一個 id「a」/));
     expect(nameBox()).toHaveValue("Ta");
     expect(nameBox()).toHaveFocus();
@@ -278,7 +321,7 @@ describe("clicking a problem", () => {
   ] as const)("focuses %s", async (_, change, text, label) => {
     const s = settings();
     change(s);
-    const user = await blocked(s, zh["tab.daily"]);
+    const user = await openOn(s, zh["tab.daily"]);
     await user.click(problem(text));
     expect(screen.getByRole("checkbox", { name: zh[label] })).toHaveFocus();
   });
@@ -286,7 +329,7 @@ describe("clicking a problem", () => {
   test("opens its plan on the plan's tab and focuses the field", async () => {
     const s = settings();
     s.deployment_order_plans.push({ id: "d3", name: "D2", order: [...SINNERS] });
-    const user = await blocked(s, zh["tab.teams"]);
+    const user = await openOn(s, zh["tab.teams"]);
     await user.click(problem(/出戰順序方案裡有 2 個都叫「D2」/));
     expect(tab(zh["tab.deployment"])).toHaveAttribute("aria-selected", "true");
     expect(nameBox()).toHaveValue("D2");
@@ -298,7 +341,7 @@ describe("clicking a problem", () => {
     s.run.target_floor = 10;
     s.run.difficulty = "normal";
     s.teams.forEach((x) => { x.hard_from_floor = 1; });
-    const user = await blocked(s, zh["tab.teams"]);
+    const user = await openOn(s, zh["tab.teams"]);
     await user.click(problem(/但難度是普通/));
     expect(tab(zh["tab.run"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["run.difficulty"] })).toHaveFocus();
@@ -307,7 +350,7 @@ describe("clicking a problem", () => {
   test("shows its list on the gift list tab", async () => {
     const s = settings();
     s.gift_lists = [{ id: "g1", name: "G1", order: [...GIFT_KEYWORDS], want: [9780], keep: [9780], gorder: defaultGorder(), fusion_condition: "any" }];
-    const user = await blocked(s, zh["tab.teams"]);
+    const user = await openOn(s, zh["tab.teams"]);
     await user.click(problem(/飾品清單「G1」/));
     expect(tab(zh["tab.gifts"])).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("g1");
