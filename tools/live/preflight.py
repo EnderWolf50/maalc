@@ -149,7 +149,7 @@ def recording_check(out: Path, seconds: float, say=print, sleep=time.sleep, cloc
     return 0
 
 
-NEW_RUN = r"\[maalc\] new run: \S+, team "  # the plan line (agent/actions.py); the other `new run:` lines are Module reads
+NEW_RUN = r"\[maalc\] new run: \S+, team "  # the plan line (agent/run_start_actions.py); the other `new run:` lines are Module reads
 NO_PLAN = re.compile(r"no run plan in memory")
 BOT_START = "[run] child pid"  # tools/live/bot.py writes it when it starts the agent; the log is appended to across runs
 

@@ -345,7 +345,7 @@ def test_shared_too_old(tmp_path, case):
 
 def test_a_run_stops_on_a_too_old_file_and_logs_why(tmp_path, monkeypatch):
     # #653: PlanRun fails before it looks at the screen (no context needed), as for any bad settings, and its log says why.
-    import actions
+    import run_start_actions
 
     case = CASES["too_old"][0]
     patch_all(monkeypatch, "ROOT", tmp_path)
@@ -353,7 +353,7 @@ def test_a_run_stops_on_a_too_old_file_and_logs_why(tmp_path, monkeypatch):
     patch_all(monkeypatch, "log", logs.append)
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "settings.json").write_text(json.dumps({**VALID, "version": case["version"]}), encoding="utf-8")
-    assert actions.PlanRun().run(None, None) is False
+    assert run_start_actions.PlanRun().run(None, None) is False
     assert logs == [f"stop: Invalid settings:\n- {case['error']}"]
 
 

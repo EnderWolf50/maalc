@@ -17,6 +17,7 @@ from agent_patch import patch_all
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
+    import run_start_actions
     import battle_actions
     import map_actions
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
@@ -206,11 +207,12 @@ def test_the_floors_not_read_are_not_asked_for_when_all_were_seen():
 def test_the_difficulty_each_floor_is_played_on_is_remembered(monkeypatch):
     # #382: all_hard comes from what the theme pack page showed per floor, not from the run's plan.
     import actions  # not at the top: the child (this file as a script) loads it under its AgentServer stand-in
+    import run_start_actions
     patch_all(monkeypatch, "text", lambda *a, **k: "HARD")
     patch_all(monkeypatch, "page_guard", lambda context, node, image=None: screen("MainWindow.png"))
     actions.RUN.clear()
     actions.RUN["floor_hard"] = None
-    actions.PickThemePack.set_difficulty(MagicMock(), 4, True)
+    run_start_actions.PickThemePack.set_difficulty(MagicMock(), 4, True)
     assert actions.RUN["floors_hard"] == {4: True}
     actions.RUN.clear()
 
@@ -218,16 +220,17 @@ def test_the_difficulty_each_floor_is_played_on_is_remembered(monkeypatch):
 def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
     # #382: a run that began on an expired session's dialog has no PlanRun to clear RUN; floor 1 does it.
     import actions
+    import run_start_actions
     patch_all(monkeypatch, "current_run", lambda context: {"difficulty": None, "team": {"hard_from_floor": None}, "settings": {"run": {}}})
     patch_all(monkeypatch, "screen", lambda context: None)
     patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 1 THEME PACK")
     patch_all(monkeypatch, "restart_floor_clock", lambda: None)
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", staticmethod(lambda context, floor, want: False))
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", staticmethod(lambda context, floor, want: False))
     patch_all(monkeypatch, "stuck", lambda reason, level=1: True)
     actions.RUN.clear()
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a fresh task's, the module's own back after the test
     actions.RUN.update(floor=5, floors_hard={f: True for f in range(1, 6)})
-    actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
+    run_start_actions.PickThemePack().run(MagicMock(), SimpleNamespace(node_name="PickThemePack"))
     assert "floors_hard" not in actions.RUN and actions.RUN["floor"] == 1
     actions.RUN.clear()
 
@@ -501,13 +504,13 @@ def mirror_task(context, monkeypatch, runs):
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     for run in runs:
         actions.TASK["modules"] = 20  # what OpenDrive read on the way to the entry page (#369)
-        actions.PlanRun().run(context, None)
+        run_start_actions.PlanRun().run(context, None)
         if run != "C":
             (battle_actions.Formation if run == "F" else battle_actions.Wipe)().run(context, None)
             map_actions.RouteMap().run(context, None)
         actions.Settle().run(context, None)
     actions.TASK["modules"] = 20
-    result = actions.PlanRun().run(context, None)
+    result = run_start_actions.PlanRun().run(context, None)
     lines = (actions.ROOT / "logs" / "runs.jsonl").read_text(encoding="utf-8").splitlines()
     return result, logged, len(started), [json.loads(line)["result"] for line in lines]
 

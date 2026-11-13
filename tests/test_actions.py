@@ -16,6 +16,7 @@ from PIL import Image
 from maa.define import Rect
 
 import actions
+import run_start_actions
 import event_actions
 import battle_actions
 import map_actions
@@ -1599,7 +1600,7 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {(400, 325, 480, 45): lambda clicks, looks: "Will you enter X?" if clicks and looks >= 3 else None})
-    assert actions.PlanRun().run(context, argv())
+    assert run_start_actions.PlanRun().run(context, argv())
     assert taps(context) == [(1108, 494)]
     no_fixed_wait(clock)
 
@@ -1617,13 +1618,13 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     monkeypatch.setattr(actions.recovery, "floor_limit", lambda runs, team, target: 1800)
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
-    actions.PlanRun().run(context, argv())
+    run_start_actions.PlanRun().run(context, argv())
     assert actions.RUN["difficulty"] == expected
 
 
 def team_picker(context, title, after_confirm):
     """The team list shows TEAMS #3 at y 390; title(clicks, looks) is the card's title text, after_confirm(clicks, looks) the next page."""
-    page(context, {tuple(actions.TEAM_LIST): [("TEAMS #3", (100, 380, 80, 20))], (220, 112, 210, 26): title,
+    page(context, {tuple(run_start_actions.TEAM_LIST): [("TEAMS #3", (100, 380, 80, 20))], (220, 112, 210, 26): title,
                    (1160, 522, 60, 34): "63", (400, 230, 480, 90): after_confirm})
 
 
@@ -1634,24 +1635,24 @@ def infinity_switch(context, monkeypatch, takes):
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
 
     def ocr(context, image, roi, only_rec=False):
-        if roi == actions.INFINITY_TITLE:
+        if roi == run_start_actions.INFINITY_TITLE:
             # As the bot's MaaFramework log read the entry page live, OFF and the red ON (2026-11-08)
             text = "Parallel Superposition Mode : OFF" if takes and taps else "PParallel Superposition Mode : oN "
             return [(text, (894, 333, 316, 17))]
         return []
     patch_all(monkeypatch, "ocr", ocr)
-    return taps, stops, actions.ParallelModeOff().run(context, None)
+    return taps, stops, run_start_actions.ParallelModeOff().run(context, None)
 
 
 def test_a_parallel_superposition_switch_left_on_is_switched_off(context, clock, monkeypatch):
     # #94: the bot never plays past floor 5.
     taps, stops, result = infinity_switch(context, monkeypatch, takes=True)
-    assert result is True and taps == [actions.INFINITY_BUTTON] and stops == []
+    assert result is True and taps == [run_start_actions.INFINITY_BUTTON] and stops == []
 
 
 def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, clock, monkeypatch):
     taps, stops, result = infinity_switch(context, monkeypatch, takes=False)
-    assert result is False and taps == [actions.INFINITY_BUTTON] * 2 and len(stops) == 1
+    assert result is False and taps == [run_start_actions.INFINITY_BUTTON] * 2 and len(stops) == 1
 
 
 def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock, monkeypatch):
@@ -1659,7 +1660,7 @@ def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_co
     actions.RUN["team"] = {"game_team": 3}
     team_picker(context, lambda clicks, looks: "TEAMS #1" if looks < 4 else "TEAMS #3",
                 lambda clicks, looks: "lower than the recommended level" if clicks >= 2 else None)
-    assert actions.SelectTeam().run(context, argv())
+    assert run_start_actions.SelectTeam().run(context, argv())
     assert taps(context) == [(130, 390), (1145, 587)]
     no_fixed_wait(clock)
     assert context.tasker.controller.post_screencap.call_count > 4  # looked until the title changed
@@ -1669,7 +1670,7 @@ def test_select_team_taps_the_card_again_when_the_title_never_changed(context, c
     actions.RUN["team"] = {"game_team": 3}
     team_picker(context, lambda clicks, looks: "TEAMS #1" if clicks < 2 else "TEAMS #3",
                 lambda clicks, looks: "recommended level" if clicks >= 3 else None)
-    assert actions.SelectTeam().run(context, argv())
+    assert run_start_actions.SelectTeam().run(context, argv())
     assert taps(context) == [(130, 390), (130, 390), (1145, 587)]
 
 
@@ -1681,12 +1682,12 @@ def team_list(context, monkeypatch, first, title, blank=0):
     rows = lambda: {n: 309 + 36 * (n - state["first"]) for n in range(state["first"], state["first"] + 7)}
 
     def ocr(context, image, roi, only_rec=False):
-        if roi == actions.TEAM_LIST:
+        if roi == run_start_actions.TEAM_LIST:
             state["looks"] += 1
             if state["looks"] <= blank:
                 return []
             return [(f"TEAMS #{n}", (100, y - 10 + state["looks"] % 2, 80, 20)) for n, y in rows().items()]
-        return [(f"TEAMS #{state['title']}", tuple(roi))] if roi == actions.TEAM_TITLE else []
+        return [(f"TEAMS #{state['title']}", tuple(roi))] if roi == run_start_actions.TEAM_TITLE else []
 
     def scroll(context, x, y, dx, dy):
         state["drags"].append(dy)
@@ -1704,7 +1705,7 @@ def team_list(context, monkeypatch, first, title, blank=0):
     return state
 
 
-TEAM_PAGES = {"mirror": actions.SelectTeam, "luxcavation": actions.LuxSelectTeam}
+TEAM_PAGES = {"mirror": run_start_actions.SelectTeam, "luxcavation": run_start_actions.LuxSelectTeam}
 
 
 @pytest.mark.parametrize("caller", TEAM_PAGES)
@@ -1757,7 +1758,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal", "target_floor": 5}, "teams": [team], "gift_lists": []})
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
-    assert actions.SelectTeam().run(context, argv())
+    assert run_start_actions.SelectTeam().run(context, argv())
     assert taps(context) == [(1145, 587)]  # TEAMS #3 already on the title: Confirm, no back arrow (97, 42)
     assert actions.RUN["team"] == {**team, "keyword": "Burn", "list": actions.resolve_list("default", [])}
 
@@ -1765,9 +1766,9 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
 def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
     actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [], "levels": []})  # nothing to buy
-    page(context, {tuple(actions.STARLIGHT_AVAILABLE): "63",
+    page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): "63",
                    (480, 210, 320, 35): lambda clicks, looks: "Continue with selected effects?" if clicks and looks >= 3 else None})
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert taps(context) == [(1195, 672)]
     no_fixed_wait(clock)
 
@@ -1777,14 +1778,14 @@ def test_starlight_confirm_waits_for_the_starting_gift_page(context, clock, monk
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": False})
     page(context, {(660, 395, 320, 90): "Any unspent Starlight will be added to your Dungeon clear rewards",
                    (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks and looks >= 4 else None})
-    assert actions.ConfirmStarlight().run(context, argv())
+    assert run_start_actions.ConfirmStarlight().run(context, argv())
     assert taps(context) == [(738, 530)]
     no_fixed_wait(clock)
 
 
 def starlight_page(context, available, owned):
     """The starlight page with Available and the Owned box as texts or f(clicks, looks); card 1's price reads 10."""
-    page(context, {tuple(actions.STARLIGHT_AVAILABLE): available, tuple(actions.STARLIGHT_OWNED): owned,
+    page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): available, tuple(run_start_actions.STARLIGHT_OWNED): owned,
                    (250, 149, 80, 28): "10", (480, 210, 320, 35): "Continue with selected effects?"})
 
 
@@ -1797,7 +1798,7 @@ def test_a_configured_grace_is_bought_with_owned_starlight_when_available_falls_
     # #96: the user chose the grace, so owned starlight pays the 5 that Available (5 of 10) cannot (live: "0+5").
     buy_grace_1(monkeypatch, "stop")
     starlight_page(context, lambda clicks, looks: "5" if clicks == 0 else "0+5", lambda clicks, looks: "4035" if clicks == 0 else "4035-5")
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert taps(context) == [(230, 252), (1195, 672)]
     assert actions.RUN["starlight_unspent"] == 0
 
@@ -1806,7 +1807,7 @@ def test_a_grace_tap_waits_for_available_to_drop_not_a_fixed_1_s(context, clock,
     # #58: the card's tap slept 1 s before Available was read; it is read every 0.2 s now, at most that 1 s.
     buy_grace_1(monkeypatch, "stop")
     starlight_page(context, lambda clicks, looks: "20" if clicks == 0 else "10", "0")
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert taps(context) == [(230, 252), (1195, 672)] and actions.RUN["starlight_unspent"] == 10
     no_fixed_wait(clock)
 
@@ -1815,10 +1816,10 @@ def test_a_grace_level_tap_waits_for_the_price_not_a_fixed_1_s(context, clock, m
     # #58: the + button's tap slept 1 s before the price was read again.
     actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [1], "levels": ["plus"] + ["none"] * 9})
-    page(context, {tuple(actions.STARLIGHT_AVAILABLE): lambda clicks, looks: "30" if clicks < 2 else "10",
-                   tuple(actions.STARLIGHT_OWNED): "0", (250, 149, 80, 28): lambda clicks, looks: "10" if clicks == 0 else "20",
+    page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): lambda clicks, looks: "30" if clicks < 2 else "10",
+                   tuple(run_start_actions.STARLIGHT_OWNED): "0", (250, 149, 80, 28): lambda clicks, looks: "10" if clicks == 0 else "20",
                    (480, 210, 320, 35): "Continue with selected effects?"})
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert taps(context) == [(188, 355), (230, 252), (1195, 672)]
     no_fixed_wait(clock)
 
@@ -1826,7 +1827,7 @@ def test_a_grace_level_tap_waits_for_the_price_not_a_fixed_1_s(context, clock, m
 def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_skip(context, clock, monkeypatch):
     buy_grace_1(monkeypatch, "skip")
     starlight_page(context, "5", "2")
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert taps(context) == [(1195, 672)]  # nothing bought, Enter only
 
 
@@ -1835,7 +1836,7 @@ def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_stop(co
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stopped.append(reason) or False)
     buy_grace_1(monkeypatch, "stop")
     starlight_page(context, "5", "2")
-    assert actions.BuyStarlight().run(context, argv()) is False
+    assert run_start_actions.BuyStarlight().run(context, argv()) is False
     assert stopped == ["a planned grace is unaffordable"] and taps(context) == []
 
 
@@ -1844,7 +1845,7 @@ def test_the_confirm_dialog_is_confirmed_when_the_graces_spent_owned_starlight(c
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": False})
     page(context, {(870, 165, 85, 25): "-60", (660, 395, 320, 90): "Any unspent Starlight will be added",
                    (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks else None})
-    assert actions.ConfirmStarlight().run(context, argv())
+    assert run_start_actions.ConfirmStarlight().run(context, argv())
     assert taps(context) == [(738, 530)]
 
 
@@ -1852,9 +1853,9 @@ def test_convert_starlight_to_cost_is_switched_without_a_fixed_wait(context, clo
     # #115: the checkbox tap slept 1 s; the note under it says when it took.
     actions.RUN["settings"] = {}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"convert_leftover": True})
-    page(context, {tuple(actions.STARLIGHT_NOTE): lambda clicks, looks: "Coverts any remaining Starlight" if clicks and looks >= 3 else "Any unspent Starlight will be added",
+    page(context, {tuple(run_start_actions.STARLIGHT_NOTE): lambda clicks, looks: "Coverts any remaining Starlight" if clicks and looks >= 3 else "Any unspent Starlight will be added",
                    (780, 145, 230, 35): lambda clicks, looks: "Selected E.G.O Gift" if clicks >= 2 else None})
-    assert actions.ConfirmStarlight().run(context, argv())
+    assert run_start_actions.ConfirmStarlight().run(context, argv())
     assert taps(context) == [(727, 363), (738, 530)]
     no_fixed_wait(clock)
 
@@ -1866,7 +1867,7 @@ def starting_gift_page(context, selects_at=2, rules=None):
     """The Burn cabinet is on the page; Select reads 0/1, 1/1 after selects_at taps, and Select (the tap after) pops the GET window up."""
     page(context, {SELECT_COUNT: lambda clicks, looks: "1/1" if clicks >= selects_at else "0/1",
                    (145, 145, 590, 430): [("Burn", (200, 300, 60, 20))],
-                   tuple(actions.STARTING_GIFT_HEADER): lambda clicks, looks: "Selected E.G.O Gift" if clicks <= selects_at else None,
+                   tuple(run_start_actions.STARTING_GIFT_HEADER): lambda clicks, looks: "Selected E.G.O Gift" if clicks <= selects_at else None,
                    GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks > selects_at else None,
                    SEARCH_SWITCH: "ON", **(rules or {})})
     actions.RUN["team"] = {"keyword": "Burn", "gift_search": {"enabled": True, "gifts": [{"name": "x"}]}}
@@ -1874,7 +1875,7 @@ def starting_gift_page(context, selects_at=2, rules=None):
 
 def test_the_starting_gift_is_picked_without_a_fixed_wait(context, clock):
     starting_gift_page(context)
-    assert actions.PickStartingGift().run(context, argv())
+    assert run_start_actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(230, 385), (970, 262), (1080, 587)]  # cabinet, first gift, Select
     assert sum(clock) < 1.5
 
@@ -1882,7 +1883,7 @@ def test_the_starting_gift_is_picked_without_a_fixed_wait(context, clock):
 def test_the_gift_search_switch_is_waited_for_not_slept_on(context, clock):
     # Select already reads 1/1 (the gift is picked); the switch reads OFF until it is tapped and the page has looked again.
     starting_gift_page(context, selects_at=0, rules={SEARCH_SWITCH: lambda clicks, looks: "OFF" if looks < 4 else "ON"})
-    assert actions.PickStartingGift().run(context, argv())
+    assert run_start_actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(1140, 158), (1080, 587)]  # the switch, then Select
     assert sum(clock) < 1.5
 
@@ -1918,7 +1919,7 @@ def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, 
     actions.RUN.clear()
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
-    actions.PlanRun().run(context, argv())
+    run_start_actions.PlanRun().run(context, argv())
     assert actions.RUN["team"]["keyword"] == "Bleed"
 
 
@@ -1926,7 +1927,7 @@ def test_the_starting_gift_comes_from_the_cabinet_of_the_lists_first_keyword(con
     settings = listed("Bleed")
     starting_gift_page(context, rules={(145, 145, 590, 430): [("Burn", (200, 300, 60, 20)), ("Bleed", (200, 400, 60, 20))]})
     actions.RUN["team"] = {**actions.RUN["team"], **actions.run_team(settings, settings["teams"][0])}
-    assert actions.PickStartingGift().run(context, argv())
+    assert run_start_actions.PickStartingGift().run(context, argv())
     assert taps(context)[0] == (230, 485)  # the Bleed label's centre, 75 px down
 
 
@@ -1935,7 +1936,7 @@ GIFT_NAME = (320, 405, 180, 80)
 
 def test_an_acquired_gift_popup_is_closed_and_waited_out_without_a_fixed_delay(context, clock):
     page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks == 0 else None, GIFT_NAME: "Wound Clerid"})
-    assert actions.GiftGet().run(context, argv())
+    assert run_start_actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)]
     no_fixed_wait(clock)
 
@@ -1945,17 +1946,17 @@ SPIDERWEB = {"name": "Spiderweb Entangled in Red", "keyword": "Burn", "tier": 2}
 
 def search_page(context, rules=None):
     """The search page with Spiderweb picked (Select 1/1, 70 starlight): Select asks to consume, Confirm shows the GET window."""
-    page(context, {tuple(actions.SEARCH_COUNT): "Select 1/1", (922, 205, 270, 34): "Spiderweb Entangled in Red",
-                   tuple(actions.SEARCH_OWNED[0]): "1542-70", tuple(actions.SEARCH_OWNED[1]): "1472",
-                   tuple(actions.SEARCH_DIALOG): lambda clicks, looks: "Consume 70 Starlight to search and obtain these E.G.O Gifts?" if clicks == 1 else None,
+    page(context, {tuple(run_start_actions.SEARCH_COUNT): "Select 1/1", (922, 205, 270, 34): "Spiderweb Entangled in Red",
+                   tuple(run_start_actions.SEARCH_OWNED[0]): "1542-70", tuple(run_start_actions.SEARCH_OWNED[1]): "1472",
+                   tuple(run_start_actions.SEARCH_DIALOG): lambda clicks, looks: "Consume 70 Starlight to search and obtain these E.G.O Gifts?" if clicks == 1 else None,
                    GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks >= 2 else None, **(rules or {})})
     actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [SPIDERWEB]}}
 
 
 def test_the_search_is_bought_with_looks_at_the_dialog_and_the_popup_not_fixed_waits(context, clock):
     search_page(context)
-    assert actions.GiftSearch().run(context, argv())
-    assert taps(context) == [actions.SEARCH_SELECT, actions.SEARCH_DIALOG_BUTTONS["confirm"]]
+    assert run_start_actions.GiftSearch().run(context, argv())
+    assert taps(context) == [run_start_actions.SEARCH_SELECT, run_start_actions.SEARCH_DIALOG_BUTTONS["confirm"]]
     no_fixed_wait(clock)
 
 
@@ -1963,45 +1964,45 @@ def test_the_owned_starlight_before_the_search_leaves_out_the_starlight_not_spen
     # #73 (live 2026-10-17): the Owned box read 1542 with 1482 on the main page: the team's unspent Starlight Bonus 60 is in it.
     search_page(context)
     actions.RUN["starlight_unspent"] = 60
-    actions.GiftSearch().run(context, argv())
+    run_start_actions.GiftSearch().run(context, argv())
     assert actions.RUN["gift_search"] == {"gifts": ["Spiderweb Entangled in Red"], "starlight": 70, "owned_before": 1482, "owned_after": 1412}
 
 
 def test_the_owned_starlight_is_as_read_when_nothing_was_left_unspent(context, clock):
     search_page(context)
-    actions.GiftSearch().run(context, argv())
+    run_start_actions.GiftSearch().run(context, argv())
     assert actions.RUN["gift_search"]["owned_before"] == 1542
 
 
 def test_refusing_the_search_waits_for_the_forgo_dialog(context, clock):
-    page(context, {tuple(actions.SEARCH_COUNT): "Select 0/3", (480, 330, 320, 35): lambda clicks, looks: "Forgo" if clicks else None})
+    page(context, {tuple(run_start_actions.SEARCH_COUNT): "Select 0/3", (480, 330, 320, 35): lambda clicks, looks: "Forgo" if clicks else None})
     actions.RUN["team"] = {"gift_search": {"enabled": False, "gifts": []}}
-    assert actions.GiftSearch().run(context, argv())
-    assert taps(context) == [actions.SEARCH_REFUSE]
+    assert run_start_actions.GiftSearch().run(context, argv())
+    assert taps(context) == [run_start_actions.SEARCH_REFUSE]
     no_fixed_wait(clock)
 
 
 def test_the_unspent_starlight_is_kept_for_the_search_unless_it_is_converted(context, clock, monkeypatch):
     actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
     monkeypatch.setattr(actions.run_start, "resolve_plan", lambda *a: {"priority": [], "levels": [], "convert_leftover": True})
-    page(context, {tuple(actions.STARLIGHT_AVAILABLE): "63", (660, 395, 320, 90): "Any unspent Starlight will be added"})
-    actions.BuyStarlight().run(context, argv())
+    page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): "63", (660, 395, 320, 90): "Any unspent Starlight will be added"})
+    run_start_actions.BuyStarlight().run(context, argv())
     assert actions.RUN["starlight_unspent"] == 63
     page(context, {(660, 395, 320, 90): "Coverts any remaining Starlight"})  # Convert Starlight to Cost is on, as planned
-    actions.ConfirmStarlight().run(context, argv())
+    run_start_actions.ConfirmStarlight().run(context, argv())
     assert actions.RUN["starlight_unspent"] == 0
 
 
 def test_the_difficulty_switch_waits_for_the_label_not_2_5_seconds(context, clock):
     page(context, {(830, 30, 160, 35): lambda clicks, looks: "NORMAL" if not clicks else "HARD"})
-    assert actions.PickThemePack.set_difficulty(context, 1, True)
+    assert run_start_actions.PickThemePack.set_difficulty(context, 1, True)
     assert taps(context) == [(965, 46)]
     no_fixed_wait(clock)
 
 
 def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(context, clock):
     page(context, {(830, 30, 160, 35): lambda clicks, looks: "HARD" if looks >= 3 else None})
-    assert actions.PickThemePack.set_difficulty(context, 1, True)
+    assert run_start_actions.PickThemePack.set_difficulty(context, 1, True)
     no_fixed_wait(clock)
 
 
@@ -2030,7 +2031,7 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
         return [(c[0], -5, "name") for c in cards]
     monkeypatch.setattr(actions.run_start, "rank_packs", rank_packs)
     covers = [] if covers is None else covers
-    monkeypatch.setattr(actions.pack_cover, "read_cover", lambda page, x, allowed: ("Cover pack", page, x, allowed))
+    monkeypatch.setattr(run_start_actions.pack_cover, "read_cover", lambda page, x, allowed: ("Cover pack", page, x, allowed))
     lines = []
     patch_all(monkeypatch, "log", lines.append)
     taps = []
@@ -2043,11 +2044,11 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
         return {
             (480, 100, 320, 40): [(f"FLOOR {floor}", (560, 110, 80, 20))] if not context.tasker.controller.post_swipe.called else [],
             (830, 30, 160, 35): [("NORMAL", (900, 40, 60, 20))],
-            tuple(actions.PACK_TITLES): [(f"Pack {page}a", (200, 420, 90, 20)), (f"Pack {page}b", (500, 420, 90, 20))],
+            tuple(run_start_actions.PACK_TITLES): [(f"Pack {page}a", (200, 420, 90, 20)), (f"Pack {page}b", (500, 420, 90, 20))],
         }.get(tuple(roi), [])
     patch_all(monkeypatch, "ocr", ocr)
 
-    actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
     assert context.tasker.controller.post_swipe.call_count == 1  # one card is pulled whatever the page
     return taps.count(REFRESH), lines
 
@@ -2058,20 +2059,20 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
     order = []
     patch_all(monkeypatch, "still", lambda context, **kw:
               order.append(("still", tuple(kw.get("roi") or ()), kw.get("runs"), kw.get("timeout"))) or actions.screen(context))
-    real = actions.pack_titles
+    real = run_start_actions.pack_titles
     patch_all(monkeypatch, "pack_titles", lambda context, image: order.append("read") or real(context, image))
     pack_page(context, monkeypatch, 2, "once", "weight")
     reads = [i for i, o in enumerate(order) if o == "read"]
     assert len(reads) == 2  # the page and the refreshed page
-    assert all(order[i - 1] == ("still", tuple(actions.PACK_CARDS), 2, actions.CARDS_SETTLE) for i in reads)
-    assert actions.CARDS_SETTLE >= 3  # the swing's ~2.8 s fits
+    assert all(order[i - 1] == ("still", tuple(run_start_actions.PACK_CARDS), 2, run_start_actions.CARDS_SETTLE) for i in reads)
+    assert run_start_actions.CARDS_SETTLE >= 3  # the swing's ~2.8 s fits
 
 
 def test_cards_still_moving_after_the_wait_are_read_anyway_and_logged(context, monkeypatch):
     # #246: a card that never stops (an animated one) costs CARDS_SETTLE, not the floor.
     patch_all(monkeypatch, "still", lambda context, **kw: None)
     _, lines = pack_page(context, monkeypatch, 2, "none", "weight")
-    assert f"floor 2: the cards still moved after {actions.CARDS_SETTLE:g} s" in lines
+    assert f"floor 2: the cards still moved after {run_start_actions.CARDS_SETTLE:g} s" in lines
     assert lines[-1] == "floor 2: pull 'Pack 0a' (-5, below the threshold)"
 
 
@@ -2107,7 +2108,7 @@ def test_the_refresh_button_sweep_over_the_theme_pack_captures():
     # RefreshGrey) or #319's `0/3` (Refresh0, which PackRefreshSpent reads too); `Refresh` alone (ThemePack) and 1/3, 2/3,
     # 3/3, 4/4 read lit. Off the theme pack page its box is dark on most captures, but PickThemePack asks it only on a
     # page page_guard took for ThemePack.
-    lit = {path.stem: actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))}
+    lit = {path.stem: run_start_actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))}
     assert [stem for stem, on in lit.items() if not on] == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey"]
     assert [stem for stem, on in lit.items() if on] == ["ThemePack", "ThemePackHardLine5", "ThemePackHardLineCover",
                                                         "ThemePackMiracle", "ThemePackNormal", "ThemePackRefresh1"]
@@ -2164,7 +2165,7 @@ def test_a_card_read_as_the_bokgak_re_run_notes_only_the_re_run(monkeypatch):
     # #361: with the BokGak line read, the pulled name is the copy's own: its id alone, not the original's.
     patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1103, "Pack 0a BokGak": 1113})
     actions.RUN["packs"] = []
-    actions.note_pack("Pack 0a BokGak")
+    run_start_actions.note_pack("Pack 0a BokGak")
     assert actions.RUN["packs"] == [1113]
 
 
@@ -2176,7 +2177,7 @@ def test_a_pulled_pack_without_an_id_is_skipped_and_the_packs_noted_so_far_stay(
     pack_page(context, monkeypatch, 2, "none", "weight")
     assert actions.run_packs() == [1011]
     patch_all(monkeypatch, "pack_ids", lambda: {"Pack 0a": 1004})
-    actions.note_pack("Pack 0a")
+    run_start_actions.note_pack("Pack 0a")
     assert actions.run_packs() == [1011, 1004]
 
 
@@ -2198,14 +2199,14 @@ def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     actions.RUN["packs"] = [1004, 1005]  # the last run's
     actions.TASK["modules"] = 20  # read on the Drive page (#369)
     page(context, {})
-    actions.PlanRun().run(context, argv())
+    run_start_actions.PlanRun().run(context, argv())
     assert actions.run_packs() == []
 
 
 def test_a_search_tab_opens_without_fixed_waits(context, clock):
     clicks = context.tasker.controller.post_click
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect =         lambda: np.full((720, 1280, 3), 20 * clicks.call_count, np.uint8)  # each tab shows at once
-    actions.GiftSearch.open_tab(context, "Bleed")
+    run_start_actions.GiftSearch.open_tab(context, "Bleed")
     assert len(taps(context)) == 2
     no_fixed_wait(clock)
     assert sum(clock) < 1  # was 1.6 s of sleep
@@ -2213,7 +2214,7 @@ def test_a_search_tab_opens_without_fixed_waits(context, clock):
 
 def test_a_picked_gift_is_checked_once_the_panel_shows_it(context, clock):
     page(context, {(922, 205, 270, 34): lambda clicks, looks: "Spiderweb Entangled in Red" if clicks else None})
-    assert actions.GiftSearch.tap_and_check(context, np.zeros((720, 1280, 3), np.uint8), 300, 300, SPIDERWEB["name"])
+    assert run_start_actions.GiftSearch.tap_and_check(context, np.zeros((720, 1280, 3), np.uint8), 300, 300, SPIDERWEB["name"])
     no_fixed_wait(clock)
 
 
@@ -2223,7 +2224,7 @@ def test_n_acquired_gift_popups_are_closed_in_one_action(context, clock):
     names = ["Wound Clerid", "Spiderweb", "Ashes to Ashes"]
     page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 3 else None,
                    GIFT_NAME: lambda clicks, looks: names[min(clicks, 2)]})
-    assert actions.GiftGet().run(context, argv())
+    assert run_start_actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)] * 3
     no_fixed_wait(clock)
 
@@ -2233,7 +2234,7 @@ def test_a_name_plate_read_mid_fade_out_is_not_taken_for_the_next_window(context
     # under it, the search grid, and picks a gift. The next window is tapped only once the screen is still.
     page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if looks < 4 else None,
                    GIFT_NAME: lambda clicks, looks: "Spiderweb" if looks < 3 else "Spiderw"})
-    assert actions.GiftGet().run(context, argv())
+    assert run_start_actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)]
 
 
@@ -2245,14 +2246,14 @@ def test_the_next_gift_popup_is_tapped_once_it_has_stopped_moving(context, clock
     context.tasker.controller.post_click.side_effect = lambda x, y: tapped_at.append(shots.call_count) or MagicMock()
     page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 2 else None,
                    GIFT_NAME: lambda clicks, looks: "Wound Clerid" if clicks == 0 else "Spiderweb"})
-    assert actions.GiftGet().run(context, argv())
+    assert run_start_actions.GiftGet().run(context, argv())
     assert len(tapped_at) == 2 and tapped_at[1] >= 5
 
 
 def test_a_gift_popup_confirm_that_did_not_take_is_left_to_the_hub(context, clock):
     # Same title, same name for the whole wait: the tap was lost; MirrorHub sees the window again.
     page(context, {GIFT_POPUP: "E.G.O Gift GET!", GIFT_NAME: "Wound Clerid"})
-    assert actions.GiftGet().run(context, argv())
+    assert run_start_actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)]
 
 
@@ -2264,7 +2265,7 @@ def test_a_search_tab_tap_waits_for_the_neighbour_tab_to_show_first(context, clo
 
     def click(x, y):
         if not pending:  # a tap while a switch is still on its way does nothing
-            pending.append([actions.SEARCH_TABS[(x - 113) // 62], 3])
+            pending.append([run_start_actions.SEARCH_TABS[(x - 113) // 62], 3])
         return MagicMock()
 
     def shot():
@@ -2275,11 +2276,11 @@ def test_a_search_tab_tap_waits_for_the_neighbour_tab_to_show_first(context, clo
                 tab[0] = pending.pop()[0]
             else:
                 image[165:215, 85:775] = 255  # the tap's light on the tab bar, before the gifts change
-        image[228:625, 85:775] = 20 * actions.SEARCH_TABS.index(tab[0])
+        image[228:625, 85:775] = 20 * run_start_actions.SEARCH_TABS.index(tab[0])
         return image
     context.tasker.controller.post_click.side_effect = click
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot
-    actions.GiftSearch.open_tab(context, "Keywordless")
+    run_start_actions.GiftSearch.open_tab(context, "Keywordless")
     assert tab[0] == "Keywordless" and not pending  # the Keywordless gifts show when it returns
 
 
@@ -2289,16 +2290,16 @@ def test_a_search_tab_whose_gifts_take_two_seconds_is_waited_for_not_read_early(
     tab, tapped = ["Poise"], {}
 
     def click(x, y):
-        tapped.update(tab=actions.SEARCH_TABS[(x - 113) // 62], at=actions.time.monotonic())
+        tapped.update(tab=run_start_actions.SEARCH_TABS[(x - 113) // 62], at=actions.time.monotonic())
         return MagicMock()
 
     def shot():
         if tapped and actions.time.monotonic() - tapped["at"] >= (2.0 if tapped["tab"] == "Keywordless" else 0.5):
             tab[0] = tapped["tab"]
-        return np.full((720, 1280, 3), 20 * actions.SEARCH_TABS.index(tab[0]), np.uint8)
+        return np.full((720, 1280, 3), 20 * run_start_actions.SEARCH_TABS.index(tab[0]), np.uint8)
     context.tasker.controller.post_click.side_effect = click
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot
-    actions.GiftSearch.open_tab(context, "Keywordless")
+    run_start_actions.GiftSearch.open_tab(context, "Keywordless")
     assert tab[0] == "Keywordless"
 
 
@@ -2307,15 +2308,15 @@ def test_a_search_tab_tap_that_did_nothing_is_tapped_again(context, clock):
     tab, own_taps = ["Poise"], []
 
     def click(x, y):
-        name = actions.SEARCH_TABS[(x - 113) // 62]
+        name = run_start_actions.SEARCH_TABS[(x - 113) // 62]
         if name == "Keywordless":
             own_taps.append(name)
         if name != "Keywordless" or len(own_taps) > 1:  # the first Keywordless tap is lost
             tab[0] = name
         return MagicMock()
     context.tasker.controller.post_click.side_effect = click
-    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.full((720, 1280, 3), 20 * actions.SEARCH_TABS.index(tab[0]), np.uint8)
-    actions.GiftSearch.open_tab(context, "Keywordless")
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.full((720, 1280, 3), 20 * run_start_actions.SEARCH_TABS.index(tab[0]), np.uint8)
+    run_start_actions.GiftSearch.open_tab(context, "Keywordless")
     assert tab[0] == "Keywordless" and len(own_taps) == 2
 
 
@@ -2324,7 +2325,7 @@ def test_a_search_tab_is_not_tapped_again_once_the_page_is_gone(context, clock, 
     page_until(context, "GiftSearch", 2)  # the neighbour's tap and the first Keywordless tap went out
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.zeros((720, 1280, 3), np.uint8)
     with pytest.raises(actions.PageGone):
-        actions.GiftSearch.open_tab(context, "Keywordless")
+        run_start_actions.GiftSearch.open_tab(context, "Keywordless")
     assert len(taps(context)) == 2
 
 
@@ -2332,7 +2333,7 @@ def test_a_search_tab_is_not_tapped_once_the_page_is_gone_after_the_neighbours_t
     # #118: the wait after the neighbour's tap is as long as the retry's; the wanted tab's first tap is guarded too.
     page_until(context, "GiftSearch", 1)
     with pytest.raises(actions.PageGone):
-        actions.GiftSearch.open_tab(context, "Keywordless")
+        run_start_actions.GiftSearch.open_tab(context, "Keywordless")
     assert len(taps(context)) == 1
 
 
@@ -2340,7 +2341,7 @@ def test_a_search_grid_is_not_dragged_once_the_page_is_gone(context, guarded):
     # #118: the drag after open_tab comes behind the tab's tap and fade; a page left meanwhile is not dragged.
     page_until(context, "GiftSearch", 0)
     with pytest.raises(actions.PageGone):
-        actions.GiftSearch.scroll(context, 600)
+        run_start_actions.GiftSearch.scroll(context, 600)
     assert moved(context) == 0
 
 
@@ -2349,22 +2350,22 @@ def test_the_second_icon_candidate_is_not_tapped_once_the_page_is_gone(context, 
     page_until(context, "GiftSearch", 1)
     entry = next(g for g in gift_tables()[0] if g["keyword"] == "Burn")
     gift = {"name": entry["en"], "keyword": "Burn", "tier": entry["tier"]}
-    monkeypatch.setattr(actions.GiftSearch, "open_tab", staticmethod(lambda *a: None))
-    monkeypatch.setattr(actions.GiftSearch, "scroll", staticmethod(lambda *a: None))
-    monkeypatch.setattr(actions.gift_search, "gift_cells", lambda im: [(500, 300, gift["tier"]), (600, 300, gift["tier"])])
-    monkeypatch.setattr(actions.GiftSearch, "icon_scores", staticmethod(lambda *a: [(0.9, 500, 300), (0.9, 600, 300)]))
-    monkeypatch.setattr(actions.GiftSearch, "tap_and_check", staticmethod(lambda c, im, x, y, n: bool(c.tasker.controller.post_click(x, y)) and False))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "open_tab", staticmethod(lambda *a: None))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "scroll", staticmethod(lambda *a: None))
+    monkeypatch.setattr(run_start_actions.gift_search, "gift_cells", lambda im: [(500, 300, gift["tier"]), (600, 300, gift["tier"])])
+    monkeypatch.setattr(run_start_actions.GiftSearch, "icon_scores", staticmethod(lambda *a: [(0.9, 500, 300), (0.9, 600, 300)]))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "tap_and_check", staticmethod(lambda c, im, x, y, n: bool(c.tasker.controller.post_click(x, y)) and False))
     with pytest.raises(actions.PageGone):
-        actions.GiftSearch.pick(context, gift)
+        run_start_actions.GiftSearch.pick(context, gift)
     assert taps(context) == [(500, 300)]
 
 
 def test_a_lookalike_pick_is_not_unselected_on_a_page_that_is_gone(context, guarded, monkeypatch):
     # #118: the tap that picked the wrong gift waited up to 1 s; the tap that undoes it is guarded.
     page_until(context, "GiftSearch", 1)
-    monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda c, im, names: ["Other"] if c.tasker.controller.post_click.called else []))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "chosen", staticmethod(lambda c, im, names: ["Other"] if c.tasker.controller.post_click.called else []))
     with pytest.raises(actions.PageGone):
-        actions.GiftSearch.tap_and_check(context, np.zeros((720, 1280, 3), np.uint8), 500, 300, "Wanted")
+        run_start_actions.GiftSearch.tap_and_check(context, np.zeros((720, 1280, 3), np.uint8), 500, 300, "Wanted")
     assert taps(context) == [(500, 300)]
 
 
@@ -2375,21 +2376,21 @@ def test_the_consume_dialog_is_confirmed_once_it_stops_dropping_in(context, cloc
     clicks, state = context.tasker.controller.post_click, {"select": None, "bought": False}
 
     def click(x, y):
-        if (x, y) == actions.SEARCH_SELECT:
+        if (x, y) == run_start_actions.SEARCH_SELECT:
             state["select"] = shots.call_count
-        elif (x, y) == actions.SEARCH_DIALOG_BUTTONS["confirm"] and shots.call_count >= state["select"] + 4:
+        elif (x, y) == run_start_actions.SEARCH_DIALOG_BUTTONS["confirm"] and shots.call_count >= state["select"] + 4:
             state["bought"] = True  # the dialog has stopped: the tap takes
         return MagicMock()
 
     def shot():
         moving = state["select"] is not None and shots.call_count < state["select"] + 4
         return np.full((720, 1280, 3), 40 * (shots.call_count % 5) if moving else 0, np.uint8)
-    search_page(context, {tuple(actions.SEARCH_DIALOG): lambda c, l: "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
+    search_page(context, {tuple(run_start_actions.SEARCH_DIALOG): lambda c, l: "Consume 70 Starlight to search and obtain these E.G.O Gifts?"
                             if state["select"] is not None and not state["bought"] else None,
                           GIFT_POPUP: lambda c, l: "E.G.O Gift GET!" if state["bought"] else None})
     clicks.side_effect = click
     shots.side_effect = shot
-    assert actions.GiftSearch().run(context, argv())
+    assert run_start_actions.GiftSearch().run(context, argv())
     assert state["bought"]
 
 
@@ -3006,7 +3007,7 @@ def test_a_team_list_gone_is_handed_back_not_stopped_on(context, guarded, monkey
     actions.RUN["team"] = {"game_team": 3}
     patch_all(monkeypatch, "stop", lambda *a, **k: pytest.fail("stopped"))
     team_picker(context, "TEAMS #1", lambda clicks, looks: None)
-    assert actions.SelectTeam().run(context, argv())
+    assert run_start_actions.SelectTeam().run(context, argv())
     assert taps(context) == []
 
 
@@ -3120,18 +3121,18 @@ def test_wipe_picks_the_card_again_when_confirm_does_not_take(context, clock, mo
 def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     # #138: "Floor 3" is floor 3, as the page-gone wait after the pull already reads it.
     patch_all(monkeypatch, "text", lambda *a, **k: "Floor 3")
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
     actions.RUN["difficulty"] = None
-    actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 3
 
 
 def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch):
     # #279: the boss' floor ends with the boss; the next floor's first map is read by its marks again.
     patch_all(monkeypatch, "text", lambda *a, **k: "Floor 3")
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
     actions.RUN.update(difficulty=None, floor=2, after_shop=True)
-    actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 3 and "after_shop" not in actions.RUN
 
 
@@ -3139,31 +3140,31 @@ def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch)
 def test_the_theme_pack_page_reads_a_two_digit_floor(context, monkeypatch, shown, floor):
     # #383: floors run to 15; "Floor 12" is not floor 1.
     patch_all(monkeypatch, "text", lambda *a, **k: shown)
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
     actions.RUN["difficulty"] = None
-    actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == floor
 
 
 def test_floor_10_to_11_restarts_the_clock_and_the_map_quota(context, monkeypatch):
     # #383: 10 -> 11 is a new floor: the clock restarts and map_misses is back to 0.
     patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 11 THEME PACK")
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
     restarted = []
     patch_all(monkeypatch, "restart_floor_clock", lambda: restarted.append(1))
     actions.RUN.update(difficulty=None, floor=10, map_misses=3)
-    actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 11 and actions.RUN["map_misses"] == 0 and restarted == [1]
 
 
 def test_a_new_floor_tells_the_ladder_the_floor_and_the_run_target(context, monkeypatch):
     # #435: a target-15 run's recovery allowance refills at floors 6 and 11 (recovery.Ladder.floor).
     patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 6 THEME PACK")
-    monkeypatch.setattr(actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
     seen = []
     monkeypatch.setattr(actions.STUCK["ladder"], "floor", lambda floor, target: seen.append((floor, target)))
     actions.RUN.update(difficulty=None, floor=5, settings={"run": {"target_floor": 15}})
-    actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
     assert seen == [(6, 15)]
 
 
@@ -3183,8 +3184,8 @@ def test_a_global_popup_over_the_page_hands_it_back(context, guarded):
 
 
 @pytest.mark.parametrize("action, team", [
-    (actions.PickStartingGift, {"keyword": "Burn", "gift_search": {"enabled": False, "gifts": []}}),
-    (actions.GiftSearch, {"gift_search": {"enabled": True, "gifts": [{"name": "Phlebotomy Pack"}]}}),
+    (run_start_actions.PickStartingGift, {"keyword": "Burn", "gift_search": {"enabled": False, "gifts": []}}),
+    (run_start_actions.GiftSearch, {"gift_search": {"enabled": True, "gifts": [{"name": "Phlebotomy Pack"}]}}),
 ])
 def test_a_gift_page_gone_is_handed_back_untouched(context, guarded, action, team):
     actions.RUN["team"] = team
@@ -3195,7 +3196,7 @@ def test_a_gift_page_gone_is_handed_back_untouched(context, guarded, action, tea
 def test_a_theme_pack_page_gone_is_handed_back_untouched(context, guarded, monkeypatch):
     patch_all(monkeypatch, "text", lambda *a, **k: "FLOOR 1")
     actions.RUN["difficulty"] = None
-    assert actions.PickThemePack().run(context, None)
+    assert run_start_actions.PickThemePack().run(context, None)
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
 
@@ -3211,7 +3212,7 @@ def starlight(monkeypatch, available):
 
 def test_a_starlight_page_gone_is_handed_back_untouched(context, guarded, monkeypatch):
     starlight(monkeypatch, [20])
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert moved(context) == 0
 
 
@@ -3219,9 +3220,9 @@ def test_a_starlight_page_handed_back_after_one_grace_still_buys_the_next(contex
     # #118: back from MirrorHub with grace 1 bought: Available reads 10, grace 1 already selected.
     starlight(monkeypatch, [10, 0])
     patch_all(monkeypatch, "grace_selected", lambda image, n: n == 1)
-    monkeypatch.setattr(actions.BuyStarlight, "set_level", staticmethod(lambda *a: True))
-    assert actions.BuyStarlight().run(context, argv())
-    x, y = actions.grace_box(2)
+    monkeypatch.setattr(run_start_actions.BuyStarlight, "set_level", staticmethod(lambda *a: True))
+    assert run_start_actions.BuyStarlight().run(context, argv())
+    x, y = run_start_actions.grace_box(2)
     assert (x + 92, y + 100) in taps(context)
 
 
@@ -3301,9 +3302,9 @@ def test_a_heal_handed_back_mid_way_is_not_paid_again(context, monkeypatch):
 
 def test_a_starlight_page_gone_after_a_grace_tap_is_handed_back_not_stopped(context, guarded, monkeypatch):
     starlight(monkeypatch, [20, None])
-    monkeypatch.setattr(actions.BuyStarlight, "set_level", staticmethod(lambda *a: True))
+    monkeypatch.setattr(run_start_actions.BuyStarlight, "set_level", staticmethod(lambda *a: True))
     page_until(context, "StarlightPage", 1)
-    assert actions.BuyStarlight().run(context, argv())
+    assert run_start_actions.BuyStarlight().run(context, argv())
     assert len(taps(context)) == 1
 
 
@@ -3348,37 +3349,37 @@ def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, g
 def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded, monkeypatch):
     gift = {"name": "Phlebotomy Pack", "keyword": "Bleed", "tier": 1}
     actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [gift]}}
-    monkeypatch.setattr(actions.gift_search, "select_count", lambda text: (0, 1))
-    monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
+    monkeypatch.setattr(run_start_actions.gift_search, "select_count", lambda text: (0, 1))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
     picks = iter([gift])
-    monkeypatch.setattr(actions.gift_search, "next_gift", lambda *a: next(picks, None))
-    monkeypatch.setattr(actions.GiftSearch, "pick", staticmethod(lambda context, gift: actions.tap(context, 400, 400, wait=0) or True))
+    monkeypatch.setattr(run_start_actions.gift_search, "next_gift", lambda *a: next(picks, None))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "pick", staticmethod(lambda context, gift: actions.tap(context, 400, 400, wait=0) or True))
     page_until(context, "GiftSearch", 1)
-    assert actions.GiftSearch().run(context, argv())
+    assert run_start_actions.GiftSearch().run(context, argv())
     assert taps(context) == [(400, 400)] and actions.STUCK["flag"] is None
 
 
 def test_a_gift_search_gone_under_its_consume_dialog_is_not_confirmed(context, guarded, monkeypatch):
     ctl = context.tasker.controller
     actions.RUN["team"] = {"gift_search": {"enabled": True, "gifts": [{"name": "Phlebotomy Pack"}]}}
-    monkeypatch.setattr(actions.gift_search, "select_count", lambda text: (1, 1))
-    monkeypatch.setattr(actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
-    monkeypatch.setattr(actions.gift_search, "next_gift", lambda *a: None)
+    monkeypatch.setattr(run_start_actions.gift_search, "select_count", lambda text: (1, 1))
+    monkeypatch.setattr(run_start_actions.GiftSearch, "chosen", staticmethod(lambda *a: ["Phlebotomy Pack"]))
+    monkeypatch.setattr(run_start_actions.gift_search, "next_gift", lambda *a: None)
     patch_all(monkeypatch, "text", lambda context, image, roi, only_rec=False:
-              "Consume 70 Starlight" if roi == actions.SEARCH_DIALOG and ctl.post_click.call_count else "")
+              "Consume 70 Starlight" if roi == run_start_actions.SEARCH_DIALOG and ctl.post_click.call_count else "")
     page_until(context, "GiftSearch", 1)  # gone once Select brought its dialog up
-    assert actions.GiftSearch().run(context, argv())
-    assert taps(context) == [actions.SEARCH_SELECT]
+    assert run_start_actions.GiftSearch().run(context, argv())
+    assert taps(context) == [run_start_actions.SEARCH_SELECT]
 
 
 def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(context, guarded, monkeypatch):
     actions.RUN["team"] = {"keyword": "Burn", "gift_search": {"enabled": False, "gifts": []}}
-    monkeypatch.setattr(actions.PickStartingGift, "set_gift_search", staticmethod(lambda *a: None))
-    monkeypatch.setattr(actions.PickStartingGift, "full", staticmethod(lambda *a: False))
-    monkeypatch.setattr(actions.PickStartingGift, "count", staticmethod(lambda *a: (0, 1)))
+    monkeypatch.setattr(run_start_actions.PickStartingGift, "set_gift_search", staticmethod(lambda *a: None))
+    monkeypatch.setattr(run_start_actions.PickStartingGift, "full", staticmethod(lambda *a: False))
+    monkeypatch.setattr(run_start_actions.PickStartingGift, "count", staticmethod(lambda *a: (0, 1)))
     patch_all(monkeypatch, "ocr", lambda *a, **k: [("Burn", (200, 200, 60, 20))])
     page_until(context, "StartingGift", 2)  # the cabinet, then its first gift
-    assert actions.PickStartingGift().run(context, argv())
+    assert run_start_actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(230, 285), (970, 262)]
 
 

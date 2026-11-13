@@ -1,6 +1,6 @@
 """E.G.O Gift Search decisions, free of MaaFramework (docs/spec/03-decisions.md section 5).
 
-actions.py taps and reads the page; everything here is plain data or a screenshot array in, plain data out.
+run_start_actions.py taps and reads the page; everything here is plain data or a screenshot array in, plain data out.
 """
 
 import re
