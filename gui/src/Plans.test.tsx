@@ -103,6 +103,20 @@ test("the floor filter reaches floor 15: an EXTREME-only pack shows on floors 11
   expect(shown("Chachihu")).toBe(false);
 });
 
+test("the difficulty filter names the difficulties as the floor badges do: 普通 and 困難 in Chinese, NORMAL and HARD in English", async () => {
+  const { user, unmount } = renderEditor(<ThemePackTab />, newSettings());
+  await waitFor(() => expect(shown("Chachihu")).toBe(true));
+  expect(screen.queryByRole("button", { name: "NORMAL" })).toBeNull();
+  await user.click(chip(zh["packs.floorsHard"]));
+  expect(chip(zh["packs.floorsHard"])).toHaveAttribute("aria-pressed", "true");
+  expect(shown("Chachihu")).toBe(false); // EXTREME only
+  expect(chip(zh["packs.floorsNormal"])).toBeInTheDocument();
+  unmount();
+  renderEditor(<ThemePackTab />, { ...newSettings(), language: "en_us" });
+  expect(chip("NORMAL")).toBeInTheDocument();
+  expect(chip("HARD")).toBeInTheDocument();
+});
+
 test("INFINITY and EXTREME are choices of the filter and badges of a pack", async () => {
   const { user } = renderEditor(<ThemePackTab />, newSettings());
   await waitFor(() => expect(shown("Chachihu")).toBe(true));

@@ -188,6 +188,8 @@ const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 const BADGES = {
   N: ["packs.floorsNormal", ""], H: ["packs.floorsHard", " hard"], I: ["packs.floorsInfinity", " inf"], X: ["packs.floorsExtreme", " ext"],
 } as const;
+/** The difficulty filter's choices by their badge, so both name a difficulty alike (普通, not NORMAL, in Chinese). */
+const MODE_BADGE = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
 
 /** Design A of #240: one lane per weight in use (0 always), highest first, and the threshold line between lanes.
  * Drag a pack to another lane, or onto + for a new weight; click one to type its weight. Read-only without onChange. */
@@ -273,7 +275,8 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     ));
   return (<>
     <div className="packbar">
-      {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty, (v) => (v ? v.toUpperCase() : t("packs.anyDifficulty")), setDifficulty)}
+      {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
+        (v) => (v ? t(BADGES[MODE_BADGE[v]][0]) : t("packs.anyDifficulty")), setDifficulty)}
       <span className="gap" />
       {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
       <span className="spacer" />
