@@ -11,28 +11,32 @@ import { useEditor } from "./ui";
 
 /** How long the popover stays after the pointer leaves the tile and the popover. */
 export const LEAVE_MS = 160;
-const OFFSET_X = 14, OFFSET_Y = 2, MARGIN = 6;
+/** The popover's left edge from the tile's; its gap to the tile, under, over or beside it; its least distance to the window's edge. */
+const OFFSET_X = 14, GAP = 2, MARGIN = 6;
 /** At most this many uses are named; the rest are a count. */
 const USED_MAX = 4;
 
 export interface Box { left: number; top: number; right: number; bottom: number }
 
-/** Where the popover goes (its top-left corner): its left edge 14 px right of the tile's left, 2 px under the tile; when it does not
- * fit to the right it is mirrored (its right edge 14 px left of the tile's right), when it does not fit below it goes above the tile.
- * When it fits neither below nor above (a tall popover in a short window) it goes beside the tile, 2 px off its right edge (its left
- * edge when there is no room to the right), level with the tile's top: it never covers the tile (#721). At last it is pushed into the
- * window. */
-export function place(tile: Box, size: { w: number; h: number }, view: { w: number; h: number }): { left: number; top: number } {
-  const fitsX = (left: number) => left + size.w <= view.w - MARGIN;
-  let left = tile.left + OFFSET_X, top = tile.bottom + OFFSET_Y;
-  if (!fitsX(left)) left = tile.right - OFFSET_X - size.w;
-  if (top + size.h > view.h - MARGIN) top = tile.top - OFFSET_Y - size.h;
-  if (top < MARGIN) {
-    top = tile.top;
-    left = fitsX(tile.right + OFFSET_Y) ? tile.right + OFFSET_Y : tile.left - OFFSET_Y - size.w;
-  }
+/** Where the popover goes (its top-left corner), never over its tile (#721): its left edge 14 px right of the tile's left, 2 px
+ * under the tile; when it does not fit to the right it is mirrored (its right edge 14 px left of the tile's right), when it does not
+ * fit below it goes above the tile. When it fits neither below nor above (a tall popover in a short window) it goes beside the tile,
+ * 2 px off its right edge (its left edge when there is no room to the right), level with the tile's top. When it fits on no side (a
+ * wide tile mid-window) it goes under or over the tile, whichever has more room, and `maxHeight` cuts it to that room (it scrolls).
+ * At last it is pushed into the window. */
+export function place(tile: Box, size: { w: number; h: number }, view: { w: number; h: number }): { left: number; top: number; maxHeight?: number } {
+  const fitsX = (left: number) => left >= MARGIN && left + size.w <= view.w - MARGIN;
   const clamp = (v: number, room: number) => Math.max(MARGIN, Math.min(v, room - MARGIN));
-  return { left: clamp(left, view.w - size.w), top: clamp(top, view.h - size.h) };
+  let left = tile.left + OFFSET_X;
+  if (!fitsX(left)) left = tile.right - OFFSET_X - size.w;
+  const under = view.h - MARGIN - (tile.bottom + GAP), over = tile.top - GAP - MARGIN; // the room under and over the tile
+  if (size.h <= under) return { left: clamp(left, view.w - size.w), top: tile.bottom + GAP };
+  if (size.h <= over) return { left: clamp(left, view.w - size.w), top: tile.top - GAP - size.h };
+  const beside = [tile.right + GAP, tile.left - GAP - size.w].find(fitsX);
+  if (beside !== undefined) return { left: beside, top: clamp(tile.top, view.h - size.h) };
+  return under >= over
+    ? { left: clamp(left, view.w - size.w), top: tile.bottom + GAP, maxHeight: under }
+    : { left: clamp(left, view.w - size.w), top: MARGIN, maxHeight: over };
 }
 
 /** The popover's state for the tab: which gift it shows and the tile it hangs from, and the GiftTip the tiles use. Scrolling,
@@ -89,9 +93,11 @@ export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HT
   useLayoutEffect(() => {
     if (!anchor.isConnected) return tip.hide(); // its tile left the page (a search, another tab): no mouseleave or blur comes
     const el = box.current!, a = anchor.getBoundingClientRect();
-    const { left, top } = place(a, { w: el.offsetWidth, h: el.offsetHeight }, { w: window.innerWidth, h: window.innerHeight });
+    el.style.maxHeight = ""; // measured at its own height, not the cut of the last placing
+    const { left, top, maxHeight } = place(a, { w: el.offsetWidth, h: el.offsetHeight }, { w: window.innerWidth, h: window.innerHeight });
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
+    if (maxHeight !== undefined) el.style.maxHeight = `${maxHeight}px`;
   });
 
   return (

@@ -321,6 +321,14 @@ describe("the E.G.O Gift Search gifts: icon first, details on hover (#721)", () 
     await waitFor(() => expect(card()).toBeNull());
   });
 
+  test("Esc closes the card, as on the gift list tab", async () => {
+    const r = renderEditor(<TeamsTab />, burnFirst());
+    act(() => tile(DUST.zh).focus());
+    expect(card()).not.toBeNull();
+    await r.user.keyboard("{Escape}");
+    expect(card()).toBeNull();
+  });
+
   test("in English the card names the gift once and gives the English effect", async () => {
     const r = renderEditor(<TeamsTab />, burnFirst("en_us"));
     await r.user.hover(tile(DUST.en));

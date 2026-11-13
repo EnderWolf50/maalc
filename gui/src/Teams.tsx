@@ -1,5 +1,5 @@
 // Teams (spec 04 section 9): the list order is the team queue (#501).
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
 import { iconUrl } from "./giftCatalog";
 import { GiftEffectCard, useGiftTip } from "./GiftPopover";
@@ -291,6 +291,15 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
   const { s, t } = useEditor();
   const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
   const { open, tip } = useGiftTip();
+  const shown = open !== null;
+  useEffect(() => { // Esc closes the card, as on the gift list tab
+    if (!shown) return;
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") tip.hide(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [shown, tip]);
+  /** A gift the full grid cannot take: not picked while 3 are. */
+  const blocked = (g: SearchGift) => full && !mark(g);
   const zh = s.language === "zh_tw";
   const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -321,7 +330,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
                 // Pointer events, not mouse ones: React drops onMouseEnter on a disabled button, and a full grid's card still
                 // shows. The full note is in the card, not a title: its native tooltip would sit over the card.
                 <button type="button" key={g.en} className={"gift" + (m ? " picked" : "")} aria-pressed={!!m}
-                  disabled={!m && full} aria-description={!m && full ? t("gift.full") : undefined}
+                  disabled={blocked(g)} aria-description={blocked(g) ? t("gift.full") : undefined}
                   onPointerEnter={(e) => tip.show(g.id, e.currentTarget)} onPointerLeave={tip.leave}
                   onFocus={(e) => tip.show(g.id, e.currentTarget)}
                   onBlur={(e) => { if (!(e.relatedTarget as Element | null)?.closest(".gl-tip")) tip.hide(); }}
@@ -337,7 +346,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
           </div>
         </div>
       ))}
-      {open && <GiftEffectCard id={open.id} anchor={open.anchor} tip={tip} note={full && !mark(SEARCH_GIFTS.find((g) => g.id === open.id)!) ? t("gift.full") : undefined} />}
+      {open && <GiftEffectCard id={open.id} anchor={open.anchor} tip={tip} note={blocked(SEARCH_GIFTS.find((g) => g.id === open.id)!) ? t("gift.full") : undefined} />}
     </div>
   );
 }

@@ -137,6 +137,12 @@ describe("hover popover: where it goes", () => {
   test("beside the tile with no room to its right: 2 px off its left edge", () => {
     expect(place(box(800, 300), { w: 300, h: 600 }, view)).toEqual({ left: 800 - 2 - 300, top: 194 });
   });
+  test("no room on any side (a wide tile mid-window): under or over it, whichever has more room, cut to that room", () => {
+    // a 160 px wide tile in the middle of an 800 x 480 window, a 340 x 250 popover: 202 px under the tile, 192 over it
+    const wide = { left: 300, top: 200, right: 460, bottom: 270 };
+    expect(place(wide, { w: 340, h: 250 }, { w: 800, h: 480 })).toEqual({ left: 314, top: 272, maxHeight: 480 - 6 - 272 });
+    expect(place({ ...wide, top: 210, bottom: 280 }, { w: 340, h: 250 }, { w: 800, h: 480 })).toEqual({ left: 314, top: 6, maxHeight: 208 - 6 });
+  });
 });
 
 describe("hover popover: setting the state", () => {
