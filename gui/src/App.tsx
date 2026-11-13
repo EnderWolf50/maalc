@@ -1,12 +1,13 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as api from "./api";
-import { TEXT, type Key } from "./i18n";
+import { TEXT, fill, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import { Decimal, EditorContext, Field, Icon, Num, ProblemMark, Select, ToggleNum, tabKeys, useEditor, withBreaks, type Ctx } from "./ui";
+import { TRIAL_SCORES } from "./trials";
 import { validate, type Problem } from "./validate";
 
 export const TABS = [
@@ -342,7 +343,7 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
         <Field label={t("lux.count")} path={`${path}/count`} note={opts.mode === "daily" ? t("lux.count_unused") : undefined}>
           <Num value={opts.count} min={1} disabled={opts.mode === "daily"} onChange={(v) => set({ count: v })} />
         </Field>
-        <Field label={t("lux.team")} path={`${path}/team`} note={t("lux.team_note")}>
+        <Field label={t("lux.team")} path={`${path}/team`} note={t("lux.team_note")} caution={opts.team === null}>
           <Select value={opts.team ?? ""} options={["", ...s.teams.map((x) => x.id)]}
             label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
             onChange={(v) => set({ team: v || null })} />
@@ -366,7 +367,8 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
 /** One editable table for both override lists (spec 04 sections 10 and 11). */
 function OverrideTable<R extends Record<string, string | number>>({ listKey, cols, blank, note }: {
   listKey: "event_overrides" | "trial_risk_overrides"; note?: string;
-  cols: { key: keyof R & string; label: Key; number?: boolean }[];
+  /** known: a column of names the data has (name -> its value there): the field offers them and says what a typed one is. */
+  cols: { key: keyof R & string; label: Key; number?: boolean; known?: Record<string, number> }[];
   blank: R;
 }) {
   const { s, update, t, bad } = useEditor();
@@ -384,8 +386,15 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                 {cols.map((c) => (
                   <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""}>
                     {c.number
-                      ? <Decimal value={r[c.key] as number} min={0} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
-                      : <input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
+                      ? <Decimal value={r[c.key] as number} min={0} label={`${t(c.label)} ${i + 1}`}
+                        onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
+                      : <input value={r[c.key] as string} aria-label={`${t(c.label)} ${i + 1}`} list={c.known ? `${listKey}-${c.key}` : undefined}
+                        onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
+                    {c.known && (r[c.key] as string).trim() !== "" && (
+                      (r[c.key] as string) in c.known
+                        ? <small className="muted">{fill(t("trial.inTable"), { score: c.known[r[c.key] as string] })}</small>
+                        : <small className="caution">{t("trial.unknown")}</small>
+                    )}
                   </td>
                 ))}
                 <td><span className="moves"><button type="button" className="icon remove" aria-label={t("remove")} title={t("remove")}
@@ -395,6 +404,9 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
           </tbody>
         </table>
       ) : <p className="muted">{t("noRows")}</p>}
+      {cols.filter((c) => c.known).map((c) => (
+        <datalist key={c.key} id={`${listKey}-${c.key}`}>{Object.keys(c.known!).map((n) => <option key={n} value={n} />)}</datalist>
+      ))}
       <button type="button" className="add" onClick={() => set((l) => { l.push({ ...blank }); })}>+ {t("add")}</button>
     </div>
   );
@@ -409,6 +421,6 @@ function TrialsTab() {
   const { t } = useEditor();
   return (
     <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }} note={t("trial.note")}
-      cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
+      cols={[{ key: "trial", label: "trial.trial", known: TRIAL_SCORES }, { key: "risk", label: "trial.risk", number: true }]} />
   );
 }

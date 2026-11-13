@@ -115,7 +115,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
       <aside>
         {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(-1)}><Icon name="lock" />{lead.label}</button>}
         {plans.length || lead ? (
-          <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={setSel}
+          <ReorderList items={plans} keyOf={(p) => p.id} nameOf={(p) => p.name || "—"} selected={i} onSelect={setSel}
             badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
             render={(p) => p.name || "—"} />
         ) : <p className="muted">{t("noPlans")}</p>}
@@ -315,7 +315,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       {lanes.map((w, i) => (
         <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
-          <div className="lane" {...target(drag !== LINE, w)}>
+          <div className={"lane" + (shown.filter((n) => weightOf(plan, n) === w).length > 40 ? " crowded" : "")} {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
               {shown.filter((n) => weightOf(plan, n) === w).sort(byFirstFloor(data.packs)).map(chip)}

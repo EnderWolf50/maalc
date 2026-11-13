@@ -5,12 +5,13 @@ import { TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill } from "./i18n";
 import {
-  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, starlightCost, teamEnum, toggleGift,
+  GRACES, MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, buyOrder, defaultStarlight, freeName, newId, newTeam, starlightCost, teamEnum,
+  toggleGift, type Order, type StarlightValues,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Num, ProblemMark, ReorderList, Select, ToggleNum, tabKeys, useEditor, withBreaks } from "./ui";
+import { Field, Holds, Num, ProblemMark, ReorderList, Select, ToggleNum, tabKeys, useEditor, withBreaks } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
@@ -20,7 +21,7 @@ export function TeamsTab() {
     <div className="split">
       <aside>
         {s.teams.length ? (
-          <ReorderList className="queue" numbered items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
+          <ReorderList className="queue" numbered items={s.teams} keyOf={(x) => x.id} nameOf={(x) => x.name || "—"} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
@@ -149,10 +150,11 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.deployment_order ? (
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
-        ) : order && <>
-          <p className="muted from-plan">{fill(t("team.fromPlan"), { tab: t("tab.deployment") })}</p>
-          <SinnerGrid order={order} path={`${path}/deployment_order`} />
-        </>}
+        ) : order && (
+          <PlanView note={fill(t("team.fromPlan"), { tab: t("tab.deployment") })} line={<OrderLine order={order} />}>
+            <SinnerGrid order={order} path={`${path}/deployment_order`} />
+          </PlanView>
+        )}
       </details>
 
       <details className="panel" open data-sec="starlight">
@@ -168,10 +170,11 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
-        ) : starPlan && <>
-          <p className="muted from-plan">{fill(t("team.fromPlan"), { tab: t("tab.starlight") })}</p>
-          <StarlightEditor value={starPlan} path={`${path}/starlight`} />
-        </>}
+        ) : starPlan && (
+          <PlanView note={fill(t("team.fromPlan"), { tab: t("tab.starlight") })} line={<StarLine value={starPlan} />}>
+            <StarlightEditor value={starPlan} path={`${path}/starlight`} />
+          </PlanView>
+        )}
       </details>
 
       <GiftSearchPanel i={i} />
@@ -228,7 +231,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </div>
         <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")}>
           <h3>{t("team.reward_cards")}</h3>
-          <ReorderList numbered items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
+          <ReorderList numbered items={team.reward_cards} keyOf={(x) => x} nameOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
             render={(x) => x} />
         </div>
       </details>
@@ -331,20 +334,22 @@ function GiftSearchPanel({ i }: { i: number }) {
   const full = search.gifts.length >= MAX_GIFTS;
   return (
     <details className="panel" data-sec="gift">
-      <summary className={bad(path) ? "bad" : ""}>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}<ProblemMark on={bad(path)} /></summary>
+      <summary className={bad(path) ? "bad" : ""}>{t("gift.title")}{search.enabled && search.gifts.length > 0 && <Holds>{search.gifts.length}/{MAX_GIFTS}</Holds>}<ProblemMark on={bad(path)} /></summary>
       <div className="toggle">
         <label className="check">
           <input type="checkbox" checked={search.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("gift.enabled")}
         </label>
         <small className="caution">{t("gift.note")}</small>
       </div>
-      <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
-        onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
+      <div className={search.enabled ? undefined : "off"}>
+        <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
+          onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
+      </div>
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")}>
         <h3>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
-          <ReorderList numbered items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
+          <ReorderList numbered items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} nameOf={(g) => refName(g, zh)} onChange={(gifts) => set({ gifts })}
             onRemove={(j) => set({ gifts: toggleGift(search.gifts, search.gifts[j]) })}
             render={(g) => <>{refName(g, zh)} <small className="muted">{g.keyword} {TIERS[g.tier]}</small></>} />
         ) : <p className="muted">{t("gift.none")}</p>}
@@ -371,8 +376,45 @@ const SECTIONS = [
   ["more", "team.more", MORE],
 ] as const;
 
-/** A panel summary's note of what the panel holds (a plan's name, ★ cost), quiet beside its title. */
-const Holds = ({ children }: { children: ReactNode }) => <span className="holds">{children}</span>;
+/** A plan's order or starlight on a team: the note that it is the plan's, the plan as one line, and its game page behind a
+ * toggle (the page is the plan tab's; drawn here in full it made the team page twice as long). */
+function PlanView({ note, line, children }: { note: string; line: ReactNode; children: ReactNode }) {
+  const { t } = useEditor();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="plan-view">
+      <p className="muted from-plan">{note}</p>
+      <p className="plan-line">{line}</p>
+      <button type="button" className="quiet" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {t(open ? "team.hidePlan" : "team.showPlan")}
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
+/** A deployment order as a line: the 7 deployed in order, then the backups. */
+function OrderLine({ order }: { order: Order }) {
+  const { t } = useEditor();
+  const part = (names: string[], from: number) => names.map((n, j) => <span key={n}><b>{from + j}</b> {n}</span>);
+  return (<>
+    <span className="tag-word">{t("order.deployed")}</span>{part(order.slice(0, 7), 1)}
+    {order.length > 7 && <><span className="tag-word">{t("order.backup")}</span>{part(order.slice(7), 8)}</>}
+  </>);
+}
+
+/** A starlight plan as a line: its graces in buying order with their + or ++, and the stars they cost. */
+function StarLine({ value }: { value: StarlightValues }) {
+  const { s } = useEditor();
+  const zh = s.language === "zh_tw";
+  const plus = { base: "", plus: " +", plus2: " ++" } as Record<string, string>;
+  return (<>
+    <span className="tag-word">★ {starlightCost(value.levels)}</span>
+    {buyOrder(value).map((n, j) => (
+      <span key={n}><b>{j + 1}</b> {zh && GRACES[n - 1].zh ? GRACES[n - 1].zh : GRACES[n - 1].en}{plus[value.levels[n - 1]]}</span>
+    ))}
+  </>);
+}
 
 /** A named list's name by id ("default" is the read-only default), or "? id" when the list is gone. */
 function listName(id: string, lists: { id: string; name: string }[], fallback: string) {

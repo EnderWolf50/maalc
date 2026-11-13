@@ -1,5 +1,5 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -28,15 +28,20 @@ export function withBreaks(text: string): ReactNode {
 
 /** A labelled control. Its note sits outside the label, so the control's name is the label alone (a screen reader read the
  * whole note as the name); the label is `display: contents`, so the span, the control and the note lay out as siblings. */
-export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
+export function Field({ label, path, note, caution, children }: {
+  label: string; path?: string; note?: string; caution?: boolean; children: ReactNode;
+}) {
   const { bad } = useEditor();
   return (
     <div className={"field" + (path && bad(path) ? " bad" : "")}>
       <label><span>{label}</span>{children}</label>
-      {note && <small>{withBreaks(note)}</small>}
+      {note && <small className={caution ? "caution" : undefined}>{withBreaks(note)}</small>}
     </div>
   );
 }
+
+/** A panel summary's note of what the panel holds (a plan's name, ★ cost, a count), quiet beside its title. */
+export const Holds = ({ children }: { children: ReactNode }) => <span className="holds">{children}</span>;
 
 /** What a red mark (a tab's or a panel's dot) says to a screen reader. */
 export function ProblemMark({ on }: { on: boolean }) {
@@ -78,10 +83,10 @@ export function Num({ value, min, max, disabled, label, onChange }: {
 
 /** A number with decimals (#381). A text field: a number field's value reads "" on the way from "0" to "0.5", which React
  * would write back. Each text that reads as a number of at least `min` is the value; leaving the field shows the value again. */
-export function Decimal({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
+export function Decimal({ value, min, label, onChange }: { value: number; min: number; label?: string; onChange: (v: number) => void }) {
   const [text, setText] = useState<string | null>(null); // null: not being typed in, the value shows
   return (
-    <input type="text" inputMode="decimal" className="decimal" value={text ?? String(value)} onBlur={() => setText(null)}
+    <input type="text" inputMode="decimal" className="decimal" aria-label={label} value={text ?? String(value)} onBlur={() => setText(null)}
       onChange={(e) => {
         setText(e.target.value);
         const v = Number(e.target.value);
@@ -130,13 +135,29 @@ export const Grip = ({ className = "grip" }: { className?: string }) => (
 /** Native HTML drag and drop, plus up/down buttons for the keyboard. Needs "dragDropEnabled": false on the Tauri
  * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64).
  * Every sorted list draws its rows alike: grip, place number (`numbered`), the item, then ↑ ↓ and, with `onRemove`, ✕. */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, className, numbered, onRemove, removeLabel }: {
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, className, numbered, onRemove, removeLabel, nameOf }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean; className?: string;
   numbered?: boolean; onRemove?: (i: number) => void; removeLabel?: string;
+  /** The row's name for a screen reader: its buttons say "上移 Team a", not "上移" in every row. */
+  nameOf?: (item: T) => string;
 }) {
   const { t } = useEditor();
   const [dragging, setDragging] = useState<number | null>(null);
+  const list = useRef<HTMLOListElement>(null);
+  // The arrow just pressed, focused again once the row is drawn in its new place; the other one when it went disabled
+  // (the row reached an end), so the focus does not fall to the page.
+  const refocus = useRef<{ key: string; dir: "up" | "down" } | null>(null);
+  useLayoutEffect(() => {
+    if (!refocus.current) return;
+    const { key, dir } = refocus.current;
+    refocus.current = null;
+    const row = [...(list.current?.children ?? [])].find((li) => (li as HTMLElement).dataset.key === key);
+    const button = (d: string) => row?.querySelector<HTMLButtonElement>(`[data-mv="${d}"]`);
+    const target = button(dir);
+    (target?.disabled ? button(dir === "up" ? "down" : "up") : target)?.focus();
+  });
+  const named = (verb: string, item: T) => (nameOf ? `${verb} ${nameOf(item)}` : verb);
   const move = (from: number, to: number) => {
     if (to < 0 || to >= items.length || from === to) return;
     const next = [...items];
@@ -145,9 +166,9 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
     if (selected === from) onSelect?.(to, next);
   };
   return (
-    <ol className={["reorder", numbered && "numbered", className].filter(Boolean).join(" ")} title={t("dragHint")}>
+    <ol ref={list} className={["reorder", numbered && "numbered", className].filter(Boolean).join(" ")} title={t("dragHint")}>
       {items.map((item, i) => (
-        <li key={keyOf(item)} draggable
+        <li key={keyOf(item)} data-key={keyOf(item)} draggable
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
           // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
           tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
@@ -160,12 +181,15 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
           <Grip />
           <span className="item">{render(item, i)}</span>
           <span className="moves">
-            <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
-              onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}><Icon name="up" /></button>
-            <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
-              onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}><Icon name="down" /></button>
+            {/* One row has nowhere to move: no arrows. */}
+            {items.length > 1 && <>
+              <button type="button" className="icon" data-mv="up" aria-label={named(t("up"), item)} title={t("up")} disabled={i === 0}
+                onClick={(e) => { e.stopPropagation(); refocus.current = { key: keyOf(item), dir: "up" }; move(i, i - 1); }}><Icon name="up" /></button>
+              <button type="button" className="icon" data-mv="down" aria-label={named(t("down"), item)} title={t("down")} disabled={i === items.length - 1}
+                onClick={(e) => { e.stopPropagation(); refocus.current = { key: keyOf(item), dir: "down" }; move(i, i + 1); }}><Icon name="down" /></button>
+            </>}
             {onRemove && (
-              <button type="button" className="icon remove" aria-label={removeLabel ?? t("remove")} title={removeLabel ?? t("remove")}
+              <button type="button" className="icon remove" aria-label={named(removeLabel ?? t("remove"), item)} title={removeLabel ?? t("remove")}
                 onClick={(e) => { e.stopPropagation(); onRemove(i); }}><Icon name="remove" /></button>
             )}
           </span>

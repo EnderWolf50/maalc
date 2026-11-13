@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { Grip, Icon, ProblemMark, useEditor, withBreaks } from "./ui";
+import { Grip, Holds, Icon, ProblemMark, useEditor, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -31,7 +31,7 @@ export function SkillPanel({ i }: { i: number }) {
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
     <details className="panel skill-panel" data-sec="skill">
-      <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}<ProblemMark on={bad(path)} /></summary>
+      <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed > 0 && <Holds>{changed}</Holds>}<ProblemMark on={bad(path)} /></summary>
       <p className="muted">{withBreaks(t("skill.note"))}</p>
       <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
         onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>
@@ -66,7 +66,7 @@ export function SkillPanel({ i }: { i: number }) {
                     <span>{k.toUpperCase()}</span>
                     <span className="skill-box skill-spin" role="group" aria-label={name}>
                       <button type="button" aria-label={`${name} ${t("skill.dec")}`} disabled={faulty || !ok.dec} onClick={() => shift(k, -1)}>−</button>
-                      <span className="n">{target[k]}</span>
+                      <span className="n" aria-live="polite">{target[k]}</span>
                       <button type="button" aria-label={`${name} ${t("skill.inc")}`} disabled={faulty || !ok.inc} onClick={() => shift(k, 1)}>+</button>
                     </span>
                   </span>
