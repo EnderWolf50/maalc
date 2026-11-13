@@ -1,6 +1,6 @@
-"""agent_patch.patch_all and rebind (#676): a test sets a name of the agent's actions modules in every module of the
-family that binds it, so a page module split off actions.py (`from actions import tap`) calls the fake too. The checks
-run on a stand-in family in a child process (this file run as a script), whose `actions` is the stand-in's; and the guard
+"""agent_patch.patch_all and rebind (#676): a test sets a name of the agent's actions modules in every one of them that
+binds it, so a page module split off actions.py (`from actions import tap`) calls the fake too. The checks run on
+stand-in modules in a child process (this file run as a script), whose `actions` is the stand-in's; and the guard
 fails on a test or tool that still sets such a name on one module directly.
 """
 
@@ -11,11 +11,12 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from agent_patch import actions_module_names
 from daily_child import run_child
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# The stand-in family: actions imports load_settings from another agent file (settings), page_actions binds actions'
+# The stand-in modules: actions imports load_settings from another agent file (settings), page_actions binds actions'
 # names as a split-off page module does, other_actions holds a tap of its own; moved is a name only page_actions has,
 # twice one that two page modules define apart.
 FAMILY = {
@@ -100,7 +101,8 @@ def direct_sets(source, modules):
     """Line numbers of source where a name is set on one of modules directly: a setattr or delattr call (builtin, or a
     method such as monkeypatch's) on the module or on a "module.name" string, and an assignment to or del of module.name.
     Setting an attribute of an object a module holds (actions.time, actions.TASK["done"]) is not one: every module that
-    binds the object sees it."""
+    binds the object sees it. The module goes by its own name: an alias (`import actions as a`), sys.modules["actions"]
+    or vars(actions) it does not see."""
 
     def on_module(node):
         return isinstance(node, ast.Name) and node.id in modules
@@ -138,7 +140,7 @@ def test_the_guard_passes_patch_all_and_an_object_a_module_holds(line):
 
 def test_no_test_or_tool_sets_a_name_on_an_actions_module_directly():
     # monkeypatch.setattr(actions, ...) and actions.<name> = ... miss a page module's own binding: use patch_all, rebind
-    modules = {"actions", *(p.stem for p in (ROOT / "agent").glob("*_actions.py"))}
+    modules = set(actions_module_names())
     found = [f"{path.relative_to(ROOT).as_posix()}:{n}" for folder in ("tests", "tools") for path in sorted((ROOT / folder).rglob("*.py"))
              for n in direct_sets(path.read_text(encoding="utf-8"), modules)]
     assert not found, "set these through agent_patch.patch_all or rebind: " + ", ".join(found)
