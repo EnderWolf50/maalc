@@ -1645,17 +1645,14 @@ def finish(context, reason):
     return go_home(context) and done(reason)
 
 
-# Shared by two or more page sections (#676): each section moves to a module of its own that imports only actions, so
-# what two of them use stays here, or the page modules would import each other.
-FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
-FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
+# Read by the helpers above or by two or more page sections (#676): each section moves to a module of its own that
+# imports only actions, so what they share stays here, or the page modules would import each other.
 BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
 GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
 GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
-WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
 DIALOG_TEXT = [360, 280, 560, 140]
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
@@ -1681,6 +1678,10 @@ def columns(results):
         else:
             groups.append([line])
     return [(g[0][0], [t for _, _, t in sorted(g, key=lambda line: line[1])]) for g in groups]
+
+
+FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
+FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 
 
 def seen(context, image, node, roi=None):
@@ -1744,6 +1745,9 @@ def want_of(run):
         kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
         return None if kind in ("pack-want", "want") and gift_id in held else kind
     return want
+
+
+WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
 
 
 def avoided_gifts(team):
