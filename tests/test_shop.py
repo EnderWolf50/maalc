@@ -355,10 +355,25 @@ ID_STARLIGHT = {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}
     (PRICES, None),  # a Replace slot's dialog: neither
     ({"s1_s2": 25, "s2_s3": 150, "s1_s3": 75}, None),  # mixed: never a guess
     ({"s1_s2": None, "s2_s3": None, "s1_s3": None}, None),
+    ({**ID_COST, "s1_s2": 9}, None),  # a lit price that is no mode's: the price the bot would pay is misread
 ])
 def test_the_pay_mode_is_told_by_the_three_prices(prices, mode):
     # #456 capture: the switch turns 90/150/240 into 25/50/75; the Cost box then shows the owned starlight.
-    assert s.pay_mode(prices, SWAPS) == mode
+    assert s.pay_mode(prices, LIT, SWAPS) == mode
+
+
+NO_SKILL_1 = {"s1_s2": False, "s2_s3": True, "s1_s3": False}  # #658: Ryōshū 0/2/4, the two swaps out of skill 1 dim
+
+
+@pytest.mark.parametrize("prices, mode", [
+    ({"s1_s2": 9, "s2_s3": 150, "s1_s3": 240}, "cost"),  # #658 live: the dim red 90 read as 9; 150 and 240 tell Cost
+    ({"s1_s2": None, "s2_s3": 150, "s1_s3": 240}, "cost"),  # a dim price unread
+    ({"s1_s2": 2, "s2_s3": 50, "s1_s3": 7}, "starlight"),  # both dim prices misread on starlight: the lit 50 tells
+    ({"s1_s2": 9, "s2_s3": 50, "s1_s3": 240}, None),  # a dim 240 (Cost) beside a lit 50 (starlight): mixed, never a guess
+    ({"s1_s2": 9, "s2_s3": None, "s1_s3": 24}, None),  # nothing read is any mode's
+])
+def test_a_dim_price_that_is_no_modes_is_left_out_of_the_pay_mode(prices, mode):
+    assert s.pay_mode(prices, NO_SKILL_1, SWAPS) == mode
 
 
 def test_id_search_pays_starlight_without_the_reserve_and_never_beyond_what_is_owned():
@@ -800,14 +815,15 @@ def test_a_tooltip_over_the_fuse_page_is_told_by_its_red_head(name, shown):
 
 def test_the_tooltip_sweep_over_tests_screens_hits_no_fuse_page():
     # CODING_STANDARDS' sweep: close_tooltip looks at the fuse page only. No fuse page of tests/screens reads a tooltip;
-    # 21 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
-    # #456's Ryōshū dialog and its second layer are three of them: Rend Space's red skill banner sits there.
+    # 22 other screens do (red banners and buttons over the area): there a hit would only tap as every read did before #378.
+    # #456's Ryōshū dialog and its second layer are three of them, #658's a fourth: Rend Space's red skill banner sits there.
     hits = [p.stem for p in sorted(SCREENS.glob("*.png")) if s.tooltip(np.asarray(Image.open(p).convert("RGB"))[:, :, ::-1])]
     assert not [h for h in hits if h.startswith("ShopFus")]
     assert hits == ["BattleTurnFocused", "EntryNewRun", "EntryParallelOn", "EntryPaused", "Formation", "LuxConsecExp10Open",
                     "LuxConsecExp2Open", "LuxConsecExp9Open", "LuxEventCommence", "LuxEventContinue", "LuxEventPassed",
                     "LuxEventText", "LuxTeamSelect", "LuxTeamSelectChain", "ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm",
-                    "ShopIdSkillSearchConnecting", "StarlightConfirm", "StarlightConfirmConnecting", "StarlightPage", "WipeDialog"]
+                    "ShopIdSkillSearchConnecting", "ShopIdSkillSearchDimmed", "StarlightConfirm", "StarlightConfirmConnecting",
+                    "StarlightPage", "WipeDialog"]
 
 
 def test_an_unselectable_cell_is_told_by_its_tag_though_it_is_flat():

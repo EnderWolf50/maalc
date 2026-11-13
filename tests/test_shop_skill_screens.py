@@ -25,7 +25,9 @@ SECOND_LAYER = ["ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting"]
 WAY_OUT = [*FIRST_LAYER, *SECOND_LAYER, "ShopPurchase", "Shop", "ShopReplaceSkillDone"]
 # #456's captures (HARD 2026-11-07): the Super Shop with ID Skill Search, its select mode, the dialog in Cost and in starlight.
 ID_GRIDS = ["SuperShop", "SuperShopIdSkillSearch", "ShopIdSkillSearchDone", "Shop"]
-ID_FIRST_LAYER = ["ShopIdSkillSearchDialog", "ShopIdSkillSearchAll", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight"]
+# #658 (HARD 2026-11-13, a frame of the clip around 03:24:36.5): Ryōshū at 0/2/4 in Cost, the two swaps out of skill 1 dim.
+ID_FIRST_LAYER = ["ShopIdSkillSearchDialog", "ShopIdSkillSearchAll", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight",
+                  "ShopIdSkillSearchDimmed"]
 ID_SECOND_LAYER = ["ShopIdSkillSearchConfirm", "ShopIdSkillSearchConnecting"]
 ID_WAY_OUT = ["ShopIdSkillSearchSelect", *ID_FIRST_LAYER, *ID_SECOND_LAYER, "ShopIdSkillSearchDone", "SuperShopIdSkillSearch"]
 
@@ -102,9 +104,13 @@ def child():
                     out["id_slot"][name] = slot and [slot["name"], slot["purchased"], slot["x"], slot["y"] - 50]
                 for name in ID_FIRST_LAYER + FIRST_LAYER:
                     read = actions.Shop.read_replace_dialog(context, capture(name))
-                    out["pay_mode"][name] = shop.pay_mode(read["prices"], swaps)
+                    out["pay_mode"][name] = shop.pay_mode(read["prices"], read["lit"], swaps)
                     if name in ID_FIRST_LAYER:
                         out["id_dialog"][name] = read
+                read = out["id_dialog"]["ShopIdSkillSearchDimmed"]
+                ryoshu = {"sinner": "Ryōshū", "target": {"s1": 0, "s2": 1, "s3": 5}, "s1_s3_first": True}  # #658's team
+                out["id_choice"] = shop.id_search_choice(ryoshu, tuple(read["owned"]), read["lit"], read["prices"], read["cost"],
+                                                         out["pay_mode"]["ShopIdSkillSearchDimmed"], 0, swaps)
                 for name in ID_SECOND_LAYER:
                     image = capture(name)
                     ask = actions.text(context, image, actions.REPLACE_ASK)
@@ -182,10 +188,10 @@ def test_the_way_back_to_the_main_page_cancels_the_dialog_on_both_layers(read):
 
 def test_the_dialog_is_told_by_its_counts_line_inside_the_dialog_title_box(read):
     # REPLACE_MARK: DIALOG_TITLE reads "Gregor's Skill Skills Owned SKILL1x3  SKILL2x2 SKILL3x0" on both layers. The sweep over
-    # every 1280x720 capture of tests/screens (CODING_STANDARDS): only the 7 dialog captures read it, and #456's 6 captures of
-    # the ID Skill Search dialog, the same dialog on both layers (its title also reads "Replace <sinner>'s Skill").
+    # every 1280x720 capture of tests/screens (CODING_STANDARDS): only the 7 dialog captures read it, and the 7 captures of
+    # the ID Skill Search dialog (#456's 6, #658's 1), the same dialog on both layers (its title also reads "Replace <sinner>'s Skill").
     id_skill_search = ["ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm", "ShopIdSkillSearchConnecting", "ShopIdSkillSearchDialog",
-                       "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight"]
+                       "ShopIdSkillSearchDimmed", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight"]
     assert read["mark_sweep"] == [*id_skill_search, "ShopReplaceSkillAll", "ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting",
                                   "ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft", "ShopReplaceSkillPickedMiddle",
                                   "ShopReplaceSkillPickedRight"]
@@ -225,12 +231,23 @@ def test_the_id_dialog_reads_like_a_replace_slots_at_its_own_prices(read):
         "ShopIdSkillSearchAll": {**GREGOR_ID, "sinner": "Ryōshū", "owned": [2, 3, 1],
                                  "lit": {"s1_s2": True, "s2_s3": True, "s1_s3": True}},
         "ShopIdSkillSearchPicked": GREGOR_ID,
-        "ShopIdSkillSearchStarlight": {**GREGOR_ID, "cost": 3433, "prices": {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}}}
+        "ShopIdSkillSearchStarlight": {**GREGOR_ID, "cost": 3433, "prices": {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}},
+        # #658: the dim red 90 reads 9, as it did live (run.log "prices s1_s2 9 dim, s2_s3 150, s1_s3 240 dim").
+        "ShopIdSkillSearchDimmed": {"sinner": "Ryōshū", "owned": [0, 2, 4], "cost": 685,
+                                    "prices": {"s1_s2": 9, "s2_s3": 150, "s1_s3": 240},
+                                    "lit": {"s1_s2": False, "s2_s3": True, "s1_s3": False}}}
 
 
 def test_the_payment_is_told_by_the_prices_and_a_replace_slots_dialog_has_none(read):
     assert read["pay_mode"] == {"ShopIdSkillSearchDialog": "cost", "ShopIdSkillSearchAll": "cost", "ShopIdSkillSearchPicked": "cost",
-                                "ShopIdSkillSearchStarlight": "starlight", **{name: None for name in FIRST_LAYER}}
+                                "ShopIdSkillSearchStarlight": "starlight", "ShopIdSkillSearchDimmed": "cost",
+                                **{name: None for name in FIRST_LAYER}}
+
+
+def test_a_misread_dim_price_leaves_cost_told_and_the_wanted_swap_bought(read):
+    # #658: the dim 9 is no mode's and is left out; 150 and 240 tell Cost. Ryōshū 0/2/4 toward 0/1/5 wants s2_s3 alone,
+    # lit, 150 of 685 Cost (live: cancelled as "the payment is unknown").
+    assert read["id_choice"] == ["s2_s3", 150]
 
 
 def test_the_id_second_layer_asks_the_price_in_cost_and_previews_the_cost_after_it(read):

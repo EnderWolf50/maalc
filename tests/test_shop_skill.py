@@ -413,8 +413,9 @@ class IdGame:
         monkeypatch.setattr(actions, "bar_dead", lambda image: set(self.dead))
 
     def lit(self, box):
-        swap = next(k for k, b in actions.REPLACE_PRICES.items() if b == box)
-        return not (swap != "s1_s2" and self.decks[self.open][2] == 0)  # skill 3 locked: the two swaps into it dim
+        swap, counts = next(k for k, b in actions.REPLACE_PRICES.items() if b == box), self.decks[self.open]
+        # skill 3 locked: the two swaps into it dim; no skill 1 card (#658 capture): the two swaps out of it dim
+        return not (swap != "s1_s2" and counts[2] == 0) and not (swap != "s2_s3" and counts[0] == 0)
 
     def prices(self):
         return PRICES if self.via is not None else ID_PRICES[self.mode]
@@ -612,6 +613,45 @@ def test_a_dialog_already_in_starlight_is_switched_back_for_cost(context, monkey
     game = IdGame(context, monkeypatch, {"Ryōshū": (2, 3, 1)}, mode="starlight")
     assert actions.Shop.id_skill_search(context, searching(RYOSHU), {}) == 1
     assert actions.PAY_SWITCH in game.taps and (game.cost, game.starlight) == (628, 3433)
+
+
+def short_dim_price(game, mode):
+    """#658: in mode, the dim s1_s2 price reads a digit short (live: the red 90 as 9)."""
+    shown, box = game.shown, actions.REPLACE_PRICES["s1_s2"]
+
+    def misread():
+        out = shown()
+        if game.state == "dialog" and game.mode == mode and not game.lit(box):
+            out[tuple(box)] = [(t[:-1], b) for t, b in out[tuple(box)]]
+        return out
+    game.shown = misread
+
+
+NO_SKILL_1 = skill_entry("Ryōshū", 0, 1, 5)  # #658's team: Ryōshū 0/2/4 wants s2_s3 alone
+
+
+def test_a_misread_dim_price_still_tells_cost_and_the_swap_is_made(context, monkeypatch):
+    # #658 live: 9 dim, 150, 240 dim was "the payment is unknown: cancel"; 150 and 240 tell Cost.
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (0, 2, 4)}, cost=685), logged(monkeypatch)
+    short_dim_price(game, "cost")
+    assert actions.Shop.id_skill_search(context, searching(NO_SKILL_1), {}) == 1
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.REPLACE_OPTIONS["s2_s3"], actions.REPLACE_CONFIRM,
+                         actions.REPLACE_CONFIRM]
+    assert ("shop: ID Skill Search: 'Ryōshū': Skills Owned 0/2/4, s1_s2 9 dim, s2_s3 150, s1_s3 240 dim, 685 Cost, reserve 0: "
+            "try s2_s3") in lines
+    assert game.cost == 535 and actions.RUN["skills"] == {"Ryōshū": [0, 1, 5]}
+
+
+def test_a_misread_dim_price_after_the_switch_still_shows_starlight(context, monkeypatch):
+    # The switch waits for the prices to tell starlight: a dim 25 read as 2 is left out there too.
+    game, lines = IdGame(context, monkeypatch, {"Ryōshū": (0, 2, 4)}, cost=685), logged(monkeypatch)
+    short_dim_price(game, "starlight")
+    assert actions.Shop.id_skill_search(context, searching(NO_SKILL_1, pay="starlight"), {}) == 1
+    assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.PAY_SWITCH, actions.REPLACE_OPTIONS["s2_s3"],
+                         actions.REPLACE_CONFIRM, actions.REPLACE_CONFIRM]
+    assert ("shop: ID Skill Search: 'Ryōshū': Skills Owned 0/2/4, s1_s2 2 dim, s2_s3 50, s1_s3 75 dim, 3433 starlight "
+            "(no reserve): try s2_s3") in lines
+    assert (game.starlight, game.cost) == (3383, 685) and actions.RUN["skills"] == {"Ryōshū": [0, 1, 5]}
 
 
 def test_id_skill_search_with_nobody_to_swap_leaves_by_return(context, monkeypatch):
@@ -820,15 +860,16 @@ def test_the_dead_are_the_grey_portraits_of_the_shops_main_page(name, alive):
 
 
 def test_the_grey_portrait_sweep_over_the_shop_captures():
-    # CODING_STANDARDS' sweep: bar_dead over all 32 shop captures of tests/screens. On the 12 main pages (the test above) it
-    # reads the dead right. Over a dialog the bar is shaded and it names Faust alone (62-64; on the HARD ones nine are dead):
-    # wrong both ways, and neither the heal nor ID Skill Search reads the bar there. The fuse and purchase pages name nobody.
-    # Off the shop (128 of the other 189 1280x720 screens name someone) there is no bar at that place, and it is never asked.
+    # CODING_STANDARDS' sweep: bar_dead over all 33 shop captures of tests/screens. On the 12 main pages (the test above) it
+    # reads the dead right. Over a dialog the bar is shaded and it names Faust alone (62-64; on the HARD ones nine are dead),
+    # or nobody (#658's): wrong both ways, and neither the heal nor ID Skill Search reads the bar there. The fuse and purchase
+    # pages name nobody. Off the shop (134 of the other 197 1280x720 screens name someone) there is no bar at that place, and
+    # it is never asked.
     main = {"Shop", "ShopHeal", "SuperShop", "ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed",
             "ShopReplaceSkillClippedGregor", "ShopReplaceSkillClippedMeursault", "SuperShopIdSkillSearch", "SuperShopScrolled",
             "ShopIdSkillSearchDone", "ShopIdSkillSearchSelect"}
     shop_screens = {stem: image for stem, image in screens_1280() if stem.startswith(("Shop", "SuperShop"))}
-    assert len(shop_screens) == 32 and main <= set(shop_screens)
+    assert len(shop_screens) == 33 and main <= set(shop_screens)
     off_main = {stem: sorted(actions.bar_dead(image)) for stem, image in shop_screens.items() if stem not in main}
     assert {stem: dead for stem, dead in off_main.items() if dead} == {
         stem: ["Faust"] for stem in ("ShopIdSkillSearchAll", "ShopIdSkillSearchConfirm", "ShopIdSkillSearchConnecting",
@@ -846,12 +887,12 @@ def screens_1280():
 
 def test_the_lit_price_sweep_over_tests_screens():
     # CODING_STANDARDS' sweep: option_lit is asked only on the dialog's first layer, after its title named the slot's sinner.
-    # Over every 1280x720 screen of tests/screens (221 of them), a price box reads lit on the dialogs and on 9 other screens,
+    # Over every 1280x720 screen of tests/screens (230 of them), a price box reads lit on the dialogs and on 9 other screens,
     # none a shop page: orange art where a box sits (a battle's skill card, a map node, a gift). The second layer (Confirm,
     # Connecting) reads none: its skill cards cover the prices. #456's ID Skill Search dialogs (live 2026-11-07, the same
     # dialog with prices 90/150/240 in Cost or 25/50/75 in Starlight) are dialogs too and read as the captures show:
-    # Gregor's skill 3 is locked, so only s1_s2 is lit; Ryōshū's three are.
-    id_dialogs = {"ShopIdSkillSearchAll": ["s1_s2", "s2_s3", "s1_s3"],
+    # Gregor's skill 3 is locked, so only s1_s2 is lit; Ryōshū's three are. #658's Ryōshū has no skill 1: only s2_s3 is lit.
+    id_dialogs = {"ShopIdSkillSearchAll": ["s1_s2", "s2_s3", "s1_s3"], "ShopIdSkillSearchDimmed": ["s2_s3"],
                   **{f"ShopIdSkillSearch{n}": ["s1_s2"] for n in ("Dialog", "Picked", "Starlight")}}
     hits = {stem: [k for k, box in actions.REPLACE_PRICES.items() if shop.option_lit(image, box)] for stem, image in screens_1280()}
     assert {k: hits[k] for k in id_dialogs} == id_dialogs

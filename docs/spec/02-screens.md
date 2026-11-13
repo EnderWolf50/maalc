@@ -187,7 +187,7 @@
 - **對話框**：就是替換格的對話框（版面、選項框、Cancel／Confirm 的位置見上方「技能替換對話框」），標題同樣是 `Replace <罪人>'s Skill`，`Skills Owned` 也一樣；`Shop.read_replace_dialog` 讀得出罪人、三個張數、Cost、三個價格與哪幾項亮著。不同的只有兩點：
   - 價格是 90／150／240（Cost）或 25／50／75（星光），和遊戲資料 `upgradePersonality` 一致。
   - 右上的 Cost 左邊多了一個雙箭頭圖示，中心約 (957, 140)：**這就是付款方式的切換**。第一次打開時是 Cost（金幣、868）。點一下 0.4 秒內換成星光：右上改成星光圖示與**持有的星光**（3433），三個價格變 25／50／75，暗的選項還是暗的；再點一下換回 Cost。`read_replace_dialog` 的 `cost` 讀的是右上的數字（`REPLACE_COST`），所以星光模式下讀到的是 3433；要知道現在付哪一種，得另外看右上的圖示或價格。換回 Cost 後再打開的對話框都是 Cost；停在星光時關掉再打開會不會保留，**沒試**。（`ShopIdSkillSearchDialog.png`、`ShopIdSkillSearchStarlight.png`）
-  - 例子：Gregor `SKILL 1x2 SKILL 2x3 SKILL 3x0`（第 1 層換過一次，技能 3 上鎖），150、240 暗、紅字（`ShopIdSkillSearchDialog.png`）；Meursault 也是 2/3/0（裝置截圖沒有收進測試截圖）；Ryōshū `SKILL 1x2 SKILL 2x3 SKILL 3x1`，三項都亮（`ShopIdSkillSearchAll.png`）。
+  - 例子：Gregor `SKILL 1x2 SKILL 2x3 SKILL 3x0`（第 1 層換過一次，技能 3 上鎖），150、240 暗、紅字（`ShopIdSkillSearchDialog.png`）；Meursault 也是 2/3/0（裝置截圖沒有收進測試截圖）；Ryōshū `SKILL 1x2 SKILL 2x3 SKILL 3x1`，三項都亮（`ShopIdSkillSearchAll.png`）。沒有技能 1 的罪人，從技能 1 換出的兩項暗：Ryōshū `SKILL 1x0 SKILL 2x2 SKILL 3x4`，90、240 暗、紅字，150 亮（#658，2026-11-13 HARD 第 5 層，Cost 685，錄影的一格：`ShopIdSkillSearchDimmed.png`）；這張的暗紅 `90`，OCR 讀成 `9`，和實機的 log 一樣（spec 03「付款方式」）。
 - **選取**：同替換格：點亮著的選項多一圈橘框、Confirm 變亮；點暗的選項沒有反應。（`ShopIdSkillSearchPicked.png`）
 - **Cancel**：0.6 秒內直接回**商店主畫面**（不是回選人模式），Cost 不變（868）。
 - **Return**（選人模式）：回商店主畫面，Cost 不變（868）。

@@ -5181,14 +5181,15 @@ class Shop(CustomAction):
         # Never assumed to carry over: the dialog opened on Cost in the capture (tests/screens/ShopIdSkillSearchDialog.png);
         # whether the game keeps the payment mode is unverified (#456). The prices tell it; a switch must show the other prices.
         # With no price read the payment is unknown, and a switch could flip the wanted one away: cancel.
-        mode = shop.pay_mode(read["prices"], swaps)
+        mode = shop.pay_mode(read["prices"], read["lit"], swaps)
         if mode is None:
             log(f"{head}{sinner!r}: prices {Shop.price_line(read)}: the payment is unknown: cancel")
             Shop.cancel_replace(context)
             return "handled"
         if mode != pay:
             page_guard(context, "Shop")
-            switched = tap_shown(context, *PAY_SWITCH, lambda im: shop.pay_mode(Shop.dialog_prices(context, im), swaps) == pay,
+            switched = tap_shown(context, *PAY_SWITCH,
+                                 lambda im: shop.pay_mode(Shop.dialog_prices(context, im), Shop.dialog_lit(im), swaps) == pay,
                                  timeout=1.5, rest=1.0)
             if switched is None:
                 log(f"{head}{sinner!r}: prices {Shop.price_line(read)}: the payment does not show {pay}: cancel")
@@ -5228,6 +5229,11 @@ class Shop(CustomAction):
         return {k: digits(text(context, image, box)) for k, box in REPLACE_PRICES.items()}
 
     @staticmethod
+    def dialog_lit(image):
+        """Whether each of the Replace dialog's three options is lit (its price orange) on image."""
+        return {k: shop.option_lit(image, box) for k, box in REPLACE_PRICES.items()}
+
+    @staticmethod
     def price_line(read):
         """"s1_s2 45, s2_s3 75 dim, s1_s3 120 dim": a dialog read's prices for the log."""
         return ", ".join(f"{k} {read['prices'][k]}{'' if read['lit'][k] else ' dim'}" for k in REPLACE_PRICES)
@@ -5253,7 +5259,7 @@ class Shop(CustomAction):
                 "owned": shop.skills_owned(text(context, image, REPLACE_OWNED)),
                 "cost": read_cost(context, REPLACE_COST) if cost is None else cost,
                 "prices": Shop.dialog_prices(context, image),
-                "lit": {k: shop.option_lit(image, box) for k, box in REPLACE_PRICES.items()}}
+                "lit": Shop.dialog_lit(image)}
 
     @staticmethod
     def cancel_replace(context):
