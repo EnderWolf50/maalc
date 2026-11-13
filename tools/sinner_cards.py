@@ -11,8 +11,10 @@ bundles when it is new or the client changed; the quarterly rerun is docs/spec/0
 """
 
 import argparse
+import ctypes
 import io
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -28,6 +30,11 @@ PERSONALITY = "static/Assets/Resources_moved/StaticData/static-data/personality"
 CHARACTERS = "raw/Localize/en/EN_Characters.json"
 CARD = "Assets/Resources_moved/Sprite/Unit/Info/Normal/{}_normal_info.png"
 QUALITY = 80
+
+
+def sinner_names() -> list[str]:
+    """The settings' 12 sinners, in their order (the deployment order's enum)."""
+    return json.loads(SCHEMA.read_text(encoding="utf-8"))["$defs"]["order"]["items"]["enum"]
 
 
 def default_identities(personalities) -> dict[int, int]:
@@ -50,14 +57,14 @@ def sinner_identities(sinners: list[str], characters: list[dict], identities: di
     return {s: identities[by_name[s]] for s in sinners}
 
 
-def card_bundles(index_lines: list[str], ids: set[int]) -> dict[str, set[int]]:
-    """Bundle key (hash/version) -> the identity ids whose card Sprite it holds, from the bundle index."""
+def card_bundles(index_lines: list[str], ids: set[int]) -> dict[str, dict[str, int]]:
+    """Bundle key (hash/version) -> {card Sprite path: identity id} of the cards it holds, from the bundle index."""
     paths = {CARD.format(i): i for i in ids}
-    out = defaultdict(set)
+    out = defaultdict(dict)
     for line in index_lines:
         key, kind, path = (line.split("\t") + ["", ""])[:3]
         if kind == "Sprite" and path in paths:
-            out[key].add(paths[path])
+            out[key][path] = paths[path]
     return dict(out)
 
 
@@ -73,26 +80,26 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=240, help="twice the widest deployment tile of the GUI")
     args = ap.parse_args()
+    if sys.platform == "win32":  # below normal: a bench job beside a live run
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
     import UnityPy
 
     UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     unpack = local_dir("unpack")
     rows = [p for f in sorted((unpack / PERSONALITY).glob("personality-*.json")) for p in json.loads(f.read_text(encoding="utf-8-sig"))["list"]]
     characters = json.loads((unpack / CHARACTERS).read_text(encoding="utf-8-sig"))["dataList"]
-    sinners = json.loads(SCHEMA.read_text(encoding="utf-8"))["$defs"]["order"]["items"]["enum"]
-    ids = sinner_identities(sinners, characters, default_identities(rows))
+    ids = sinner_identities(sinner_names(), characters, default_identities(rows))
     cache = unpack / "raw/UnityCache"
-    where = card_bundles(bundle_index(cache, unpack / INDEX), set(ids.values()))
+    bundles = card_bundles(bundle_index(cache, unpack / INDEX), set(ids.values()))
 
     OUT.mkdir(exist_ok=True)
-    done = set()
-    for key, wanted in where.items():
+    written = set()
+    for key, cards in bundles.items():
         for path, obj in UnityPy.load(str(cache / key / "__data")).container.items():
-            if obj.type.name == "Sprite" and path in {CARD.format(i) for i in wanted}:
-                pid = int(path.rsplit("/", 1)[-1].split("_")[0])
-                (OUT / f"{pid}.webp").write_bytes(webp(obj.read().image, args.width))
-                done.add(pid)
-    missing = {s: i for s, i in ids.items() if i not in done}
+            if obj.type.name == "Sprite" and path in cards:
+                (OUT / f"{cards[path]}.webp").write_bytes(webp(obj.read().image, args.width))
+                written.add(cards[path])
+    missing = {s: i for s, i in ids.items() if i not in written}
     if missing:
         raise SystemExit(f"no card sprite for {missing}")
     index = {s: f"{i}.webp" for s, i in ids.items()}

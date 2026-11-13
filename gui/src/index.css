@@ -47,8 +47,8 @@
   --bak-plate: #006e7e; --bak-ink: #81f1ff;
   /* A sinner tile is the identity's card art (#718): it stays the game's in both themes, as Grace of the Star does, so what
    * sits on it keeps the dark theme's ink: the name, the deployed and backup numbers, and the shade under them. Over a white
-   * pixel of the art the name keeps 4.5:1 on 67% shade and more (the foot is 78% and more up to 28% of the tile, two lines of
-   * a narrow tile's name included), the numbers on their 85% plates 6.6:1 and 10.6:1. */
+   * pixel of the art the name keeps 4.5:1 on 67% shade and more (the foot is 78% and more up to 34% of the tile; two lines of
+   * a narrow tile's name reach 31%), the numbers on their 85% plates 6.6:1 and 10.6:1. */
   --art-shade: #0b0806; --art-top: #2c2219; --art-ink: #edcda6; --art-dep: #f0a632; --art-bak: #22fde3;
   /* Grace of the Star as the game draws it (a capture of 2026-11-13): grey-navy cards in a blue frame on a near-black page,
    * cream price and + / ++ on near-black buttons with a grey outline; a picked card turns white. The same in both themes,
@@ -420,7 +420,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .sinner::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(to top, color-mix(in srgb, var(--art-shade) 88%, transparent) 0,
-    color-mix(in srgb, var(--art-shade) 78%, transparent) 28%, transparent 52%);
+    color-mix(in srgb, var(--art-shade) 78%, transparent) 34%, transparent 56%);
 }
 .sinner > span { z-index: 1; }
 .sinner:hover:not(:disabled) { border-color: var(--accent-line); }
@@ -671,7 +671,8 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
   nav[role="tablist"] button { padding: 7px 9px 8px; }
   nav[role="tablist"] .tabsep { margin: 0 3px; }
   main { padding: 14px 14px 24px; }
-  nav.sections { top: -14px; margin-top: -14px; padding-top: 14px; }
+  nav.sections { top: -14px; margin-top: -14px; padding-top: 14px; column-gap: 4px; }
+  nav.sections button { padding: 2px 7px; } /* the six still fit one row in the narrowest window (800 px) */
   .split { gap: 14px; }
   .split aside { width: 190px; }
   .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */

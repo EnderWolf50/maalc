@@ -8,7 +8,6 @@ import sinner_cards as sc
 
 REPO = Path(__file__).resolve().parent.parent
 CARDS = REPO / "assets/resource/base/data/sinner_cards"
-SINNERS = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))["$defs"]["order"]["items"]["enum"]
 # tools/sinner_cards.py --width: twice the widest deployment tile of gui/src/index.css (`.sinners`, 6 columns in 760 px); the
 # identity list's art is 537 x 827, so 240 x 370
 WIDTH, HEIGHT = 240, 370
@@ -45,12 +44,15 @@ def test_the_card_is_found_in_the_bundle_index():
         "24b6/8b71\tSprite\tAssets/Resources_moved/Sprite/Unit/Info/Normal/10201_normal_info.png",
         "aaaa/bbbb\t-\t-",
     ]
-    assert sc.card_bundles(lines, {10101, 10201}) == {"24b6/8b71": {10101, 10201}}
+    card = "Assets/Resources_moved/Sprite/Unit/Info/Normal/{}_normal_info.png"
+    assert sc.card_bundles(lines, {10101, 10201}) == {"24b6/8b71": {card.format(10101): 10101, card.format(10201): 10201}}
 
 
 def test_every_sinner_of_the_settings_has_a_card():
     index = json.loads((CARDS / "index.json").read_text(encoding="utf-8"))
-    assert list(index) == SINNERS
+    assert list(index) == ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion",
+                           "Sinclair", "Outis", "Gregor"]
+    assert list(index) == sc.sinner_names()
     for file in index.values():
         assert Image.open(CARDS / file).size == (WIDTH, HEIGHT)
     assert {f.name for f in CARDS.glob("*.webp")} == set(index.values())

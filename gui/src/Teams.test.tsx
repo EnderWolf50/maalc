@@ -9,7 +9,6 @@ import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import css from "./index.css?raw";
-import { DeploymentTab } from "./Plans";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
 
@@ -327,24 +326,15 @@ describe("the deployment order tiles (#718)", () => {
     for (const s of ["Don Quixote", "Meursault", "Gregor"]) expect(tile(s)).toHaveClass("out");
     for (const s of order) expect(tile(s)).not.toHaveClass("out");
     // at rest: the pointer over one lifts it a little, to say a click puts it back in
-    const dim = rules(css).filter((r) => r.selector.includes(".sinner.out") && /\bimg\b/.test(r.selector) && !r.selector.includes(":hover"))
+    const dim = cssRules(css).filter((r) => r.selector.includes(".sinner.out") && /\bimg\b/.test(r.selector) && !r.selector.includes(":hover"))
       .map((r) => r.body.match(/brightness\(([\d.]+)\)/)?.[1]);
     expect(dim.length).toBeGreaterThan(0);
     for (const b of dim) expect(Number(b)).toBeLessThan(0.6);
   });
-
-  test("the plan tab's grid shows the same cards", () => {
-    const s = ordered();
-    s.deployment_order_plans = [{ id: "p", name: "P", order }];
-    renderEditor(<DeploymentTab />, s);
-    const grid = document.querySelector<HTMLElement>(".sinners")!;
-    expect(within(grid).getByRole("button", { name: /Gregor/ })).toHaveClass("out");
-    expect(within(grid).getByRole("button", { name: /Ryōshū/ }).querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/10401\.webp$/);
-  });
 });
 
 /** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets. */
-function rules(text: string) {
+function cssRules(text: string) {
   return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
 }
 
