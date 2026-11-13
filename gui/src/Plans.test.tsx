@@ -181,20 +181,20 @@ describe("dragging a pack chip", () => {
 
 // The theme pack tab's filter and badges (#387).
 const chip = (name: string) => screen.getByRole("button", { name });
-const floorChip = (n: number) => chip(zh["packs.floor"].replace("{n}", String(n)));
+const floorBox = () => screen.getByRole("combobox", { name: zh["packs.floorPick"] });
 const shown = (pack: string) => screen.queryByText(pack) !== null;
 
 test("the floor filter reaches floor 15: an EXTREME-only pack shows on floors 11-15, not on 1-5", async () => {
   const { user } = renderEditor(<ThemePackTab />, newSettings());
   await waitFor(() => expect(shown("Chachihu")).toBe(true)); // the bundled data file, every floor: 1519, EXTREME only
-  await user.click(floorChip(5));
+  await user.selectOptions(floorBox(), "5");
   expect(shown("Chachihu")).toBe(false);
   expect(shown("The Heartbreaking")).toBe(true); // HARD 5
-  await user.click(floorChip(12));
+  await user.selectOptions(floorBox(), "12");
   expect(shown("Chachihu")).toBe(true);
   expect(shown("Line 3")).toBe(true); // HARD 5, INFINITY and EXTREME
   expect(shown("The Heartbreaking")).toBe(false); // HARD 5 and INFINITY: not on an EXTREME floor
-  await user.click(floorChip(7));
+  await user.selectOptions(floorBox(), "7");
   expect(shown("The Heartbreaking")).toBe(true);
   expect(shown("Chachihu")).toBe(false);
 });

@@ -178,6 +178,37 @@ test("a team's plan opens on its own page, and the plan's team list leads back t
   expect(nameBox()).toHaveValue("Tb");
 });
 
+test("moving a team from its own order to a plan can be undone", async () => {
+  const s = settings();
+  s.deployment_order_plans = [{ id: "d1", name: "Bleed order", order: [...SINNERS] }];
+  s.teams[0].deployment_order = { custom: ["Faust", "Yi Sang"] };
+  file.text = JSON.stringify(s);
+  const user = userEvent.setup();
+  render(<App />);
+  const pickPlan = await screen.findByRole("combobox", { name: zh["team.deployment_order"] });
+  await user.selectOptions(pickPlan, "d1");
+  expect(pickPlan).toHaveValue("d1");
+  await user.click(screen.getByRole("button", { name: zh.undo }));
+  expect(pickPlan).toHaveValue("");
+  expect(screen.getByText(zh["sum.order"].replace("{d}", "2").replace("{b}", "0"))).toBeInTheDocument();
+  const titles = [...document.querySelectorAll("details.exp > summary")].map((x) => x.firstChild?.textContent);
+  expect(titles.filter((x) => x === zh["team.deployment_order"] || x === zh["team.starlight"])).toEqual([zh["team.deployment_order"], zh["team.starlight"]]);
+});
+
+test("Revert goes back to the saved settings after a confirm", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole("tab", { name: zh["tab.teams"] });
+  expect(screen.queryByRole("button", { name: zh.revert })).toBeNull();
+  await user.type(nameBox(), "!");
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  await user.click(screen.getByRole("button", { name: zh.revert }));
+  expect(confirm).toHaveBeenCalledWith(zh.revertConfirm);
+  expect(nameBox()).toHaveValue("Ta");
+  expect(screen.queryByRole("button", { name: zh.revert })).toBeNull();
+  confirm.mockRestore();
+});
+
 test("a folded section's header says what is set inside", async () => {
   const s = settings();
   s.teams[0].gift_search = { enabled: true, gifts: [{ keyword: "Burn", tier: 1, name: "Ashes to Ashes" }] };

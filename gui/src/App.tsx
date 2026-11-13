@@ -200,6 +200,14 @@ export default function App() {
   };
   saveRef.current = save;
 
+  /** Back to the file as last read or written: every unsaved edit goes, after a confirm. */
+  const revert = () => {
+    if (!confirm(t("revertConfirm"))) return;
+    setS(savedText ? JSON.parse(savedText) : newSettings());
+    setChecked(false);
+    setStatus("");
+  };
+
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
   const goTo = (path: string) => {
     const [section, index] = path.split("/");
@@ -229,6 +237,7 @@ export default function App() {
         <span className="path" title={t("file")}>{root}\config\settings.json</span>
         <span className={"status" + (state ? " " + state : "")} aria-live="polite">{blocked
           ? fill(t("blockedCount"), { n: problems.length }) : dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
+        {dirty && <button type="button" className="subtle" onClick={revert}><Icon glyph={GLYPHS.reset} />{t("revert")}</button>}
         <label className="lang" title={t("language")}><Icon glyph={GLYPHS.language} /><span className="sr-only">{t("language")}</span>
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>

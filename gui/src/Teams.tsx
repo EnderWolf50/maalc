@@ -82,6 +82,12 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState("");
+  // the team's own order or graces, put away when it moved to a plan: 復原 brings them back (gone on another team)
+  const [putAway, setPutAway] = useState<{ team: string; name: string; back: Partial<Team> } | null>(null);
+  const toPlan = (what: "deployment_order" | "starlight", id: string, name: string) => {
+    if ("custom" in team[what]) setPutAway({ team: team.id, name, back: { [what]: team[what] } });
+    set({ [what]: { plan: id } });
+  };
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -151,25 +157,30 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Icon glyph={GLYPHS.remove} />{t("remove")}</button>
       </div>
       {notice && <p className="notice">{notice}</p>}
+      {putAway?.team === team.id && (
+        <p className="notice" aria-live="polite">{fill(t("plan.switched"), { name: putAway.name })}{" "}
+          <button type="button" onClick={() => { set(putAway.back); setPutAway(null); }}>{t("undo")}</button>
+        </p>
+      )}
 
       <Section id="team.plans" title={t("team.plans")} open summary={plansSum}>
         <div className="srows">
           {/* the choice first, the button after it: a problem in the row focuses the row's first control (focusPath) */}
           <Row many label={t("team.deployment_order")} path={`${path}/deployment_order`} mark={bad(`${path}/deployment_order`) && !orderCustom}
             control={<>
-              {planSelect(orderSource, s.deployment_order_plans, (id) => set({
-                deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
-              }), t("team.deployment_order"))}
+              {planSelect(orderSource, s.deployment_order_plans, (id) => (id
+                ? toPlan("deployment_order", id, s.deployment_order_plans.find((p) => p.id === id)?.name ?? id)
+                : set({ deployment_order: { custom: [...(order ?? SINNERS)] } })), t("team.deployment_order"))}
               {orderCustom ? <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>
                 : editPlan("deployment_order_plans", orderSource, "deployment", "team.deployment_order")}
             </>} />
           <Row many label={t("team.starlight")} path={`${path}/starlight`} mark={bad(`${path}/starlight`) && !starCustom}
             control={<>
-              {planSelect(starSource, s.starlight_plans, (id) => set({
-                starlight: id ? { plan: id } : {
+              {planSelect(starSource, s.starlight_plans, (id) => (id
+                ? toPlan("starlight", id, s.starlight_plans.find((p) => p.id === id)?.name ?? id)
+                : set({ starlight: {
                   custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
-                },
-              }), t("team.starlight"))}
+                } })), t("team.starlight"))}
               {starCustom ? <button type="button" onClick={saveStarPlan}>{t("saveAsPlan")}</button>
                 : editPlan("starlight_plans", starSource, "starlight", "team.starlight")}
             </>} />
@@ -194,7 +205,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </div>
       </Section>
 
-      <Section id="team.order" title={t("team.deployment_order")} open bad={bad(`${path}/deployment_order`)}
+      <Section key={orderCustom ? "order-own" : "order-plan"} id={orderCustom ? "team.order" : "team.order.plan"} title={t("team.deployment_order")}
+        open={orderCustom} bad={bad(`${path}/deployment_order`)}
         summary={fill(t("sum.order"), { d: Math.min(deployed, 7), b: Math.max(deployed - 7, 0) })}>
         {"custom" in team.deployment_order ? (
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
@@ -202,7 +214,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         ) : order && <SinnerGrid order={order} path={`${path}/deployment_order`} />}
       </Section>
 
-      <Section id="team.starlight" title={t("team.starlight")} open bad={bad(`${path}/starlight`)}
+      <Section key={starCustom ? "star-own" : "star-plan"} id={starCustom ? "team.starlight" : "team.starlight.plan"} title={t("team.starlight")}
+        open={starCustom} bad={bad(`${path}/starlight`)}
         summary={[fill(t("sum.stars"), { n: picked, cost: star ? starlightCost(star.levels) : 0 }), star?.convert_leftover ? t("sum.convert") : ""]
         .filter(Boolean).join(t("sum.sep"))}>
         {"custom" in team.starlight ? (

@@ -341,7 +341,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
         (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
       <span className="gap" />
-      {chips(FLOORS, floor, (v) => (v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")), setFloor)}
+      <select aria-label={t("packs.floorPick")} value={floor} onChange={(e) => setFloor(Number(e.target.value))}>
+        {FLOORS.map((v) => <option key={v} value={v}>{v ? t("packs.floor").replace("{n}", String(v)) : t("packs.anyFloor")}</option>)}
+      </select>
       <span className="spacer" />
       {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
     </div>

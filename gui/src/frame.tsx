@@ -92,17 +92,20 @@ export function Section({ id, title, summary, open = false, bad, path, className
  * always shows whole. The whole text stays in one element, its lines split by <br>, so it reads and searches as one; while
  * folded it is hidden from the eye only (a screen reader reads it in full) and the sentence shown is hidden from screen
  * readers, so they hear it once. */
-/** A help longer than this folds: about two lines of a settings row's help column (Chinese runs about 2.2 characters to an
+/** A help longer than this folds: about three lines of a settings row's help column (Chinese runs about 2.2 characters to an
  * English word). */
-const FOLD_CHARS = { zh: 50, en: 110 };
+const FOLD_CHARS = { zh: 90, en: 200 };
+/** A first paragraph this short is shown whole when the help folds; a longer one shows its first sentence. */
+const LEAD_CHARS = { zh: 60, en: 140 };
 const CJK = /[㐀-鿿]/;
 
 export function Note({ text, block }: { text: string; block?: boolean }) {
   const { t } = useEditor();
   const [all, setAll] = useState(false);
   const caution = cautionClass(text);
-  const first = text.split("\n")[0].match(/^.*?[。！？]|^.*?[.!?](?=\s|$)/)?.[0] ?? text.split("\n")[0];
-  const long = !caution && first.length < text.length && text.length > (CJK.test(text) ? FOLD_CHARS.zh : FOLD_CHARS.en);
+  const zh = CJK.test(text), lead = text.split("\n")[0];
+  const first = lead.length <= (zh ? LEAD_CHARS.zh : LEAD_CHARS.en) ? lead : lead.match(/^.*?[。！？]|^.*?[.!?](?=\s|$)/)?.[0] ?? lead;
+  const long = !caution && first.length < text.length && text.length > (zh ? FOLD_CHARS.zh : FOLD_CHARS.en);
   const Tag = block ? "p" : "small";
   const body = <Tag className={[caution, block && "group-note", long && !all && "sr-only"].filter(Boolean).join(" ") || undefined}>{withBreaks(text)}</Tag>;
   if (!long) return body;
