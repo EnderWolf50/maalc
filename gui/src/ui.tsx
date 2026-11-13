@@ -16,8 +16,12 @@ export interface Ctx {
   giftList: string;
   /** Show that list in the gift list tab; with `open`, also switch to the tab. */
   chooseList: (id: string, open?: boolean) => void;
-  /** Open a page of the editor by its tab id ("teams", "starlight"); absent where there is one page (the tests' harness). */
-  openTab?: (tab: string) => void;
+  /** Open a page of the editor; absent where there is one page (the tests' harness). */
+  openTab?: (tab: PageId) => void;
+  /** A team's own deployment order or graces, put away when it moved to a plan, so 復原 can bring them back; held here so
+   * it outlives a page switch (the plan's 編輯方案 leaves the page). Absent in the tests' harness: the team page keeps its own. */
+  putAway?: PutAway | null;
+  setPutAway?: (p: PutAway | null) => void;
   /** The team or plan each list tab shows, by id. Kept here: a tab switch unmounts the tab, and its own state with it. */
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
@@ -28,6 +32,16 @@ export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams">;
 /** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
 export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
 export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);
+/** The editor's pages, by the tab id App.tsx's TABS gives them. */
+export type PageId = "run" | "teams" | "gifts" | "deployment" | "starlight" | "themepacks" | "events" | "trials" | "daily";
+type TeamRef = Settings["teams"][number];
+export interface PutAway {
+  teamId: string;
+  what: "deployment_order" | "starlight";
+  plan: string; // the plan it moved to: the note shows only while the team is still on it
+  planName: string;
+  back: TeamRef["deployment_order"] | TeamRef["starlight"];
+}
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
 
@@ -104,7 +118,7 @@ export function translate(lang: Settings["language"]): Pick<Ctx, "t" | "tv"> {
 }
 
 /** The context App and the test harness build over their settings state. */
-export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked" | "openTab"> & {
+export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked" | "openTab" | "putAway" | "setPutAway"> & {
   setS: (next: (prev: Settings) => Settings) => void;
   setPicked: (next: (prev: Picked) => Picked) => void;
 }): Ctx {

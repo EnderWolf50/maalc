@@ -209,11 +209,11 @@ const coverOf = (name: string): string | undefined => COVER_URLS[COVERS_DIR + CO
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
 const LINE = "\u0000line";
-/** A lane of more packs than this shows two rows until opened. */
+/** A lane of more packs than this shows its first FOLD_SHOW packs until opened. */
 const FOLD_AT = 30;
 /** How many packs a folded lane still shows. */
 const FOLD_SHOW = 12;
-/** The floor filter's chips (0: any): a run's 15 floors, 6-10 INFINITY's and 11-15 EXTREME's (#387). */
+/** The floor filter's choices (0: any): a run's 15 floors, 6-10 INFINITY's and 11-15 EXTREME's (#387). */
 const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 /** A floor badge's label and class per mode of the data file. */
 const BADGES = {
@@ -356,7 +356,8 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       {lanes.map((w, i) => {
         const here = shown.filter((n) => weightOf(plan, n) === w);
         // A lane of many packs (the unweighted ones, mostly) shows its first packs until opened, so the weighted lanes and the
-        // line stay near the top. The lane itself takes a drop folded or not, and the unlisted chip leads it, so it never folds.
+        // line stay near the top. A drag opens every lane, so each pack is a place to drop; the unlisted chip leads its lane,
+        // so it never folds.
         const many = here.length > FOLD_AT && drag === null;
         const fold = many && !open.includes(w);
         return (

@@ -188,8 +188,11 @@ test("moving a team from its own order to a plan can be undone", async () => {
   const pickPlan = await screen.findByRole("combobox", { name: zh["team.deployment_order"] });
   await user.selectOptions(pickPlan, "d1");
   expect(pickPlan).toHaveValue("d1");
+  await user.click(tab(zh["tab.run"])); // the page goes and comes back: the put-away order stays
+  await user.click(tab(zh["tab.teams"]));
   await user.click(screen.getByRole("button", { name: zh.undo }));
-  expect(pickPlan).toHaveValue("");
+  expect(screen.getByRole("combobox", { name: zh["team.deployment_order"] })).toHaveValue("");
+  expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
   expect(screen.getByText(zh["sum.order"].replace("{d}", "2").replace("{b}", "0"))).toBeInTheDocument();
   const titles = [...document.querySelectorAll("details.exp > summary")].map((x) => x.firstChild?.textContent);
   expect(titles.filter((x) => x === zh["team.deployment_order"] || x === zh["team.starlight"])).toEqual([zh["team.deployment_order"], zh["team.starlight"]]);

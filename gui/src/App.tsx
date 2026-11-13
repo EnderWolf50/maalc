@@ -8,7 +8,8 @@ import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import { Group, Note, Rail, Row, ToggleRow, useRailCompact } from "./frame";
 import {
-  Decimal, EditorContext, GLYPHS, Icon, Num, Select, focusPath, isPickList, makeCtx, translate, useEditor, type Picked,
+  Decimal, EditorContext, GLYPHS, Icon, Num, Select, focusPath, isPickList, makeCtx, translate, useEditor, type PageId, type Picked,
+  type PutAway,
 } from "./ui";
 import { validate, type Problem } from "./validate";
 
@@ -24,6 +25,8 @@ export const TABS = [
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 type TabId = (typeof TABS)[number][0];
+const SAME_PAGES: [PageId[], TabId[]] = [TABS.map((x) => x[0]), [] as PageId[]]; // ui.tsx's PageId names the same tabs
+void SAME_PAGES;
 
 /** The rail's groups, by job: what to run, teams and plans, overrides, daily tasks. A group of one page needs no header. */
 const NAV: { label?: Key; tabs: TabId[] }[] = [
@@ -46,6 +49,8 @@ function useSystemAccent() {
 }
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The settings a saved text holds (toText's), or a new file's when there is none yet. */
+const fromText = (text: string): Settings => (text ? JSON.parse(text) : newSettings());
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
 
@@ -57,6 +62,7 @@ export default function App() {
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [compact, setCompact] = useRailCompact();
+  const [putAway, setPutAway] = useState<PutAway | null>(null);
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // a save was tried and refused: the banner and the title bar's count show
@@ -83,7 +89,7 @@ export default function App() {
       setStatus("diskGone");
       return draft;
     }
-    const next = rebase(base ? JSON.parse(base) : newSettings(), draft, data); // no base: a new file, not saved yet
+    const next = rebase(fromText(base), draft, data); // no base: a new file, not saved yet
     latest.current = { s: next, savedText: toText(data) }; // now, not at the render: a save's sync may run before it
     setS(next);
     setSavedText(toText(data));
@@ -168,7 +174,7 @@ export default function App() {
     s, bad, giftList, picked, setPicked,
     setS: (next) => setS((prev) => next(prev!)),
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
-    openTab: (id) => { if (TABS.some((x) => x[0] === id)) setTab(id as TabId); },
+    openTab: setTab, putAway, setPutAway,
   });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
@@ -203,7 +209,8 @@ export default function App() {
   /** Back to the file as last read or written: every unsaved edit goes, after a confirm. */
   const revert = () => {
     if (!confirm(t("revertConfirm"))) return;
-    setS(savedText ? JSON.parse(savedText) : newSettings());
+    setS(fromText(savedText));
+    setPutAway(null);
     setChecked(false);
     setStatus("");
   };
@@ -237,7 +244,7 @@ export default function App() {
         <span className="path" title={t("file")}>{root}\config\settings.json</span>
         <span className={"status" + (state ? " " + state : "")} aria-live="polite">{blocked
           ? fill(t("blockedCount"), { n: problems.length }) : dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
-        {dirty && <button type="button" className="subtle" onClick={revert}><Icon glyph={GLYPHS.reset} />{t("revert")}</button>}
+        {dirty && savedText && <button type="button" className="subtle" onClick={revert}><Icon glyph={GLYPHS.reset} />{t("revert")}</button>}
         <label className="lang" title={t("language")}><Icon glyph={GLYPHS.language} /><span className="sr-only">{t("language")}</span>
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>

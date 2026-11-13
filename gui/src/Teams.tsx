@@ -11,7 +11,7 @@ import { fill, type Key } from "./i18n";
 import { Row, Section, ToggleRow } from "./frame";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, GLYPHS, Icon, Num, ReorderList, Select, useEditor, usePick, useUndo } from "./ui";
+import { Field, GLYPHS, Icon, Num, ReorderList, Select, useEditor, usePick, useUndo, type PageId, type PutAway } from "./ui";
 
 /** Which team the next run plays, per difficulty the run can begin on: the first enabled team whose usage fits, as the bot's
  * agent/team_queue.py pick_team takes it. A fixed difficulty begins on itself; auto begins HARD while weekly bonuses are left
@@ -57,16 +57,16 @@ export function TeamsTab() {
           <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)} label={t("tab.teams")}
             onChange={(teams) => update((d) => { d.teams = teams; })}
-            render={(x) => (
+            render={(x) => { const tag = nextTag(x.id); return (
               <span className={"queue-row" + (x.enabled ? "" : " off")}>
                 <span className="nm">{x.name || "—"}</span> <small className="slot">#{x.game_team}</small>
-                {(nextTag(x.id) || !x.enabled || x.usage !== "any") && <span className="tags">
-                  {nextTag(x.id)}
+                {(tag || !x.enabled || x.usage !== "any") && <span className="tags">
+                  {tag}
                   {!x.enabled && <small className="off-tag">{t("team.off")}</small>}
                   {x.usage !== "any" && <small className="off-tag">{tv("usage", x.usage)}</small>}
                 </span>}
               </span>
-            )} />
+            ); }} />
         ) : <p className={"empty-note" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
         {undoNote}
       </aside>
@@ -76,18 +76,21 @@ export function TeamsTab() {
 }
 
 function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
-  const { s, update, t, tv, bad, chooseList, pick, openTab } = useEditor();
+  const { s, update, t, tv, bad, chooseList, pick, openTab, putAway: shared, setPutAway: setShared } = useEditor();
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState("");
-  // the team's own order or graces, put away when it moved to a plan: 復原 brings them back (gone on another team)
-  const [putAway, setPutAway] = useState<{ team: string; name: string; back: Partial<Team> } | null>(null);
-  const toPlan = (what: "deployment_order" | "starlight", id: string, name: string) => {
-    if ("custom" in team[what]) setPutAway({ team: team.id, name, back: { [what]: team[what] } });
-    set({ [what]: { plan: id } });
+  // the team's own order or graces, put away when it moved to a plan: 復原 brings them back while it is still on that plan
+  const ownPutAway = useState<PutAway | null>(null);
+  const [putAway, setPutAway] = setShared ? [shared ?? null, setShared] as const : ownPutAway;
+  const toPlan = (what: PutAway["what"], plan: string, planName: string) => {
+    if ("custom" in team[what]) setPutAway({ teamId: team.id, what, plan, planName, back: team[what] });
+    set({ [what]: { plan } });
   };
+  const putAwayHere = putAway && putAway.teamId === team.id && "plan" in team[putAway.what]
+    && (team[putAway.what] as { plan: string }).plan === putAway.plan ? putAway : null;
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -119,7 +122,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
   // What each section holds, for its header: a folded section still says what is set.
   const deployed = order ? order.length : 0;
-  const orderName = orderSource ? s.deployment_order_plans.find((p) => p.id === orderSource)?.name ?? orderSource : t("custom");
+  const orderName = orderSource ? nameOf(s.deployment_order_plans, orderSource) : t("custom");
   const starName = starSource ? starPlan?.name ?? starSource : t("custom");
   const listName = team.gift_list === "default" ? t("defaultPlan") : s.gift_lists.find((l) => l.id === team.gift_list)?.name ?? team.gift_list;
   const packName = team.theme_pack_plan === "default" ? t("defaultPlan")
@@ -131,8 +134,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
     [team.gift_list !== "default", "team.gift_list", listName], [team.theme_pack_plan !== "default", "team.theme_pack_plan", packName]];
   const plansSum = linked.filter(([on]) => on).map(([, key, name]) => `${t(key)} ${name}`).join(sep) || t("sum.plans_none");
   // a team on a plan opens it where it is edited (the gift list's 編輯這份清單 does the same)
-  const editPlan = (list: "deployment_order_plans" | "starlight_plans" | "theme_pack_plans", id: string, tab: string, what: Key) => (
-    <button type="button" aria-label={`${t("plan.edit")}${t("sum.sep")}${t(what)}`} onClick={() => { pick(list, id); openTab?.(tab); }}>
+  const editPlan = (list: "deployment_order_plans" | "starlight_plans" | "theme_pack_plans", id: string, tab: PageId, what: Key) => openTab && (
+    <button type="button" aria-label={`${t("plan.edit")}${t("sum.sep")}${t(what)}`} onClick={() => { pick(list, id); openTab(tab); }}>
       {t("plan.edit")}</button>
   );
   const battleSum = [team.guard_turns ? fill(t("sum.guard"), { n: team.guard_turns }) : "",
@@ -157,9 +160,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Icon glyph={GLYPHS.remove} />{t("remove")}</button>
       </div>
       {notice && <p className="notice">{notice}</p>}
-      {putAway?.team === team.id && (
-        <p className="notice" aria-live="polite">{fill(t("plan.switched"), { name: putAway.name })}{" "}
-          <button type="button" onClick={() => { set(putAway.back); setPutAway(null); }}>{t("undo")}</button>
+      {putAwayHere && (
+        <p className="notice" role="status">{fill(t("plan.switched"), { name: putAwayHere.planName })}{" "}
+          <button type="button" onClick={() => { set({ [putAwayHere.what]: putAwayHere.back }); setPutAway(null); }}>{t("undo")}</button>
         </p>
       )}
 
@@ -169,7 +172,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Row many label={t("team.deployment_order")} path={`${path}/deployment_order`} mark={bad(`${path}/deployment_order`) && !orderCustom}
             control={<>
               {planSelect(orderSource, s.deployment_order_plans, (id) => (id
-                ? toPlan("deployment_order", id, s.deployment_order_plans.find((p) => p.id === id)?.name ?? id)
+                ? toPlan("deployment_order", id, nameOf(s.deployment_order_plans, id))
                 : set({ deployment_order: { custom: [...(order ?? SINNERS)] } })), t("team.deployment_order"))}
               {orderCustom ? <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>
                 : editPlan("deployment_order_plans", orderSource, "deployment", "team.deployment_order")}
@@ -177,7 +180,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Row many label={t("team.starlight")} path={`${path}/starlight`} mark={bad(`${path}/starlight`) && !starCustom}
             control={<>
               {planSelect(starSource, s.starlight_plans, (id) => (id
-                ? toPlan("starlight", id, s.starlight_plans.find((p) => p.id === id)?.name ?? id)
+                ? toPlan("starlight", id, nameOf(s.starlight_plans, id))
                 : set({ starlight: {
                   custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
                 } })), t("team.starlight"))}
@@ -392,6 +395,9 @@ function GiftSearchPanel({ i }: { i: number }) {
     </Section>
   );
 }
+
+/** A plan's name by its id; a dangling id shows as itself. */
+const nameOf = (plans: { id: string; name: string }[], id: string) => plans.find((p) => p.id === id)?.name ?? id;
 
 /** Keep a dangling plan id selectable so the select shows it instead of silently changing it. */
 function missing(id: string | false, plans: { id: string }[]) {

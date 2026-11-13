@@ -88,16 +88,17 @@ export function Section({ id, title, summary, open = false, bad, path, className
   );
 }
 
-/** A help text under a setting. A long one shows its first sentence and a 顯示全部 button for the rest; a caution ("注意：")
- * always shows whole. The whole text stays in one element, its lines split by <br>, so it reads and searches as one; while
- * folded it is hidden from the eye only (a screen reader reads it in full) and the sentence shown is hidden from screen
- * readers, so they hear it once. */
 /** A help longer than this folds: about three lines of a settings row's help column (Chinese runs about 2.2 characters to an
  * English word). */
 const FOLD_CHARS = { zh: 90, en: 200 };
 /** A first paragraph this short is shown whole when the help folds; a longer one shows its first sentence. */
 const LEAD_CHARS = { zh: 60, en: 140 };
 const CJK = /[㐀-鿿]/;
+
+/** A help text under a setting. A long one shows its lead (its first paragraph when short, else its first sentence) and a
+ * 顯示全部 button for the rest; a caution ("注意：") always shows whole. The whole text stays in one element, its lines split
+ * by <br>, so it reads and searches as one; while folded it is hidden from the eye only (a screen reader reads it in full)
+ * and the lead shown is hidden from screen readers, so they hear it once. */
 
 export function Note({ text, block }: { text: string; block?: boolean }) {
   const { t } = useEditor();

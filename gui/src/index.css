@@ -263,7 +263,7 @@ small.caution::before, p.caution::before { content: "\E7BA"; position: absolute;
 /* a switch with its value: the value at one width, so the switches of a stack line up */
 .srow-ctl > .switch + select, .srow-ctl > .switch + input { width: 160px; min-width: 160px; }
 .check-row:hover { background: var(--card-2); }
-/* A long help text: two lines, then a button for the rest. */
+/* A long help text: its lead, then a button for the rest. */
 .note { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .note .preview + .sr-only { margin: 0; }
 button.more {
@@ -280,9 +280,6 @@ button.more:hover:not(:disabled) { background: none; text-decoration: underline;
 .exp-body .srows > .srow:first-child { border-top: 0; padding-top: 0; }
 .exp-body .check-row:hover { background: transparent; }
 .exp-body .srow-ctl select { min-width: 160px; }
-.rewards-row { align-items: start; }
-.rewards-row .rewards { grid-area: ctl; width: 300px; }
-.rewards-row { grid-template-rows: auto 1fr; }
 
 /* Fields in a row or a bar: the label above, small. */
 .row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
@@ -317,8 +314,6 @@ ol.reorder li.dragging { opacity: 0.4; }
 ol.reorder li.bad { color: var(--critical); }
 ol.reorder li.bad::after { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--critical); }
 ol.reorder .grip { color: var(--fg-2); font-size: 11px; }
-aside ol.reorder .grip { opacity: 0; }
-aside ol.reorder li:hover .grip, aside ol.reorder li:focus .grip { opacity: 1; }
 ol.reorder .item { flex: 1; min-width: 0; }
 ol.reorder .moves { display: inline-flex; opacity: 0; }
 ol.reorder li:hover .moves, ol.reorder li:focus-within .moves { opacity: 1; }
@@ -347,6 +342,7 @@ button.link:focus-visible { outline: 2px solid var(--focus-out); outline-offset:
 .queue-row .off-tag { flex: none; padding: 0 6px; border-radius: 3px; background: var(--card-2); box-shadow: inset 0 0 0 1px var(--stroke-2); font-size: 11px; line-height: 16px; }
 /* The same lists inside a panel: one card a row. */
 .rewards { max-width: 420px; }
+.srow-ctl .rewards { width: 300px; }
 .rewards ol.reorder li { background: var(--card); border: 1px solid var(--stroke); min-height: 34px; }
 .rewards ol.reorder li:hover { background: var(--card-2); }
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }
@@ -379,10 +375,6 @@ details.exp > summary.bad { color: var(--critical); }
 details.exp > summary.bad .exp-sum::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--critical); }
 .exp-body { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 16px; }
 .options { display: flex; flex-direction: column; gap: 10px; }
-.toggle { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
-.toggle .check { min-width: 12em; }
-.toggle small { flex-basis: 100%; padding-left: 26px; max-width: calc(70ch + 26px); }
-.toggle small.caution { padding-left: 32px; max-width: none; }
 
 /* The sinner grid: the game's deployment cards. Deployed in amber, backup in teal, as the gift tiles want and keep. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; max-width: 720px; }

@@ -101,9 +101,9 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
   const dragItem = useDragSort((from, to) => change((l) => moveGift(l, Number(from), Number(to))), editable);
   const zh = s.language === "zh_tw";
   const c = counts(list, keyword), blocks = tiersOf(list.gorder, keyword);
-  const notes = blocks.map(({ ids }) => {
+  const rules = blocks.map(({ ids }): "fusion" | "unbuyable" | "" => {
     const kinds = ids.map((id) => GIFT_BY_ID.get(id)!.kind);
-    return kinds.includes("fusion") ? t("gl.tier_fusion") : kinds.some((k) => k !== "buyable") ? t("gl.tier_unbuyable") : "";
+    return kinds.includes("fusion") ? "fusion" : kinds.some((k) => k !== "buyable") ? "unbuyable" : "";
   });
   const { grid, stop, walk, onFocus } = useTileGrid((id) => GIFT_BY_ID.get(id)?.keyword === keyword, blocks[0]?.ids[0]);
 
@@ -120,8 +120,10 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
       </h3>
       {blocks.map(({ tier, ids }, b) => {
         const set = ids.filter((id) => state(list, id) !== "drop").length;
-        // a band above already says the rule: this one only says that it holds here too
-        const note = !notes[b] || !notes.slice(0, b).includes(notes[b]) ? notes[b] : notes[b] === t("gl.tier_fusion") ? t("gl.tier_fusion_again") : notes[b];
+        // a band above already says the rule: the fusion rule only says that it holds here too, the other says nothing again
+        const said = rules.slice(0, b).includes(rules[b]);
+        const note = rules[b] === "fusion" ? t(said ? "gl.tier_fusion_again" : "gl.tier_fusion")
+          : rules[b] === "unbuyable" && !said ? t("gl.tier_unbuyable") : "";
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>
