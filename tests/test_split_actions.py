@@ -260,7 +260,9 @@ def test_the_table_places_every_top_level_name_of_actions_py_once():
     assert [n for s in statements for n in s.names if n not in table] == []
 
 
-def test_the_pilot_module_fits_actions_py():
-    # #676 PR 4 splits lux_actions first: nothing it moves reads another page module, nothing staying reads it
+def test_every_module_not_split_yet_fits_actions_py():
+    # #676 splits the page modules one PR each, in any order: nothing a module not split yet moves reads another page
+    # module, nothing staying reads it
     src = Source((ROOT / "agent/actions.py").read_text(encoding="utf-8"))
-    assert split_actions.move_plan(src, "lux_actions").problems == []
+    not_split = [m for m in split_actions.MODULES if not (ROOT / "agent" / f"{m}.py").exists()]
+    assert {m: split_actions.move_plan(src, m).problems for m in not_split} == {m: [] for m in not_split}
