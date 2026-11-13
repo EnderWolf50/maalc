@@ -314,6 +314,8 @@ describe("reloading the page (F5, Ctrl+R)", () => {
     ["Ctrl+R", { key: "r", code: "KeyR", ctrlKey: true }],
     ["Ctrl+F5", { key: "F5", code: "F5", ctrlKey: true }],
     ["Ctrl+Shift+R", { key: "R", code: "KeyR", ctrlKey: true, shiftKey: true }],
+    ["the browser's Refresh key", { key: "BrowserRefresh", code: "BrowserRefresh" }],
+    ["Ctrl+R on a Russian keyboard, where the R key types к", { key: "к", code: "KeyR", ctrlKey: true }],
   ];
   /** Press a reload key on the focused element; true when the editor kept the browser from reloading. */
   const press = (init: KeyboardEventInit) => {
@@ -344,10 +346,12 @@ describe("reloading the page (F5, Ctrl+R)", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  test("other keys with a modifier are not reloads: Ctrl+Alt+R, Ctrl+E", async () => {
+  test("other keys are not reloads: Ctrl+Alt+R, Alt+F5, Ctrl+E, and on Dvorak the key that types P", async () => {
     await edited();
     expect(press({ key: "r", code: "KeyR", ctrlKey: true, altKey: true })).toBe(false);
+    expect(press({ key: "F5", code: "F5", altKey: true })).toBe(false);
     expect(press({ key: "e", code: "KeyE", ctrlKey: true })).toBe(false);
+    expect(press({ key: "p", code: "KeyR", ctrlKey: true })).toBe(false); // KeyR is where Dvorak puts P
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 

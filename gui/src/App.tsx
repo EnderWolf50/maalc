@@ -24,6 +24,8 @@ export const TABS = [
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 
+/** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
+type Leave = "close" | "reload";
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** The element id of the problem at this place in the problems block. */
 const problemId = (i: number) => `problem-${i}`;
@@ -42,7 +44,7 @@ export default function App() {
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   // The window was closed, or the page asked to reload (F5, Ctrl+R), with unsaved changes: the prompt for that shows (#695, #702).
-  const [asking, setAsking] = useState<false | "close" | "reload">(false);
+  const [asking, setAsking] = useState<false | Leave>(false);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -122,7 +124,7 @@ export default function App() {
   // Closing the window with unsaved changes asks first; with none it closes.
   const focusBefore = useRef<Element | null>(null); // what had the focus when the prompt opened: it gets it back when the prompt goes
   const unsaved = () => { const { s, savedText } = latest.current; return s !== null && toText(s) !== savedText; };
-  const ask = (kind: "close" | "reload") => {
+  const ask = (kind: Leave) => {
     focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
     setAsking((was) => (kind === "close" ? kind : was || kind)); // a close outranks a reload; a reload keeps the prompt that shows
   };
@@ -135,8 +137,10 @@ export default function App() {
   // prompt asks first; with none the key is left alone and the browser reloads (#702).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const r = e.key === "Process" ? e.code === "KeyR" : e.key.toLowerCase() === "r";
-      if (!(e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && r)) || !unsaved()) return;
+      // a key that types no Latin letter (an input method's "Process", a Russian "к") is told by its place on the keyboard
+      const r = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() === "r" : e.code === "KeyR";
+      const reload = e.key === "F5" || e.key === "BrowserRefresh" || ((e.ctrlKey || e.metaKey) && r);
+      if (!reload || e.altKey || !unsaved()) return;
       e.preventDefault();
       ask("reload");
     };
@@ -218,9 +222,9 @@ export default function App() {
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
   const close = () => api.closeWindow().catch((e) => setStatus(String(e)));
   /** What the prompt's Save and Discard end with: the window closes or the page loads again. */
-  const leave = async (kind: "close" | "reload") => { if (kind === "close") await close(); else api.reloadPage(); };
-  const closePrompt = asking && (
-    <ClosePrompt kind={asking} onCancel={() => setAsking(false)}
+  const leave = async (kind: Leave) => { if (kind === "close") await close(); else api.reloadPage(); };
+  const leavePrompt = asking && (
+    <LeavePrompt kind={asking} onCancel={() => setAsking(false)}
       onSave={async () => { setAsking(false); if (await save()) await leave(asking); }}
       onDiscard={() => { setAsking(false); leave(asking); }} />
   );
@@ -269,15 +273,15 @@ export default function App() {
         )}
         <Current />
       </main>
-      {closePrompt}
+      {leavePrompt}
     </EditorContext.Provider>
   );
 }
 
 /** Asked when the window closes, or the page reloads (F5, Ctrl+R), with unsaved changes: save and go on, go on without saving,
  * or stay (Esc). The focus starts on the choice that keeps the edits. */
-function ClosePrompt({ kind, onSave, onDiscard, onCancel }: {
-  kind: "close" | "reload"; onSave: () => void; onDiscard: () => void; onCancel: () => void;
+function LeavePrompt({ kind, onSave, onDiscard, onCancel }: {
+  kind: Leave; onSave: () => void; onDiscard: () => void; onCancel: () => void;
 }) {
   const { t } = useEditor();
   const cancel = useRef(onCancel);
