@@ -128,14 +128,17 @@ describe("a settings file that does not read", () => {
 
 test("on the load error screen, a window button that fails adds its reason under the file's, which stays", async () => {
   win.text = "{ not json";
-  const failing = await import("./api");
-  const spy = vi.spyOn(failing, "minimizeWindow").mockRejectedValue("no permission");
-  const user = userEvent.setup();
-  render(<App />);
-  const why = await screen.findByText(zh.loadError);
-  await user.click(button(zh["win.minimize"]));
-  const pre = why.parentElement!.querySelector("pre")!;
-  await waitFor(() => expect(pre).toHaveTextContent("no permission"));
-  expect(pre.textContent).toMatch(/JSON|Unexpected|token|position/i);
-  spy.mockRestore();
+  const api = await import("./api");
+  const spy = vi.spyOn(api, "minimizeWindow").mockRejectedValue("no permission");
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    const why = await screen.findByText(zh.loadError);
+    await user.click(button(zh["win.minimize"]));
+    const pre = why.parentElement!.querySelector("pre")!;
+    await waitFor(() => expect(pre).toHaveTextContent("no permission"));
+    expect(pre.textContent).toMatch(/JSON|Unexpected|token|position/i);
+  } finally {
+    spy.mockRestore();
+  }
 });

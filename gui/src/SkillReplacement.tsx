@@ -28,7 +28,7 @@ export function SkillPanel({ i }: { i: number }) {
   const rest = SINNERS.filter((n) => !sr.sinners.some((x) => x.sinner === n));
   const dragItem = useDragSort((from, to) => edit((d) => { d.sinners = move(d.sinners, Number(from), Number(to)); }), () => true);
 
-  const [undoNote, removeRow] = useUndoRow<SkillReplacement["sinners"][number]>((fn) => edit((d) => fn(d.sinners)));
+  const [undoNote, removeRow] = useUndoRow<SkillReplacement["sinners"][number]>((fn) => edit((d) => fn(d.sinners)), s.teams[i].id);
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
     <details className="panel skill-panel" data-section="skill">

@@ -316,6 +316,17 @@ describe("in the whole editor", () => {
   });
 });
 
+test("a removed sinner's Undo stays with its team: the next team picked shows none, and its open panel stays open", async () => {
+  const s = settings([entry("Yi Sang", 2, 2, 2)]);
+  s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+  const r = renderEditor(<TeamsTab />, s);
+  await expand(r);
+  await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
+  await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+  expect(panel().open).toBe(true);
+  expect(within(panel()).queryByRole("button", { name: zh.undo })).toBeNull();
+});
+
 test("a removed sinner can be undone, targets and place and all", async () => {
   const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1, false)]));
   await expand(r);

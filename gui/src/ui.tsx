@@ -48,14 +48,8 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
  * before the item that followed it, which stays right when the Agent reorders the list meanwhile (#501). A confirmation
  * would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
 export function useUndo() {
-  const { t } = useEditor();
   const [last, setLast] = useState<{ name: string; undo: () => void } | null>(null);
-  const note = last && (
-    <p className="notice" role="status">
-      {fill(t("undo.deleted"), { name: last.name })}{" "}
-      <button type="button" onClick={() => { last.undo(); setLast(null); }}>{t("undo")}</button>
-    </p>
-  );
+  const note = last && <UndoNote name={last.name} onUndo={() => { last.undo(); setLast(null); }} />;
   const remove = <T extends { id: string; name: string }>(items: T[], i: number, edit: (fn: (list: T[]) => void) => void,
     pick: (id: string | undefined) => void) => {
     const item = items[i], next = items[i + 1]?.id;
@@ -74,23 +68,31 @@ export function useUndo() {
 
 /** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
  * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
- * when the list got shorter) until the next delete. The teams and plans, which the Agent can reorder, use useUndo. */
-export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void) {
-  const { t } = useEditor();
-  const [last, setLast] = useState<{ row: T; at: number; name: string } | null>(null);
-  const note = last && (
-    <p className="notice" role="status">
-      {fill(t("undo.deleted"), { name: last.name })}{" "}
-      <button type="button" onClick={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }}>
-        {t("undo")}
-      </button>
-    </p>
+ * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): the note shows only while
+ * that one is on screen, so an Undo never puts a row into the next team picked. The teams and plans, which the Agent can
+ * reorder, use useUndo. */
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "") {
+  const [last, setLast] = useState<{ row: T; at: number; name: string; scope: string } | null>(null);
+  const note = last?.scope === scope && (
+    <UndoNote name={last.name}
+      onUndo={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }} />
   );
   const remove = (rows: T[], i: number, name: string) => {
-    setLast({ row: rows[i], at: i, name: name || "—" });
+    setLast({ row: rows[i], at: i, name: name || "—", scope });
     edit((list) => { list.splice(i, 1); });
   };
   return [note, remove] as const;
+}
+
+/** The note after a delete: what went, and the Undo button that puts it back. */
+function UndoNote({ name, onUndo }: { name: string; onUndo: () => void }) {
+  const { t } = useEditor();
+  return (
+    <p className="notice" role="status">
+      {fill(t("undo.deleted"), { name })}{" "}
+      <button type="button" onClick={onUndo}>{t("undo")}</button>
+    </p>
+  );
 }
 
 /** `/` focuses a search box from anywhere on the page but a field or a dialog, which have their own keys (the gift list, the theme

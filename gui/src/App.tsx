@@ -26,7 +26,7 @@ export const TABS = [
 ] as const;
 
 /** The tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): the tabs that start a group. */
-const GROUP_STARTS = new Set<string>(["deployment", "events", "daily"]);
+const GROUP_STARTS = new Set<(typeof TABS)[number][0]>(["deployment", "events", "daily"]);
 
 /** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
 type Leave = "close" | "reload";
@@ -180,7 +180,7 @@ export default function App() {
     <header data-tauri-drag-region="deep">
       <h1>{t("title")}</h1>
       <span className="path" />
-      <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError((why) => `${why}\n${String(e)}`)} />
+      <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError((why) => (why ? `${why}\n${String(e)}` : String(e)))} />
     </header>
   );
   if (loadError) {
@@ -203,7 +203,7 @@ export default function App() {
     .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
     s, problemIds, giftList, picked, setPicked,
-    // any edit makes the edits 放棄變更 dropped no longer the newest: its Undo goes
+    // any edit makes the edits that the revert (放棄變更) dropped no longer the newest: its Undo goes
     setS: (next) => { setRevertedFrom(null); setS((prev) => next(prev!)); },
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });

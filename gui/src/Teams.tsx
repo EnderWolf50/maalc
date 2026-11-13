@@ -41,8 +41,7 @@ export function TeamsTab() {
         }}>+ {t("add")}</button>
         {s.teams[i] && <SectionIndex />}
       </aside>
-      {/* keyed by the team: what one team's editor holds (a question open, a deleted row to undo) never reaches the next */}
-      <section>{s.teams[i] && <TeamEditor key={s.teams[i].id} i={i} onRemove={remove} />}</section>
+      <section>{s.teams[i] && <TeamEditor i={i} onRemove={remove} />}</section>
     </div>
   );
 }
@@ -76,8 +75,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
-  const [notice, setNotice] = useState("");
-  const [askReset, setAskReset] = useState(false); // Reset time records asks first, in the page
+  // The question and its note hold the team they are for, so neither shows on the next team picked; the editor itself stays
+  // mounted, so the panels left open stay open.
+  const [notice, setNotice] = useState<{ team: string; text: string } | null>(null);
+  const [askReset, setAskReset] = useState<string | null>(null); // Reset time records asks first, in the page
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -121,22 +122,24 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}
         </Mark>
         <span className="spacer" />
-        <button type="button" onClick={() => setAskReset(true)}>{t("resetTimes")}</button>
+        <button type="button" onClick={() => setAskReset(team.id)}>{t("resetTimes")}</button>
         <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>
       </div>
-      {askReset && (
+      {askReset === team.id && (
         // asked in the page, not in a browser dialog: the window has no system frame for one to match
         <div className="notice confirm" role="group" aria-label={t("resetTimes")}>
           <span>{t("resetConfirm")}</span>
           <button type="button" onClick={async () => {
-            setAskReset(false);
-            try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
+            setAskReset(null);
+            const id = team.id;
+            try { await resetTeamTimes(id); setNotice({ team: id, text: t("resetDone") }); }
+            catch (e) { setNotice({ team: id, text: String(e) }); }
           }}>{t("resetGo")}</button>
           {/* the focus starts on Cancel: the marker cannot be taken back */}
-          <button type="button" autoFocus onClick={() => setAskReset(false)}>{t("cancel")}</button>
+          <button type="button" autoFocus onClick={() => setAskReset(null)}>{t("cancel")}</button>
         </div>
       )}
-      {notice && <p className="notice">{notice}</p>}
+      {notice?.team === team.id && <p className="notice">{notice.text}</p>}
       {/* What the team plays with, under its name: read and changed without scrolling past the grids. */}
       <div className="bar lists">
         <Field label={t("team.gift_list")} path={`${path}/gift_list`}>
