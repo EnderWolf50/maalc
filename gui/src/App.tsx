@@ -53,9 +53,10 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  // The field being typed in, and the marks (problemMark) that showed before its last keystroke: a mark the typing makes waits
-  // until the field loses focus, a save is tried or another writer changes the file; null: every problem shows (#717).
-  const [typed, setTyped] = useState<{ field: EventTarget; marks: Set<string> } | null>(null);
+  // The field being typed in, its settings path ("" for none) and the marks (problemMark) that showed before its last
+  // keystroke: a mark the typing makes waits until the field loses focus, a save is tried or another writer changes the file;
+  // null: every problem shows (#717).
+  const [typed, setTyped] = useState<{ field: EventTarget; at: string; marks: Set<string> } | null>(null);
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
   const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
@@ -185,10 +186,15 @@ export default function App() {
   // What the marks, the tab markers, the problems block and the save plate show, each problem with the fields it marks now;
   // a fix shows at once, typing or not. The hold is the field's only while it has the focus: a field that goes with the focus
   // in it (Enter closes its box) fires no blur.
-  const held = typed && typed.field === document.activeElement ? typed.marks : null;
-  const shown = held
-    ? problems.flatMap((p) => { const paths = p.paths.filter((m) => held.has(problemMark(p, m))); return paths.length ? [{ ...p, paths }] : []; })
-    : problems;
+  const held = typed && typed.field === document.activeElement ? typed : null;
+  const shown = held ? problems.flatMap((p) => {
+    const kept = p.paths.filter((m) => held.marks.has(problemMark(p, m)));
+    const typedHere = (m: string) => held.at !== "" && (m === held.at || m.startsWith(held.at + "/"));
+    // the same problem as before: by a mark elsewhere, since the typed field's own may now be another problem of its kind
+    // (TEAMS #1 typed into #12, a clash for a clash); a problem of the typed field alone, by that field's mark
+    const before = p.paths.every(typedHere) ? kept.length > 0 : kept.some((m) => !typedHere(m));
+    return before ? [{ ...p, paths: kept }] : [];
+  }) : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -354,7 +360,8 @@ export default function App() {
       <main inert={!!asking}
         onChange={(e) => {
           if (!(e.target === document.activeElement && typesText(e.target))) return;
-          setTyped({ field: e.target, marks: new Set(shown.flatMap((p) => p.paths.map((m) => problemMark(p, m)))) });
+          const at = (e.target as HTMLElement).closest<HTMLElement>("[data-path]")?.dataset.path ?? "";
+          setTyped({ field: e.target, at, marks: new Set(shown.flatMap((p) => p.paths.map((m) => problemMark(p, m)))) });
         }}
         onBlur={() => setTyped(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>

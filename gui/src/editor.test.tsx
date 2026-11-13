@@ -194,6 +194,21 @@ describe("a problem shows while editing, before any save", () => {
     marked(slot(), zh["tab.teams"]);
   });
 
+  test("typing a field out of one clash into another: the first goes at once, the second waits until the field is left", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
+    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 12 });
+    const user = await openOn(s, zh["tab.teams"]);
+    await pickInList(user, "Tb");
+    await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12, Tc's
+    const bad = () => [...document.querySelectorAll("aside li")].map((r) => r.classList.contains("bad"));
+    expect(bad()).toEqual([false, false, false]);
+    unmarked(slot(), zh["tab.teams"]);
+    await user.tab();
+    expect(bad()).toEqual([false, true, true]);
+    marked(slot(), zh["tab.teams"]);
+  });
+
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
     const s = settings();
     s.teams.push({ ...newTeam(3, "Tc"), id: "c" });
