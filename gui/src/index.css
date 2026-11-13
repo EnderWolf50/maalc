@@ -537,10 +537,10 @@ details.skill-panel > summary.bad { color: var(--bad); }
  * the left; the native one keeps its own inset of a few pixels whatever the padding. */
 .skill-add {
   align-self: flex-start; appearance: none; cursor: pointer; padding: 4px 40px 4px 12px;
-  background-color: var(--field); background-repeat: no-repeat; background-size: 6px 6px;
+  background-color: var(--field); background-repeat: no-repeat; background-size: 5px 5px; /* 10 x 5, the native chevron's size */
   background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
     linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
-  background-position: right 21px center, right 15px center; /* measured: 16 px from each edge to the ink, like the text's */
+  background-position: right 20px center, right 15px center; /* measured: 16 px from each edge to the ink, like the text's */
 }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
