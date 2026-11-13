@@ -9,7 +9,7 @@ import {
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Num, ReorderList, Select, ToggleNum, useEditor } from "./ui";
+import { Field, Num, ReorderList, Select, ToggleNum, lines, useEditor } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
@@ -278,7 +278,7 @@ function KeepPanel({ i }: { i: number }) {
             <input type="checkbox" checked={team.sell_vestiges} onChange={(e) => set({ sell_vestiges: e.target.checked })} />
             {t("keep.sell_vestiges")}
           </label>
-          <small>{t("keep.sell_vestiges_note")}</small>
+          <small>{lines(t("keep.sell_vestiges_note"))}</small>
         </div>
       </div>
     </details>

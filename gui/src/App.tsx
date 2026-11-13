@@ -6,7 +6,7 @@ import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavatio
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
-import { Decimal, EditorContext, Field, Num, Select, ToggleNum, useEditor, type Ctx } from "./ui";
+import { Decimal, EditorContext, Field, Num, Select, ToggleNum, lines, useEditor, type Ctx } from "./ui";
 import { validate, type Problem } from "./validate";
 
 export const TABS = [
@@ -225,7 +225,7 @@ function DailyTab() {
   const { t } = useEditor();
   return (
     <>
-      <p className="muted">{t("daily.note")}</p>
+      <p className="muted">{lines(t("daily.note"))}</p>
       <LuxFields task="exp" />
       <LuxFields task="thread" />
       <ChargeFields />
@@ -238,7 +238,7 @@ function ChargeFields() {
   return (
     <fieldset>
       <legend>{t("charge.title")}</legend>
-      <p className="muted">{t("charge.note")}</p>
+      <p className="muted">{lines(t("charge.note"))}</p>
       <div className="grid">
         <Field label={t("charge.count")} path="charge_enkephalin/count">
           <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
@@ -256,7 +256,7 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
   return (
     <fieldset>
       <legend>{t(`lux.${task}`)}</legend>
-      <p className="muted">{t(`lux.${task}_note`)}</p>
+      <p className="muted">{lines(t(`lux.${task}_note`))}</p>
       <div className="grid">
         <Field label={t("lux.mode")} path={`${path}/mode`}>
           <Select value={opts.mode} options={LUX_MODES} label={(v) => tv("lux_mode", v)} onChange={(v) => set({ mode: v as LuxMode })} />
@@ -324,7 +324,7 @@ function TrialsTab() {
   const { t } = useEditor();
   return (
     <>
-      <p className="muted">{t("trial.note")}</p>
+      <p className="muted">{lines(t("trial.note"))}</p>
       <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
         cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
     </>

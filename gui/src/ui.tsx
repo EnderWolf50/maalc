@@ -1,5 +1,5 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useState, type ReactNode } from "react";
 import type { Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -20,13 +20,19 @@ export interface Ctx {
 export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
 
+/** A help text as shown: each "\n" in it starts a new line, one topic to a line (#664). A text without one stays a string. */
+export function lines(text: string): ReactNode {
+  const parts = text.split("\n");
+  return parts.length === 1 ? text : parts.map((part, i) => <Fragment key={i}>{i > 0 && <br />}{part}</Fragment>);
+}
+
 export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
   const { bad } = useEditor();
   return (
     <label className={"field" + (path && bad(path) ? " bad" : "")}>
       <span>{label}</span>
       {children}
-      {note && <small>{note}</small>}
+      {note && <small>{lines(note)}</small>}
     </label>
   );
 }
@@ -77,7 +83,7 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
         {label}
       </label>
       <Num value={value ?? on} min={min} max={max} disabled={value === null} onChange={onChange} />
-      {note && <small>{note}</small>}
+      {note && <small>{lines(note)}</small>}
     </div>
   );
 }
