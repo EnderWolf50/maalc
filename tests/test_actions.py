@@ -16,6 +16,7 @@ from PIL import Image
 from maa.define import Rect
 
 import actions
+import settle_actions
 import run_start_actions
 import event_actions
 import battle_actions
@@ -2911,7 +2912,7 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     taps = []
 
     def ocr(context, image, roi, only_rec=False):
-        if roi == actions.RESULT:
+        if roi == settle_actions.RESULT:
             return [("Floor 3 [HARD] 2/6", (300, 420, 90, 20))]
         if roi == actions.DIALOG_TEXT and taps:
             return [("End expedition without claiming rewards?", (400, 300, 400, 30))]
@@ -2919,8 +2920,8 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     patch_all(monkeypatch, "ocr", ocr)
     patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
 
-    actions.Settle().run(context, None)
-    assert taps == [actions.GIVE_UP, actions.DIALOG_CONFIRM]
+    settle_actions.Settle().run(context, None)
+    assert taps == [settle_actions.GIVE_UP, actions.DIALOG_CONFIRM]
     assert [t["id"] for t in json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["teams"]] == ["a", "b"]
     line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
     assert line["result"] == "giveup" and line["team"] == "a"
@@ -3244,7 +3245,7 @@ def test_a_map_gone_while_looking_for_its_bus_is_not_dragged(context, guarded):
 def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch, cleared):
     actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
     monkeypatch.setattr(actions.settlement, "read_result", lambda text: actions.settlement.Result(5, "normal", cleared, 5))
-    assert actions.Settle().run(context, argv())
+    assert settle_actions.Settle().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
 
@@ -3342,8 +3343,8 @@ def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, g
     monkeypatch.setattr(actions.settlement, "bonus_toggles", lambda *a: 1)
     patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])
     page_until(context, "ExplorationReward", 1)
-    assert actions.Settle().run(context, argv())
-    assert taps(context) == [(actions.TOGGLE_X[0], 252)]
+    assert settle_actions.Settle().run(context, argv())
+    assert taps(context) == [(settle_actions.TOGGLE_X[0], 252)]
 
 
 def test_a_gift_search_gone_after_a_pick_does_not_press_select(context, guarded, monkeypatch):

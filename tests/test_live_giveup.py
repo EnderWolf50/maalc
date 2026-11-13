@@ -66,6 +66,7 @@ def point(xy):
 
 def test_the_taps_are_the_bots_own():
     import actions
+    import settle_actions
     import battle_actions
     import map_actions
 
@@ -77,7 +78,7 @@ def test_the_taps_are_the_bots_own():
     assert (gu.MAP_GEAR, gu.FORFEIT, gu.FORFEIT_CONFIRM) == (map_actions.GEAR, map_actions.FORFEIT, map_actions.FORFEIT_CONFIRM)
     assert gu.BACK == gu.Key(actions.BACK_KEY)
     assert (gu.FORFEIT_DIALOG, gu.DIALOG_TEXT) == (map_actions.FORFEIT_DIALOG, actions.DIALOG_TEXT)
-    assert (gu.GIVE_UP_REWARDS, gu.DIALOG_CANCEL, gu.DIALOG_CONFIRM) == (actions.GIVE_UP, actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM)
+    assert (gu.GIVE_UP_REWARDS, gu.DIALOG_CANCEL, gu.DIALOG_CONFIRM) == (settle_actions.GIVE_UP, actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM)
     assert (gu.ACCEPT_RESULTS, gu.WIPE_CONFIRM, gu.FORMATION_BACK) == (battle_actions.DEFEAT_OPTIONS["forfeit"], battle_actions.DEFEAT_CONFIRM,
                                                                      battle_actions.FORMATION_BACK)
     assert gu.DEFEAT_CONFIRM == centre(nodes["DefeatScreen"]["custom_action_param"]["target"])

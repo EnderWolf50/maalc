@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import actions
+import settle_actions
 import run_start_actions
 import battle_actions
 import test_actions
@@ -47,9 +48,9 @@ def edit_settings(change):
 
 def claim(context, monkeypatch, difficulty="NORMAL"):
     """Exploration Reward of a cleared run, no weekly bonus left: Settle claims."""
-    page(context, {tuple(actions.RESULT): [(f"Floor 5 [{difficulty}] 6/6", (300, 420, 90, 20))]})
+    page(context, {tuple(settle_actions.RESULT): [(f"Floor 5 [{difficulty}] 6/6", (300, 420, 90, 20))]})
     patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])
-    assert actions.Settle().run(context, argv())
+    assert settle_actions.Settle().run(context, argv())
 
 
 def b_first(data):

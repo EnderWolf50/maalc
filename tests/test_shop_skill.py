@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 
 import actions
+import settle_actions
 import event_actions
 import battle_actions
 import shop_actions
@@ -268,9 +269,9 @@ def test_the_counts_leave_with_the_run_when_its_rewards_are_given_up(context, mo
     # #455: cleared on leaving the Mirror Dungeon. RUN goes as a whole at the claim, the give-up (here), a new run and a
     # task change; a new floor or a hand-back keeps it.
     shop_actions.note_skills("Gregor", (2, 3, 0))
-    monkeypatch.setattr(actions.Settle, "record", staticmethod(lambda *a: None))
+    monkeypatch.setattr(settle_actions.Settle, "record", staticmethod(lambda *a: None))
     test_actions.reads(context, {tuple(actions.DIALOG_TEXT): [("End expedition without claiming rewards?", (420, 300, 440, 30))]})
-    assert actions.Settle().give_up(context, actions.RUN, None)
+    assert settle_actions.Settle().give_up(context, actions.RUN, None)
     assert "skills" not in actions.RUN
 
 

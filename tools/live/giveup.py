@@ -61,7 +61,7 @@ FORFEIT_CONFIRM = (760, 488)  # map_actions.FORFEIT_CONFIRM
 FORFEIT_DIALOG = [450, 335, 380, 40]  # map_actions.FORFEIT_DIALOG
 DEFEAT_CONFIRM = (1127, 568)  # the centre of DefeatScreen's target
 CLAIM_REWARDS = (1135, 597)  # the centre of ExplorationComplete's target
-GIVE_UP_REWARDS = (393, 544)  # actions.GIVE_UP
+GIVE_UP_REWARDS = (393, 544)  # settle_actions.GIVE_UP
 DIALOG_TEXT = [360, 280, 560, 140]  # actions.DIALOG_TEXT
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)  # actions.DIALOG_CANCEL, actions.DIALOG_CONFIRM
 # Copied, not imported: agent/actions.py and its page modules import MaaFramework's AgentServer, and a process that has
