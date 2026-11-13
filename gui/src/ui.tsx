@@ -242,6 +242,8 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); }}>
           <span className="grip" aria-hidden>⋮⋮</span>
+          {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
+          {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
           <span className="item">{render(item, i)}</span>
           <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
             onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>

@@ -216,7 +216,8 @@ nav[role="tablist"] button.selected { color: var(--fg); background: var(--bg); b
 nav[role="tablist"] button.selected::after { content: ""; position: absolute; left: 12px; right: 12px; top: 0; height: 3px; background: var(--accent-line); }
 nav[role="tablist"] button.bad { color: var(--bad); }
 nav[role="tablist"] button.bad::before {
-  content: ""; position: absolute; top: 7px; right: 5px; width: 7px; height: 7px; transform: rotate(45deg); background: var(--bad);
+  content: ""; position: absolute; top: 6px; right: 4px; width: 9px; height: 9px; background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
+    linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%);
 }
 main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-width: 0; }
 
@@ -226,7 +227,9 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
   border-radius: 10px 0 10px 0; corner-shape: bevel;
 }
 .problems p { margin: 0 0 6px; font-weight: 700; color: var(--bad); display: flex; align-items: center; gap: 8px; }
-.problems p::before { content: ""; width: 9px; height: 9px; transform: rotate(45deg); background: var(--bad); flex: none; }
+/* an error's mark is the cross everywhere (the plate, the banner, the tab, a list row); the diamond is the save state's */
+.problems p::before { content: ""; width: 11px; height: 11px; flex: none; background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
+    linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%); }
 .problems ul { margin: 0; padding-left: 22px; font-size: 13px; color: var(--fg); }
 .problems li + li { margin-top: 2px; }
 /* a problem is a link to its field */
@@ -343,6 +346,8 @@ ol.reorder li {
 ol.reorder li:hover { border-color: var(--line-2); }
 ol.reorder li.selected { border-color: var(--accent-line); background: var(--sel); outline: 1px solid var(--accent-line); }
 ol.reorder li.selected.bad { border-color: var(--bad); outline-color: var(--bad); } /* picked and wrong: the error shows */
+ol.reorder li.bad { border-style: dashed; }
+ol.reorder .badmark { color: var(--bad); font-weight: 700; font-size: 12px; }
 ol.reorder li.dragging { opacity: 0.4; }
 ol.reorder .grip { color: var(--muted); font-size: 11px; }
 ol.reorder .item { flex: 1; min-width: 0; }
@@ -420,6 +425,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 
 /* Starlight, drawn after the game's "Grace of the Star" page: grey-navy cards in a blue frame, a selected one turns white,
  * + and ++ add the starlight's gold rim. */
+.starlight :focus-visible { outline-color: var(--season-ink); } /* the page stays dark in the light theme: a light ring */
 .starlight {
   color-scheme: dark; /* the game's page in both themes: its checkbox and scrollbars dark too */
   display: flex; gap: 14px; align-items: flex-start; padding: 12px; color: var(--season-ink);
@@ -452,7 +458,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .grace button.name:hover:not(:disabled) { background: none; }
 .grace button.name:disabled { opacity: 1; cursor: default; }
 .grace button.name:focus-visible { outline: none; }
-.grace:has(button.name:focus-visible) { outline: 2px solid var(--fg); outline-offset: 2px; }
+.grace:has(button.name:focus-visible) { outline: 2px solid var(--season-ink); outline-offset: 2px; }
 .grace .name small { display: block; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em; opacity: 0.85; }
 .grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.4; flex: 1; }
 .grace li.sub { list-style: none; margin-left: 4px; opacity: 0.85; }
@@ -643,4 +649,9 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
   .sinner .name { font-size: 13px; }
   .graces { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .groups { grid-template-columns: 1fr; }
+}
+
+/* A short window: the side column scrolls with the page, so its last buttons are never cut off below the fold. */
+@media (max-height: 640px) {
+  .split aside { position: static; }
 }

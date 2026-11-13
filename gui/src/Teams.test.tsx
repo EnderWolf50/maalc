@@ -43,6 +43,7 @@ describe("Reset time records", () => {
     await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
     expect(confirm).not.toHaveBeenCalled();
     expect(screen.getByRole("group", { name: zh.resetTimes })).toHaveTextContent(zh.resetConfirm);
+    expect(screen.getByRole("button", { name: zh.cancel })).toHaveFocus(); // the marker cannot be taken back: Enter keeps things
     await r.user.click(screen.getByRole("button", { name: zh.cancel }));
     expect(file.resets).toEqual([]);
     expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();

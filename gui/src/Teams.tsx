@@ -126,11 +126,12 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         // asked in the page, not in a browser dialog: the window has no system frame for one to match
         <div className="notice confirm" role="group" aria-label={t("resetTimes")}>
           <span>{t("resetConfirm")}</span>
-          <button type="button" autoFocus onClick={async () => {
+          <button type="button" onClick={async () => {
             setAskReset(false);
             try { await resetTeamTimes(team.id); setNotice(t("resetDone")); } catch (e) { setNotice(String(e)); }
           }}>{t("resetGo")}</button>
-          <button type="button" onClick={() => setAskReset(false)}>{t("cancel")}</button>
+          {/* the focus starts on Cancel: the marker cannot be taken back */}
+          <button type="button" autoFocus onClick={() => setAskReset(false)}>{t("cancel")}</button>
         </div>
       )}
       {notice && <p className="notice">{notice}</p>}

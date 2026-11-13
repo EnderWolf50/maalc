@@ -120,6 +120,19 @@ describe("a field marked red", () => {
     expect(control()).toHaveAccessibleDescription(problem(text).textContent!);
   });
 
+  test("a wrong team row says so without its colour: a cross, and words a screen reader reads, also while picked", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    await blocked(s, zh["tab.run"]);
+    await userEvent.setup().click(tab(zh["tab.teams"]));
+    const rows = [...document.querySelectorAll("aside li")] as HTMLElement[];
+    expect(rows[0]).toHaveClass("selected");
+    for (const row of rows) {
+      expect(row.querySelector(".badmark")).toHaveTextContent("✕");
+      expect(row).toHaveTextContent(zh.hasProblem);
+    }
+  });
+
   test("a field the checks pass is not", async () => {
     const s = settings();
     s.teams[0].theme_pack_plan = "gone";
