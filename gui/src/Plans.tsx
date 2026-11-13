@@ -58,7 +58,8 @@ export function StarlightEditor({ value, onChange, path }: {
             <div key={g.en} className={`grace ${level}`} role="button" tabIndex={onChange ? 0 : -1} aria-pressed={rank > 0}
               aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
               onClick={() => set((v) => clickCard(v, n))}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
+              // the card's own keys only: Enter or Space on its + / ++ is that button's click, not a click on the card
+              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
               {rank > 0 && <span className="rank">{rank}</span>}
               <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
               <span className="name">{zh && g.zh ? g.zh : g.en}{zh && g.zh && <small>{g.en}</small>}</span>

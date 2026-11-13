@@ -6,7 +6,7 @@ import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
 import {
-  GIFT_KEYWORDS, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
+  GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
 } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { expectLines, renderEditor } from "./testing";
@@ -280,4 +280,19 @@ test("a plan's hint and the event pack note show one topic to a line", async () 
   await screen.findByText(zh["packs.eventPacks"]);
   expectLines(zh["packs.hint"]);
   expectLines(zh["packs.eventPacksNote"]);
+});
+
+test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and the card's own keys still pick it", async () => {
+  const r = renderEditor(<StarlightTab />, settings({ starlight_plans: [{ id: "s1", name: "Plan", ...defaultStarlight() }] }));
+  const name = GRACES[0].zh;
+  const levels = () => r.settings().starlight_plans[0].levels;
+  screen.getByRole("button", { name: `${name} +` }).focus();
+  await r.user.keyboard("{Enter}");
+  expect(levels()[0]).toBe("plus");
+  screen.getByRole("button", { name: `${name} ++` }).focus();
+  await r.user.keyboard(" ");
+  expect(levels()[0]).toBe("plus2");
+  (document.querySelectorAll(".grace")[1] as HTMLElement).focus();
+  await r.user.keyboard("{Enter}");
+  expect(levels()[1]).toBe("base");
 });
