@@ -1,6 +1,6 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
 import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { TEXT, type Key } from "./i18n";
+import { TEXT, fill, type Key } from "./i18n";
 import type { Settings } from "./model";
 
 export interface Ctx {
@@ -41,7 +41,21 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
   return [i, (id: string | undefined) => pick(list, id)] as const;
 }
 
-const FOCUSABLE = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
+/** One step back after a delete: `deleted` remembers what went, and the note names it with an Undo button until the next delete
+ * or until the tab closes. A confirmation would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
+export function useUndo() {
+  const { t } = useEditor();
+  const [last, deleted] = useState<{ name: string; undo: () => void } | null>(null);
+  const note = last && (
+    <p className="notice" role="status">
+      {fill(t("undo.deleted"), { name: last.name })}{" "}
+      <button type="button" onClick={() => { last.undo(); deleted(null); }}>{t("undo")}</button>
+    </p>
+  );
+  return [note, deleted] as const;
+}
+
+const FOCUSABLE ="input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /** Scroll to and focus the field a problem path points at: the element in <main> whose data-path is that path or the nearest
  * one above it ("teams/1/id" finds the team's editor, "teams/1"). Closed panels around it open. The element itself takes the

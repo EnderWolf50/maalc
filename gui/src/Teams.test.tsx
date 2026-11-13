@@ -1,11 +1,11 @@
 // Component tests of the teams tab's gift list choice (#296, covering #305 as well): the list dropdown, the main keyword the
 // list decides, and the button that sends the user to the gift list tab with that list chosen.
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
-import { TEXT } from "./i18n";
+import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
@@ -119,6 +119,21 @@ describe("in the whole editor", () => {
     await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("other");
+  });
+});
+
+describe("deleting a team", () => {
+  test("can be undone: the team comes back in its place, in the editor", async () => {
+    const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
+    const r = renderEditor(<TeamsTab />, { ...newSettings(), language: "zh_tw", teams });
+    await r.user.click(within(document.querySelector("aside")!).getByText("Tb"));
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    expect(r.settings().teams.map((x) => x.id)).toEqual(["a", "c"]);
+    expect(screen.getByRole("status")).toHaveTextContent(fill(zh["undo.deleted"], { name: "Tb" }));
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(r.settings().teams).toEqual(teams);
+    expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Tb");
+    expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
   });
 });
 
