@@ -308,7 +308,7 @@ def holders(qdir: Path, is_alive=alive, now: float | None = None) -> list[Holder
     for p in tickets(qdir, is_alive) if qdir.exists() else []:
         if (t := read(p)) is not None:
             cmd, _, first = t
-            ticket, state = Ticket.of(p), hold.read(p)
+            ticket, state = Ticket.of(p), hold.read_state(p)
             out.append(Holder(ticket.name, ticket.pid, cmd, first, hold.stranded(state, is_alive, now), hold.note(state, now)))
     return out
 
@@ -405,7 +405,10 @@ def main(argv=None) -> int:
 
         # not local_dir(): it would create the folder of a mistyped task
         task = main_checkout() / ".local" / "scratch" / a.task
-        print("\n".join(hold.resume(task)) if a.cmd == "resume" else hold.pause(task, None if a.end else a.minutes))
+        if a.cmd == "resume":
+            print("\n".join(hold.resume(task)))
+        else:
+            print(hold.pause(task, None if a.end else a.minutes))
         return 0
     if a.cmd == "wait":
         return wait(queue_dir(a.resource), a.name, a.timeout_s)

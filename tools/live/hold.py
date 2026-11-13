@@ -45,19 +45,37 @@ def own_state_path() -> Path | None:
 
 
 def publish(path: Path | None, state: State) -> None:
-    """Write the hold's state where readers look for it (nothing outside a queue)."""
-    if path:
-        doc = {"done": str(state.done), "guard": state.guard and str(state.guard), "deadline": state.deadline}
-        path.write_text(json.dumps(doc), encoding="utf-8")
+    """Write the hold's state where readers look for it (nothing outside a queue), whole: a reader never sees half of
+    it. The state is a courtesy to the readers, so a write that fails (a hand-cleared queue folder; on Windows, a reader
+    that has the file open as it is replaced) is skipped, and the next one, 30 s on, tries again; the hold goes on."""
+    if not path:
+        return
+    doc = {"done": str(state.done), "guard": state.guard and str(state.guard), "deadline": state.deadline}
+    try:
+        part(path).write_text(json.dumps(doc), encoding="utf-8")
+        os.replace(part(path), path)
+    except OSError:
+        pass
 
 
 def withdraw(path: Path | None) -> None:
-    if path:
-        path.unlink(missing_ok=True)
+    """Remove the state when the hold ends; one a reader holds open stays, read by nobody once the ticket is gone."""
+    if not path:
+        return
+    for p in (path, part(path)):
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
-def read(ticket: Path) -> State | None:
-    """The state of the hold under this ticket; None when the ticket runs no hold (or the file is half written)."""
+def part(path: Path) -> Path:
+    """Where publish writes the state before it replaces the file with it."""
+    return path.with_name(path.name + ".part")
+
+
+def read_state(ticket: Path) -> State | None:
+    """The state of the hold under this ticket; None when the ticket runs no hold."""
     try:
         doc = json.loads(state_path(ticket).read_text(encoding="utf-8"))
         return State(Path(doc["done"]), doc["guard"] and Path(doc["guard"]), doc["deadline"])

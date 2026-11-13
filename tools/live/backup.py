@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -73,7 +74,8 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
          running=detached_running, stop_profile: str | None = None, grace: float = 60.0, stop=stop_recording,
          wall=time.time, state_file: Path | None = None) -> int:
     """state_file: where `queue.py status` reads this hold's state (hold.own_state_path(); None publishes nothing)."""
-    publish(state_file, State(done, guard))  # from the start, as status read the done file and guard off the command line
+    state = State(done, guard)
+    publish(state_file, state)  # from the start, as status read the done file and guard off the command line
     try:
         print(f"backed up {backup(root, dest)} files of {root}; waiting for {done}", flush=True)
         deadline = time.monotonic() + timeout
@@ -96,9 +98,9 @@ def hold(root: Path, dest: Path, done: Path, timeout: float, poll: float = 2.0, 
                 stop_profile = None
             if time.monotonic() - shown >= 30:
                 shown = time.monotonic()
-                publish(state_file, State(done, guard, round(wall() + deadline - time.monotonic())))
+                publish(state_file, replace(state, deadline=round(wall() + deadline - time.monotonic())))
             time.sleep(poll)
-        publish(state_file, State(done, guard))  # the wait is over: no deadline to warn about
+        publish(state_file, state)  # the wait is over: no deadline to warn about
         print("done file found" if done.exists() else f"timed out after {timeout:.0f} s", flush=True)
         diff = verify(root, dest)
         print("\n".join(diff) if diff else "install matches the backup (md5)")
