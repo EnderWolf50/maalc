@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpa
 
 if __name__ != "__main__":  # pytest; the script (child) imports actions itself, under a stand-in AgentServer
     import actions
+    import daily_actions
     import run_start_actions
     import lux_actions
     import recovery
@@ -277,7 +278,7 @@ def test_every_task_after_an_account_level_stop_fails_at_its_entry_without_a_tap
     evidence = list((actions.ROOT / "logs" / "evidence").iterdir())
     context.reset_mock()
     for start, node, param in [(actions.TaskStart, "ClaimMail", None), (lux_actions.LuxStart, "ExpLuxcavation", '"exp"'),
-                               (actions.ChargeStart, "ChargeEnkephalin", None)]:
+                               (daily_actions.ChargeStart, "ChargeEnkephalin", None)]:
         assert start().run(context, SimpleNamespace(node_name=node, custom_action_param=param)) is False, node
     assert urlopen.call_count == 1 and list((actions.ROOT / "logs" / "evidence").iterdir()) == evidence
     assert not context.method_calls and not context.tasker.controller.method_calls  # no tap, no key, no screenshot
