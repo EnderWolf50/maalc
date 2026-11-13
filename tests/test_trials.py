@@ -11,6 +11,7 @@ import yaml
 from PIL import Image
 
 import actions
+import event_actions
 import gifts
 import rewards as r
 import test_actions
@@ -254,7 +255,7 @@ def boss_page(context, monkeypatch, cards, floor=None, slots=1, says=None):
               for x, (_, _, n, name, lines) in zip(centres, cards)}
 
     def ocr(context, image, roi, only_rec=False):
-        if roi == actions.GIFT_CARDS:
+        if roi == event_actions.GIFT_CARDS:
             return [r for x, (gift, owned, *_) in zip(centres, cards) for r in
                     [("Acquire E.G.O Gift", (x + 7, 152, 107, 22)), (gift, (x - 60, 181, 120, 20)),
                      ("Mounting Trials", (x + 10, 421, 98, 16))] + ([("Owned", (x - 80, 152, 55, 17))] if owned else [])
@@ -262,9 +263,9 @@ def boss_page(context, monkeypatch, cards, floor=None, slots=1, says=None):
         if tuple(roi) in halves:
             return halves[tuple(roi)]
         picked = any(y == 300 for _, y in taps)
-        if roi == actions.GIFT_COUNT:
+        if roi == event_actions.GIFT_COUNT:
             return [(f"Select {min(slots, sum(y == 300 for _, y in taps))}/{slots}", (1080, 565, 100, 30))]
-        if roi == actions.REFUSE_GIFT and not (actions.GIFT_SELECT in taps and picked):
+        if roi == event_actions.REFUSE_GIFT and not (event_actions.GIFT_SELECT in taps and picked):
             return [("Refuse Gift", (900, 570, 100, 25))]
         return []
     patch_all(monkeypatch, "ocr", ocr)
@@ -283,7 +284,7 @@ FLOOR_3 = [("Ashes to Ashes", False, 2, "Resilient V", ["Defense Level +4, Max H
 def test_a_boss_page_takes_the_card_whose_trial_and_level_ups_weigh_least(context, monkeypatch, floor):
     # The 2026-10-28 floor-3 page; a black screen shows no tier numerals: tier I each
     taps, logs = boss_page(context, monkeypatch, FLOOR_3, floor)
-    assert actions.PickGift().run(context, None)
+    assert event_actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(375, 300)]
     assert logs[0] == ("gifts: Ashes to Ashes/other gift 2 trial Resilient V +2 score 0.105 total 1.175, "
                        "Barbed Lasso/other gift 2 trial Final Power Boost +1 score 1.075 total 0.565, "
@@ -297,7 +298,7 @@ def test_a_boss_page_adds_the_tier_the_numeral_over_each_icon_shows(context, mon
     image = np.asarray(Image.open(ROOT / "tests/screens/BossGiftTrialsFloor3.png").convert("RGB"))[:, :, ::-1].copy()
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
     taps, logs = boss_page(context, monkeypatch, FLOOR_3, 3)
-    assert actions.PickGift().run(context, None)
+    assert event_actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(375, 300)]
     assert logs[0] == ("gifts: Ashes to Ashes/other gift 2 tier I trial Resilient V +2 score 0.105 total 1.175, "
                        "Barbed Lasso/other gift 2.5 tier II trial Final Power Boost +1 score 1.075 total 1.065, "
@@ -313,7 +314,7 @@ def test_a_fight_s_gift_page_does_not_weigh_tiers(context, monkeypatch):
     patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False: [
         (t.replace("Bleed", "Burn") if b[0] > 400 else t, b) for t, b in inner(context, image, roi, only_rec)])
     patch_all(monkeypatch, "gift_tier", lambda image, x: 1 if x < 400 else 4)
-    actions.PickGift().run(context, None)
+    event_actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(236, 300)]
 
 
@@ -321,13 +322,13 @@ def select_alone(monkeypatch):
     """The Select button reads "Select" alone, as on a page that takes one card (GiftChoiceNoCount.png, #494)."""
     inner = actions.ocr
     patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False:
-              [("Select", (1102, 566, 73, 26))] if roi == actions.GIFT_COUNT else inner(context, image, roi, only_rec))
+              [("Select", (1102, 566, 73, 26))] if roi == event_actions.GIFT_COUNT else inner(context, image, roi, only_rec))
 
 
 def test_a_page_without_trials_whose_select_reads_alone_takes_its_best_card_alone(context, monkeypatch):
     taps = test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Barbed Lasso", "Nebulizer"])
     select_alone(monkeypatch)
-    actions.PickGift().run(context, None)
+    event_actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(236, 300)]
 
 
@@ -335,7 +336,7 @@ def test_a_boss_page_whose_select_reads_alone_takes_every_card(context, monkeypa
     # #494: a page with trials always showed its count, so "Select" alone there is a count missed (#81), not one pick
     taps, _ = boss_page(context, monkeypatch, FLOOR_3, 3)
     select_alone(monkeypatch)
-    actions.PickGift().run(context, None)
+    event_actions.PickGift().run(context, None)
     assert [t for t in taps if t[1] == 300] == [(375, 300), (639, 300), (903, 300)]
 
 
@@ -343,7 +344,7 @@ def test_a_card_read_by_its_effects_or_not_at_all_says_what_was_read(context, mo
     cards = [("Disk Fragment", False, 2, "Resilient Il", ["Defense Level +1, Max HP", "+7.5%"]),
              ("Phlebotomy Pack", False, 1, "", [])]
     taps, logs = boss_page(context, monkeypatch, cards, 2)
-    actions.PickGift().run(context, None)
+    event_actions.PickGift().run(context, None)
     assert logs[0] == ("gifts: Disk Fragment/other gift 2 trial Resilient II +2 score 0.0575 (by its effects, read 'Resilient Il' / "
                        "'Defense Level +1, Max HP +7.5%') total 1.2225, Phlebotomy Pack/other gift 2 trial ? +1 score 12 "
                        "(unread: the pool worst, read '' / '') total -10.36: order [0, 1]")
@@ -352,7 +353,7 @@ def test_a_card_read_by_its_effects_or_not_at_all_says_what_was_read(context, mo
 def test_a_coin_power_trial_taken_counts_toward_the_run_s_budget(context, monkeypatch):
     actions.RUN["trial_coins"] = 1
     taps, logs = boss_page(context, monkeypatch, [("Huge Gift Sack", False, 2, "Brutality", ["Plus Coin Power +1, Minus", "Coin Power -1"])], 4)
-    assert actions.PickGift().run(context, None)
+    assert event_actions.PickGift().run(context, None)
     assert actions.RUN["trial_coins"] == 2 and logs[-1] == "trials: 2 Coin Power units this run"
 
 
@@ -381,7 +382,7 @@ def test_an_unmatched_title_is_logged_as_read_and_a_fight_s_page_logs_name_categ
     logs = []
     patch_all(monkeypatch, "log", logs.append)
     test_actions.gift_page(context, monkeypatch, ["Ashes to Ashes", "Zzqx Glorp"])
-    actions.PickGift().run(context, None)
+    event_actions.PickGift().run(context, None)
     assert logs[0] == "gifts: Ashes to Ashes/main gift 3 total 3, 'Zzqx Glorp'/main gift 3 total 3: order [0, 1]"
 
 
@@ -391,7 +392,7 @@ def test_a_wanted_card_is_logged_with_its_category_and_score_and_picked_first(co
     patch_all(monkeypatch, "log", logs.append)
     taps = test_actions.gift_page(context, monkeypatch, ["Zzqx Glorp", "Ashes to Ashes"])
     actions.RUN["team"] = {**test_actions.NO_GOSSYPIUM, "list": test_actions.wants(9003)}
-    actions.PickGift().run(context, None)
+    event_actions.PickGift().run(context, None)
     assert logs[0] == "gifts: 'Zzqx Glorp'/main gift 3 total 3, Ashes to Ashes/want gift 6 total 6: order [1, 0]"
     assert [t for t in taps if t[1] == 300] == [(536, 300)]
 
@@ -411,7 +412,7 @@ def hard_page(context, monkeypatch, cards, wanted):
 
 def test_a_boss_page_without_wants_is_scored_as_before(context, monkeypatch):
     taps, logs = hard_page(context, monkeypatch, HARD_PAGE_1, [])
-    assert actions.PickGift().run(context, None)
+    assert event_actions.PickGift().run(context, None)
     assert logs[0].endswith("order [0, 3, 1, 2]")  # 3.1, 1.755, 1.54, -2.72
     assert [t[0] for t in taps if t[1] == 300] == [375, 1167]
 
@@ -419,7 +420,7 @@ def test_a_boss_page_without_wants_is_scored_as_before(context, monkeypatch):
 def test_a_wanted_gift_on_a_boss_page_scores_6_minus_its_trial(context, monkeypatch):
     # Rusted Muzzle (not in a pack's own pool) wanted: Take Less Damage +2 costs 4 + 0.72, so 1.28, last of the four
     taps, logs = hard_page(context, monkeypatch, HARD_PAGE_1, [9089])
-    assert actions.PickGift().run(context, None)
+    assert event_actions.PickGift().run(context, None)
     assert "Rusted Muzzle/want gift 6 tier I trial Take Less Damage +2 score 4 total 1.28" in logs[0]
     assert logs[0].endswith("order [0, 3, 1, 2]")
 
@@ -430,7 +431,7 @@ def test_a_pack_want_on_a_boss_page_beats_a_main_card_through_a_heavy_trial(cont
     cards = [*HARD_PAGE_1[:2], ("Regular Operational Gear", *HARD_PAGE_1[2][1:]), HARD_PAGE_1[3]]
     taps, logs = hard_page(context, monkeypatch, cards, [])
     actions.RUN["team"]["list"] = gifts.default_list()
-    assert actions.PickGift().run(context, None)
+    assert event_actions.PickGift().run(context, None)
     assert "Regular Operational Gear/pack-want gift 9 tier I trial Take Less Damage +2 score 4 total 4.28" in logs[0]
     assert logs[0].endswith("order [2, 0, 3, 1]")
     assert [t[0] for t in taps if t[1] == 300] == [903, 375]

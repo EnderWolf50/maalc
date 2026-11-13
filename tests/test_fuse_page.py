@@ -3,6 +3,7 @@ read again there, and the next fusion made, a wanted one first, until none is le
 import pytest
 
 import actions
+import event_actions
 import shop_actions
 import test_actions
 import test_shop
@@ -172,7 +173,7 @@ def test_the_gift_made_goes_last_of_its_tier_as_on_the_live_fuse_pages(before, g
     # The list goes by tier, highest first, the vestiges ahead; the materials go out, the rest keep their order, and the
     # gift made goes after the vestiges, last of its tier's run (29 of the 30 fusions read again in the live logs; the 30th
     # failed and gave an EX gift). Its id is unknown until read; the places run on.
-    new, k = actions.shop.fusion_places(listed(before), gone, tier, GRID)
+    new, k = event_actions.shop.fusion_places(listed(before), gone, tier, GRID)
     assert [c["id"] for c in new] == [None if g == made else g for g in after]
     assert k == after.index(made) and new[k]["tier"] == tier and new[k]["keyword"] is None
     assert [(c["i"], c["x"], c["y"]) for c in new] == [(i, 678 + 96 * (i % 5), 294 + 92 * (i // 5)) for i in range(len(after))]
@@ -182,7 +183,7 @@ def test_a_super_shops_five_materials_go_out_at_once():
     # II + II + II + I + I (24 points, a Super Shop's IV): the IV goes first, the gifts left keep their order.
     gifts = [(3, "Poise", 1), (3, "Poise", 2), (2, "Bleed", 3), (2, "Bleed", 4), (2, "Bleed", 5), (1, "Burn", 6),
              (1, "Burn", 7), (1, "Burn", 8), (1, "Burn", 9)]
-    new, k = actions.shop.fusion_places(listed(gifts), [2, 3, 4, 7, 8], 4, GRID)
+    new, k = event_actions.shop.fusion_places(listed(gifts), [2, 3, 4, 7, 8], 4, GRID)
     assert k == 0 and [c["id"] for c in new] == [None, 1, 2, 6, 7]
 
 
@@ -195,10 +196,10 @@ def test_a_super_shops_five_materials_go_out_at_once():
     ([(1, "Keywordless", 9991), (3, "Keywordless", 9993), (2, "Burn", 3)], [2], 2),  # the vestiges not by tier
 ])
 def test_no_order_is_made_up_from_a_read_that_does_not_give_it(gifts, gone, tier):
-    assert actions.shop.fusion_places(listed(gifts), gone, tier, GRID) is None
+    assert event_actions.shop.fusion_places(listed(gifts), gone, tier, GRID) is None
     cells = listed(gifts[:1] + gifts[2:])
     cells[1]["i"] = 2  # place 1 not read
-    assert actions.shop.fusion_places(cells, [0], 2, GRID) is None
+    assert event_actions.shop.fusion_places(cells, [0], 2, GRID) is None
 
 
 def placed_lines(lines):
@@ -319,7 +320,7 @@ def test_a_fusion_places_the_gift_made_by_the_tier_its_get_popup_shows(context, 
     if popup:
         show_get_popup(context, g, popup)
     if forecast:
-        monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: forecast)
+        monkeypatch.setattr(event_actions.shop, "forecast_tier", lambda image: forecast)
     keep = [UNLISTED + i for i in (*range(16), 1001) if i not in (4, 10, 13, 14, 15)]
     assert fusion(context, monkeypatch, g, shop_team({"list": wants(keep=keep)}))
     assert "shop: the GET! popup " + line in lines

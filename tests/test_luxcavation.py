@@ -8,6 +8,7 @@ import pytest
 from PIL import Image
 
 import actions
+import event_actions
 import lux_actions
 import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
@@ -139,7 +140,7 @@ def test_a_luxcavation_event_reads_its_choices_without_a_mirror_run_plan(context
     actions.RUN.clear()
     actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
     page = Choices(context, monkeypatch, [("Option 0.", ""), ("Option 1.", "Select to gain a Burn E.G.O Gift")], ["Unknown story."])
-    actions.Event().run(context, None)
+    event_actions.Event().run(context, None)
     assert page.tapped == ["Option 1."] and "settings" not in actions.RUN
 
 
@@ -152,14 +153,14 @@ LUX_EVENT = {name: np.array(Image.open(SCREENS / f"{name}.png").convert("RGB"))[
 def test_a_check_card_alone_is_told_from_every_other_event_page(name):
     # Live 2026-10-28 (J1): after SKIP, a Luxcavation event's check card shows alone at the right, SKIP grey; nothing
     # goes on until the card is tapped. Its prompt below, a result, a Choices list or no card: another page.
-    assert actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
+    assert event_actions.card_alone(LUX_EVENT[name]) == (name == "LuxEventCard")
 
 
 def test_no_other_screen_is_a_check_card_alone():
     # CODING_STANDARDS, Recognition: the colour thresholds swept over every 720p capture of tests/screens; only the card
     # alone (live 2026-10-28, J1) hits.
     hits = [png.name for png in sorted(SCREENS.glob("*.png"))
-            if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280) and actions.card_alone(image)]
+            if (image := np.asarray(Image.open(png).convert("RGB"))[:, :, ::-1]).shape[:2] == (720, 1280) and event_actions.card_alone(image)]
     assert hits == ["LuxEventCard.png"]
 
 
@@ -170,8 +171,8 @@ def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
         lambda: LUX_EVENT["LuxEventCheck"] if taps else LUX_EVENT["LuxEventCard"])
     actions.RUN.clear()
     actions.RUN.update(lux={"name": "Thread Luxcavation"}, team={"keyword": "Burn"})
-    assert actions.Event().run(context, None) is True
-    assert taps == [actions.EVENT_CARD] and "settings" not in actions.RUN
+    assert event_actions.Event().run(context, None) is True
+    assert taps == [event_actions.EVENT_CARD] and "settings" not in actions.RUN
 
 
 def run_set_consecutive(context, monkeypatch, reads, target, enter=None):

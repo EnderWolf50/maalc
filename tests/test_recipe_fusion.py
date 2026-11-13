@@ -1,5 +1,6 @@
 """#300: a wanted fusion whose recipe the owned gifts hold is made by recipe before any ordinary fusion."""
 import actions
+import event_actions
 import shop_actions
 import test_actions
 import test_fuse_page
@@ -129,7 +130,7 @@ SOOTHE_MATERIALS = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
 
 
 def forecasting(monkeypatch, tier):
-    monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: tier)
+    monkeypatch.setattr(event_actions.shop, "forecast_tier", lambda image: tier)
 
 
 def test_a_recipe_whose_forecast_is_not_its_tier_is_not_fused_and_the_materials_come_out(context, monkeypatch):

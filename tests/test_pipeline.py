@@ -157,11 +157,11 @@ def test_the_screens_that_lift_a_held_finger_are_hub_nodes():
 
 def test_the_event_labels_are_the_event_nodes():
     # #188: a press's fade tells another button by these; one the node gains and they lack waits EVENT_TAKE s.
-    import actions
+    import event_actions
     from ocrtext import compact
     event = load_nodes()["Event"]
-    assert {compact(s) for s in event["expected"].split("|")} == actions.EVENT_LABELS
-    assert event["roi"] == actions.EVENT_BUTTON_LABEL
+    assert {compact(s) for s in event["expected"].split("|")} == event_actions.EVENT_LABELS
+    assert event["roi"] == event_actions.EVENT_BUTTON_LABEL
 
 
 KEPT_DELAYS = ["BattleTurn"]  # #258: a post_delay of the default 200 ms, written out with the reason in the pipeline

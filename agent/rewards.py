@@ -1,6 +1,6 @@
 """Event, reward card and gift decisions, free of MaaFramework (docs/spec/03-decisions.md sections 10-12).
 
-actions.py reads the pages and taps; everything here is plain data in, plain data out.
+event_actions.py reads the pages and taps; everything here is plain data in, plain data out.
 """
 
 import re
