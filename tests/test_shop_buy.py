@@ -12,7 +12,8 @@ import shop_actions
 import gifts
 import test_actions
 from settings import gift_tables
-from test_actions import NO_GOSSYPIUM, OLD_DOLL_SHOP, buying, cells_read, live_shop, reads, wants
+from test_actions import NO_GOSSYPIUM, buying, cells_read, live_shop, reads, wants
+from test_shop import OLD_DOLL_SHOP
 from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
