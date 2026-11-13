@@ -95,14 +95,19 @@ export function clickEnhance(v: StarlightValues, n: number, plus: 1 | 2) {
 const allTo = (v: StarlightValues, level: (l: string) => string) =>
   v.levels.reduce((acc, l, i) => setGrace(acc, i + 1, level(l)), v);
 
+/** Every grace selected: Select All Graces then clears them, and its button is lit. */
+export const allSelected = (v: StarlightValues) => !v.levels.includes("none");
+/** Every grace at + (1) or ++ (2): Enhance All of that level then puts them back to base, and its button is lit. */
+export const allEnhanced = (v: StarlightValues, plus: 1 | 2) => v.levels.every((l) => l === LEVELS[plus + 1]);
+
 /** Select All Graces: the unselected ones at base, or none when all are selected. */
 export const selectAll = (v: StarlightValues) =>
-  v.levels.includes("none") ? allTo(v, (l) => (l === "none" ? "base" : l)) : allTo(v, () => "none");
+  allSelected(v) ? allTo(v, () => "none") : allTo(v, (l) => (l === "none" ? "base" : l));
 
 /** Enhance All + (1) or ++ (2): every grace at that level, or back to base when all already are. */
 export function enhanceAll(v: StarlightValues, plus: 1 | 2) {
-  const level = LEVELS[plus + 1];
-  return allTo(v, () => (v.levels.every((l) => l === level) ? "base" : level));
+  const level = allEnhanced(v, plus) ? "base" : LEVELS[plus + 1];
+  return allTo(v, () => level);
 }
 
 /** The E.G.O Gift Search page's tabs, left to right (agent/settings.schema.json gift_search keywords). */

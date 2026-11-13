@@ -41,15 +41,15 @@ export function TeamsTab() {
           update((d) => { d.teams.push(team); });
           setSel(team.id);
         }}>+ {t("add")}</button>
-        {s.teams[i] && <SectionIndex />}
       </aside>
-      <section>{s.teams[i] && <TeamEditor i={i} onRemove={remove} />}</section>
+      <section>{s.teams[i] && <><SectionIndex /><TeamEditor i={i} onRemove={remove} /></>}</section>
     </div>
   );
 }
 
 /** The team page's sections, so a long page is one click from each: a closed panel opens and its summary takes the focus, or a
- * section's first control. */
+ * section's first control. One row above the editor, the page's order left to right, held at the top as the page scrolls:
+ * under the team list a long list pushed it off the screen (#718). */
 const SECTIONS = [
   ["order", "team.deployment_order"], ["starlight", "team.starlight"], ["gift", "gift.title"], ["keep", "keep.title"],
   ["skill", "skill.title"], ["more", "team.more"],

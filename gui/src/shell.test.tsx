@@ -129,7 +129,7 @@ test("an edit after a refused save still shows the refusal, with the unsaved cha
   expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
 });
 
-test("a problem made before any save already says Save must wait, on the plate and on Save; the fields are not marked yet", async () => {
+test("a problem typed before any save says Save must wait, on the plate and on Save, with the field marked, once the field is left", async () => {
   const ok = newSettings();
   ok.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
   file.text = JSON.stringify(ok, null, 2) + "\n";
@@ -138,14 +138,17 @@ test("a problem made before any save already says Save must wait, on the plate a
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(screen.getAllByRole("listitem")[1]);
   const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
-  fireEvent.change(slot, { target: { value: "1" } });
+  await user.type(slot, "{Backspace}"); // TEAMS #2 emptied: the lowest, #1, the first team's
   const plate = document.querySelector(".status")!;
+  expect(plate).toHaveAttribute("data-state", "dirty"); // still being typed in
+  expect(save).toHaveClass("armed");
+  await user.tab();
   expect(plate).toHaveAttribute("data-state", "blocked");
   expect(plate).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
   expect(save).toHaveClass("refused");
   expect(save).not.toHaveClass("armed");
-  expect(slot).not.toHaveAttribute("aria-invalid");
-  expect(screen.queryByRole("alert")).toBeNull();
+  expect(slot).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("alert")).toHaveTextContent(zh.saveBlocked);
 });
 
 describe("Revert", () => {
