@@ -1105,12 +1105,6 @@ def fractions(results):
     return [f for t, _ in sorted(results, key=lambda r: r[1][0]) for f in text_fractions(t)]
 
 
-def node_results(context, image, node):
-    """Every (text, box) the OCR node read on image, hit or not."""
-    detail = context.run_recognition(node, image)
-    return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
-
-
 def read_fractions(context, image, node):
     return fractions(node_results(context, image, node))
 
@@ -1649,6 +1643,124 @@ class TapUntil(CustomAction):
 def finish(context, reason):
     """A task with nothing left to do: the main window (GoHome) first, as a daily task's end (live-2 G4), then done."""
     return go_home(context) and done(reason)
+
+
+# Read by the helpers above or by two or more page sections (#676): each section moves to a module of its own that
+# imports only actions, so what they share stays here, or the page modules would import each other.
+BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
+GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
+GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
+GIFTS = gift_cells.load()  # every gift a cell may show (#297)
+GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
+GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
+DIALOG_TEXT = [360, 280, 560, 140]
+DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
+
+
+def node_results(context, image, node):
+    """Every (text, box) the OCR node read on image, hit or not."""
+    detail = context.run_recognition(node, image)
+    return [(r.text, tuple(r.box)) for r in (detail.all_results if detail else [])]
+
+
+def run_packs():
+    """The ids of the theme packs the run pulled so far, or None when unknown: the agent restarted mid-run (ADR 0003). The gift list's exclusive recipes lock their materials all the same when it is None (gifts.lockers, #306)."""
+    return RUN.get("packs")
+
+
+def columns(results):
+    """OCR results grouped into cards left to right as (x centre, [lines top to bottom]); lines within 80 px are one card."""
+    lines = sorted((x + w // 2, y, t) for t, (x, y, w, h) in results)
+    groups = []
+    for line in lines:
+        if groups and line[0] - groups[-1][-1][0] < 80:
+            groups[-1].append(line)
+        else:
+            groups.append([line])
+    return [(g[0][0], [t for _, _, t in sorted(g, key=lambda line: line[1])]) for g in groups]
+
+
+FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
+FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
+
+
+def seen(context, image, node, roi=None):
+    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss.
+
+    #156: FeatureMatch runs SIFT over the whole image it is handed, its roi only masking the keypoints:
+    ~0.18 s per template on a full screen whatever the roi (41 map captures offline, #163). So a FEATURE_MATCH node gets the roi with a
+    FEATURE_PAD margin cut out (corner on a FEATURE_ALIGN grid, as SIFT's octaves halve), the box put back.
+    Only detail.box is put back: best_result and the result lists stay in the cut-out's coordinates.
+    """
+    override, dx, dy = None, 0, 0
+    if roi:
+        x, y, w, h = roi
+        x0, y0 = max(0, x), max(0, y)
+        x1, y1 = min(1280, x + w), min(720, y + h)
+        if node in FEATURE_MATCH:
+            dx, dy = (max(0, v - FEATURE_PAD) // FEATURE_ALIGN * FEATURE_ALIGN for v in (x0, y0))
+            image = image[dy:y1 + FEATURE_PAD, dx:x1 + FEATURE_PAD]
+        override = {node: {"roi": [x0 - dx, y0 - dy, x1 - x0, y1 - y0]}}
+    detail = context.run_recognition(node, image, override)
+    if not detail or not detail.hit:
+        return None
+    if dx or dy:
+        detail.box = Rect(detail.box[0] + dx, detail.box[1] + dy, detail.box[2], detail.box[3])
+    return detail
+
+
+def saturation(image):
+    """HSV S (0-255) of a BGR image."""
+    hi, lo = image.max(axis=2).astype(int), image.min(axis=2).astype(int)
+    return (hi - lo) * 255 // np.maximum(hi, 1)
+
+
+def data(name):
+    return yaml.safe_load((data_dir() / name).read_text(encoding="utf-8")) or {}
+
+
+def owned_now(visit):
+    """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read (note_owned), else
+    only what this visit bought (visit["bought"]): an owned gift not read counts as none (spec 03), a gift bought counts."""
+    return list(visit["owned"] if visit.get("owned") is not None else visit.get("bought", ()))
+
+
+def leave_shop():
+    """The shop visit RUN["shop"] is over, left by its Leave or without it (#118): the run holds what the visit counted as owned
+    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds only what it bought."""
+    visit = RUN.pop("shop", None)
+    if visit and visit.get("owned") is not None:
+        RUN["owned"] = owned_now(visit)
+    elif visit:
+        RUN["owned"] = RUN.get("owned", []) + owned_now(visit)
+
+
+def want_of(run):
+    """`want(gift_id)` -> "pack-want" | "want" | "material" | None for the team's list (gifts.want_kind), the run's packs and the
+    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages; the start gifts and the events'
+    are not told). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
+    gift_list, held = run["team"].get("list"), RUN.get("owned", [])
+
+    def want(gift_id):
+        kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
+        return None if kind in ("pack-want", "want") and gift_id in held else kind
+    return want
+
+
+WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
+
+
+def avoided_gifts(team):
+    """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90)."""
+    if team.get("allow_white_gossypium", True):
+        return []
+    g = next(e for e in gift_tables()[0] if e["id"] == WHITE_GOSSYPIUM)
+    return [{"name": g["en"], "keyword": g["keyword"], "tier": g["tier"], "id": g["id"]}]
+
+
+def on_map(context, image):
+    """Whether image shows the map (or its node panel): the shop was left."""
+    return on_page(context, image, "MirrorMap", "MapNodePanel") is not None
 
 
 @AgentServer.custom_action("PlanRun")
@@ -2257,11 +2369,6 @@ def pack_ids():
     return data("theme_packs.yaml")["pack_ids"]
 
 
-def run_packs():
-    """The ids of the theme packs the run pulled so far, or None when unknown: the agent restarted mid-run (ADR 0003). The gift list's exclusive recipes lock their materials all the same when it is None (gifts.lockers, #306)."""
-    return RUN.get("packs")
-
-
 def note_pack(name):
     """Note the pack PickThemePack pulled in the run; a run that lost its earlier floors leaves it unknown, a pack the data file
     has no id for (most EXTREME-only packs, an event pack newer than the file) is skipped and the rest stay noted."""
@@ -2279,18 +2386,6 @@ def note_pack(name):
 def pack_titles(context, image):
     """Cards left to right as (x centre, [text lines top to bottom]); see run_start.pack_cards."""
     return run_start.pack_cards(ocr(context, image, PACK_TITLES))
-
-
-def columns(results):
-    """OCR results grouped into cards left to right as (x centre, [lines top to bottom]); lines within 80 px are one card."""
-    lines = sorted((x + w // 2, y, t) for t, (x, y, w, h) in results)
-    groups = []
-    for line in lines:
-        if groups and line[0] - groups[-1][-1][0] < 80:
-            groups[-1].append(line)
-        else:
-            groups.append([line])
-    return [(g[0][0], [t for _, _, t in sorted(g, key=lambda line: line[1])]) for g in groups]
 
 
 def refresh_lit(image):
@@ -2430,10 +2525,7 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 # The shop's icon in grey, each with its own threshold: the plain one, the "+" variant (a star at the top left, a "+" at the
 # bottom right, hard floors) and one torn-frame capture (#287)
 SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn")
-FEATURE_MATCH = {"MapNodeFocusedHex", "MapNodeEvent", "MapNodeShop"}  # the pipeline's FeatureMatch nodes
-FEATURE_PAD, FEATURE_ALIGN = 64, 32  # px of the screen kept around a FeatureMatch roi; grid of the cut's corner
 ENTER = (1133, 543)
-BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
@@ -2458,31 +2550,6 @@ BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # next touch, at most 2.6 s later, was always taken.
 MAP_ANSWER = 0.7  # s a tap on the map has to answer (its node panel, or the screen moving) before follow taps again
 MAP_TAP_LIMIT = 4  # s follow taps its node again, and find_bus drags the map again (#486), while the map ignores touches
-
-
-def seen(context, image, node, roi=None):
-    """The node's hit on image, its roi overridden and clipped to the screen; None on a miss.
-
-    #156: FeatureMatch runs SIFT over the whole image it is handed, its roi only masking the keypoints:
-    ~0.18 s per template on a full screen whatever the roi (41 map captures offline, #163). So a FEATURE_MATCH node gets the roi with a
-    FEATURE_PAD margin cut out (corner on a FEATURE_ALIGN grid, as SIFT's octaves halve), the box put back.
-    Only detail.box is put back: best_result and the result lists stay in the cut-out's coordinates.
-    """
-    override, dx, dy = None, 0, 0
-    if roi:
-        x, y, w, h = roi
-        x0, y0 = max(0, x), max(0, y)
-        x1, y1 = min(1280, x + w), min(720, y + h)
-        if node in FEATURE_MATCH:
-            dx, dy = (max(0, v - FEATURE_PAD) // FEATURE_ALIGN * FEATURE_ALIGN for v in (x0, y0))
-            image = image[dy:y1 + FEATURE_PAD, dx:x1 + FEATURE_PAD]
-        override = {node: {"roi": [x0 - dx, y0 - dy, x1 - x0, y1 - y0]}}
-    detail = context.run_recognition(node, image, override)
-    if not detail or not detail.hit:
-        return None
-    if dx or dy:
-        detail.box = Rect(detail.box[0] + dx, detail.box[1] + dy, detail.box[2], detail.box[3])
-    return detail
 
 
 def node_marks(context, image, cx, cy):
@@ -3122,12 +3189,6 @@ def participants(context, image):
     return fraction(text(context, image, PARTICIPANTS))
 
 
-def saturation(image):
-    """HSV S (0-255) of a BGR image."""
-    hi, lo = image.max(axis=2).astype(int), image.min(axis=2).astype(int)
-    return (hi - lo) * 255 // np.maximum(hi, 1)
-
-
 def dead_sinners(image):
     """Sinners whose card is grey: mean S ~2 against 65+ for any living card, picked or not."""
     dead = set()
@@ -3633,7 +3694,7 @@ def forfeit(context):
         else:
             return stuck(f"forfeit: {want!r} did not {'show' if shown else 'go'}")
     # The map can stay up a moment after Quit; RouteMap, back on it with no forfeit flag, would pick a node.
-    until(context, lambda im: not Shop.on_map(context, im), timeout=2)
+    until(context, lambda im: not on_map(context, im), timeout=2)
     RUN["forfeited"] = RUN.pop("forfeit")  # why, for the forfeits in a row Settle counts
     log("forfeited the run")
     return True
@@ -3668,10 +3729,6 @@ EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's fi
 CHOICE_X = 925  # the option list's middle
 CHOICE_STEP = 150  # px per drag of a list that scrolls: about a card (130-150 px), so none is skipped
 CHOICE_SCROLLS = 6  # drags at most to an end of the list
-
-
-def data(name):
-    return yaml.safe_load((data_dir() / name).read_text(encoding="utf-8")) or {}
 
 
 @functools.cache
@@ -4157,8 +4214,6 @@ PURCHASE_PREVIEW = [780, 145, 140, 40]  # "2864 > 2612": the Cost before and aft
 PURCHASE, PURCHASE_CANCEL = (747, 482), (525, 482)
 KEYWORD_LABELS = [270, 300, 740, 200]  # the 10 keyword cards of both keyword dialogs
 KEYWORD_REFRESH, KEYWORD_CANCEL = (785, 560), (495, 560)
-GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
-GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
 PAGE_CLOSE, PAGE_OK = (490, 585), (788, 585)  # Close, and Fuse / Sell, on the fuse and sell pages
 SHOP_BUTTONS = {"fuse": (295, 390), "sell": (395, 390), "heal": (197, 474)}
 FUSE_CENTRE, FUSE_KEYWORD_OK = (365, 340), (788, 566)
@@ -4200,11 +4255,8 @@ BADGES = tuple(k for k in GIFT_KEYWORDS if k != "Keywordless")
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
 # cell's best 0.41; 160 cells of 60 live captures.
 BADGE_MIN = 0.5
-GIFTS = gift_cells.load()  # every gift a cell may show (#297)
-GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
 FUSION_IDS = {g["id"] for g in gift_tables()[1]}
 GIFT_TIERS = {e["id"]: e["tier"] for e in GIFTS}
-GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 # An EX gift's tier in the game data (TIER_5 beside TIER_EX: 9799 A Certain Philosophy, 9800 Wealth); its cell shows "EX"
 # where the numerals go, so a cell with no numeral read and that "EX" (#449) or the Unselectable tag (#378) is matched
@@ -4315,34 +4367,6 @@ def note_owned(team, visit, cells):
     return owned
 
 
-def owned_now(visit):
-    """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read (note_owned), else
-    only what this visit bought (visit["bought"]): an owned gift not read counts as none (spec 03), a gift bought counts."""
-    return list(visit["owned"] if visit.get("owned") is not None else visit.get("bought", ()))
-
-
-def leave_shop():
-    """The shop visit RUN["shop"] is over, left by its Leave or without it (#118): the run holds what the visit counted as owned
-    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds only what it bought."""
-    visit = RUN.pop("shop", None)
-    if visit and visit.get("owned") is not None:
-        RUN["owned"] = owned_now(visit)
-    elif visit:
-        RUN["owned"] = RUN.get("owned", []) + owned_now(visit)
-
-
-def want_of(run):
-    """`want(gift_id)` -> "pack-want" | "want" | "material" | None for the team's list (gifts.want_kind), the run's packs and the
-    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages; the start gifts and the events'
-    are not told). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
-    gift_list, held = run["team"].get("list"), RUN.get("owned", [])
-
-    def want(gift_id):
-        kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
-        return None if kind in ("pack-want", "want") and gift_id in held else kind
-    return want
-
-
 def owned_change(visit, gone=(), got=()):
     """Take `gone` out of the gifts the visit counts as owned (owned_now) and add `got`, in place: a sale, a fusion, a
     purchase. Unread, `got` goes to visit["bought"] and `gone` is not looked for: the sale and the fusions read the owned
@@ -4382,17 +4406,6 @@ def cell_role(cell, team, page, avoid, owned=()):
     if page == "sell" and cell["id"] in vestige_ids() and not team.get("sell_vestiges", False):
         return "keep"
     return "material"
-
-
-WHITE_GOSSYPIUM = 9020  # its id in data/gift_search.json
-
-
-def avoided_gifts(team):
-    """Gifts the team never takes or buys, and fuses or sells first: White Gossypium unless it allows it (#90)."""
-    if team.get("allow_white_gossypium", True):
-        return []
-    g = next(e for e in gift_tables()[0] if e["id"] == WHITE_GOSSYPIUM)
-    return [{"name": g["en"], "keyword": g["keyword"], "tier": g["tier"], "id": g["id"]}]
 
 
 def template_hits(context, image, template, threshold):
@@ -4933,7 +4946,7 @@ class Shop(CustomAction):
             log(f"shop: still acting after {shop.ROUNDS} rounds")
         for _ in range(3):
             image = screen(context)
-            if Shop.on_map(context, image):
+            if on_map(context, image):
                 log("shop: already out of the shop")
                 leave_shop()
                 return True
@@ -4943,15 +4956,10 @@ class Shop(CustomAction):
                          timeout=1.5) is not None:
                 log(f"shop: leave with {read_cost(context)} Cost")
                 # Up to the old 2 s for the map: MirrorHub must not find the shop fading out and start a new visit.
-                tap_then(context, *LEAVE_CONFIRM, lambda im: Shop.on_map(context, im), timeout=2)
+                tap_then(context, *LEAVE_CONFIRM, lambda im: on_map(context, im), timeout=2)
                 leave_shop()
                 return True
         return stuck("Leave did not bring up `Leave the shop?`")
-
-    @staticmethod
-    def on_map(context, image):
-        """Whether image shows the map (or its node panel): the shop was left."""
-        return on_page(context, image, "MirrorMap", "MapNodePanel") is not None
 
     @staticmethod
     def to_main(context):
@@ -4976,7 +4984,7 @@ class Shop(CustomAction):
     def way_out(context, image):
         """What image asks of to_main: "map" (the shop was left), "main" (the main page: its Refresh fee shows), the point to
         tap to close a page or dialog (a heal page's Return or Leave too), or None (a page the shop does not know)."""
-        if Shop.on_map(context, image):
+        if on_map(context, image):
             return "map"
         title = text(context, image, DIALOG_TITLE)
         if has(text(context, image, GET_TITLE), "GET"):
@@ -5934,9 +5942,7 @@ WEEKLY_LEFT = [440, 230, 65, 50]  # "n/3"
 TOGGLE_X, TOGGLE_ROI = (558, 660, 763), (-45, 237, 90, 30)  # the 3 weekly-bonus toggles: x centre, roi offset
 GIVE_UP, CLAIM = (393, 544), (887, 544)
 REWARD_TITLE_ROI = [500, 100, 280, 45]
-DIALOG_TEXT = [360, 280, 560, 140]
 FIRST_FLOOR = [96, 238, 64, 36]  # Dungeon Progress's floor 1 tile, left of the dialog: "[HARD] Floor1" (2026-10-29)
-DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
 
 def reward_up(context, image):
