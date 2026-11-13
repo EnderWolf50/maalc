@@ -14,6 +14,8 @@ from daily_child import probe_child, run_child, screen
 
 from settlement import NOT_SEEN, Result, all_hard, append_run, bonus_toggles, claim_bonuses, claim_dialog, claim_ok, counts_as_run, first_floor_hard, floors_passed, new_run_gate, now, read_result, runs_done, target_reached
 from agent_patch import patch_all
+import battle
+import settlement
 
 if __name__ != "__main__":  # as test_luxcavation.py: the fixtures are test_actions's
     import actions
@@ -500,7 +502,7 @@ def mirror_task(context, monkeypatch, runs):
     patch_all(monkeypatch, "tap", tap)
     patch_all(monkeypatch, "ocr", lambda context, image, roi, only_rec=False: [(reads[page[0]], (0, 0, 9, 9))] if page[0] in reads else [])
     patch_all(monkeypatch, "toggles", lambda context, image: [False] * 3)
-    patch_all(monkeypatch, "dead_sinners", lambda image: set(battle_actions.battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
+    patch_all(monkeypatch, "dead_sinners", lambda image: set(battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
     patch_all(monkeypatch, "log", logged.append)
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     for run in runs:
@@ -549,13 +551,13 @@ def child():
     def body(context, actions, out):
         import settle_actions
         team = {"id": "a", "name": "A", "enabled": True, "hard_from_floor": None}
-        asked, real = [], actions.settlement.bonus_toggles
+        asked, real = [], settlement.bonus_toggles
 
         def bonus(use, amount, hard, left, all_hard):
             asked.append(real(use, amount, hard, left, all_hard))
             raise Asked
 
-        actions.settlement.bonus_toggles = bonus
+        settlement.bonus_toggles = bonus
         out["asked"] = {}
         for name, floors in SEEN.items():
             actions.RUN.clear()

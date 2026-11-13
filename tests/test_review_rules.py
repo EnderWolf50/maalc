@@ -109,3 +109,21 @@ def test_the_test_jobs_run_on_windows_and_shard_seconds_reads_their_runner():
     # Windows' default shell is pwsh, which has no python3
     runs = [step["run"] for name in ("agent", "pipeline") for step in jobs[name]["steps"] if "run" in step]
     assert not [run for run in runs if "python3" in run]
+
+
+def test_a_test_reads_a_pure_logic_module_directly_not_through_a_page_module():
+    # #676: `event_actions.shop.fuse_slots` is `shop.fuse_slots` under a longer name that says the page owns it, and
+    # so is `settle_actions.has` for `ocrtext.has`. A page module's own names (shop_actions.FUSE_CELLS) are fine.
+    modules = {p.stem for p in (ROOT / "agent").glob("*.py")}
+    pages = {m for m in modules if m == "actions" or m.endswith("_actions")}
+    pure = modules - pages - {"main"}
+    through = {}  # page -> the pure modules and the names of them that it imports
+    for page in pages:
+        body = ast.parse((ROOT / "agent" / f"{page}.py").read_text(encoding="utf-8")).body
+        through[page] = {a.name for n in body if isinstance(n, ast.Import) for a in n.names if a.name in pure} | {
+            a.asname or a.name for n in body if isinstance(n, ast.ImportFrom) and n.module in pure for a in n.names}
+    reads = [f"{path.relative_to(ROOT)}:{n.lineno}: {n.value.id}.{n.attr}"
+             for folder in ("tests", "tools") for path in sorted((ROOT / folder).rglob("*.py"))
+             for n in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.attr in through.get(n.value.id, ())]
+    assert reads == []

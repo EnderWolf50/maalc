@@ -13,10 +13,9 @@ from PIL import Image
 
 import actions
 import settle_actions
-import event_actions
-import battle_actions
 import shop_actions
 import shop
+import battle
 import test_actions
 from test_actions import argv, buying, replacing, shop_team, wants
 from test_pipeline import load_nodes
@@ -53,8 +52,8 @@ class Game:
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
             lambda: np.full((720, 1280, 3), len(self.taps) * 20 % 256, np.uint8)
         context.run_recognition.side_effect = self.recognition
-        monkeypatch.setattr(event_actions.shop, "option_lit", lambda image, box: self.lit(box))
-        monkeypatch.setattr(event_actions.shop, "option_picked", lambda image, frame: self.picked is not None
+        monkeypatch.setattr(shop, "option_lit", lambda image, box: self.lit(box))
+        monkeypatch.setattr(shop, "option_picked", lambda image, frame: self.picked is not None
                             and frame == shop_actions.REPLACE_FRAMES[self.picked])
 
     def lit(self, box):
@@ -387,7 +386,7 @@ ID_SLOT = slot_tap(0)
 
 
 def portrait(sinner):
-    return shop_actions.SHOP_PORTRAIT_X[battle_actions.battle.SINNERS.index(sinner)], 655
+    return shop_actions.SHOP_PORTRAIT_X[battle.SINNERS.index(sinner)], 655
 
 
 class IdGame:
@@ -412,8 +411,8 @@ class IdGame:
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
             lambda: np.full((720, 1280, 3), len(self.taps) * 20 % 256, np.uint8)
         context.run_recognition.side_effect = self.recognition
-        monkeypatch.setattr(event_actions.shop, "option_lit", lambda image, box: self.lit(box))
-        monkeypatch.setattr(event_actions.shop, "option_picked", lambda image, frame: self.picked is not None
+        monkeypatch.setattr(shop, "option_lit", lambda image, box: self.lit(box))
+        monkeypatch.setattr(shop, "option_picked", lambda image, frame: self.picked is not None
                             and frame == shop_actions.REPLACE_FRAMES[self.picked])
         patch_all(monkeypatch, "bar_dead", lambda image: set(self.dead))
 
@@ -852,7 +851,7 @@ HARD_ALIVE = ["Ryōshū", "Meursault", "Gregor"]  # #453's and #456's runs: the 
 
 
 @pytest.mark.parametrize("name, alive", [
-    *[(n, list(battle_actions.battle.SINNERS)) for n in ("Shop", "ShopHeal", "SuperShop")],
+    *[(n, list(battle.SINNERS)) for n in ("Shop", "ShopHeal", "SuperShop")],
     *[(n, HARD_ALIVE) for n in ("ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed",
                                 "ShopReplaceSkillClippedGregor", "ShopReplaceSkillClippedMeursault", "SuperShopIdSkillSearch",
                                 "SuperShopScrolled", "ShopIdSkillSearchDone", "ShopIdSkillSearchSelect")],
@@ -861,7 +860,7 @@ def test_the_dead_are_the_grey_portraits_of_the_shops_main_page(name, alive):
     # Every capture of tests/screens that shows the shop's main page (or the select mode over it): the bar the heal and ID
     # Skill Search read. A dead portrait reads up to 51, over the old 30.
     image = capture(name)
-    assert [s for s in battle_actions.battle.SINNERS if s not in shop_actions.bar_dead(image)] == alive
+    assert [s for s in battle.SINNERS if s not in shop_actions.bar_dead(image)] == alive
 
 
 def test_the_grey_portrait_sweep_over_the_shop_captures():

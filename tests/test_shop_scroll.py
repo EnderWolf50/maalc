@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 import actions
-import event_actions
 import shop_actions
+import shop
 import test_actions
 from test_shop import screen_with
 from agent_patch import patch_all
@@ -256,8 +256,8 @@ def test_the_tap_that_closes_a_materials_tooltip_is_followed_by_the_page_guard(c
     patch_all(monkeypatch, "tap_settled", lambda context, x, y, timeout=1.0: events.append((x, y)))
     patch_all(monkeypatch, "page_guard", lambda context, home, image=None: events.append("guard") or np.zeros((720, 1280, 3), np.uint8))
     patch_all(monkeypatch, "screen", lambda context: np.zeros((720, 1280, 3), np.uint8))
-    monkeypatch.setattr(event_actions.shop, "placed", lambda image, n: events.count("cell"))
-    monkeypatch.setattr(event_actions.shop, "picked", lambda image, x, y, bottom=720: True)
+    monkeypatch.setattr(shop, "placed", lambda image, n: events.count("cell"))
+    monkeypatch.setattr(shop, "picked", lambda image, x, y, bottom=720: True)
     cells = [{"i": i, "x": x, "y": y} for i, (x, y) in enumerate(shop_actions.FUSE_CELLS[:3])]
     assert shop_actions.Shop.place(context, cells, 3, {"page": "fuse", "at": 0})
     assert events == ["guard", "cell", shop_actions.FUSE_NEUTRAL, "guard"] * 3
@@ -309,7 +309,7 @@ def test_the_same_gift_check_holds_on_live_captures():
     same, other = [], []
     for name, cells in grids.items():
         image = screen_with(name)
-        cells = [(x, y) for x, y in getattr(shop_actions, cells)[:10] if event_actions.shop.filled(image, x, y)]
+        cells = [(x, y) for x, y in getattr(shop_actions, cells)[:10] if shop.filled(image, x, y)]
         for x, y in cells:
             look = shop_actions.centre(image, x, y)
             for f in (0.33, 0.5, 0.67):
@@ -347,7 +347,7 @@ def by_points(slots=3):
     thresholds), an id no list mentions."""
     d = actions.data("shop.yaml")
     thresholds = d["fusion_tiers"]["super_shop" if slots == 5 else "shop"]
-    return lambda tiers, ids: (event_actions.shop.fusion_tier(sum(d["fusion_points"][t] for t in tiers), thresholds), None)
+    return lambda tiers, ids: (shop.fusion_tier(sum(d["fusion_points"][t] for t in tiers), thresholds), None)
 
 
 def fusion(context, monkeypatch, g, team, slots=3, visit=None):
@@ -374,9 +374,9 @@ def fusion(context, monkeypatch, g, team, slots=3, visit=None):
                                                                 box=(330, 175, 320, 30))], hit=True, best_result=None)
         return g.recognition(name, image, override) or inner(name, image, override)
     context.run_recognition.side_effect = recognition
-    monkeypatch.setattr(event_actions.shop, "fuse_slots", lambda image: slots)
-    monkeypatch.setattr(event_actions.shop, "placed", lambda image, n: len(inside()))
-    monkeypatch.setattr(event_actions.shop, "picked", lambda image, x, y, bottom=720: g.at_screen(x, y) in inside())
+    monkeypatch.setattr(shop, "fuse_slots", lambda image: slots)
+    monkeypatch.setattr(shop, "placed", lambda image, n: len(inside()))
+    monkeypatch.setattr(shop, "picked", lambda image, x, y, bottom=720: g.at_screen(x, y) in inside())
     return shop_actions.Shop.fuse(context, team, {} if visit is None else visit)
 
 
