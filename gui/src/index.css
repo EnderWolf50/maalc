@@ -201,21 +201,21 @@ header button.primary:not(.armed):hover { border-color: var(--accent-line); }
 header button.primary.refused { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); padding: 5px 25px; }
 header button.primary.refused:hover { background: var(--bad-soft); border-color: var(--bad); }
 
-nav {
+nav[role="tablist"] {
   flex: none; display: flex; gap: 2px; padding: 6px 16px 0; background: var(--panel); box-shadow: inset 0 -1px var(--line-2);
   overflow: auto hidden; scrollbar-width: thin;
 }
-nav button {
+nav[role="tablist"] button {
   position: relative; border: 1px solid transparent; border-bottom: none; background: none; padding: 7px 14px 8px; white-space: nowrap;
   color: var(--muted); font-weight: 600; border-radius: 8px 8px 0 0; corner-shape: bevel;
 }
-nav button:hover:not(:disabled) { color: var(--fg); background: var(--hov); border-color: transparent; }
+nav[role="tablist"] button:hover:not(:disabled) { color: var(--fg); background: var(--hov); border-color: transparent; }
 /* the tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): a short bronze rule between */
-nav .tabsep { flex: none; align-self: center; width: 1px; height: 16px; margin: 0 8px; background: var(--line-2); }
-nav button.selected { color: var(--fg); background: var(--bg); border-color: var(--line-2); }
-nav button.selected::after { content: ""; position: absolute; left: 12px; right: 12px; top: 0; height: 3px; background: var(--accent-line); }
-nav button.bad { color: var(--bad); }
-nav button.bad::before {
+nav[role="tablist"] .tabsep { flex: none; align-self: center; width: 1px; height: 16px; margin: 0 8px; background: var(--line-2); }
+nav[role="tablist"] button.selected { color: var(--fg); background: var(--bg); border-color: var(--line-2); }
+nav[role="tablist"] button.selected::after { content: ""; position: absolute; left: 12px; right: 12px; top: 0; height: 3px; background: var(--accent-line); }
+nav[role="tablist"] button.bad { color: var(--bad); }
+nav[role="tablist"] button.bad::before {
   content: ""; position: absolute; top: 7px; right: 5px; width: 7px; height: 7px; transform: rotate(45deg); background: var(--bad);
 }
 main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-width: 0; }
@@ -627,9 +627,9 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
 
 /* A narrow window (the minimum is 800 px wide): the tabs and the team page fit without a sideways scroll. */
 @media (max-width: 1000px) {
-  nav { padding: 6px 10px 0; }
-  nav button { padding: 7px 9px 8px; }
-  nav .tabsep { margin: 0 3px; }
+  nav[role="tablist"] { padding: 6px 10px 0; }
+  nav[role="tablist"] button { padding: 7px 9px 8px; }
+  nav[role="tablist"] .tabsep { margin: 0 3px; }
   main { padding: 14px 14px 24px; }
   .split { gap: 14px; }
   .split aside { width: 190px; }
