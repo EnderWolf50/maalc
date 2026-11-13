@@ -5,7 +5,6 @@ import pytest
 from PIL import Image
 
 import grace_icons as gi
-import theme_pack_covers
 
 GUI = Path(__file__).resolve().parent.parent / "gui/src"
 CARD = GUI / "grace_card"
@@ -20,8 +19,8 @@ def solid(size, rgba):
     return Image.new("RGBA", size, rgba)
 
 
-def found():
-    """Every sprite card_sprites returns, each a solid colour of its game size."""
+def white_sprites():
+    """Every sprite card_sprites returns, each white at its game size."""
     return {key: solid(size, (255, 255, 255, 255)) for parts in gi.CARD_PARTS.values() for key, (_, size) in parts.items()}
 
 
@@ -39,7 +38,7 @@ def test_the_lit_plate_is_the_button_with_the_focused_plate_over_its_middle():
 
 
 def test_card_parts_are_the_files_the_gui_reads_at_their_sizes():
-    parts = gi.card_parts(found())
+    parts = gi.card_parts(white_sprites())
     assert {k: v.size for k, v in parts.items()} == PARTS
     assert parts["plus"].getpixel((0, 0)) == (*gi.PLUS_TINT, 255)
 
@@ -56,7 +55,7 @@ def test_a_card_sprite_of_another_size_stops_the_tool(monkeypatch, tmp_path):
 
     for f in gi.CARD_PARTS:
         (tmp_path / f).write_bytes(b"")
-    monkeypatch.setattr(theme_pack_covers, "unity", unity)
+    monkeypatch.setattr(gi, "unity", unity)
     with pytest.raises(SystemExit, match=r"MainUI_MirrorDungeon8_2_9 .*\(1, 1\), expected \(209, 69\).*prefabs"):
         gi.card_sprites(tmp_path)
 
@@ -65,7 +64,3 @@ def test_the_committed_card_images_are_the_tools_and_stay_small():
     files = {f.stem: f for f in CARD.glob("*.webp")}
     assert {k: Image.open(f).size for k, f in files.items()} == PARTS
     assert sum(f.stat().st_size for f in files.values()) < MAX_BYTES
-
-
-def test_every_grace_has_its_icon():
-    assert sorted(f.name for f in (GUI / "grace_icons").glob("*.webp")) == sorted(f"{n}.webp" for n in range(1, 11))

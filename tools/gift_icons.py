@@ -30,7 +30,7 @@ def gift_ids() -> list[int]:
 
 
 def webp(sprite, size: int = SIZE, quality: int = QUALITY) -> bytes:
-    """The sprite fitted into size x size, alpha kept (tools/grace_icons.py uses it too)."""
+    """The sprite fitted into size x size, alpha kept."""
     im = sprite.convert("RGBA")
     im.thumbnail((size, size))
     buf = io.BytesIO()

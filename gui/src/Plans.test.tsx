@@ -10,7 +10,7 @@ import {
 } from "./model";
 import css from "./index.css?raw";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
-import { expectLines, renderEditor } from "./testing";
+import { cssRules, expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
@@ -464,12 +464,21 @@ describe("a grace card at each level", () => {
   });
 
   // #726: the card face, its selected and hover frames, the + / ++ plate lit and unlit, the glyphs, the price icon, the Enhance
-  // All panel and the page are the game's own sprites (tools/grace_icons.py); the stylesheet draws each file the tool writes.
-  test("the page draws every texture the tool takes from the game, and no other", () => {
-    const files = Object.keys(import.meta.glob("./grace_card/*.webp")).map((f) => f.replace("./", ""));
-    expect(files).toHaveLength(10);
-    const used = new Set([...css.matchAll(/url\("?\.\/(grace_card\/[\w-]+\.webp)"?\)/g)].map((m) => m[1]));
-    expect([...used].sort()).toEqual(files.sort());
+  // All panel and the page are the game's own sprites (tools/grace_icons.py), each drawn for its own state.
+  test("each state draws the game's own texture for it, and the page draws every texture the tool writes", () => {
+    const rules = cssRules(css);
+    const drawn = (selector: string) => rules.filter((r) => r.selector.split(",").map((x) => x.trim()).includes(selector))
+      .flatMap((r) => [...r.body.matchAll(/grace_card\/([\w-]+)\.webp/g)].map((m) => m[1]));
+    const states: [string, string][] = [
+      [".starlight", "page"], [".grace::before", "face"], [".grace:not(.none)::before", "face-picked"], [".grace::after", "hover"],
+      [".grace .enhance button", "button"], ['.grace .enhance button[aria-pressed="true"]', "button-lit"],
+      [".grace-side button", "button"], ['.grace-side button[aria-pressed="true"]', "button-lit"],
+      [".starlight .glyph", "plus"], ['.starlight button[aria-pressed="true"] .glyph', "plus-lit"],
+      [".starlight .star", "star"], [".grace-side", "side"],
+    ];
+    for (const [selector, file] of states) expect(drawn(selector), selector).toEqual([file]);
+    const written = Object.keys(import.meta.glob("./grace_card/*.webp")).map((f) => f.replace(/^.*\/|\.webp$/g, ""));
+    expect(written.sort()).toEqual([...new Set(states.map(([, file]) => file))].sort());
   });
 
   // The longest title, "傾落的流星雨++" (6 characters and "++", about 7.2 em), sits right of the icon's bracket, in 55 % of the
@@ -503,8 +512,3 @@ describe("a grace card at each level", () => {
     expect(screen.getByRole("button", { name: `${zh["starlight.enhanceAll"]} +` })).toHaveAttribute("aria-pressed", "false");
   });
 });
-
-/** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets. */
-function cssRules(text: string) {
-  return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
-}

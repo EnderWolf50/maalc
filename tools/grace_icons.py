@@ -19,9 +19,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from game_data import INDEX, UNITY_VERSION, bundle_index
-from gift_icons import webp
+from game_data import INDEX, bundle_index
 from local_dir import local_dir
+from theme_pack_covers import PLAYER_DATA, sprite_image, unity
 
 REPO = Path(__file__).resolve().parent.parent
 GRACES = REPO / "gui/src/graces.json"
@@ -30,8 +30,7 @@ CARD_OUT = REPO / "gui/src/grace_card"
 TITLE = "mirror_dungeon_5_buffs_title_"
 SPRITE = "StartBuffIcon_"
 SIZE = 96
-QUALITY = 80
-PLAYER_DATA = "apk-data/assets/bin/Data"
+QUALITY = 80  # every file the tool writes, icons and card parts
 # The card's sprites: player-data file -> {part: (sprite, size)}. Read from the Image components of the card prefab
 # `[Script]StartBuffCardUIWithLevel_MD7` (Panel, Selected, Hover, the level buttons' plate, Focused, Icon and FocusedIcon, Cost) and
 # of the page prefab `Prefab_MirrorDungeonStartBuffCardUIPanel` (its background Image, ApplyAllCardLevel) in client 1.118.1; the
@@ -54,7 +53,6 @@ CARD_PARTS = {
 PLUS_TINT = (235, 202, 162)  # the + glyph's Image colour in the prefab, (0.922, 0.792, 0.635, 1)
 PAGE_SIZE = 1024  # the page background, from 2048: the panel is about 800 CSS px wide
 STAR_SIZE = 64  # the price icon, from 123: it shows at about 20 CSS px
-CARD_QUALITY = 80
 
 
 def grace_ids(unpack: Path) -> list[str]:
@@ -70,16 +68,13 @@ def grace_ids(unpack: Path) -> list[str]:
 
 def sprites(unpack: Path, ids: list[str]) -> dict:
     """{start-buff id: its StartBuffIcon sprite image} for the ids the bundles hold."""
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     cache = unpack / "raw/UnityCache"
     want = {SPRITE + i for i in ids}
     rows = [(line.split("\t") + ["", ""])[:3] for line in bundle_index(cache, unpack / INDEX)]
     bundles = {key for key, kind, p in rows if kind == "Sprite" and Path(p).stem in want}
     found = {}
     for key in sorted(bundles):
-        for p, obj in UnityPy.load(str(cache / key / "__data")).container.items():
+        for p, obj in unity(cache / key / "__data").container.items():
             if obj.type.name == "Sprite" and Path(p).stem in want:
                 found[Path(p).stem[len(SPRITE):]] = obj.read().image
     return found
@@ -87,8 +82,6 @@ def sprites(unpack: Path, ids: list[str]) -> dict:
 
 def card_sprites(data: Path) -> dict[str, Image.Image]:
     """The card's sprites from the player data, each over its whole rect, found by name and checked by size."""
-    from theme_pack_covers import sprite_image, unity
-
     out = {}
     for file, wanted in CARD_PARTS.items():
         names = {sprite: key for key, (sprite, _) in wanted.items()}
@@ -111,7 +104,8 @@ def tint(im: Image.Image, rgb: tuple[int, int, int]) -> Image.Image:
 
 
 def over_centre(base: Image.Image, top: Image.Image) -> Image.Image:
-    """`top` laid over the middle of `base`: the lit plate, whose Focused child sits centred on the button (171 x 52 on 188 x 70)."""
+    """`top` laid over the middle of `base`: the lit plate. The prefab sizes the Focused child 171 x 52 on the 188 x 70 button,
+    9 px in on each side; the two sprites at their own size (191 x 51 on 209 x 69) keep those 9 px."""
     out = base.convert("RGBA").copy()
     out.alpha_composite(top.convert("RGBA"), ((base.width - top.width) // 2, (base.height - top.height) // 2))
     return out
@@ -128,11 +122,18 @@ def card_parts(found: dict[str, Image.Image]) -> dict[str, Image.Image]:
     return parts
 
 
+def icon(sprite: Image.Image) -> Image.Image:
+    """A grace's icon: its sprite fitted into SIZE px, alpha kept."""
+    im = sprite.convert("RGBA")
+    im.thumbnail((SIZE, SIZE))
+    return im
+
+
 def write(images: dict[str, Image.Image], out: Path) -> int:
     """Each image as `<name>.webp` in out, alpha kept; files of other names removed. The bytes written."""
     out.mkdir(exist_ok=True)
     for name, im in images.items():
-        im.save(out / f"{name}.webp", "WEBP", quality=CARD_QUALITY, method=6)
+        im.save(out / f"{name}.webp", "WEBP", quality=QUALITY, method=6)
     for stale in set(out.glob("*.webp")) - {out / f"{n}.webp" for n in images}:
         stale.unlink()
     return sum((out / f"{n}.webp").stat().st_size for n in images)
@@ -145,15 +146,9 @@ def main():
     missing = [i for i in ids if i not in found]
     if missing:
         raise SystemExit(f"no {SPRITE}<id> sprite for {missing}")
-    OUT.mkdir(exist_ok=True)
-    files = {OUT / f"{n}.webp" for n in range(1, len(ids) + 1)}
-    for n, i in enumerate(ids, 1):
-        (OUT / f"{n}.webp").write_bytes(webp(found[i], SIZE, QUALITY))
-    for stale in set(OUT.glob("*.webp")) - files:
-        stale.unlink()
-    total = sum(f.stat().st_size for f in files)
-    print(f"{len(files)} icons -> {OUT} ({total} bytes)")
-    parts = card_parts(card_sprites(unpack / PLAYER_DATA))
+    parts = card_parts(card_sprites(unpack / PLAYER_DATA))  # every sprite found before any file is written
+    icons = {str(n): icon(found[i]) for n, i in enumerate(ids, 1)}
+    print(f"{len(icons)} icons -> {OUT} ({write(icons, OUT)} bytes)")
     print(f"{len(parts)} card parts -> {CARD_OUT} ({write(parts, CARD_OUT)} bytes)")
 
 

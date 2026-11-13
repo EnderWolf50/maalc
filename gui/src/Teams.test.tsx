@@ -8,7 +8,7 @@ import { iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
-import { expectLines, renderEditor } from "./testing";
+import { cssRules, expectLines, renderEditor } from "./testing";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
@@ -398,11 +398,6 @@ describe("the deployment order tiles (#718)", () => {
     for (const b of dim) expect(Number(b)).toBeLessThan(0.6);
   });
 });
-
-/** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets. */
-function cssRules(text: string) {
-  return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
-}
 
 describe("the section index", () => {
   test("sits above the team editor, not under the team list, so a long list never pushes it away", () => {
