@@ -223,39 +223,20 @@ describe("a problem shows while editing, before any save", () => {
     marked(slot(), zh["tab.teams"]);
   });
 
-  test("a shown clash that a schema error typed for a moment hid comes back at once when the error is typed away", async () => {
+  test("a schema error typed in stops the checks across teams: a shown clash goes, and once the error is typed away it is "
+    + "new like any mark the typing makes, shown when the field is left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
     s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 4 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tc");
-    await user.type(slot(), "5"); // #45: above the game's 40, so the checks across teams wait for it
+    await user.type(slot(), "5"); // #45: above the game's 40
     expect(bad()).toEqual([false, false, false]);
     await user.keyboard("{Backspace}"); // #4 again
+    expect(bad()).toEqual([false, false, false]);
+    await user.tab();
     expect(bad()).toEqual([true, true, false]);
     expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
-  });
-
-  test.each([
-    ["Ctrl+S in the field", async () => { expect(ctrlS()).toBe(true); }],
-    // the field loses the focus to the button, and gets it back for the fix
-    ["the Save button", async (user: ReturnType<typeof userEvent.setup>) => {
-      await user.click(screen.getByRole("button", { name: zh.save }));
-      await user.click(slot());
-    }],
-  ] as const)("so it does after a save the schema error refused (%s)", async (_, saveThenBack) => {
-    const s = settings();
-    s.teams[1].game_team = 1;
-    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 4 });
-    const user = await openOn(s, zh["tab.teams"]);
-    await pickInList(user, "Tc");
-    await user.type(slot(), "5");
-    await saveThenBack(user);
-    await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
-    expect(slot()).toHaveAttribute("aria-invalid", "true"); // the save shows the schema error
-    await user.keyboard("{End}{Backspace}");
-    expect(slot()).toHaveValue(4);
-    expect(bad()).toEqual([true, true, false]);
   });
 
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
