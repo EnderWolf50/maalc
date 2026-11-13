@@ -12,14 +12,13 @@ import os
 import re
 import sys
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from game_data import unpack_client
+from game_data import STATIC, unpack_client
 from local_dir import local_dir
 
-STATIC = "static/Assets/Resources_moved/StaticData/static-data/"
-LOCALIZE = "raw/Localize/en/"
+LOCALIZE = "raw/Localize/en"
 UI_KW = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
          "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}
 SIN = {"CRIMSON": "Wrath", "SCARLET": "Lust", "AMBER": "Sloth", "SHAMROCK": "Gluttony", "AZURE": "Gloom", "INDIGO": "Pride", "VIOLET": "Envy"}
@@ -36,41 +35,41 @@ def tag(s):
 
 @dataclass
 class Tables:
-    """The client's tables, by id: what load reads once and every builder below looks up."""
-    event_rows: dict  # abnormality-event records; the first file wins on a duplicate id
-    event_file: dict  # the file each event came from
-    gift_rows: dict
-    battle_rows: dict
-    loc: dict  # action events (desc/options) and personality events (success/failure text)
-    loc_file: dict
-    gift_names: dict
-    effect_texts: dict
+    """The event, gift, battle and text tables by id: load reads them once, and the builders below look them up."""
+    event_rows: dict = field(default_factory=dict)  # abnormality-event records; the first file wins on a duplicate id
+    event_file: dict = field(default_factory=dict)  # the file each event came from
+    gift_rows: dict = field(default_factory=dict)
+    battle_rows: dict = field(default_factory=dict)
+    loc: dict = field(default_factory=dict)  # action events (desc/options) and personality events (success/failure text)
+    loc_file: dict = field(default_factory=dict)
+    gift_names: dict = field(default_factory=dict)
+    effect_texts: dict = field(default_factory=dict)
 
 
-def load(root: str) -> Tables:
+def load(root: Path) -> Tables:
     """static: events (all abnormality-event files), gifts, battles; localize: event texts, gift names, effect texts."""
-    b, lz = root + STATIC, root + LOCALIZE
-    t = Tables({}, {}, {}, {}, {}, {}, {}, {})
-    for f in sorted(glob.glob(b + "abnormality-event/*.json")):
+    b, lz = root / STATIC, root / LOCALIZE
+    t = Tables()
+    for f in sorted(glob.glob(str(b / "abnormality-event/*.json"))):
         for e in ld(f).get("list", []):
             if e["id"] not in t.event_rows:
                 t.event_rows[e["id"]], t.event_file[e["id"]] = e, os.path.basename(f)
-    for f in glob.glob(b + "ego-gift*/*.json"):
+    for f in glob.glob(str(b / "ego-gift*/*.json")):
         for g in ld(f).get("list", []):
             if isinstance(g, dict) and "id" in g:
                 t.gift_rows.setdefault(g["id"], g)
-    for f in glob.glob(b + "battle-mirrordungeon/*.json"):
+    for f in glob.glob(str(b / "battle-mirrordungeon/*.json")):
         for row in ld(f)["list"]:
             t.battle_rows.setdefault(row["id"], row)
-    for f in sorted(glob.glob(lz + "EN_ActionEvents*.json") + glob.glob(lz + "EN_AbEvents*.json")):
+    for f in sorted(glob.glob(str(lz / "EN_ActionEvents*.json")) + glob.glob(str(lz / "EN_AbEvents*.json"))):
         for x in ld(f).get("dataList", []):
             t.loc.setdefault(x["id"], x)
             t.loc_file.setdefault(x["id"], os.path.basename(f))
-    for f in glob.glob(lz + "*EGOgift*.json"):
+    for f in glob.glob(str(lz / "*EGOgift*.json")):
         for x in ld(f).get("dataList", []):
             if x.get("name"):
                 t.gift_names.setdefault(x["id"], x["name"])
-    for x in ld(lz + "EN_ChoiceEventEffect.json")["dataList"]:
+    for x in ld(lz / "EN_ChoiceEventEffect.json")["dataList"]:
         t.effect_texts[x["id"]] = tag(x["content"])
     return t
 
@@ -188,21 +187,21 @@ def build_event(t, eid):
     return rec
 
 
-def theme_floors(root: str):
+def theme_floors(root: Path):
     """(event id -> the theme floors that pool it, the battle ids they pool). MD8 data has no per-MD theme list: every
     theme floor is shared."""
     roots = defaultdict(set)
     battles = set()
-    for f in sorted(glob.glob(root + STATIC + "mirrordungeon-theme-floor/*.json")):
-        for t in ld(f)["list"]:
-            m = t["mapGenOption"]
+    for f in sorted(glob.glob(str(root / STATIC / "mirrordungeon-theme-floor/*.json"))):
+        for floor in ld(f)["list"]:
+            m = floor["mapGenOption"]
             for k in ("eventPool", "specialEventPool"):
                 for i in m.get(k, []):
-                    roots[i].add(t["id"])
-            for s in t.get("mapGenSequence", []):
+                    roots[i].add(floor["id"])
+            for s in floor.get("mapGenSequence", []):
                 if "EVENT" in s["type"]:
                     for i in s.get("numberList", []):
-                        roots[i].add(t["id"])
+                        roots[i].add(floor["id"])
             for k in ("bossPool", "battlePool", "abBattlePool", "hardBattlePool", "hardAbBattlePool"):
                 battles |= set(m.get(k, []))
     return roots, battles
@@ -238,7 +237,8 @@ def closure(t, start, battles):
 
 def event_list(t, roots, battles):
     """(events, map ids, battle ids): every event the theme-floor pools reach (scope map), then every event in a battle
-    they or those events lead to (scope battle), each linked to the option that leads to it."""
+    they or those events lead to (scope battle), each linked to the option that leads to it. The battles the events
+    lead to are added to battles."""
     map_ids = closure(t, roots, battles)
     # in-battle events: abnormalityEventList of every battle reachable from the pools / event outcomes
     battle_ev = defaultdict(set)
@@ -332,10 +332,10 @@ def write_summary(path, client, meta, events):
         for e in events:
             if e["type"] != "choice" or e["scope"] != "map" or not e["root"]:
                 continue
-            t = (e["title"] or e["desc"][:40]).replace("\n", " ").replace("|", "/")
+            title = (e["title"] or e["desc"][:40]).replace("\n", " ").replace("|", "/")
             for o in e["options"]:
                 g = ", ".join(f'{x["keyword"]} {x["name"]} ({x["how"]})' for x in o["gifts"])
-                fh.write(f'| {e["id"]} | {t} | {o["index"]}. {(o["text"] or "").replace("|", "/")} | {(o["hint"] or "").replace("|", "/")} | {o["kind"]} | {g} |\n')
+                fh.write(f'| {e["id"]} | {title} | {o["index"]}. {(o["text"] or "").replace("|", "/")} | {(o["hint"] or "").replace("|", "/")} | {o["kind"]} | {g} |\n')
 
 
 def dump(obj, path):
@@ -343,29 +343,29 @@ def dump(obj, path):
         json.dump(obj, fh, ensure_ascii=False, indent=1)
 
 
-def run(root: str, out: str) -> None:
-    """Every events-md8 file of the unpack folder root (a path ending in /) into out."""
-    client = unpack_client(Path(root))
+def run(root: Path, out: Path) -> None:
+    """Every events-md8 file of the unpack folder root into out."""
+    client = unpack_client(root)
     t = load(root)
     roots, battles = theme_floors(root)
     events, map_ids, battle_ids = event_list(t, roots, battles)
     os.makedirs(out, exist_ok=True)
     meta = {"client": client, "dungeon": 8, "events": len(events), "choiceEvents": sum(e["type"] == "choice" for e in events),
             "checkEvents": sum(e["type"] == "check" for e in events), "mapEvents": len(map_ids), "battleEvents": len(battle_ids)}
-    dump({"meta": meta, "events": events}, out + "/events-md8.json")
-    write_csv(out + "/events-md8.csv", events)
+    dump({"meta": meta, "events": events}, out / "events-md8.json")
+    write_csv(out / "events-md8.csv", events)
     cov, amb, amb_diff, hid = coverage(events)
     dump({"meta": meta, "coverage": cov, "ambiguous": [[e["id"] for e in v] for v in amb.values()],
           "ambiguousDifferent": [[e["id"] for e in v] for v in amb_diff],
-          "hiddenHint": [[e["id"], o["index"], o["kind"]] for e, o in hid]}, out + "/events-md8-coverage.json")
+          "hiddenHint": [[e["id"], o["index"], o["kind"]] for e, o in hid]}, out / "events-md8-coverage.json")
     print(json.dumps({"meta": meta, "coverage": cov}, ensure_ascii=False, indent=1))
-    write_summary(out + "/events-md8-summary.md", client, meta, events)
+    write_summary(out / "events-md8-summary.md", client, meta, events)
 
 
 def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
-    root = local_dir("unpack").as_posix() + "/"
-    run(root, argv[0] if argv else root + "out")
+    root = local_dir("unpack")
+    run(root, Path(argv[0]) if argv else root / "out")
 
 
 if __name__ == "__main__":

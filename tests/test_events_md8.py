@@ -1,6 +1,8 @@
 """tools/events_md8.py on a small unpack folder of its own: what each option gives, and which events the pools reach."""
 import json
 
+import pytest
+
 import events_md8 as md8
 
 
@@ -46,9 +48,14 @@ def unpack(tmp_path):
     return root
 
 
-def test_options_get_their_kind_gifts_and_checks(tmp_path):
-    root, out = unpack(tmp_path), tmp_path / "out"
-    md8.run(root.as_posix() + "/", out.as_posix())
+@pytest.fixture
+def out(tmp_path):
+    """The folder run wrote the table of unpack() into."""
+    md8.run(unpack(tmp_path), tmp_path / "out")
+    return tmp_path / "out"
+
+
+def test_options_get_their_kind_gifts_and_checks(out):
     doc = json.loads((out / "events-md8.json").read_text(encoding="utf-8"))
     assert doc["meta"] == {"client": "9.9.9", "dungeon": 8, "events": 3, "choiceEvents": 2, "checkEvents": 1, "mapEvents": 2,
                            "battleEvents": 1}
@@ -65,9 +72,7 @@ def test_options_get_their_kind_gifts_and_checks(tmp_path):
     assert event[100]["themeFloors"] == [1]
 
 
-def test_the_other_files_count_and_list_what_the_table_holds(tmp_path):
-    root, out = unpack(tmp_path), tmp_path / "out"
-    md8.run(root.as_posix() + "/", out.as_posix())
+def test_the_other_files_count_and_list_what_the_table_holds(out):
     cov = json.loads((out / "events-md8-coverage.json").read_text(encoding="utf-8"))
     assert cov["coverage"]["kinds"] == {"direct": 1, "check": 1, "other": 2}
     assert cov["hiddenHint"] == [[100, 1, "check"]] and cov["coverage"]["optionsNoHintAtAll"] == 2
@@ -82,5 +87,5 @@ def test_main_reads_the_main_checkouts_unpack_and_writes_to_its_out_by_default(t
     monkeypatch.setattr(md8, "local_dir", lambda *parts: root)
     md8.main([])
     assert (root / "out/events-md8.json").is_file()
-    md8.main([(tmp_path / "elsewhere").as_posix()])
+    md8.main([str(tmp_path / "elsewhere")])
     assert (tmp_path / "elsewhere/events-md8-summary.md").is_file()
