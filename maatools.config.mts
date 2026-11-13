@@ -310,6 +310,8 @@ const screens: [image: string, hits: string[]][] = [
   ['ShopIdSkillSearchStarlight.png', ['Shop']],
   ['ShopIdSkillSearchConfirm.png', ['Shop']],
   ['ShopIdSkillSearchConnecting.png', ['Connecting', 'Shop']],
+  // #658 (live 2026-11-13, HARD): the dialog in Cost for Ryōshū at 0/2/4, the two swaps out of skill 1 dim.
+  ['ShopIdSkillSearchDimmed.png', ['Shop']],
   ['ShopHeal.png', []],
 ]
 

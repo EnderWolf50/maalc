@@ -6,7 +6,10 @@ import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavatio
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
-import { Decimal, EditorContext, Field, Icon, Num, ProblemMark, Select, ToggleNum, tabKeys, useEditor, withBreaks, type Ctx } from "./ui";
+import {
+  Decimal, EditorContext, Field, Icon, Num, Select, ToggleNum, focusPath, isPickList, makeCtx, tabKeys, translate,
+  useEditor, withBreaks, type Picked,
+} from "./ui";
 import { TRIAL_SCORES } from "./trials";
 import { validate, type Problem } from "./validate";
 
@@ -25,11 +28,15 @@ export const TABS = [
 const GROUP_START = new Set<(typeof TABS)[number][0]>(["deployment", "events", "daily"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
+const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
 /** A field whose text has its own undo (the browser's): Ctrl+Z there is the field's, and its keystrokes are one edit. */
 const isTextField = (el: EventTarget | null) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement
   && !["checkbox", "radio", "button", "submit", "range", "color", "file"].includes(el.type));
 /** How many edits 復原 can take back. */
 const UNDO_DEPTH = 100;
+/** Keystrokes in one text field this close together are one edit to undo (a word, not a letter). */
+const TYPING_RUN_MS = 1500;
 
 export default function App() {
   const [s, setS] = useState<Settings | null>(null);
@@ -38,6 +45,8 @@ export default function App() {
   const [root, setRoot] = useState("");
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
+  const [picked, setPicked] = useState<Picked>({});
+  const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
@@ -56,6 +65,15 @@ export default function App() {
     lastEdit.current = { at: 0, field: null };
     latest.current = { ...latest.current, s: before };
     setS(before);
+  };
+  /** Before an edit: keep the settings as they are now, unless it is the next keystroke of a run in one text field. */
+  const remember = () => {
+    const field = isTextField(document.activeElement) ? document.activeElement : null, now = Date.now();
+    const sameRun = field !== null && field === lastEdit.current.field && now - lastEdit.current.at < TYPING_RUN_MS;
+    lastEdit.current = { at: now, field };
+    if (sameRun || !latest.current.s) return;
+    past.current = [...past.current.slice(1 - UNDO_DEPTH), latest.current.s];
+    setUndoDepth(past.current.length);
   };
   const undoRef = useRef(undo);
   undoRef.current = undo;
@@ -128,9 +146,16 @@ export default function App() {
     }, (e) => setLoadError(String(e)));
   }, []);
 
+  // A clicked problem's field, focused once its tab and its team or plan are on screen.
+  useEffect(() => {
+    if (jump === null) return;
+    setJump(null);
+    focusPath(jump);
+  }, [jump]);
+
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
   const lang = s?.language ?? "zh_tw";
-  const t = (k: Key) => TEXT[lang][k] ?? k;
+  const { t } = translate(lang);
 
   if (loadError) {
     return (
@@ -145,21 +170,11 @@ export default function App() {
 
   const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
   const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
-  const ctx: Ctx = {
-    s, t, bad, giftList,
+  const ctx = makeCtx({
+    s, bad, giftList, picked, setPicked,
+    setS: (next) => { remember(); setS((prev) => next(prev!)); }, // every edit: undo keeps what it changes
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
-    update: (fn) => {
-      const field = isTextField(document.activeElement) ? document.activeElement : null, now = Date.now();
-      const sameTyping = field !== null && field === lastEdit.current.field && now - lastEdit.current.at < 1500;
-      lastEdit.current = { at: now, field };
-      if (!sameTyping) {
-        past.current = [...past.current.slice(1 - UNDO_DEPTH), latest.current.s!];
-        setUndoDepth(past.current.length);
-      }
-      setS((prev) => { const next = structuredClone(prev!); fn(next); return next; });
-    },
-    tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
-  };
+  });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again
@@ -190,6 +205,16 @@ export default function App() {
     }
   };
 
+  /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
+  const goTo = (path: string) => {
+    const [section, index] = path.split("/");
+    const at = Number(index);
+    if (section === "gift_lists" && s.gift_lists[at]) setGiftList(s.gift_lists[at].id);
+    else if (isPickList(section) && s[section][at]) ctx.pick(section, s[section][at].id);
+    setTab(tabOf(path)![0]);
+    setJump(path);
+  };
+
   const [, tabLabel, Current] = TABS.find((x) => x[0] === tab)!;
   return (
     <EditorContext.Provider value={ctx}>
@@ -210,25 +235,32 @@ export default function App() {
         </button>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
+      {/* What a tab's red dot says to a screen reader, as the tab's description (its name stays the label). */}
+      <span id="has-problem" hidden>{t("hasProblem")}</span>
       <nav role="tablist" aria-label={t("title")}>
         {TABS.map(([id, label, , prefixes]) => (
           <button type="button" role="tab" key={id} id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
+            aria-describedby={prefixes.some(bad) ? "has-problem" : undefined}
             tabIndex={tab === id ? 0 : -1} onKeyDown={tabKeys(TABS.map((x) => x[0]), tab, setTab)}
             className={[tab === id && "selected", GROUP_START.has(id) && "group-start", prefixes.some(bad) && "bad"].filter(Boolean).join(" ")}
-            onClick={() => setTab(id)}>{t(label)}<ProblemMark on={prefixes.some(bad)} /></button>
+            onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
       {/* Keyed by tab: a tab opens at its top, not at the scroll position the last tab left. A refused save's problems open the
         tab, under the tab bar, so the frame above never moves; the tab bar's dots show which tabs hold them. */}
-      <main key={tab} id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-        <h2 className="sr-only">{t(tabLabel)}</h2>
-        {blocked && (
-          <div className="problems" role="alert">
-            <p>{t("saveBlocked")}</p>
-            <ul>{problems.map((p, i) => <li key={i}>{p.text}</li>)}</ul>
-          </div>
-        )}
-        <Current />
+      <main key={tab}>
+        <div className="tabpanel" id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+          <h2 className="sr-only">{t(tabLabel)}</h2>
+          {blocked && (
+            <div className="problems" role="alert">
+              <p>{t("saveBlocked")}</p>
+              <ul>{problems.map((p, i) => (
+                <li key={i}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
+              ))}</ul>
+            </div>
+          )}
+          <Current />
+        </div>
       </main>
     </EditorContext.Provider>
   );
@@ -268,7 +300,7 @@ function RunTab() {
         <div className="rows">
           {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
           {pick("weekly_bonus_amount")}
-          <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")}>
+          <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")} data-path="run/stop_when_weekly_bonus_out">
             <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
             {t("run.stop_when_weekly_bonus_out")}
           </label>
@@ -288,7 +320,7 @@ function RunTab() {
         <legend>{t("run.group_screens")}</legend>
         <div className="rows">
           {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-            <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")}>
+            <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")} data-path={`run/${k}`}>
               <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
               {t(`run.${k}`)}
             </label>
@@ -384,7 +416,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
             {rows.map((r, i) => (
               <tr key={i}>
                 {cols.map((c) => (
-                  <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""}>
+                  <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""} data-path={`${listKey}/${i}/${c.key}`}>
                     {c.number
                       ? <Decimal value={r[c.key] as number} min={0} label={`${t(c.label)} ${i + 1}`}
                         onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />

@@ -146,6 +146,10 @@ main::after { content: ""; display: block; height: 40px; } /* the gap under a ta
 }
 .problems p { margin: 0 0 4px; font-weight: 600; color: var(--bad); }
 .problems ul { margin: 0; padding-left: 18px; font-size: 13px; }
+/* A problem is a link to its field (#683): quiet text that underlines under the pointer. */
+.problems li button { all: unset; cursor: pointer; }
+.problems li button:hover { text-decoration: underline; }
+.problems li button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
 
 .muted { color: var(--muted); }
 p.muted { max-width: 46em; font-size: 13px; line-height: 1.6; margin: 0; text-wrap: pretty; }
@@ -227,7 +231,7 @@ fieldset { display: flex; flex-direction: column; gap: 10px; align-items: flex-s
 fieldset > legend { float: left; width: 100%; padding: 0; margin: 0 0 2px; font-size: 16px; font-weight: 600; }
 fieldset > legend + * { clear: both; }
 fieldset > .rows { align-self: stretch; }
-main > fieldset + fieldset { margin-top: 16px; } /* Run and Daily: cards straight under main; a team's are spaced by its gap */
+.tabpanel > fieldset + fieldset { margin-top: 16px; } /* Run and Daily: cards straight in the tab; a team's are spaced by its gap */
 /* On a plan tab the cards are the name row (Delete at its end, like a team's top bar), the plan's own settings outside its
  * editor (the theme pack plan's event packs) and a deployment or starlight plan's editor (as the same editor sits on a team). */
 .split section > .row:first-child { align-items: flex-end; }
@@ -283,7 +287,7 @@ table.overrides td:last-child { width: 1%; white-space: nowrap; padding-left: 0;
 table.overrides th:first-child, table.overrides td:first-child { padding-left: 0; }
 table.overrides th { background: none; }
 table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
-main > p.muted { margin-bottom: 16px; }
+.tabpanel > p.muted { margin-bottom: 16px; }
 
 .load-error { padding: 24px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .load-error p { margin: 0; font-weight: 600; }
