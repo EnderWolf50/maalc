@@ -38,14 +38,18 @@
   --season-plate: #4e61ba;
   --gold: #ffd34d; /* the starlight's gold: a pick's place, a lit + or ++ */
   /* The game panels. Sinner frames: */
-  --card-top: #2c2219; --card-bottom: #120e0b; --card-line: #5a4630; --card-fg: #edcda6;
-  --dep-top: #4a3413; --dep-bottom: #17100a; --bak-top: #12392f; --bak-bottom: #0b1311;
+  --card-line: #5a4630; /* a tile's frame when the sinner is left out */
   --tone-dep: #f0a632; --on-tone: #1d1206;
   /* deployed as the game draws it: a red plate with orange text. The game's orange #ffa20f as it is, its red #bd1600 darkened
    * until the text reads 4.5:1 on it; one plate for both themes */
   --dep-plate: #931001; --dep-ink: #ffa20f;
   /* backup as the game draws it: a dark teal plate (the frame too) with light cyan text, a bright cyan number */
-  --bak-plate: #006e7e; --bak-ink: #81f1ff; --bak-num: #22fde3;
+  --bak-plate: #006e7e; --bak-ink: #81f1ff;
+  /* A sinner tile is the identity's card art (#718): it stays the game's in both themes, as Grace of the Star does, so what
+   * sits on it keeps the dark theme's ink: the name, the deployed and backup numbers, and the shade under them. Over a white
+   * pixel of the art the name keeps 4.5:1 on 67% shade and more (the foot is 78% and more up to 28% of the tile, two lines of
+   * a narrow tile's name included), the numbers on their 85% plates 6.6:1 and 10.6:1. */
+  --art-shade: #0b0806; --art-top: #2c2219; --art-ink: #edcda6; --art-dep: #f0a632; --art-bak: #22fde3;
   /* Grace of the Star as the game draws it (a capture of 2026-11-13): grey-navy cards in a blue frame on a near-black page,
    * cream price and + / ++ on near-black buttons with a grey outline; a picked card turns white. The same in both themes,
    * as the game's page is. */
@@ -101,9 +105,8 @@
     --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
     --fl-i: #6a40c4; --fl-i-ink: #f5f4fe;
     --fl-x: #a50000; --fl-x-ink: #fff2f0; --fl-x-mark: #a50000;
-    --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
-    --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
-    --tone-dep: #9a5c00; --on-tone: #ffffff; --bak-num: #046f63;
+    --card-line: #b9a68c;
+    --tone-dep: #9a5c00; --on-tone: #ffffff;
   }
 }
 
@@ -267,10 +270,17 @@ p.muted { margin: 0; max-width: 56em; }
 .split aside .notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 10px; margin: 0;
   color: var(--fg-2); font-size: 12.5px; background: var(--raise); border: 1px dashed var(--line-2); }
 .split aside .notice button { padding: 1px 10px; }
-/* the team page's section index, under the team list in the sticky side column */
-nav.sections { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 6px; }
-nav.sections small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+/* The team page's section index (#718): one row above the editor, the sections left to right in the page's order, held flush
+ * with the top of the scrolling page on the page's own ground, so what scrolls under it is hidden. It takes main's top padding
+ * into its own (the same 16 px, 14 in a narrow window), so its row lines up with the team list's first line. A section it
+ * jumps to stops below it (scroll-margin-top). */
+nav.sections {
+  position: sticky; top: -16px; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
+  margin: -16px 0 -4px; padding: 16px 0 8px; background: var(--bg); border-bottom: 1px solid var(--line);
+}
+nav.sections small { margin-right: 4px; color: var(--muted); font-size: 12px; }
 nav.sections button { padding: 2px 9px; font-size: 12.5px; color: var(--fg-2); background: none; border-color: var(--line); }
+.team [data-section] { scroll-margin-top: 56px; }
 .tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
 .split { display: flex; gap: 20px; align-items: flex-start; }
@@ -394,33 +404,49 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 details.hint > summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; font-weight: 600; width: max-content; }
 details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 56em; }
 
-/* The sinner grid: the game's identity frames, a big deployment number, a banner for deployed or backup. No portraits, so the
- * frame is short: number, banner, name. */
+/* The sinner grid, drawn after the game's identity list: each tile is the sinner's default identity card (#718) in the
+ * game's frame, a big deployment number on a shade plate, a banner for deployed or backup, the name on a shade at the foot.
+ * A sinner left out of the order is darkened, so the deployed and backup ones read first. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(88px, 1fr)); gap: 8px; max-width: 760px; }
 .sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
   --tone: var(--muted);
-  position: relative; aspect-ratio: 5 / 4; padding: 0; overflow: hidden; color: var(--card-fg);
+  position: relative; aspect-ratio: 3 / 4; padding: 0; overflow: hidden; color: var(--art-ink);
   border: 1px solid var(--card-line); border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: linear-gradient(165deg, var(--card-top), var(--card-bottom) 75%);
+  background: linear-gradient(165deg, var(--art-top), var(--art-shade) 75%); /* under the art; the whole tile when a card is missing */
 }
+/* the card from the top, where the face is; the foot is shaded for the name */
+.sinner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; transition: filter 0.18s ease-out; }
+.sinner::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top, color-mix(in srgb, var(--art-shade) 88%, transparent) 0,
+    color-mix(in srgb, var(--art-shade) 78%, transparent) 28%, transparent 52%);
+}
+.sinner > span { z-index: 1; }
 .sinner:hover:not(:disabled) { border-color: var(--accent-line); }
 .sinner:disabled { opacity: 1; cursor: default; }
 /* A team on a plan: the plan's grid, quieter, so it does not read as one to click (the line above says where to change it). */
-.sinners.readonly .sinner { filter: saturate(0.45) brightness(0.85); border-style: dashed; }
-.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--dep-top), var(--dep-bottom) 75%); }
+.sinners.readonly .sinner { border-style: dashed; }
+.sinners.readonly .sinner img { filter: saturate(0.6) brightness(0.85); }
+.sinners .sinner.out img { filter: saturate(0.35) brightness(0.4); }
+.sinners .sinner.out:hover:not(:disabled) img { filter: saturate(0.6) brightness(0.62); } /* a click puts it back in */
+.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); }
 .sinner.deployed .banner { background: var(--dep-plate); color: var(--dep-ink); }
-.sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--bak-top), var(--bak-bottom) 75%); }
-.sinner.backup .num { color: var(--bak-num); }
+.sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); }
+.sinner.backup .num { color: var(--art-bak); }
 .sinner.backup .banner { color: var(--bak-ink); }
-.sinner .num { position: absolute; top: 4px; left: 9px; font: 700 34px/1 var(--font-display); color: var(--tone); }
+.sinner .num {
+  position: absolute; top: 0; left: 0; min-width: 1.25em; padding: 6px 8px 3px 9px; text-align: center;
+  font: 700 30px/1 var(--font-display); color: var(--art-dep);
+  background: color-mix(in srgb, var(--art-shade) 85%, transparent); border-radius: 0 0 8px 0; corner-shape: bevel;
+}
 .sinner .banner {
   position: absolute; top: 4px; right: 0; padding: 1px 8px 1px 12px; background: var(--tone); color: var(--on-tone);
   font-weight: 700; letter-spacing: 0.2em; font-size: 12.5px; clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
 }
 .sinner .name {
   position: absolute; right: 8px; bottom: 6px; left: 6px; font: 700 15px/1.1 var(--font-display); letter-spacing: 0.02em;
-  text-transform: uppercase; color: var(--card-fg); text-align: right;
+  text-transform: uppercase; color: var(--art-ink); text-align: right; text-shadow: 0 1px 2px var(--art-shade);
 }
 
 /* Starlight, drawn after the game's "Grace of the Star" page: grey-navy cards in a blue frame, a selected one turns white,
@@ -507,7 +533,15 @@ details.skill-panel > summary + * { margin-top: 0; }
 details.skill-panel > p { margin-bottom: 0; }
 /* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
-.skill-add { align-self: flex-start; }
+/* 「＋ 加入罪人」(#718): its chevron is drawn, two strokes in the text's colour, as far in from the right edge as the text is from
+ * the left; the native one keeps its own inset of a few pixels whatever the padding. */
+.skill-add {
+  align-self: flex-start; appearance: none; cursor: pointer; padding: 4px 40px 4px 12px;
+  background-color: var(--field); background-repeat: no-repeat; background-size: 6px 6px;
+  background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
+    linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
+  background-position: right 21px center, right 15px center; /* measured: 16 px from each edge to the ink, like the text's */
+}
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
 ol.skill-sinners > li {
@@ -637,6 +671,7 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
   nav[role="tablist"] button { padding: 7px 9px 8px; }
   nav[role="tablist"] .tabsep { margin: 0 3px; }
   main { padding: 14px 14px 24px; }
+  nav.sections { top: -14px; margin-top: -14px; padding-top: 14px; }
   .split { gap: 14px; }
   .split aside { width: 190px; }
   .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */
@@ -644,7 +679,7 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
   ol.skill-sinners > li { flex-wrap: wrap; row-gap: 4px; }
   .skill-pillcell { flex: 1 1 auto; width: auto; }
   .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-  .sinner .num { font-size: 28px; left: 7px; }
+  .sinner .num { font-size: 24px; padding: 5px 6px 2px 7px; }
   .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }
   .sinner .name { font-size: 13px; }
   .graces { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }

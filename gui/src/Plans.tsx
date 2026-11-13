@@ -13,8 +13,16 @@ import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
 import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useSlashFocus, useUndo, withBreaks, type PlanKey } from "./ui";
 
-/** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
- * (spec 04 section 6). Read-only without onChange. */
+// #718's cards (sinner_cards/index.json: sinner -> file, each sinner's default identity), bundled at build time; a sinner
+// without one, or a build before they exist, shows its frame alone. The name is printed on the tile, so the art is decoration.
+const CARDS_DIR = "../../assets/resource/base/data/sinner_cards/";
+const CARD_URLS = import.meta.glob<string>("../../assets/resource/base/data/sinner_cards/*.webp", { eager: true, query: "?url", import: "default" });
+const CARD_INDEX = Object.values(import.meta.glob<Record<string, string>>("../../assets/resource/base/data/sinner_cards/index.json",
+  { eager: true, import: "default" }))[0] ?? {};
+const cardOf = (sinner: string): string | undefined => CARD_URLS[CARDS_DIR + CARD_INDEX[sinner]];
+
+/** The 12 sinners in the game's grid, each on its default identity's card; clicking adds one at the end of the order or
+ * leaves it out (spec 04 section 6), and a sinner left out shows its card darkened. Read-only without onChange. */
 export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
   return (<>
@@ -22,10 +30,12 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
     <div className={"sinners" + (onChange ? "" : " readonly") + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
-        const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
+        const kind = n === 0 ? "out" : n <= 7 ? "deployed" : "backup";
+        const art = cardOf(s);
         return (
           <button type="button" key={s} className={"sinner " + kind} disabled={!onChange} aria-pressed={n > 0}
             onClick={() => onChange?.(toggleSinner(order, s))}>
+            {art && <img src={art} alt="" draggable={false} />}
             {n > 0 && <span className="num">{n}</span>}
             {n > 0 && <span className="banner">{t(n <= 7 ? "order.deployed" : "order.backup")}</span>}
             <span className="name">{s}</span>

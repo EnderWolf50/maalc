@@ -8,6 +8,8 @@ import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
+import css from "./index.css?raw";
+import { DeploymentTab } from "./Plans";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
 
@@ -298,7 +300,74 @@ describe("the E.G.O Gift Search keyword tabs", () => {
   });
 });
 
-describe("the side column's section index", () => {
+describe("the deployment order tiles (#718)", () => {
+  // 7 deployed, 2 backups; Don Quixote, Meursault and Gregor are left out
+  const order = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Ishmael", "Rodion", "Outis", "Heathcliff", "Sinclair"];
+  const ordered = () => {
+    const s = settings();
+    s.teams[0].deployment_order = { custom: order };
+    return s;
+  };
+  const tile = (name: string) => within(document.querySelector<HTMLElement>('[data-section="order"]')!).getByRole("button", { name: new RegExp(name) });
+  // each sinner's default identity, LCB Sinner (the static data's BASE_APPEARANCE personality, 1.118.1)
+  const DEFAULT_IDENTITY: Record<string, number> = {
+    "Yi Sang": 10101, Faust: 10201, "Don Quixote": 10301, "Ryōshū": 10401, Meursault: 10501, "Hong Lu": 10601,
+    Heathcliff: 10701, Ishmael: 10801, Rodion: 10901, Sinclair: 11001, Outis: 11101, Gregor: 11201,
+  };
+
+  test("each tile shows its sinner's default identity card, in the order or not", () => {
+    renderEditor(<TeamsTab />, ordered());
+    for (const s of SINNERS) {
+      expect(tile(s).querySelector("img")?.getAttribute("src")).toMatch(new RegExp(`sinner_cards/${DEFAULT_IDENTITY[s]}\\.webp$`));
+    }
+  });
+
+  test("a sinner left out of the order shows its card darkened; deployed and backup ones at full light", () => {
+    renderEditor(<TeamsTab />, ordered());
+    for (const s of ["Don Quixote", "Meursault", "Gregor"]) expect(tile(s)).toHaveClass("out");
+    for (const s of order) expect(tile(s)).not.toHaveClass("out");
+    // at rest: the pointer over one lifts it a little, to say a click puts it back in
+    const dim = rules(css).filter((r) => r.selector.includes(".sinner.out") && /\bimg\b/.test(r.selector) && !r.selector.includes(":hover"))
+      .map((r) => r.body.match(/brightness\(([\d.]+)\)/)?.[1]);
+    expect(dim.length).toBeGreaterThan(0);
+    for (const b of dim) expect(Number(b)).toBeLessThan(0.6);
+  });
+
+  test("the plan tab's grid shows the same cards", () => {
+    const s = ordered();
+    s.deployment_order_plans = [{ id: "p", name: "P", order }];
+    renderEditor(<DeploymentTab />, s);
+    const grid = document.querySelector<HTMLElement>(".sinners")!;
+    expect(within(grid).getByRole("button", { name: /Gregor/ })).toHaveClass("out");
+    expect(within(grid).getByRole("button", { name: /Ryōshū/ }).querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/10401\.webp$/);
+  });
+});
+
+/** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets. */
+function rules(text: string) {
+  return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
+}
+
+describe("the section index", () => {
+  test("sits above the team editor, not under the team list, so a long list never pushes it away", () => {
+    const s = settings();
+    for (let n = 2; n <= 30; n++) s.teams.push({ ...newTeam(n, `T${n}`), id: `t${n}` });
+    renderEditor(<TeamsTab />, s);
+    const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
+    expect(jump.closest("aside")).toBeNull();
+    const editor = document.querySelector(".team")!;
+    expect(jump.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("its links follow the page's sections from top to bottom", () => {
+    renderEditor(<TeamsTab />, settings());
+    const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
+    const headings = [...document.querySelectorAll<HTMLElement>(".team [data-section]")]
+      .map((el) => el.querySelector(":scope > legend, :scope > summary")!.textContent!.replace(/\s*\(\d+\)$/, ""));
+    expect(headings).toHaveLength(6);
+    expect(within(jump).getAllByRole("button").map((b) => b.textContent)).toEqual(headings);
+  });
+
   test("jumps to a section: a closed panel opens, and its summary takes the focus", async () => {
     const r = renderEditor(<TeamsTab />, settings());
     const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
