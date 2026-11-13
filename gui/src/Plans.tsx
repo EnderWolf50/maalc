@@ -1,5 +1,5 @@
 // Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
-import { Fragment, useEffect, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
   EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
@@ -263,11 +263,25 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
+  const [query, setQuery] = useState(""); // a part of a pack's name: only the packs that hold it show
+  const searchBox = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
-  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra];
+  const named = (n: string) => n.toLowerCase().includes(query.trim().toLowerCase());
+  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra].filter(named);
+  // / jumps to the search from anywhere on the page but a field or a dialog, as on the gift list tab
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const typing = (e.target as HTMLElement).closest("input, select, textarea, [role=dialog], [role=alertdialog]");
+      if (e.key !== "/" || typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault();
+      searchBox.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
   // The pack whose weight is being typed: on its chip, or in the + lane for a new weight (`lane`).
@@ -340,6 +354,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     ));
   return (<>
     <div className="packbar">
+      <input ref={searchBox} type="search" className="pk-search" aria-label={t("packs.search")} placeholder={t("packs.search_ph")}
+        value={query} onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape" && query) { e.preventDefault(); setQuery(""); } }} />
       <span className="seg">
         {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
           (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty,
@@ -365,7 +382,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
               {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
-              {w === plan.unlisted && (
+              {w === plan.unlisted && !query.trim() && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
                   {images && <span className="img" aria-hidden />}

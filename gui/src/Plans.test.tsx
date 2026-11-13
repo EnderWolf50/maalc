@@ -69,6 +69,37 @@ describe("the 含想要 mark", () => {
   });
 });
 
+describe("finding a pack by name", () => {
+  const plan = { id: "p1", name: "Mine", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" };
+  const open = async () => {
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan] }));
+    await r.user.click(await screen.findByText("Mine"));
+    return r;
+  };
+  const names = () => [...document.querySelectorAll(".pk .nm")].map((x) => x.textContent);
+  const search = () => screen.getByRole("searchbox", { name: zh["packs.search"] });
+
+  test("the search shows only the packs whose name holds what is typed, any case; Esc clears it", async () => {
+    const r = await open();
+    const all = names().length;
+    await r.user.type(search(), "forg");
+    expect(names()).toContain("The Forgotten");
+    expect(names().every((n) => n!.toLowerCase().includes("forg"))).toBe(true);
+    expect(names().length).toBeLessThan(all);
+    await r.user.keyboard("{Escape}");
+    expect(search()).toHaveValue("");
+    expect(names().length).toBe(all);
+  });
+
+  test("/ jumps to the search from the page, and types a / in a field", async () => {
+    const r = await open();
+    (document.querySelector(".pk") as HTMLElement).focus();
+    await r.user.keyboard("/");
+    expect(search()).toHaveFocus();
+    expect(search()).toHaveValue("");
+  });
+});
+
 describe("a pack's weight, typed in place (no prompt dialog)", () => {
   const plan = () => ({ id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" });
   /** The theme pack tab on plan Mine; window.prompt only counts calls. */
