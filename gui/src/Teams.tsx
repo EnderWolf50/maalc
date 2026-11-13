@@ -16,23 +16,29 @@ import { Field, GLYPHS, Icon, Num, ReorderList, Select, useEditor, usePick, useU
 /** Which team the next run plays, per difficulty the run can begin on: the first enabled team whose usage fits, as the bot's
  * agent/team_queue.py pick_team takes it. A fixed difficulty begins on itself; auto begins HARD while weekly bonuses are left
  * and NORMAL after, and a target past floor 5 is always HARD (spec 04, 自動難度). */
-export function nextTeams(s: Settings): { difficulty: "hard" | "normal"; id: string }[] {
-  const run = s.run.difficulty === "auto" ? (s.run.target_floor > 5 ? ["hard"] : ["hard", "normal"]) : [s.run.difficulty];
-  return (run as ("hard" | "normal")[]).flatMap((difficulty) => {
+export function nextTeams(s: Settings): { difficulties: Difficulty[]; picks: { difficulty: Difficulty; id: string }[] } {
+  // auto runs NORMAL only once the weekly bonuses are out, and with 每週獎勵用完就停 the bot ends there instead
+  // (agent/actions.py, before run_difficulty)
+  const difficulties: Difficulty[] = s.run.difficulty !== "auto" ? [s.run.difficulty as Difficulty]
+    : s.run.target_floor > 5 || s.run.stop_when_weekly_bonus_out ? ["hard"] : ["hard", "normal"];
+  const picks = difficulties.flatMap((difficulty) => {
     const team = s.teams.find((x) => x.enabled && (x.usage === "any" || x.usage === `${difficulty}_only`));
     return team ? [{ difficulty, id: team.id }] : [];
   });
+  return { difficulties, picks };
 }
+type Difficulty = "hard" | "normal";
 
 export function TeamsTab() {
   const { s, update, t, tv, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const next = nextTeams(s);
-  // one difficulty, or one team for both: "下一局"; else each team says for which difficulty
+  // a team the next run plays whatever its difficulty: "下一局"; else it says for which difficulty
   const nextTag = (id: string) => {
-    const mine = next.filter((x) => x.id === id);
+    const mine = next.picks.filter((x) => x.id === id);
     if (!mine.length) return null;
-    const text = mine.length === next.length ? t("queue.next") : `${t("queue.next")}・${mine.map((x) => tv("difficulty", x.difficulty)).join(t("gl.sep"))}`;
+    const text = mine.length === next.difficulties.length ? t("queue.next")
+      : [t("queue.next"), ...mine.map((x) => tv("difficulty", x.difficulty))].join(t("sum.sep"));
     return <small className="next-tag">{text}</small>;
   };
   const [undoNote, removeAt] = useUndo();
@@ -53,10 +59,12 @@ export function TeamsTab() {
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
               <span className={"queue-row" + (x.enabled ? "" : " off")}>
-                <span className="nm">{x.name || "—"}</span>
-                {nextTag(x.id)}
-                {!x.enabled && <small className="off-tag">{t("team.off")}</small>}
-                {x.usage !== "any" && <small className="off-tag">{tv("usage", x.usage)}</small>} <small>#{x.game_team}</small>
+                <span className="nm">{x.name || "—"}</span> <small className="slot">#{x.game_team}</small>
+                {(nextTag(x.id) || !x.enabled || x.usage !== "any") && <span className="tags">
+                  {nextTag(x.id)}
+                  {!x.enabled && <small className="off-tag">{t("team.off")}</small>}
+                  {x.usage !== "any" && <small className="off-tag">{tv("usage", x.usage)}</small>}
+                </span>}
               </span>
             )} />
         ) : <p className={"empty-note" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
@@ -68,7 +76,7 @@ export function TeamsTab() {
 }
 
 function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
-  const { s, update, t, tv, bad, chooseList } = useEditor();
+  const { s, update, t, tv, bad, chooseList, pick, openTab } = useEditor();
   const team = s.teams[i];
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
@@ -111,11 +119,16 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const packName = team.theme_pack_plan === "default" ? t("defaultPlan")
     : s.theme_pack_plans.find((p) => p.id === team.theme_pack_plan)?.name ?? team.theme_pack_plan;
   const picked = star ? star.levels.filter((l) => l !== "none").length : 0;
-  // only what links to a plan, each with its name: custom and default are the plain case
-  const plansSum = [[orderSource, "team.deployment_order", orderName], [starSource, "team.starlight", starName],
-    [team.gift_list !== "default", "team.gift_list", listName], [team.theme_pack_plan !== "default", "team.theme_pack_plan", packName]]
-    .filter(([on]) => on).map(([, key, name]) => `${t(key as Key)} ${name}`).join(t("sum.sep")) || t("sum.plans_none");
   const sep = t("sum.sep");
+  // only what links to a plan, each with its label: custom and default are the plain case
+  const linked: [boolean, Key, string][] = [[!!orderSource, "team.deployment_order", orderName], [!!starSource, "team.starlight", starName],
+    [team.gift_list !== "default", "team.gift_list", listName], [team.theme_pack_plan !== "default", "team.theme_pack_plan", packName]];
+  const plansSum = linked.filter(([on]) => on).map(([, key, name]) => `${t(key)} ${name}`).join(sep) || t("sum.plans_none");
+  // a team on a plan opens it where it is edited (the gift list's 編輯這份清單 does the same)
+  const editPlan = (list: "deployment_order_plans" | "starlight_plans" | "theme_pack_plans", id: string, tab: string, what: Key) => (
+    <button type="button" aria-label={`${t("plan.edit")}${t("sum.sep")}${t(what)}`} onClick={() => { pick(list, id); openTab?.(tab); }}>
+      {t("plan.edit")}</button>
+  );
   const battleSum = [team.guard_turns ? fill(t("sum.guard"), { n: team.guard_turns }) : "",
     team.hard_from_floor === null ? "" : fill(t("sum.hard_from"), { n: team.hard_from_floor }),
     team.usage === "any" ? "" : tv("usage", team.usage), tv("heal", team.heal),
@@ -141,38 +154,43 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <Section id="team.plans" title={t("team.plans")} open summary={plansSum}>
         <div className="srows">
+          {/* the choice first, the button after it: a problem in the row focuses the row's first control (focusPath) */}
           <Row many label={t("team.deployment_order")} path={`${path}/deployment_order`} mark={bad(`${path}/deployment_order`) && !orderCustom}
             control={<>
-              {orderCustom && <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>}
               {planSelect(orderSource, s.deployment_order_plans, (id) => set({
                 deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
               }), t("team.deployment_order"))}
+              {orderCustom ? <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>
+                : editPlan("deployment_order_plans", orderSource, "deployment", "team.deployment_order")}
             </>} />
           <Row many label={t("team.starlight")} path={`${path}/starlight`} mark={bad(`${path}/starlight`) && !starCustom}
             control={<>
-              {starCustom && <button type="button" onClick={saveStarPlan}>{t("saveAsPlan")}</button>}
               {planSelect(starSource, s.starlight_plans, (id) => set({
                 starlight: id ? { plan: id } : {
                   custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
                 },
               }), t("team.starlight"))}
+              {starCustom ? <button type="button" onClick={saveStarPlan}>{t("saveAsPlan")}</button>
+                : editPlan("starlight_plans", starSource, "starlight", "team.starlight")}
             </>} />
           <Row many label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")} control={<>
-            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
             <select aria-label={t("team.gift_list")} value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
               <option value="default">{t("defaultPlan")}</option>
               {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
             </select>
+            <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
           </>}>
             {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
           </Row>
-          <Row label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`} control={
-            <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
+          <Row many label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`} control={<>
+            <select aria-label={t("team.theme_pack_plan")} value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
               <option value="default">{t("defaultPlan")}</option>
               {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
-            </select>} />
+            </select>
+            {team.theme_pack_plan !== "default" && editPlan("theme_pack_plans", team.theme_pack_plan, "themepacks", "team.theme_pack_plan")}
+          </>} />
         </div>
       </Section>
 
@@ -185,7 +203,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       </Section>
 
       <Section id="team.starlight" title={t("team.starlight")} open bad={bad(`${path}/starlight`)}
-        summary={fill(t("sum.stars"), { n: picked, cost: star ? starlightCost(star.levels) : 0 })}>
+        summary={[fill(t("sum.stars"), { n: picked, cost: star ? starlightCost(star.levels) : 0 }), star?.convert_leftover ? t("sum.convert") : ""]
+        .filter(Boolean).join(t("sum.sep"))}>
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
@@ -221,14 +240,13 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             control={<Select value={team.heal} options={teamEnum("heal")} label={(v) => tv("heal", v)} onChange={(v) => set({ heal: v })} />} />
           <Row label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}
             control={<Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />} />
-          <div className={"srow rewards-row" + (bad(`${path}/reward_cards`) ? " bad" : "")} data-path={`${path}/reward_cards`}>
-            <span className="srow-label">{t("team.reward_cards")}</span>
-            <span className="srow-help"><small>{t("dragHint")}</small><small>{t("list.keys")}</small></span>
-            <div className="rewards">
+          <Row many label={t("team.reward_cards")} path={`${path}/reward_cards`} control={
+            <span className="rewards">
               <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
                 label={t("team.reward_cards")} render={(x, j) => <>{j + 1}. {x}</>} />
-            </div>
-          </div>
+            </span>}>
+            <small>{t("dragHint")}</small><small>{t("list.keys")}</small>
+          </Row>
           <Row many label={t("team.times")} note={t("team.times_note")} control={
             <button type="button" onClick={async () => {
               if (!confirm(t("resetConfirm"))) return;
@@ -345,7 +363,7 @@ function GiftSearchPanel({ i }: { i: number }) {
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>
         <h3 className="sub">{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>
-        {search.gifts.length > 1 && <p className="muted hint">{t("dragHint")}・{t("list.keys")}</p>}
+        {search.gifts.length > 1 && <p className="muted hint">{[t("dragHint"), t("list.keys")].join(t("sum.sep"))}</p>}
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })} label={t("gift.order")}

@@ -120,7 +120,8 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
       </h3>
       {blocks.map(({ tier, ids }, b) => {
         const set = ids.filter((id) => state(list, id) !== "drop").length;
-        const note = notes[b] && !notes.slice(0, b).includes(notes[b]) ? notes[b] : ""; // a band above already says it
+        // a band above already says the rule: this one only says that it holds here too
+        const note = !notes[b] || !notes.slice(0, b).includes(notes[b]) ? notes[b] : notes[b] === t("gl.tier_fusion") ? t("gl.tier_fusion_again") : notes[b];
         return (
           <section key={tier} className="gl-tier" aria-label={TIERS[tier]}>
             <h4><span className={"gl-tierno" + (tier >= 4 ? " fusion" : "")}>{TIERS[tier]}</span>

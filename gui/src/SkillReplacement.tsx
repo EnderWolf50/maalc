@@ -32,7 +32,8 @@ export function SkillPanel({ i }: { i: number }) {
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
     <Section id="team.skill" className="panel skill-panel" title={t("skill.title")} bad={bad(path)}
-      summary={sr.sinners.length ? fill(t("sum.skill"), { n: sr.sinners.length, m: changed }) : t("sum.none")}>
+      summary={[sr.sinners.length ? fill(t("sum.skill"), { n: sr.sinners.length, m: changed }) : t("sum.none"),
+        search.enabled ? fill(t("sum.id_search"), { pay: tv("skill_pay", search.pay) }) : ""].filter(Boolean).join(t("sum.sep"))}>
       <Note text={t("skill.note")} block />
       <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
         onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>

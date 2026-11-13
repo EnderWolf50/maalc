@@ -102,9 +102,18 @@ const PLAN_OF: Record<PlanKey, (team: Team) => string | null> = {
 
 /** Which teams use plan `id`, so a change or a delete shows whom it touches. */
 function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
-  const { s, t } = useEditor();
-  const names = s.teams.filter((x) => PLAN_OF[planKey](x) === id).map((x) => x.name || "—");
-  return <p className="muted">{names.length ? fill(t("plan.usedBy"), { names: names.join(t("gl.sep")) }) : t("plan.unused")}</p>;
+  const { s, t, pick, openTab } = useEditor();
+  const teams = s.teams.filter((x) => PLAN_OF[planKey](x) === id);
+  if (!teams.length) return <p className="muted">{t("plan.unused")}</p>;
+  // each name opens its team, so a change here can be followed to whom it touches
+  const [before, after] = t("plan.usedBy").split("{names}");
+  return (
+    <p className="muted plan-users">{before}{teams.map((x, k) => (
+      <Fragment key={x.id}>{k > 0 && t("gl.sep")}{openTab
+        ? <button type="button" className="link" onClick={() => { pick("teams", x.id); openTab("teams"); }}>{x.name || "—"}</button>
+        : x.name || "—"}</Fragment>
+    ))}{after}</p>
+  );
 }
 
 /** A list of named plans on the left, the selected plan's editor on the right; `lead`, a read-only plan above the list. */
@@ -202,6 +211,8 @@ const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no p
 const LINE = "\u0000line";
 /** A lane of more packs than this shows two rows until opened. */
 const FOLD_AT = 30;
+/** How many packs a folded lane still shows. */
+const FOLD_SHOW = 12;
 /** The floor filter's chips (0: any): a run's 15 floors, 6-10 INFINITY's and 11-15 EXTREME's (#387). */
 const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 /** A floor badge's label and class per mode of the data file. */
@@ -282,14 +293,14 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its
   // threshold is that lane's weight.
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
-  const chip = (name: string) => {
+  const chip = (name: string, beyond = false) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
     const wanted = packWanted(lists, data.pack_ids[name]).map((id) => GIFT_BY_ID.get(id)).filter((g) => g !== undefined)
       .map((g) => giftName(g, zh));
     const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
     return (
-      <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
+      <span key={name} className={"pk" + (beyond ? " beyond" : "") + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
         {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
         {!cover && <span className="nm">{name}</span>}
@@ -325,7 +336,8 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       control={onChange
         ? <Select value={plan.event_packs} options={EVENT_MODES} label={(v) => tv("event_packs", v)} onChange={(v) => set({ event_packs: v })} />
         : <span>{tv("event_packs", plan.event_packs)}</span>} />
-    <div className="packbar">
+    <div className="packbar" role="group" aria-label={t("packs.filter")}>
+      <span className="packbar-label">{t("packs.filter")}</span>
       {chips<PackMode>(["", "normal", "hard", "infinity", "extreme"], difficulty,
         (v) => (v ? t(BADGES[MODE_KEYS[v]][0]) : t("packs.anyDifficulty")) /* a badge's name: 普通, not NORMAL, in Chinese */, setDifficulty)}
       <span className="gap" />
@@ -341,16 +353,16 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       {line === 0 && lineBar}
       {lanes.map((w, i) => {
         const here = shown.filter((n) => weightOf(plan, n) === w);
-        // A lane of many packs (the unweighted ones, mostly) shows two rows until opened, so the weighted lanes and the line
-        // stay near the top; a drag opens it, so every pack is a place to drop.
-        const fold = here.length > FOLD_AT && !open.includes(w) && drag === null;
+        // A lane of many packs (the unweighted ones, mostly) shows its first packs until opened, so the weighted lanes and the
+        // line stay near the top. The lane itself takes a drop folded or not, and the unlisted chip leads it, so it never folds.
+        const many = here.length > FOLD_AT && drag === null;
+        const fold = many && !open.includes(w);
         return (
         <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
-          <div className={"lane" + (fold ? " folded" : "")} {...target(drag !== LINE, w)}>
+          <div className={"lane" + (fold ? " lane-folded" : "")} {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
             <div className="packs">
-              {here.map(chip)}
               {w === plan.unlisted && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
@@ -359,8 +371,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
                   {typingOn(UNLISTED) && box(UNLISTED, plan.unlisted)}
                 </span>
               )}
+              {here.map((n, k) => chip(n, fold && k >= FOLD_SHOW))}
             </div>
-            {here.length > FOLD_AT && drag === null && (
+            {many && (
               <button type="button" className="more lane-more" aria-expanded={!fold}
                 onClick={() => setOpen(fold ? [...open, w] : open.filter((x) => x !== w))}>
                 {fold ? fill(t("packs.showAll"), { n: here.length }) : t("less")}

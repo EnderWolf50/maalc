@@ -256,7 +256,7 @@ small.caution::before, p.caution::before { content: "\E7BA"; position: absolute;
 .check-row:hover { background: var(--card-2); }
 /* A long help text: two lines, then a button for the rest. */
 .note { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.folded { display: none; }
+.note .preview + .sr-only { margin: 0; }
 button.more {
   min-height: 20px; padding: 0 2px; border: 0; background: none; color: var(--accent-text); font-size: 12px; line-height: 16px;
 }
@@ -312,16 +312,23 @@ aside ol.reorder .grip { opacity: 0; }
 aside ol.reorder li:hover .grip, aside ol.reorder li:focus .grip { opacity: 1; }
 ol.reorder .item { flex: 1; min-width: 0; }
 ol.reorder .moves { display: inline-flex; opacity: 0; }
-ol.reorder li:hover .moves, ol.reorder li:focus-within .moves, ol.reorder li.selected .moves { opacity: 1; }
+ol.reorder li:hover .moves, ol.reorder li:focus-within .moves { opacity: 1; }
+.rewards ol.reorder li .moves, ol.reorder:not(aside ol) li.selected .moves { opacity: 1; }
 ol.reorder .moves .icon-glyph { font-size: 12px; }
 /* The team list is the queue: a number before each team, its game slot after. */
 aside ol.reorder { counter-reset: queue; }
 aside ol.reorder li { counter-increment: queue; }
-.queue-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.queue-row::before { content: counter(queue); min-width: 1.2em; font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
+/* a queue row: the name and its slot on the first line, its tags under; the arrows float over the slot on hover */
+.queue-row { display: grid; grid-template-columns: 1.4em minmax(0, 1fr) auto; align-items: baseline; column-gap: 6px; row-gap: 2px; padding: 6px 0; min-width: 0; }
+.queue-row::before { content: counter(queue); grid-row: 1; font-size: 12px; color: var(--fg-2); font-variant-numeric: tabular-nums; }
 .queue-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queue-row small { margin-left: auto; font-variant-numeric: tabular-nums; }
+.queue-row .slot { font-variant-numeric: tabular-nums; }
+.queue-row .tags { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+aside ol.reorder li .moves { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border-radius: var(--r-ctl); background: var(--card); box-shadow: 0 0 0 1px var(--stroke); }
+aside ol.reorder .grip { display: none; }
 .queue-row.off .nm { color: var(--fg-2); }
+button.link { all: unset; color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; cursor: default; }
+button.link:focus-visible { outline: 2px solid var(--focus-out); outline-offset: 1px; }
 .queue-row .next-tag {
   flex: none; padding: 0 6px; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: 11px; line-height: 16px; font-weight: 600;
 }
@@ -515,10 +522,11 @@ ol.skill-sinners .grip { color: var(--fg-2); font-size: 11px; }
 .packbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .packbar .gap { width: 10px; }
 .packbar .spacer { flex: 1; }
-.lanes + .field { max-width: 320px; }
 .chip { min-height: 28px; border-radius: 14px; padding: 0 10px; font-size: 12px; color: var(--fg); }
-.chip[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--on-accent); }
-.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-hover); }
+/* filter chips: a quiet selection, so the strip reads as a view filter and not as the plan */
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, transparent); color: var(--accent-text); font-weight: 600; }
+.chip[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); }
+.packbar-label { font-size: 12px; color: var(--fg-2); margin-right: 4px; }
 .lanes { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--stroke); border-radius: var(--r-card); padding: 4px 12px; }
 .lane { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--stroke); min-height: 38px; }
 .lane .w { width: 40px; flex: none; text-align: right; font-weight: 700; padding-top: 4px; font-variant-numeric: tabular-nums; }
@@ -526,9 +534,8 @@ ol.skill-sinners .grip { color: var(--fg-2); font-size: 11px; }
 .lane .w.neg { color: var(--critical); }
 .lane .packs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 .lane { flex-wrap: wrap; }
-.lane.folded .packs { max-height: 58px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
+.lane-folded .pk.beyond { display: none; }
 .lane .lane-more { flex-basis: 100%; margin-left: 50px; align-self: flex-start; }
-.lanes.images .lane.folded .packs { max-height: 200px; }
 .lane.add { color: var(--fg-2); justify-content: center; align-items: center; border: 1px dashed var(--stroke-2); border-radius: var(--r-ctl); margin: 6px 0; }
 .lanes .gap { height: 12px; }
 .lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }

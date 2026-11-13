@@ -156,9 +156,14 @@ describe("deleting a team", () => {
 describe("the next run's team (as agent/team_queue.py pick_team takes it)", () => {
   const queue = (...teams: [string, boolean, string][]) =>
     teams.map(([id, enabled, usage], n) => ({ ...newTeam(n + 1, `T${id}`), id, enabled, usage }));
-  const next = (difficulty: string, target: number, teams: ReturnType<typeof queue>) =>
-    nextTeams({ ...newSettings(), run: { ...newSettings().run, difficulty, target_floor: target }, teams })
-      .map((x) => `${x.difficulty}:${x.id}`);
+  const next = (difficulty: string, target: number, teams: ReturnType<typeof queue>, stop = false) =>
+    nextTeams({ ...newSettings(), run: { ...newSettings().run, difficulty, target_floor: target, stop_when_weekly_bonus_out: stop }, teams })
+      .picks.map((x) => `${x.difficulty}:${x.id}`);
+
+  test("auto with 每週獎勵用完就停: the bot ends when the bonuses are out, so the next run is HARD", () => {
+    const teams = queue(["a", true, "hard_only"], ["b", true, "any"]);
+    expect(next("auto", 5, teams, true)).toEqual(["hard:a"]);
+  });
 
   test("a fixed difficulty: the first enabled team whose usage fits; a disabled one is skipped", () => {
     const teams = queue(["a", false, "any"], ["b", true, "normal_only"], ["c", true, "any"]);

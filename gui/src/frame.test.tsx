@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
-import { newSettings, newTeam, type Settings } from "./model";
+import { SINNERS, newSettings, newTeam, type Settings } from "./model";
 
 const file = vi.hoisted(() => ({ text: "" }));
 vi.mock("./api", async (original) => ({
@@ -115,17 +115,17 @@ test("a long help text shows its first sentence and a button for the rest; a cau
   render(<App />);
   await user.click(await screen.findByRole("tab", { name: zh["tab.daily"] }));
   const note = screen.getByText((_, el) => el?.textContent === zh["daily.note"].replace(/\n/g, ""), { selector: "p" });
-  expect(note).toHaveClass("folded");
+  expect(note).toHaveClass("sr-only"); // hidden from the eye only: a screen reader reads it whole
   const preview = note.parentElement!.querySelector(".preview")!;
   expect(preview.textContent).toBe(zh["daily.note"].split("\n")[0]); // a whole sentence, never cut inside one
   const more = note.parentElement!.querySelector("button.more")!;
   await user.click(more);
   expect(more).toHaveAttribute("aria-expanded", "true");
-  expect(note).not.toHaveClass("folded");
+  expect(note).not.toHaveClass("sr-only");
   expect(note.parentElement!.querySelector(".preview")).toBeNull();
   const caution = screen.getByText((_, el) => el?.textContent === zh["charge.note"].replace(/\n/g, ""), { selector: "p" });
   expect(caution).toHaveClass("caution");
-  expect(caution).not.toHaveClass("folded");
+  expect(caution).not.toHaveClass("sr-only");
 });
 
 test("a problem marks its page while the player edits, before any save; the banner waits for a save", async () => {
@@ -148,6 +148,22 @@ test("a row with a long help names its switch by the label alone, and a click on
   const was = (exp as HTMLInputElement).checked;
   await user.click(screen.getAllByText(zh["lux.consecutive"])[0]);
   expect(exp).toHaveProperty("checked", !was);
+});
+
+test("a team's plan opens on its own page, and the plan's team list leads back to the team", async () => {
+  const s = settings();
+  s.deployment_order_plans = [{ id: "d1", name: "Bleed order", order: [...SINNERS] }];
+  s.teams[1].deployment_order = { plan: "d1" };
+  file.text = JSON.stringify(s);
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(await screen.findByText("Tb"));
+  await user.click(screen.getByRole("button", { name: `${zh["plan.edit"]}${zh["sum.sep"]}${zh["team.deployment_order"]}` }));
+  expect(tab(zh["tab.deployment"])).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Bleed order");
+  await user.click(screen.getByRole("button", { name: "Tb" }));
+  expect(tab(zh["tab.teams"])).toHaveAttribute("aria-selected", "true");
+  expect(nameBox()).toHaveValue("Tb");
 });
 
 test("a folded section's header says what is set inside", async () => {

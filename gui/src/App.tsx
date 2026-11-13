@@ -33,7 +33,7 @@ const NAV: { label?: Key; tabs: TabId[] }[] = [
   { tabs: ["daily"] },
 ];
 /** Each page's icon in the rail (Segoe Fluent Icons). */
-const GLYPH: Record<TabId, number> = {
+const PAGE_GLYPH: Record<TabId, number> = {
   run: 0xe9e9, teams: 0xe716, gifts: 0xf133, deployment: 0xe8cb, starlight: 0xe734, themepacks: 0xe81e, events: 0xe8f2,
   trials: 0xec4a, daily: 0xe787,
 };
@@ -59,7 +59,7 @@ export default function App() {
   const [compact, setCompact] = useRailCompact();
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  const [checked, setChecked] = useState(false); // marks show after the first save attempt
+  const [checked, setChecked] = useState(false); // a save was tried and refused: the banner and the title bar's count show
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
@@ -168,6 +168,7 @@ export default function App() {
     s, bad, giftList, picked, setPicked,
     setS: (next) => setS((prev) => next(prev!)),
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
+    openTab: (id) => { if (TABS.some((x) => x[0] === id)) setTab(id as TabId); },
   });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
@@ -190,6 +191,7 @@ export default function App() {
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
+        setChecked(false); // saved: a problem made later shows its marks, and the banner waits for the next save
         return setStatus("saved");
       }
     } catch (e) {
@@ -213,7 +215,7 @@ export default function App() {
     label: g.label,
     items: g.tabs.map((id) => {
       const [, name, , prefixes] = TABS.find((x) => x[0] === id)!;
-      return { id, label: t(name), glyph: GLYPH[id], bad: prefixes.some(bad) };
+      return { id, label: t(name), glyph: PAGE_GLYPH[id], bad: prefixes.some(bad) };
     }),
   }));
   const blocked = checked && problems.length > 0; // a refused save says so beside the button that caused it
@@ -235,7 +237,7 @@ export default function App() {
         </label>
         <button type="button" className="primary" onClick={save}><Icon glyph={GLYPHS.save} />{t("save")}</button>
       </header>
-      <Rail groups={groups} current={tab} onPick={(id) => setTab(id as TabId)} label={t("nav.label")} compact={compact} />
+      <Rail groups={groups} current={tab} onPick={setTab} label={t("nav.label")} compact={compact} />
       <main aria-labelledby="page-title">
         <h2 className="page-title" id="page-title">{t(label)}</h2>
         {checked && problems.length > 0 && (

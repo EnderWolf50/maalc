@@ -16,6 +16,8 @@ export interface Ctx {
   giftList: string;
   /** Show that list in the gift list tab; with `open`, also switch to the tab. */
   chooseList: (id: string, open?: boolean) => void;
+  /** Open a page of the editor by its tab id ("teams", "starlight"); absent where there is one page (the tests' harness). */
+  openTab?: (tab: string) => void;
   /** The team or plan each list tab shows, by id. Kept here: a tab switch unmounts the tab, and its own state with it. */
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
@@ -102,7 +104,7 @@ export function translate(lang: Settings["language"]): Pick<Ctx, "t" | "tv"> {
 }
 
 /** The context App and the test harness build over their settings state. */
-export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked"> & {
+export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked" | "openTab"> & {
   setS: (next: (prev: Settings) => Settings) => void;
   setPicked: (next: (prev: Picked) => Picked) => void;
 }): Ctx {
@@ -134,11 +136,11 @@ export function Select({ value, options, label, onChange }: {
   );
 }
 
-export function Num({ value, min, max, disabled, onChange }: {
-  value: number; min: number; max?: number; disabled?: boolean; onChange: (v: number) => void;
+export function Num({ value, min, max, disabled, label, onChange }: {
+  value: number; min: number; max?: number; disabled?: boolean; label?: string; onChange: (v: number) => void;
 }) {
   return (
-    <input type="number" value={value} min={min} max={max} step={1} disabled={disabled}
+    <input type="number" aria-label={label} value={value} min={min} max={max} step={1} disabled={disabled}
       onChange={(e) => onChange(e.target.value === "" ? min : Math.trunc(Number(e.target.value)))} />
   );
 }
