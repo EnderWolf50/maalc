@@ -25,7 +25,7 @@ SECOND_LAYER = ["ShopReplaceSkillConfirm", "ShopReplaceSkillConnecting"]
 WAY_OUT = [*FIRST_LAYER, *SECOND_LAYER, "ShopPurchase", "Shop", "ShopReplaceSkillDone"]
 # #456's captures (HARD 2026-11-07): the Super Shop with ID Skill Search, its select mode, the dialog in Cost and in starlight.
 ID_GRIDS = ["SuperShop", "SuperShopIdSkillSearch", "ShopIdSkillSearchDone", "Shop"]
-# #658 (HARD 2026-11-13, a frame of the clip around 03:24:36.5): Ryōshū at 0/2/4 in Cost, the two swaps out of skill 1 dim.
+# #658 (HARD 2026-11-13, a frame of the clip attached to the issue): Ryōshū at 0/2/4 in Cost, the two swaps out of skill 1 dim.
 ID_FIRST_LAYER = ["ShopIdSkillSearchDialog", "ShopIdSkillSearchAll", "ShopIdSkillSearchPicked", "ShopIdSkillSearchStarlight",
                   "ShopIdSkillSearchDimmed"]
 ID_SECOND_LAYER = ["ShopIdSkillSearchConfirm", "ShopIdSkillSearchConnecting"]
@@ -48,6 +48,7 @@ def child():
     sys.modules["maa.agent.agent_server"] = stub
     import actions
     import shop
+    from test_shop import skill_entry
 
     class Still(CustomController):
         def connect(self):
@@ -104,13 +105,12 @@ def child():
                     out["id_slot"][name] = slot and [slot["name"], slot["purchased"], slot["x"], slot["y"] - 50]
                 for name in ID_FIRST_LAYER + FIRST_LAYER:
                     read = actions.Shop.read_replace_dialog(context, capture(name))
-                    out["pay_mode"][name] = shop.pay_mode(read["prices"], read["lit"], swaps)
+                    out["pay_mode"][name] = shop.pay_mode(read["lit"], read["prices"], swaps)
                     if name in ID_FIRST_LAYER:
                         out["id_dialog"][name] = read
                 read = out["id_dialog"]["ShopIdSkillSearchDimmed"]
-                ryoshu = {"sinner": "Ryōshū", "target": {"s1": 0, "s2": 1, "s3": 5}, "s1_s3_first": True}  # #658's team
-                out["id_choice"] = shop.id_search_choice(ryoshu, tuple(read["owned"]), read["lit"], read["prices"], read["cost"],
-                                                         out["pay_mode"]["ShopIdSkillSearchDimmed"], 0, swaps)
+                out["id_choice"] = shop.id_search_choice(skill_entry("Ryōshū", 0, 1, 5), tuple(read["owned"]), read["lit"],  # #658's team
+                                                         read["prices"], read["cost"], out["pay_mode"]["ShopIdSkillSearchDimmed"], 0, swaps)
                 for name in ID_SECOND_LAYER:
                     image = capture(name)
                     ask = actions.text(context, image, actions.REPLACE_ASK)

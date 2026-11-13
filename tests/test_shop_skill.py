@@ -627,14 +627,14 @@ def short_dim_price(game, mode):
     game.shown = misread
 
 
-NO_SKILL_1 = skill_entry("Ryōshū", 0, 1, 5)  # #658's team: Ryōshū 0/2/4 wants s2_s3 alone
+RYOSHU_NO_SKILL_1 = skill_entry("Ryōshū", 0, 1, 5)  # #658's team: Ryōshū 0/2/4 wants s2_s3 alone
 
 
 def test_a_misread_dim_price_still_tells_cost_and_the_swap_is_made(context, monkeypatch):
     # #658 live: 9 dim, 150, 240 dim was "the payment is unknown: cancel"; 150 and 240 tell Cost.
     game, lines = IdGame(context, monkeypatch, {"Ryōshū": (0, 2, 4)}, cost=685), logged(monkeypatch)
     short_dim_price(game, "cost")
-    assert actions.Shop.id_skill_search(context, searching(NO_SKILL_1), {}) == 1
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU_NO_SKILL_1), {}) == 1
     assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.REPLACE_OPTIONS["s2_s3"], actions.REPLACE_CONFIRM,
                          actions.REPLACE_CONFIRM]
     assert ("shop: ID Skill Search: 'Ryōshū': Skills Owned 0/2/4, s1_s2 9 dim, s2_s3 150, s1_s3 240 dim, 685 Cost, reserve 0: "
@@ -646,7 +646,7 @@ def test_a_misread_dim_price_after_the_switch_still_shows_starlight(context, mon
     # The switch waits for the prices to tell starlight: a dim 25 read as 2 is left out there too.
     game, lines = IdGame(context, monkeypatch, {"Ryōshū": (0, 2, 4)}, cost=685), logged(monkeypatch)
     short_dim_price(game, "starlight")
-    assert actions.Shop.id_skill_search(context, searching(NO_SKILL_1, pay="starlight"), {}) == 1
+    assert actions.Shop.id_skill_search(context, searching(RYOSHU_NO_SKILL_1, pay="starlight"), {}) == 1
     assert game.taps == [ID_SLOT, portrait("Ryōshū"), actions.PAY_SWITCH, actions.REPLACE_OPTIONS["s2_s3"],
                          actions.REPLACE_CONFIRM, actions.REPLACE_CONFIRM]
     assert ("shop: ID Skill Search: 'Ryōshū': Skills Owned 0/2/4, s1_s2 2 dim, s2_s3 50, s1_s3 75 dim, 3433 starlight "

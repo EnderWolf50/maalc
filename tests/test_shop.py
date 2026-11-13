@@ -359,10 +359,10 @@ ID_STARLIGHT = {"s1_s2": 25, "s2_s3": 50, "s1_s3": 75}
 ])
 def test_the_pay_mode_is_told_by_the_three_prices(prices, mode):
     # #456 capture: the switch turns 90/150/240 into 25/50/75; the Cost box then shows the owned starlight.
-    assert s.pay_mode(prices, LIT, SWAPS) == mode
+    assert s.pay_mode(LIT, prices, SWAPS) == mode
 
 
-NO_SKILL_1 = {"s1_s2": False, "s2_s3": True, "s1_s3": False}  # #658: Ryōshū 0/2/4, the two swaps out of skill 1 dim
+LIT_NO_SKILL_1 = {"s1_s2": False, "s2_s3": True, "s1_s3": False}  # #658: Ryōshū 0/2/4, the two swaps out of skill 1 dim
 
 
 @pytest.mark.parametrize("prices, mode", [
@@ -373,7 +373,7 @@ NO_SKILL_1 = {"s1_s2": False, "s2_s3": True, "s1_s3": False}  # #658: Ryōshū 0
     ({"s1_s2": 9, "s2_s3": None, "s1_s3": 24}, None),  # nothing read is any mode's
 ])
 def test_a_dim_price_that_is_no_modes_is_left_out_of_the_pay_mode(prices, mode):
-    assert s.pay_mode(prices, NO_SKILL_1, SWAPS) == mode
+    assert s.pay_mode(LIT_NO_SKILL_1, prices, SWAPS) == mode
 
 
 def test_id_search_pays_starlight_without_the_reserve_and_never_beyond_what_is_owned():

@@ -5181,7 +5181,7 @@ class Shop(CustomAction):
         # Never assumed to carry over: the dialog opened on Cost in the capture (tests/screens/ShopIdSkillSearchDialog.png);
         # whether the game keeps the payment mode is unverified (#456). The prices tell it; a switch must show the other prices.
         # With no price read the payment is unknown, and a switch could flip the wanted one away: cancel.
-        mode = shop.pay_mode(read["prices"], read["lit"], swaps)
+        mode = shop.pay_mode(read["lit"], read["prices"], swaps)
         if mode is None:
             log(f"{head}{sinner!r}: prices {Shop.price_line(read)}: the payment is unknown: cancel")
             Shop.cancel_replace(context)
@@ -5189,7 +5189,7 @@ class Shop(CustomAction):
         if mode != pay:
             page_guard(context, "Shop")
             switched = tap_shown(context, *PAY_SWITCH,
-                                 lambda im: shop.pay_mode(Shop.dialog_prices(context, im), Shop.dialog_lit(im), swaps) == pay,
+                                 lambda im: shop.pay_mode(Shop.dialog_lit(im), Shop.dialog_prices(context, im), swaps) == pay,
                                  timeout=1.5, rest=1.0)
             if switched is None:
                 log(f"{head}{sinner!r}: prices {Shop.price_line(read)}: the payment does not show {pay}: cancel")
