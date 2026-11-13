@@ -206,6 +206,31 @@ const BADGES = {
 /** The difficulty filter's choices by their badge, so both name a difficulty alike (普通, not NORMAL, in Chinese). */
 const MODE_BADGE = { normal: "N", hard: "H", infinity: "I", extreme: "X" } as const;
 
+/** A pack's weight typed in place (#679, in place of prompt()): Enter keeps a whole number from -10 to 10, or says why not
+ * beside the box; Esc, or leaving the box, keeps the weight as it was. */
+function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | null) => void }) {
+  const { t } = useEditor();
+  const [text, setText] = useState(value === undefined ? "" : String(value));
+  const [wrong, setWrong] = useState(false);
+  const keep = () => {
+    const w = Number(text);
+    if (text.trim() !== "" && Number.isInteger(w) && w >= -10 && w <= 10) onDone(w);
+    else setWrong(true);
+  };
+  return (
+    <span className="weigh" onClick={(e) => e.stopPropagation()}>
+      <input type="number" min={-10} max={10} step={1} autoFocus aria-label={t("packs.weightPrompt")} value={text}
+        onChange={(e) => { setText(e.target.value); setWrong(false); }} onBlur={() => onDone(null)}
+        onKeyDown={(e) => {
+          e.stopPropagation(); // the chip's own Enter would open the box again
+          if (e.key === "Enter") { e.preventDefault(); keep(); }
+          if (e.key === "Escape") onDone(null);
+        }} />
+      {wrong && <small>{t("packs.weightRange")}</small>}
+    </span>
+  );
+}
+
 /** Design A of #240: one lane per weight in use (0 always), highest first, and the threshold line between lanes.
  * Drag a pack to another lane, or onto + for a new weight; click one to type its weight. Read-only without onChange. */
 function PackPlanEditor({ data, plan, planId, path, onChange }: {
@@ -224,13 +249,13 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra];
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
-  const ask = (what: string, current?: number) => {
-    const text = prompt(t("packs.weightPrompt"), current === undefined ? "" : String(current));
-    if (text === null || text.trim() === "") return;
-    const w = Number(text);
-    if (Number.isInteger(w) && w >= -10 && w <= 10) weigh(what, w);
-    else alert(t("packs.weightRange"));
-  };
+  // The pack whose weight is being typed: on its chip, or in the + lane for a new weight (`lane`).
+  const [typing, setTyping] = useState<{ what: string; lane: boolean } | null>(null);
+  const ask = (what: string, current?: number) => setTyping({ what, lane: current === undefined });
+  const box = (what: string, current?: number) => (
+    <WeightBox value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
+  );
+  const typingOn = (what: string) => typing?.what === what && !typing.lane;
   const dropOn = (w: number | null) => (e: DragEvent) => {
     e.preventDefault();
     if (drag === LINE && w !== null) set({ threshold: w });
@@ -239,12 +264,12 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   };
   const target = (accepts: boolean, w: number | null) => (onChange && accepts
     ? { onDragOver: (e: DragEvent) => e.preventDefault(), onDrop: dropOn(w) } : {});
-  const dragged = (what: string) => (onChange ? {
+  const dragged = (what: string) => (onChange && !typingOn(what) ? { // a box on a draggable chip would drag, not select its text
     draggable: true,
     onDragStart: (e: DragEvent) => { setDrag(what); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what); },
     onDragEnd: () => setDrag(null),
   } : {});
-  const clickable = (what: string, current: number) => (onChange ? {
+  const clickable = (what: string, current: number) => (onChange && !typingOn(what) ? {
     role: "button", tabIndex: 0, onClick: () => ask(what, current),
     onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what, current); } },
   } : {});
@@ -269,6 +294,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
           })
           : <small><em>{t("packNotInData")}</em></small>}
         {wanted.length > 0 && <small className="wk" role="img" title={wantedTip} aria-label={wantedTip}>{t("packs.wanted")}</small>}
+        {typingOn(name) && box(name, weightOf(plan, name))}
       </span>
     );
   };
@@ -315,6 +341,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
                   {...dragged(UNLISTED)} {...clickable(UNLISTED, plan.unlisted)}>
                   {images && <span className="img" aria-hidden />}
                   <span className="nm">{t("packs.unlisted")}</span>
+                  {typingOn(UNLISTED) && box(UNLISTED, plan.unlisted)}
                 </span>
               )}
             </div>
@@ -322,7 +349,13 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
         </Fragment>
       ))}
       {gapOrLine(lanes.length)}
-      {onChange && <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>＋ {t("packs.newLane")}</div>}
+      {onChange && (
+        <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>
+          {typing?.lane
+            ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what)}</>
+            : <>＋ {t("packs.newLane")}</>}
+        </div>
+      )}
     </div>
     <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
       {onChange

@@ -1,7 +1,7 @@
 // Component tests of the theme pack plan screen's "含想要" mark (#421, spec 04 section 8): which packs carry it and what its
 // tooltip lists, for the list the teams using the plan hold.
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
@@ -64,6 +64,66 @@ describe("the 含想要 mark", () => {
     renderEditor(<ThemePackTab />, settings({ gift_lists: [mine([own])], teams: [team] }));
     expect(await markOf("The Outcast")).toBeNull();
     expect(await markOf("LCB Regular Check-up")).not.toBeNull();
+  });
+});
+
+describe("a pack's weight, typed in place (no prompt dialog)", () => {
+  const plan = () => ({ id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" });
+  /** The theme pack tab on plan Mine; window.prompt only counts calls. */
+  async function open() {
+    const asked = vi.spyOn(window, "prompt").mockReturnValue(null);
+    onTestFinished(() => asked.mockRestore());
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan()] }));
+    await r.user.click(await screen.findByText("Mine"));
+    return { ...r, asked, weights: () => r.settings().theme_pack_plans[0].weights };
+  }
+  const chipOf = async (name: string) => (await screen.findByText(name, { selector: ".nm" })).closest(".pk") as HTMLElement;
+  const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
+
+  test("clicking a pack opens a box on it with its weight; Enter keeps the new one", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    expect(box()).toHaveFocus();
+    expect(box()).toHaveValue(0);
+    await r.user.clear(box());
+    await r.user.type(box(), "3{Enter}");
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(r.asked).not.toHaveBeenCalled();
+  });
+
+  test("Esc leaves the weight as it was", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Outcast"));
+    await r.user.clear(box());
+    await r.user.type(box(), "5{Escape}");
+    expect(r.weights()).toEqual({ "The Outcast": -1 });
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  test("a weight outside -10..10 says so beside the box and keeps the old one", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Outcast"));
+    await r.user.clear(box());
+    await r.user.type(box(), "11{Enter}");
+    expect(screen.getByText(zh["packs.weightRange"])).toBeInTheDocument();
+    expect(box()).toBeInTheDocument();
+    expect(r.weights()).toEqual({ "The Outcast": -1 });
+  });
+
+  test("a pack dropped on + asks for the new lane's weight in that lane", async () => {
+    const r = await open();
+    const lane = screen.getByText(new RegExp(zh["packs.newLane"])).closest(".lane")!;
+    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
+    const chip = await chipOf("The Forgotten");
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(lane, { dataTransfer });
+    fireEvent.drop(lane, { dataTransfer });
+    fireEvent.dragEnd(chip, { dataTransfer });
+    expect(lane).toContainElement(box());
+    await r.user.type(box(), "-2{Enter}");
+    expect(r.weights()["The Forgotten"]).toBe(-2);
+    expect(r.asked).not.toHaveBeenCalled();
   });
 });
 
