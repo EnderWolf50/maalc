@@ -117,12 +117,14 @@ export function StarlightReceipt({ value }: { value: StarlightValues }) {
   const order = buyOrder(value);
   return (
     <div className="receipt">
-      <ol>
-        {order.map((n, i) => {
-          const g = GRACES[n - 1], level = value.levels[n - 1];
-          return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{"+".repeat(LEVELS.indexOf(level) - 1)}</i>}</li>;
-        })}
-      </ol>
+      {order.length ? (
+        <ol>
+          {order.map((n, i) => {
+            const g = GRACES[n - 1], level = value.levels[n - 1];
+            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{"+".repeat(LEVELS.indexOf(level) - 1)}</i>}</li>;
+          })}
+        </ol>
+      ) : <span className="muted">{t("starlight.none")}</span>}
       <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>
     </div>
   );

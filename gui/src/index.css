@@ -293,7 +293,7 @@ legend, details.panel > summary {
 }
 legend { float: left; width: 100%; padding: 10px 0 8px; margin: 0 0 2px; border-bottom: 1px solid var(--line); }
 legend + * { clear: left; }
-legend::before { content: ""; width: 5px; height: 14px; background: var(--accent-line); transform: skewX(-18deg); flex: none; }
+legend::before { content: ""; width: 5px; height: 14px; background: var(--line-2); transform: skewX(-18deg); flex: none; } /* bronze: amber is for what is in use */
 
 details.panel { padding: 0 14px; display: flex; flex-direction: column; }
 details.panel[open] { padding-bottom: 14px; }
@@ -327,6 +327,7 @@ ol.reorder li {
 }
 ol.reorder li:hover { border-color: var(--line-2); }
 ol.reorder li.selected { border-color: var(--accent-line); background: var(--sel); outline: 1px solid var(--accent-line); }
+ol.reorder li.selected.bad { border-color: var(--bad); outline-color: var(--bad); } /* picked and wrong: the error shows */
 ol.reorder li.dragging { opacity: 0.4; }
 ol.reorder .grip { color: var(--muted); font-size: 11px; }
 ol.reorder .item { flex: 1; min-width: 0; }
@@ -453,7 +454,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 }
 .grace-side button { border-color: var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink); font-weight: 700; padding: 3px 14px; }
 .grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
-.grace-side .muted { color: var(--season-hint); font-size: 12.5px; margin-left: 8px; }
+.grace-side .muted { color: var(--season-ink-2); font-size: 12.5px; margin-left: 8px; } /* a label for the + / ++ beside it, not a link */
 .grace-side .total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; color: var(--season-ink-2); }
 .grace-side .total b { font: 700 26px/1 var(--font-display); color: var(--season-ink); }
 .grace-side .check { color: var(--season-ink); font-size: 12.5px; }
@@ -600,3 +601,19 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
 .lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 128px; text-align: center; padding: 4px; }
 .lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; margin-bottom: 4px; background: linear-gradient(160deg, #3a2f24, #120e0b); }
 .lanes.images .pk .nm { font-weight: 600; flex-basis: 100%; }
+
+/* A narrow window (the minimum is 800 px wide): the tabs and the team page fit without a sideways scroll. */
+@media (max-width: 1000px) {
+  nav { padding: 6px 10px 0; }
+  nav button { padding: 7px 9px 8px; }
+  nav button:nth-child(4), nav button:nth-child(7), nav button:nth-child(9) { margin-left: 8px; }
+  main { padding: 14px 14px 24px; }
+  .split { gap: 14px; }
+  .split aside { width: 190px; }
+  .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .sinner .num { font-size: 28px; left: 7px; }
+  .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }
+  .sinner .name { font-size: 13px; }
+  .graces { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .groups { grid-template-columns: 1fr; }
+}

@@ -178,6 +178,16 @@ describe("a team on a starlight plan", () => {
     expect(document.querySelector(".starlight")!.closest("details")).not.toHaveAttribute("open");
   });
 
+  test("a plan that buys no grace says so on the receipt, not an empty line", () => {
+    const s = onPlan();
+    s.starlight_plans[0].levels = GRACES.map(() => "none");
+    renderEditor(<TeamsTab />, s);
+    const receipt = document.querySelector(".receipt")!;
+    expect(receipt.querySelector("ol")).toBeNull();
+    expect(receipt).toHaveTextContent(zh["starlight.none"]);
+    expect(receipt).toHaveTextContent("★ 0");
+  });
+
   test("a team's own starlight shows the cards to edit, no receipt", () => {
     renderEditor(<TeamsTab />, settings());
     expect(document.querySelector(".receipt")).toBeNull();
