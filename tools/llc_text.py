@@ -5,8 +5,10 @@ Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusC
 (cached under `.local/llc/`) and rewrites the `zh` of assets/resource/base/data/gift_search.json and gift_recipes.json
 (from `LLC_zh-CN/EGOgift_*.json`, by gift id) and gui/src/graces.json (names: `MirrorDungeonUI_5.json`
 `mirror_dungeon_5_buffs_title_<id>`; effects: the `DungeonStartBuffs_MD7.json` templates filled with the effect values of
-`.local/unpack/` static data mirrordungeon-start-buffs-08). Simplified to Traditional with OpenCC s2twp. Fails on a gift
-or grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
+`.local/unpack/` static data mirrordungeon-start-buffs-08). It writes gui/src/gift_effects.json too: the effect text of each
+gift of gift_search.json, English from the client's `EN_EGOgift_*.json` and Chinese from `LLC_zh-CN/EGOgift_*.json` (`desc`),
+a keyword tag named by the `Bufs*.json` and `BattleKeywords*.json` of each. Simplified to Traditional with OpenCC s2twp. Fails
+on a gift or grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
 """
 
 import argparse
@@ -23,6 +25,7 @@ from local_dir import local_dir
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 GRACES = REPO / "gui/src/graces.json"
+EFFECTS = REPO / "gui/src/gift_effects.json"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
@@ -43,6 +46,14 @@ NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgi
 NOTE_GRACES = ("Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and "
                "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". English "
                "names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
+
+
+def note_effects(client):
+    return ("The effect text of each gift of gift_search.json, as the settings GUI shows it. English: the game client "
+            f"{client}'s EN_EGOgift_*.json desc; Chinese: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json desc "
+            "(Simplified Chinese), by gift id. A [tag] that names a keyword (Bufs*.json, BattleKeywords*.json of each) is replaced "
+            "by its name, other bracketed notes stay, markup is dropped. The Chinese converted with OpenCC s2twp, then "
+            + FIXES_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.")
 
 
 def current_release():
@@ -76,6 +87,51 @@ def gift_names(z):
     return names
 
 
+def keyword_names(z):
+    """keyword id -> LLC's (Simplified) name, from Bufs*.json and BattleKeywords*.json; the first file (sorted) that names it."""
+    names = {}
+    for f in files(z, "Bufs") + files(z, "BattleKeywords"):
+        for x in read(z, f):
+            if x.get("name"):
+                names.setdefault(x["id"], x["name"])
+    return names
+
+
+def effect_text(text, names):
+    """A gift's effect text as the GUI shows it: markup (`<noparse>`, colours) dropped, a `[tag]` that names a keyword replaced
+    by the keyword's name (`[Combustion]` -> Burn); a bracketed note that names none (`[Cannot Stack]`) stays as it is."""
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\[([^\]]+)\]", lambda m: names.get(m[1], m[0]), text).strip()
+
+
+def _en_list(unpack, prefix):
+    """id -> record of the client's English localization files `<prefix>*.json`; the first file (sorted) that lists the id."""
+    out = {}
+    for f in sorted((unpack / "raw/Localize/en").glob(prefix + "*.json")):
+        for x in json.loads(f.read_text(encoding="utf-8-sig")).get("dataList", []):
+            out.setdefault(x["id"], x)
+    return out
+
+
+def gift_effects(z, unpack, ids):
+    """str(gift id) -> {"en", "zh"}: the effect text of each gift, in the order of `ids`."""
+    en = _en_list(unpack, "EN_EGOgift_")
+    en_names = {k: x["name"] for p in ("EN_Bufs", "EN_BattleKeywords") for k, x in _en_list(unpack, p).items() if x.get("name")}
+    zh = {}
+    for f in files(z, "EGOgift_"):
+        for x in read(z, f):
+            zh.setdefault(x["id"], x)
+    zh_names = keyword_names(z)
+    return {str(i): {"en": effect_text(en[i]["desc"], en_names), "zh": to_traditional(effect_text(zh[i]["desc"], zh_names))} for i in ids}
+
+
+def dump_effects(data):
+    """gift_effects.json's layout: one line per header key and per gift."""
+    head = [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data.items() if k != "effects"]
+    rows = ",\n".join(f"    {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data["effects"].items())
+    return "{\n" + ",\n".join(head) + ',\n  "effects": {\n' + rows + "\n  }\n}\n"
+
+
 def needed(value, template):
     if value is None:
         raise ValueError(f"template needs a value the effect lacks: {template}")
@@ -92,11 +148,7 @@ def effect_line(template, values, keyword_names):
 def grace_texts(z, static):
     """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in the game's own wording."""
     templates = {x["id"]: x["description"] for x in read(z, "DungeonStartBuffs_MD7.json")}
-    keywords = {}
-    for f in files(z, "Bufs") + files(z, "BattleKeywords"):
-        for x in read(z, f):
-            if x.get("name"):
-                keywords.setdefault(x["id"], x["name"])
+    keywords = keyword_names(z)
     titles = {x["id"]: x["content"] for x in read(z, "MirrorDungeonUI_5.json")}
     out, names = {}, {}
     for b in static["list"][0]["buffs"]:
@@ -155,7 +207,13 @@ def main():
     for g in graces["graces"]:
         g["zh"], g["effects"] = titles[base_ids[g["en"]]], effects[base_ids[g["en"]]]
     GRACES.write_text(json.dumps(retitled(graces, args.release, NOTE_GRACES), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"release {args.release}: {len(names)} gift names, {len(titles)} graces")
+    from game_data import unpack_client
+    unpack = local_dir("unpack")
+    ids = [g["id"] for g in json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]]
+    effects = gift_effects(z, unpack, ids)
+    EFFECTS.write_text(dump_effects({"note": note_effects(unpack_client(unpack)), **credit(args.release), "effects": effects}),
+                       encoding="utf-8")
+    print(f"release {args.release}: {len(names)} gift names, {len(titles)} graces, {len(effects)} gift effects")
 
 
 if __name__ == "__main__":

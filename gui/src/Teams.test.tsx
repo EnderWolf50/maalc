@@ -1,12 +1,13 @@
 // Component tests of the teams tab's gift list choice (#296, covering #305 as well): the list dropdown, the main keyword the
 // list decides, and the button that sends the user to the gift list tab with that list chosen.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
+import { iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
+import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
@@ -295,6 +296,63 @@ describe("the E.G.O Gift Search keyword tabs", () => {
     await r.user.keyboard("{ArrowRight}"); // round at the end, as the main tabs
     expect(tabs()[0]).toHaveAttribute("aria-selected", "true");
     expect(tabs()[0]).toHaveFocus();
+  });
+});
+
+describe("the E.G.O Gift Search gifts: icon first, details on hover (#721)", () => {
+  // Dust to Dust (9053), Burn III: its names, and the start of its effect in each language (gift_effects.json)
+  const DUST = { id: 9053, zh: "土歸土", en: "Dust to Dust", zhEffect: "波次的首個回合開始時，使全體敵方單位", enEffect: "First Turn Start of a wave: inflict 5 Burn Potency" };
+  const burnFirst = (language: Settings["language"] = "zh_tw"): Settings => ({ ...settings("mine", language), gift_lists: [list("mine", "Burn")] });
+  const tile = (name: string) => within(document.querySelector(".gift-search")!).getByRole("button", { name: new RegExp(name) });
+  const card = () => screen.queryByRole("dialog", { name: /./ });
+
+  test("a gift shows its icon first and its name under it; its English name and effect are in the gift list's hover card", async () => {
+    const r = renderEditor(<TeamsTab />, burnFirst());
+    const t = tile(DUST.zh);
+    expect(t.firstElementChild).toHaveAttribute("src", iconUrl(DUST.id));
+    expect([...t.children].filter((x) => !x.matches(".sr-only")).map((x) => x.textContent).join("")).toBe(DUST.zh); // nothing else shows
+    expect(card()).toBeNull();
+    await r.user.hover(t);
+    expect(card()).toHaveAccessibleName(DUST.zh);
+    expect(card()).toHaveClass("gl-tip");
+    expect(within(card()!).getByText(DUST.en)).toBeInTheDocument();
+    expect(card()).toHaveTextContent(DUST.zhEffect);
+    await r.user.unhover(t);
+    await waitFor(() => expect(card()).toBeNull());
+  });
+
+  test("in English the card names the gift once and gives the English effect", async () => {
+    const r = renderEditor(<TeamsTab />, burnFirst("en_us"));
+    await r.user.hover(tile(DUST.en));
+    expect(card()).toHaveAccessibleName(DUST.en);
+    expect(within(card()!).getAllByText(DUST.en)).toHaveLength(1);
+    expect(card()).toHaveTextContent(DUST.enEffect);
+  });
+
+  test("with 3 picked, a gift that cannot be added still opens its card, which says why; a screen reader hears it too", async () => {
+    const s = burnFirst();
+    s.teams[0].gift_search.gifts = SEARCH_GIFTS.filter((g) => g.keyword === "Burn").slice(1, 4).map((g) => ({ keyword: g.keyword, tier: g.tier, name: g.en }));
+    const r = renderEditor(<TeamsTab />, s);
+    const t = tile(DUST.zh);
+    expect(t).toBeDisabled();
+    expect(t).toHaveAccessibleDescription(zh["gift.full"]);
+    expect(t).not.toHaveAttribute("title"); // the native tooltip would sit over the card
+    await r.user.hover(t);
+    expect(card()).toHaveAccessibleName(DUST.zh);
+    expect(card()).toHaveTextContent(DUST.zhEffect);
+    expect(card()).toHaveTextContent(zh["gift.full"]);
+  });
+
+  test("keyboard and screen reader stay as they were: both names are the button's name, focus shows the card, a click picks it with its number", async () => {
+    const r = renderEditor(<TeamsTab />, burnFirst());
+    const t = tile(DUST.zh);
+    expect(t).toHaveAccessibleName(new RegExp(`${DUST.zh}.*${DUST.en}`));
+    act(() => t.focus());
+    expect(card()).toHaveAccessibleName(DUST.zh);
+    await r.user.click(t);
+    expect(r.settings().teams[0].gift_search.gifts).toEqual([{ keyword: "Burn", tier: 3, name: DUST.en }]);
+    expect(t).toHaveAttribute("aria-pressed", "true");
+    expect(t.querySelector(".rank")).toHaveTextContent("1");
   });
 });
 

@@ -127,9 +127,15 @@ describe("hover popover: where it goes", () => {
   test("no room below: above the tile, its bottom 2 px over the tile's top", () => {
     expect(place(box(100, 700), size, view)).toEqual({ left: 114, top: 700 - 2 - 200 });
   });
-  test("what fits nowhere is pushed into the window, the top-left kept visible", () => {
+  test("a tile partly out of the window: the popover is pushed into it", () => {
     expect(place(box(-50, 300), size, view)).toEqual({ left: 6, top: 366 });
-    expect(place(box(100, 300), { w: 300, h: 900 }, view)).toEqual({ left: 114, top: 6 });
+  });
+  test("no room below or above (a tall popover, a short window): beside the tile, 2 px off its right edge, never over it (#721)", () => {
+    expect(place(box(100, 300), { w: 300, h: 600 }, view)).toEqual({ left: 164 + 2, top: 800 - 6 - 600 });
+    expect(place(box(100, 300), { w: 300, h: 900 }, view)).toEqual({ left: 164 + 2, top: 6 });
+  });
+  test("beside the tile with no room to its right: 2 px off its left edge", () => {
+    expect(place(box(800, 300), { w: 300, h: 600 }, view)).toEqual({ left: 800 - 2 - 300, top: 194 });
   });
 });
 

@@ -1,6 +1,7 @@
 /* The gift list tab (GiftLists.tsx, KeywordGrid.tsx), after the mockup of #291. Its colours are the editor's (index.css), light
- * and dark alike: amber is wanted, teal is kept, faded is dropped. */
-.gl {
+ * and dark alike: amber is wanted, teal is kept, faded is dropped. The gift card (.gl-tip) takes them too: the team page's Gift
+ * Search shows it outside the tab (#721). */
+.gl, .gl-tip {
   --gl-sel: var(--sel); --gl-hov: var(--hov); --gl-drop: var(--muted);
   --gl-want: var(--accent-line); --gl-wantink: var(--accent-ink); --gl-wantbg: var(--accent-soft); --gl-stripe: var(--stripe);
   --gl-keep: var(--keep); --gl-keepbg: var(--keep-soft);
@@ -118,6 +119,8 @@
 .gl-tip-head img { width: 44px; height: 44px; object-fit: contain; }
 .gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }
 .gl-tip-head b { font-size: 14.5px; }
+.gl-tip-effect { margin: 0; padding-top: 8px; white-space: pre-line; line-height: 1.55; } /* the game's effect text; a blank line between its parts */
+.gl-tip-note { margin: 8px 0 0; padding-top: 7px; border-top: 1px solid var(--gl-line); color: var(--gl-muted); }
 .gl-tip-head small, .gl-tip-why { color: var(--gl-muted); }
 .gl-tip-set { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 2px; }
 .gl-tip .k { color: var(--gl-muted); font-weight: 600; width: 36px; flex: none; }

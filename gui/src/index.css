@@ -287,11 +287,6 @@ aside > p.muted { font-size: 12.5px; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field > span { font-size: 12.5px; font-weight: 600; color: var(--fg-2); }
 .field > span:empty { display: none; }
-/* A field whose control is a checkbox: the box before its label, as every other checkbox; the note under both. */
-.field:has(> input[type="checkbox"]) { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; }
-.field:has(> input[type="checkbox"]) > span { grid-row: 1; grid-column: 2; }
-.field:has(> input[type="checkbox"]) > input { grid-row: 1; grid-column: 1; }
-.field:has(> input[type="checkbox"]) > small { grid-column: 1 / -1; }
 .field small { color: var(--muted); font-size: 12px; line-height: 1.45; }
 .check { display: flex; align-items: flex-start; gap: 8px; }
 .check > input[type="checkbox"] { margin-top: 3px; }
@@ -543,8 +538,9 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-first { width: 8.5em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
 
-/* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, text cards; a picked
- * one takes the amber of what is in use, with its place in the order. The shell's colours, as the gift list tab has them. */
+/* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, a gift's icon with its
+ * name under it (#721; its card, GiftPopover's, holds both names and the effect); a picked one takes the amber of what is in use,
+ * with its place in the order in the corner. The shell's colours, as the gift list tab has them. */
 .gift-search {
   display: flex; flex-direction: column; gap: 10px; padding: 12px; background: var(--bg); color: var(--fg);
   border: 1px solid var(--line); border-radius: 10px 0 10px 0; corner-shape: bevel;
@@ -555,19 +551,19 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .gift-tabs button.selected { background: var(--sel); border-color: var(--accent-line); color: var(--fg); font-weight: 700; }
 .gift-tabs b { padding: 0 5px; background: var(--accent); color: var(--on-accent); font: 700 13px/16px var(--font-display); border-radius: 2px; }
 .gift-tier h3 { margin: 0 0 6px; padding: 2px 10px; background: var(--raise); color: var(--accent-ink); font: 700 15px/1.4 var(--font-display); letter-spacing: 3px; }
-.gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
 .gift {
-  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 48px; padding: 5px 8px 5px 10px;
-  text-align: left; background: var(--panel); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel;
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 5px 7px;
+  text-align: center; background: var(--panel); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel;
   color: var(--fg); overflow-wrap: anywhere;
 }
 .gift:hover:not(:disabled) { border-color: var(--accent-line); background: var(--hov); }
-.gift .name { font-weight: 600; font-size: 13px; line-height: 1.25; }
-.gift small { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
-.gift.picked { background: var(--sel); border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); padding-left: 30px; }
+.gift img { width: 52px; height: 52px; object-fit: contain; pointer-events: none; } /* the gift list tab's tile icon size */
+.gift .name { font-weight: 600; font-size: 13px; line-height: 1.3; }
+.gift.picked { background: var(--sel); border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
 .gift .rank {
-  position: absolute; top: 0; left: 0; bottom: 0; width: 22px; display: flex; align-items: center; justify-content: center;
-  background: var(--gold); color: #1a1406; font: 700 16px/1 var(--font-display);
+  position: absolute; top: 0; left: 0; min-width: 22px; height: 22px; padding: 0 5px; display: flex; align-items: center; justify-content: center;
+  background: var(--gold); color: #1a1406; font: 700 16px/1 var(--font-display); border-radius: 0 0 4px 0;
 }
 
 /* Theme pack plan, design A of #240: lanes of weights, the refresh threshold between them as a double rule. */

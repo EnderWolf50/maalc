@@ -1,6 +1,6 @@
 # 第三方聲明
 
-本專案的程式碼採 [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)（`LICENSE`）。取自都市零漢化組的中文名稱與效果文字（`gift_search.json`、`gift_recipes.json`、`gui/src/graces.json`）採 CC BY-NC-SA 4.0，見下方「都市零漢化組」。以下第三方內容各依其授權。
+本專案的程式碼採 [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)（`LICENSE`）。取自都市零漢化組的中文名稱與效果文字（`gift_search.json`、`gift_recipes.json`、`gui/src/graces.json`、`gui/src/gift_effects.json`）採 CC BY-NC-SA 4.0，見下方「都市零漢化組」。以下第三方內容各依其授權。
 
 ## MaaPracticeBoilerplate
 
@@ -46,7 +46,7 @@ SOFTWARE.
 
 ## 觀測飾品與合成飾品的資料
 
-`assets/resource/base/data/gift_recipes.json` 與 `assets/resource/base/data/gift_search.json` 的飾品清單、id、等級、體系與英文名稱、配方、主題包專屬標記（`isSpecific`、`specificEgoGiftPool`）取自遊戲客戶端 1.118.1 的靜態資料與英文在地化（© Project Moon），只摘錄這些欄位；`assets/resource/base/image/GiftRecipe/` 的 140 個圖示（含 `extra_gifts` 的 66 個）取自同一版資源包的 `Sprite/EgoGiftIcon`，縮 0.21 倍、透明處填綠色，同屬 © Project Moon。`assets/resource/base/data/gift_icons/` 的 466 個圖示（56 px WebP，保留透明）取自同一版資源包的 `Sprite/EgoGiftIcon`，同屬 © Project Moon。`assets/resource/base/data/keyword_icons/` 的 10 個體系圖示（64 px WebP，保留透明）取自遊戲客戶端的體系圖示，同屬 © Project Moon。
+`assets/resource/base/data/gift_recipes.json` 與 `assets/resource/base/data/gift_search.json` 的飾品清單、id、等級、體系與英文名稱、配方、主題包專屬標記（`isSpecific`、`specificEgoGiftPool`）取自遊戲客戶端 1.118.1 的靜態資料與英文在地化（© Project Moon），只摘錄這些欄位；`assets/resource/base/image/GiftRecipe/` 的 140 個圖示（含 `extra_gifts` 的 66 個）取自同一版資源包的 `Sprite/EgoGiftIcon`，縮 0.21 倍、透明處填綠色，同屬 © Project Moon。`assets/resource/base/data/gift_icons/` 的 466 個圖示（112 px WebP，保留透明）取自同一版資源包的 `Sprite/EgoGiftIcon`，同屬 © Project Moon。`assets/resource/base/data/keyword_icons/` 的 10 個體系圖示（64 px WebP，保留透明）取自遊戲客戶端的體系圖示，同屬 © Project Moon。`gui/src/gift_effects.json` 的觀測飾品英文效果文字取自同一版（1.118.1）客戶端英文在地化 `EN_EGOgift_*.json` 的 `desc`，狀態標籤換成 `EN_Bufs*.json`、`EN_BattleKeywords*.json` 的狀態名稱，同屬 © Project Moon。
 
 ## 都市零漢化組（LLC）的中文名稱與效果文字
 
@@ -54,8 +54,9 @@ SOFTWARE.
 
 - `assets/resource/base/data/gift_search.json` 與 `assets/resource/base/data/gift_recipes.json` 的飾品中文名稱：`LLC_zh-CN/EGOgift_*.json` 的 `name`，依飾品 id 對應。
 - `gui/src/graces.json` 的星之恩惠名稱：`LLC_zh-CN/MirrorDungeonUI_5.json` 的 `mirror_dungeon_5_buffs_title_<id>`。效果文字：`LLC_zh-CN/DungeonStartBuffs_MD7.json` 的句型，填入遊戲客戶端 1.118.1 靜態資料（`mirrordungeon-start-buffs-08`）的效果數值與 `LLC_zh-CN/Bufs*.json`、`BattleKeywords*.json` 的狀態名稱。英文名稱取自遊戲畫面。
+- `gui/src/gift_effects.json` 的觀測飾品中文效果文字：`LLC_zh-CN/EGOgift_*.json` 的 `desc`，依飾品 id 對應，狀態標籤換成 `LLC_zh-CN/Bufs*.json`、`BattleKeywords*.json` 的狀態名稱。
 
-修改：以 OpenCC `s2twp` 由簡體轉成繁體，再改五個用詞（「指標」改回「指針」、「重新整理」改回「刷新」、「映象」改為「鏡像」、「透過階層」改為「通過階層」、「松肉」改為「鬆肉」）；星之恩惠的效果文字去掉顏色標籤並填入數值。轉換由 `tools/llc_text.py` 完成，所用 release 記在各資料檔的 `zh_release`。這三個資料檔的中文名稱與效果文字同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱與數值仍是 © Project Moon。
+修改：以 OpenCC `s2twp` 由簡體轉成繁體，再改五個用詞（「指標」改回「指針」、「重新整理」改回「刷新」、「映象」改為「鏡像」、「透過階層」改為「通過階層」、「松肉」改為「鬆肉」）；星之恩惠的效果文字去掉顏色標籤並填入數值；飾品的效果文字去掉標記、狀態標籤換成狀態名稱。轉換由 `tools/llc_text.py` 完成，所用 release 記在各資料檔的 `zh_release`。這四個資料檔的中文名稱與效果文字同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱、英文效果文字與數值仍是 © Project Moon。
 
 ## 發佈 zip 內附的第三方程式
 
