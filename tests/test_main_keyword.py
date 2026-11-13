@@ -2,6 +2,7 @@
 
 Each test plays a team whose list order starts with Bleed (run_team makes its team) and fails when the path reads Burn."""
 import actions
+import shop_actions
 import test_actions
 from test_actions import Choices, FUSING, fuse_page, gift_page, listed, live_shop, reads, shop_team, with_ids, wants
 from agent_patch import patch_all
@@ -18,21 +19,21 @@ def bleed_team(**extra):
 
 def test_the_keyword_refresh_picks_the_lists_first_keyword(context, clock):
     def reads_now(taps):
-        cost = "410" if actions.KEYWORD_REFRESH in taps else "500"
-        return {tuple(actions.SHOP_COST): [(cost, (560, 120, 60, 30))],
-                tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
-                tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
-                tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]}  # the dialog lists no Burn here
+        cost = "410" if shop_actions.KEYWORD_REFRESH in taps else "500"
+        return {tuple(shop_actions.SHOP_COST): [(cost, (560, 120, 60, 30))],
+                tuple(shop_actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                tuple(shop_actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
+                tuple(shop_actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]}  # the dialog lists no Burn here
     taps = live_shop(context, reads_now)
     visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
-    assert actions.Shop.buy(context, bleed_team(shop_refresh_keyword=1), visit)
-    assert taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
+    assert shop_actions.Shop.buy(context, bleed_team(shop_refresh_keyword=1), visit)
+    assert taps == [shop_actions.REFRESH["keyword"][0], (330, 360), shop_actions.KEYWORD_REFRESH]
 
 
 def test_the_fusion_page_picks_the_lists_first_keyword(context, monkeypatch):
-    reads(context, FUSING | {tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
+    reads(context, FUSING | {tuple(shop_actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
     fuse_page(context, monkeypatch, *with_ids([("Pierce",), ("Slash",), ("Blunt",)]))
-    assert actions.Shop.fuse(context, shop_team(bleed_team()), {})  # no Burn label: a Burn team finds no keyword dialog
+    assert shop_actions.Shop.fuse(context, shop_team(bleed_team()), {})  # no Burn label: a Burn team finds no keyword dialog
 
 
 def test_an_event_takes_the_option_that_gains_a_gift_of_the_lists_first_keyword(context, monkeypatch):

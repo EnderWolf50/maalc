@@ -5,12 +5,13 @@ import numpy as np
 import pytest
 
 import actions
+import shop_actions
 import test_actions
 from test_shop import screen_with
 from agent_patch import patch_all
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures
-CHANCE = {tuple(actions.FORECAST_CHANCE): [("90%", (430, 456, 40, 24))]}
+CHANCE = {tuple(shop_actions.FORECAST_CHANCE): [("90%", (430, 456, 40, 24))]}
 THREE_THREE_TWO = [("Bleed", 3), ("Tremor", 3), ("Pierce", 2)]  # 26 points: a IV by the points
 
 
@@ -20,24 +21,24 @@ def fuse(context, monkeypatch, team, readings, page, chance=True, slots=3, stuck
     Returns (fused, how often each cell was tapped, whether Fuse was pressed, the log lines)."""
     lines = []
     patch_all(monkeypatch, "log", lines.append)
-    reads_ = {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts 3/{slots}", (330, 175, 320, 30))],
+    reads_ = {**test_actions.FUSE_PAGE, tuple(shop_actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts 3/{slots}", (330, 175, 320, 30))],
               **({tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]} if get else {}), **(CHANCE if chance else {})}
     test_actions.reads(context, reads_)
     test_actions.fuse_page(context, monkeypatch, *test_actions.with_ids(readings), slots=slots)
 
     def since():  # the taps since a fusion last emptied the slots
-        return test_actions.after_last(test_actions.taps(context), actions.FUSE_DIALOG_CONFIRM)
+        return test_actions.after_last(test_actions.taps(context), shop_actions.FUSE_DIALOG_CONFIRM)
 
     def inside():
-        n = [since().count(c) for c in actions.FUSE_CELLS]
+        n = [since().count(c) for c in shop_actions.FUSE_CELLS]
         return {i for i, k in enumerate(n) if (k and stuck) or k % 2}
     monkeypatch.setattr(actions.shop, "placed", lambda image, n: len(inside()))
-    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: actions.FUSE_CELLS.index((x, y)) in (
-        {i for i, c in enumerate(actions.FUSE_CELLS) if since().count(c)} if framed else inside()))
+    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: shop_actions.FUSE_CELLS.index((x, y)) in (
+        {i for i, c in enumerate(shop_actions.FUSE_CELLS) if since().count(c)} if framed else inside()))
     monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: page.get(tuple(sorted(inside()))))
-    fused = actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
+    fused = shop_actions.Shop.fuse(context, test_actions.shop_team(team), {} if visit is None else visit)
     tapped = test_actions.taps(context)
-    return fused, [tapped.count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in tapped, lines
+    return fused, [tapped.count(c) for c in shop_actions.FUSE_CELLS[:len(readings)]], shop_actions.PAGE_OK in tapped, lines
 
 
 
@@ -81,8 +82,8 @@ def test_the_page_turns_down_at_most_fuse_tries_groups_then_closes(context, monk
     page = SimpleNamespace(get=lambda key: 3)
     fused, taps, ok, lines = fuse(context, monkeypatch, {"fusion_condition": "tier4"}, cells, page, get=False)
     assert not fused and not ok
-    assert len(forecast_line(lines)) == actions.FUSE_TRIES
-    assert actions.PAGE_CLOSE in [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert len(forecast_line(lines)) == shop_actions.FUSE_TRIES
+    assert shop_actions.PAGE_CLOSE in [c.args for c in context.tasker.controller.post_click.call_args_list]
 
 
 def test_an_unread_forecast_falls_back_to_the_points_tier_and_says_so(context, monkeypatch):
@@ -106,7 +107,7 @@ def test_materials_that_will_not_come_out_close_the_page(context, monkeypatch):
     assert not fused and not ok
     assert taps == [3, 1, 1, 0, 0]  # the first tap out did not show, nor the one more (#611): the rest stay, the next group is not tried
     assert any("not taken out" in m for m in lines)
-    assert actions.PAGE_CLOSE in [c.args for c in context.tasker.controller.post_click.call_args_list]
+    assert shop_actions.PAGE_CLOSE in [c.args for c in context.tasker.controller.post_click.call_args_list]
     assert visit["fuse_scanned"]
 
 
@@ -129,17 +130,17 @@ def test_the_forecast_is_read_off_a_live_capture(context, monkeypatch):
     image = screen_with("forecast_super_iv")
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
     test_actions.reads(context, CHANCE)
-    assert actions.read_forecast(context) == (4, 90)
+    assert shop_actions.read_forecast(context) == (4, 90)
 
 
 def test_the_forecast_waits_for_its_row_but_not_for_long(context, clock):
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = iter(
         [np.zeros((720, 1280, 3), np.uint8)] + [screen_with("forecast_super_iv")] * 3)
     test_actions.reads(context, CHANCE)
-    assert actions.read_forecast(context) == (4, 90)
+    assert shop_actions.read_forecast(context) == (4, 90)
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = None
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
-    assert actions.read_forecast(context) == (None, None)
+    assert shop_actions.read_forecast(context) == (None, None)
     assert 1.0 <= sum(clock) < 2.0
 
 
@@ -147,9 +148,9 @@ CASK_SPIRITS = 9180  # Poise, tier IV
 
 
 def real_read_cells(monkeypatch, tiers, ids):
-    """actions.read_cells itself over the first cells of any grid, whose numerals read `tiers` and whose icons cell_id names
+    """shop_actions.read_cells itself over the first cells of any grid, whose numerals read `tiers` and whose icons cell_id names
     `ids`: only the pixel reading is replaced."""
-    spots = actions.FUSE_CELLS[:len(tiers)]
+    spots = shop_actions.FUSE_CELLS[:len(tiers)]
     named = iter(ids)
     monkeypatch.setattr(actions.shop, "filled", lambda image, x, y: (x, y) in spots)
     monkeypatch.setattr(actions.shop, "cell_crop", lambda image, x, y, scale: (x, y))
@@ -162,7 +163,7 @@ def real_read_cells(monkeypatch, tiers, ids):
 def test_a_cell_named_by_a_gift_of_another_tier_takes_that_gifts_tier(context, monkeypatch):
     # #330: the numeral read II, the icon is Cask Spirits (IV): the cell is a IV, not what the numeral said.
     real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
-    cells = actions.read_cells(context, np.zeros((720, 1280, 3), np.uint8), actions.FUSE_CELLS[:3], "fuse")
+    cells = shop_actions.read_cells(context, np.zeros((720, 1280, 3), np.uint8), shop_actions.FUSE_CELLS[:3], "fuse")
     assert [(c["id"], c["tier"]) for c in cells] == [(CASK_SPIRITS, 4), (9071, 3), (9053, 3)]
 
 
@@ -172,11 +173,11 @@ def test_a_misread_tier_does_not_make_a_fusion_the_condition_refuses(context, mo
     real_read_cells(monkeypatch, [2, 3, 3], [CASK_SPIRITS, 9071, 9053])
     lines = []
     patch_all(monkeypatch, "log", lines.append)
-    test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+    test_actions.reads(context, {**test_actions.FUSE_PAGE, tuple(shop_actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
                                  tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))], **CHANCE})
     test_actions.fuse_slots(context, monkeypatch)
     monkeypatch.setattr(actions.shop, "forecast_tier", lambda image: 4)
-    fused = actions.Shop.fuse(context, test_actions.shop_team({"fusion_condition": "upgrade"}), {})
+    fused = shop_actions.Shop.fuse(context, test_actions.shop_team({"fusion_condition": "upgrade"}), {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert not fused and not set(taps[4:]) & set(actions.FUSE_CELLS)
-    assert actions.PAGE_OK not in taps
+    assert not fused and not set(taps[4:]) & set(shop_actions.FUSE_CELLS)
+    assert shop_actions.PAGE_OK not in taps

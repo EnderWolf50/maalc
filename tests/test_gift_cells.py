@@ -110,65 +110,68 @@ def fake_context(scores, seen=None):
 
 
 def test_a_cell_takes_only_an_icon_of_its_own_keyword_and_tier():
-    import actions  # noqa: PLC0415  # the pytest process's own import
+    import shop_actions  # noqa: PLC0415  # the pytest process's own import
     grid = np.zeros((200, 200, 3), np.uint8)
     icons = {"GiftSearch/9001.png": 0.9, "GiftSearch/9156.png": 0.4}  # Hellterfly's Dream, Decamillennial Heart: Burn II
-    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Burn", 2) == (9001, 0.9)
+    assert shop_actions.cell_id(fake_context(icons), grid, (100, 100), "Burn", 2) == (9001, 0.9)
     # the same icon on a Pierce II cell is a lookalike, not a Burn gift: the cell is unknown
-    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Pierce", 2)[0] is None
-    assert actions.cell_id(fake_context({"GiftSearch/9001.png": 0.9}), grid, (100, 100), "Burn", None) == (None, 0.0)
+    assert shop_actions.cell_id(fake_context(icons), grid, (100, 100), "Pierce", 2)[0] is None
+    assert shop_actions.cell_id(fake_context({"GiftSearch/9001.png": 0.9}), grid, (100, 100), "Burn", None) == (None, 0.0)
 
 
 def test_a_misread_tier_is_made_up_by_matching_the_whole_keyword():
-    import actions  # noqa: PLC0415
+    import shop_actions  # noqa: PLC0415
     grid = np.zeros((200, 200, 3), np.uint8)
     # Smokes and Wires is Bleed III, read as II (sell page, the tier numeral cut short): no Bleed II icon is on the cell.
     icons = {"GiftSearch/9042.png": 0.9}
-    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", 2) == (9042, 0.9)
+    assert shop_actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", 2) == (9042, 0.9)
     # still nothing when the keyword's other tiers do not show it either, or when no tier was read at all
-    assert actions.cell_id(fake_context({}), grid, (100, 100), "Bleed", 2)[0] is None
-    assert actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", None) == (None, 0.0)
+    assert shop_actions.cell_id(fake_context({}), grid, (100, 100), "Bleed", 2)[0] is None
+    assert shop_actions.cell_id(fake_context(icons), grid, (100, 100), "Bleed", None) == (None, 0.0)
 
 
 def test_the_keyword_fallback_never_overrules_a_cell_its_tier_names():
     import actions  # noqa: PLC0415
+    import shop_actions
     grid = np.zeros((200, 200, 3), np.uint8)
     # Dark (I) and Faint (II) Vestige are one jar, only the fill differs: the cell read as I is Dark even where Faint's icon scores more.
     seen = []
-    assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.85}, seen), grid, (100, 100), "Keywordless", 1)[0] == 9991
+    assert shop_actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.85}, seen), grid, (100, 100), "Keywordless", 1)[0] == 9991
     tier_one = {e["template"] for e in g.candidates(actions.GIFTS, "Keywordless", 1)}
     assert "GiftSearch/9992.png" not in seen and set(seen) <= tier_one  # the fallback was not consulted
     # a tier-III cell without a badge is not matched against the jars of the other tiers: Keywordless is no badge read
-    assert actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.78}), grid, (100, 100), "Keywordless", 3)[0] is None
+    assert shop_actions.cell_id(fake_context({"GiftSearch/9991.png": 0.8, "GiftSearch/9992.png": 0.78}), grid, (100, 100), "Keywordless", 3)[0] is None
     # a read badge's other tiers all score: two as good as each other leave the cell unknown instead of picking one
-    assert actions.cell_id(fake_context({"GiftSearch/9042.png": 0.8, "GiftSearch/9048.png": 0.78}), grid, (100, 100), "Bleed", 2)[0] is None
+    assert shop_actions.cell_id(fake_context({"GiftSearch/9042.png": 0.8, "GiftSearch/9048.png": 0.78}), grid, (100, 100), "Bleed", 2)[0] is None
 
 
 def test_the_fallback_also_scores_the_candidates_an_early_stop_skipped():
     import actions  # noqa: PLC0415
+    import shop_actions
     a, b, c = (e["template"] for e in g.candidates(actions.GIFTS, "Burn", 2)[:3])
     # a 0.70 and b 0.76 stop the first pass 0.06 apart (unknown); c, never reached there, is the 0.90 gift
-    found = actions.cell_id(fake_context({a: 0.70, b: 0.76, c: 0.90}), np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2)
+    found = shop_actions.cell_id(fake_context({a: 0.70, b: 0.76, c: 0.90}), np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2)
     assert found == (int(c.split("/")[1].split(".")[0]), 0.90)
 
 
 def test_matching_stops_at_an_icon_that_cannot_be_a_lookalike():
     import actions  # noqa: PLC0415
+    import shop_actions
     seen = []
     context = fake_context({"GiftSearch/9001.png": 0.9}, seen)
-    assert actions.cell_id(context, np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2) == (9001, 0.9)
+    assert shop_actions.cell_id(context, np.zeros((200, 200, 3), np.uint8), (100, 100), "Burn", 2) == (9001, 0.9)
     burn_ii = [e["template"] for e in g.candidates(actions.GIFTS, "Burn", 2)]
     assert seen == burn_ii[:burn_ii.index("GiftSearch/9001.png") + 1] and len(seen) < len(burn_ii)
 
 
 def test_a_cell_log_line_names_the_gift_or_says_unknown():
-    import actions  # noqa: PLC0415
+    import shop_actions  # noqa: PLC0415
     cell = {"i": 2, "tier": 3, "keyword": "Bleed", "id": 9042, "score": 0.77}
-    assert actions.cell_line(cell, "keep") == "2 III Bleed 9042 Smokes and Wires (0.77): keep"
-    assert actions.cell_line({**cell, "id": None, "score": 0.38}, "keep") == "2 III Bleed unknown (best 0.38): keep"
+    assert shop_actions.cell_line(cell, "keep") == "2 III Bleed 9042 Smokes and Wires (0.77): keep"
+    assert shop_actions.cell_line({**cell, "id": None, "score": 0.38}, "keep") == "2 III Bleed unknown (best 0.38): keep"
     # #449: a sell page's EX gift (the green "EX" where the numerals go, no Unselectable tag there): its tier reads EX
     ex = {"i": 4, "tier": 5, "keyword": "Keywordless", "id": 9799, "score": 0.81, "ex": True}
-    assert actions.cell_line(ex, "keep, drop") == "4 EX Keywordless 9799 A Certain Philosophy (0.81): keep, drop"
+    assert shop_actions.cell_line(ex, "keep, drop") == "4 EX Keywordless 9799 A Certain Philosophy (0.81): keep, drop"
 
 
 # --- The ids on live captures, read by MaaFramework itself (the setup of test_shop_cells.py) -------------------------
@@ -202,6 +205,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+    import shop_actions
     import shop
 
     class Still(CustomController):
@@ -223,39 +227,39 @@ def child():
         def run(self, context, argv):
             try:
                 for case, (crop, cells, page) in CASES.items():
-                    found = actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(actions, cells), page)
+                    found = shop_actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(shop_actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
-                    out["ex"][case] = [actions.cell_line(c, "keep") for c in found if c["ex"]]
-                actions.ocr(context, screen_with("offers"), actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
-                first = actions.Shop.read_offers(context, screen_with("offers_super"))  # a Super Shop at rest, then scrolled (#341)
-                more = actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), first)
+                    out["ex"][case] = [shop_actions.cell_line(c, "keep") for c in found if c["ex"]]
+                actions.ocr(context, screen_with("offers"), shop_actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
+                first = shop_actions.Shop.read_offers(context, screen_with("offers_super"))  # a Super Shop at rest, then scrolled (#341)
+                more = shop_actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), first)
                 out["super"] = [[[s["name"], s["price"], s["plate"]["id"], s["cell"]["id"] if "cell" in s else None] for s in page]
                                 for page in (first, more)]
                 for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell
                     image = screen_with(case)
-                    cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
                     started = time.perf_counter()
-                    actions.ocr(context, image, actions.OFFER_GRID)  # one det+rec pass over the page, for the bound of the plate time
+                    actions.ocr(context, image, shop_actions.OFFER_GRID)  # one det+rec pass over the page, for the bound of the plate time
                     out["page_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
                     started = time.perf_counter()
-                    plates = actions.read_plates(context, image, cells)
+                    plates = shop_actions.read_plates(context, image, cells)
                     out["plate_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
                     out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
-                    cells = [(x, y) for x, y in actions.OFFER_CELLS if shop.filled(image, x, y)]
-                    short = [t for t, (_, _, _, h) in actions.ocr(context, image, actions.OFFER_GRID)
+                    cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    short = [t for t, (_, _, _, h) in actions.ocr(context, image, shop_actions.OFFER_GRID)
                              if h < 18 and not shop.has_letters(t) and sum(c.isdigit() for c in t) >= 3]
                     if short:  # read_slots keeps a price line under 18 px tall that has 3 digits (#341): what else is one
                         out["short_prices"][path.stem] = short
-                    named = [[i, p["id"]] for i, p in enumerate(actions.read_plates(context, image, cells)) if p["id"]]
+                    named = [[i, p["id"]] for i, p in enumerate(shop_actions.read_plates(context, image, cells)) if p["id"]]
                     if named:
                         out["plate_sweep"][path.stem] = named
                     for cells, page in ((FUSE, "fuse"), (SELL, "sell"), (OFFER, "offer")):
-                        cells, scale = getattr(actions, cells), actions.CELL_PAGES[page][0]
+                        cells, scale = getattr(shop_actions, cells), shop_actions.CELL_PAGES[page][0]
                         if not any(shop.filled(image, x, y) and shop.tier(shop.cell_crop(image, x, y, scale)) for x, y in cells):
                             continue
-                        found = actions.read_cells(context, image, cells, page)
+                        found = shop_actions.read_cells(context, image, cells, page)
                         if any(c["id"] for c in found):
                             out["sweep"][f"{path.stem} {page}"] = [[c["i"], c["id"]] for c in found if c["id"]]
             except Exception:  # MaaFramework swallows it: hand it to the test
@@ -333,14 +337,14 @@ def test_a_plate_costs_no_more_per_cell_than_the_det_rec_pass_over_the_page(read
 
 def test_a_plate_is_read_one_line_by_the_default_ocr_instance():
     # #329: only_rec in the plate's box under the cell's centre, on the shared OCR instance (no "model" folder of its own).
-    import actions  # noqa: PLC0415
+    import shop_actions  # noqa: PLC0415
     asked = []
 
     def run_recognition(name, image, override):
         asked.append(override[name])
         return types.SimpleNamespace(all_results=[types.SimpleNamespace(text="Arrested Hymn", box=(0, 0, 10, 10))])
     context = types.SimpleNamespace(run_recognition=run_recognition)
-    assert actions.read_plates(context, None, [(778, 265)]) == [{"text": "Arrested Hymn", "id": 9106}]
+    assert shop_actions.read_plates(context, None, [(778, 265)]) == [{"text": "Arrested Hymn", "id": 9106}]
     assert asked == [{"recognition": "OCR", "roi": [702, 329, 152, 26], "only_rec": True}]
 
 

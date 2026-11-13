@@ -1,6 +1,6 @@
 """Which gift a shop grid cell shows (#297, docs/spec/03-decisions.md section 13), free of MaaFramework.
 
-actions.read_cells reads a cell's tier and keyword badge; the gifts of that keyword and tier are its candidates, and
+shop_actions.read_cells reads a cell's tier and keyword badge; the gifts of that keyword and tier are its candidates, and
 their icons are matched on the cell. Everything here is plain data in, plain data out.
 """
 

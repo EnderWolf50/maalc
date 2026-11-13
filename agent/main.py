@@ -14,6 +14,7 @@ from maa.agent.agent_server import AgentServer  # noqa: E402
 
 import actions  # noqa: E402,F401  registers custom actions
 import lux_actions  # noqa: E402,F401  registers custom actions
+import shop_actions  # noqa: E402,F401  registers custom actions
 
 
 def main() -> None:

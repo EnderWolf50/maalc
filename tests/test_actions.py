@@ -16,6 +16,7 @@ from PIL import Image
 from maa.define import Rect
 
 import actions
+import shop_actions
 import gifts
 import recovery
 from settings import gift_tables
@@ -777,7 +778,7 @@ def reads(context, texts):
     context.run_recognition.side_effect = run_recognition
 
 
-def owned_gifts(context, cells=actions.FUSE_CELLS):
+def owned_gifts(context, cells=shop_actions.FUSE_CELLS):
     """Screenshots whose cells hold a gift (a textured square); the rest stay flat."""
     image = np.zeros((720, 1280, 3), np.uint8)
     for x, y in cells:
@@ -807,11 +808,11 @@ def grid_read(monkeypatch, readings):
     patch_all(monkeypatch, "read_cells", read_cells)
 
 
-FUSE_PAGE = {tuple(actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
-             tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))],
-             tuple(actions.FUSE_LIST): [("E.G.O Gifts Owned", (635, 216, 161, 24))]}  # at its place: nothing over it
+FUSE_PAGE = {tuple(shop_actions.DIALOG_TITLE): [("Fuse E.G.O Gift", (500, 100, 200, 40))],
+             tuple(shop_actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))],
+             tuple(shop_actions.FUSE_LIST): [("E.G.O Gifts Owned", (635, 216, 161, 24))]}  # at its place: nothing over it
 # The fuse page whose fusions go through: its dialog counts 3/3, its GET! shows (fuse_page: once a fusion is confirmed).
-FUSING = FUSE_PAGE | {tuple(actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
+FUSING = FUSE_PAGE | {tuple(shop_actions.FUSE_CONFIRM): [("Selected E.G.O Gifts 3/3", (330, 175, 320, 30))],
                       tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}
 
 
@@ -823,8 +824,8 @@ def after_last(tapped, at):
 def in_slots(tapped, ignored=()):
     """The cells (FUSE_CELLS) whose gift is in the fuse page's slots after the taps `tapped`: each tapped an odd number of
     times since the last fusion confirmed (the dialog's Confirm empties the slots), a cell in ignored never."""
-    since = after_last(tapped, actions.FUSE_DIALOG_CONFIRM)
-    return {c for c in actions.FUSE_CELLS if c not in ignored and since.count(c) % 2}
+    since = after_last(tapped, shop_actions.FUSE_DIALOG_CONFIRM)
+    return {c for c in shop_actions.FUSE_CELLS if c not in ignored and since.count(c) % 2}
 
 
 def fuse_slots(context, monkeypatch, slots=3, ignored=()):
@@ -845,8 +846,8 @@ def fuse_page(context, monkeypatch, *readings, slots=3, ignored=()):
     grid_read(monkeypatch, grid)
 
     def click(x, y):
-        if (x, y) == actions.FUSE_DIALOG_CONFIRM:  # recorded already: the slots as they were before it
-            gone = {actions.FUSE_CELLS.index(c) for c in in_slots(taps(context)[:-1], ignored)}
+        if (x, y) == shop_actions.FUSE_DIALOG_CONFIRM:  # recorded already: the slots as they were before it
+            gone = {shop_actions.FUSE_CELLS.index(c) for c in in_slots(taps(context)[:-1], ignored)}
             grid[:] = [r for k, r in enumerate(grid) if k not in gone]
         return MagicMock()
     context.tasker.controller.post_click.side_effect = click
@@ -855,8 +856,8 @@ def fuse_page(context, monkeypatch, *readings, slots=3, ignored=()):
     def run_recognition(name, image, override=None):
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
         tapped = taps(context)
-        if roi == tuple(actions.GET_TITLE) and (actions.FUSE_DIALOG_CONFIRM not in tapped
-                                                 or actions.GET_CONFIRM in after_last(tapped, actions.FUSE_DIALOG_CONFIRM)):
+        if roi == tuple(actions.GET_TITLE) and (shop_actions.FUSE_DIALOG_CONFIRM not in tapped
+                                                 or actions.GET_CONFIRM in after_last(tapped, shop_actions.FUSE_DIALOG_CONFIRM)):
             return None
         return shown(name, image, override)
     context.run_recognition.side_effect = run_recognition
@@ -919,22 +920,22 @@ def test_offers_are_read_once_and_bought_in_the_lists_order_from_the_back(contex
 
     def click(x, y):
         tapped.append((x, y))
-        if (x, y) == actions.PURCHASE:
+        if (x, y) == shop_actions.PURCHASE:
             costs.append(costs[-1] - price_at[tapped[-2][0]])
         return MagicMock()
     context.tasker.controller.post_click.side_effect = click
 
     def run_recognition(name, image, override=None):
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
-                 tuple(actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
+        lines = {tuple(shop_actions.OFFER_GRID): offers, tuple(shop_actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
+                 tuple(shop_actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
                  tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
     cells_read(monkeypatch, ("Burn", 1, 9003), ("Bleed", 2, 9005), ("Burn", 2, 9009), ("Burn", 3, 9053))
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, buying(wants(9009, 9003, 9053)), visit) == 2
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9009, 9003, 9053)), visit) == 2
     offer_taps = [t for t in tapped if t[1] == 268]
     assert offer_taps == [(930, 268), (620, 268)]
     assert costs[-1] == 160 and visit["wanted"] is None
@@ -944,10 +945,10 @@ def test_a_glyph_on_an_offers_icon_opens_no_purchase_dialog(context, monkeypatch
     # #216, live 2026-10-22: a "3" read in Old Wooden Doll's icon corner made a slot priced 3 named '214' whose cell
     # (read_cells found no badge) was opened to read its keyword. Skill slot first, the glyph, four gifts.
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
-    reads(context, {tuple(actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
+    reads(context, {tuple(shop_actions.OFFER_GRID): OLD_DOLL_SHOP, tuple(shop_actions.SHOP_COST): [("787", (560, 120, 60, 30))]})
     cells_read(monkeypatch, ("Burn", 2), ("Bleed", 2), ("Pierce", 2), ("Blunt", 2))
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9009)), visit) == 0
     assert not context.tasker.controller.post_click.called  # no cell opened to read its keyword
     assert visit["wanted"] is None
 
@@ -958,11 +959,11 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
     image = np.zeros((720, 1280, 3), np.uint8)
     image[265 + 46:265 + 60, 778 - 15:778 + 15] = (0, 0, 200)  # the second cell's red price
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
-    reads(context, {tuple(actions.OFFER_GRID): [("Emerald Elytra", (735, 333, 90, 17)), ("16", (755, 306, 40, 24))],
-                    tuple(actions.SHOP_COST): [("106", (560, 120, 60, 30))]})
+    reads(context, {tuple(shop_actions.OFFER_GRID): [("Emerald Elytra", (735, 333, 90, 17)), ("16", (755, 306, 40, 24))],
+                    tuple(shop_actions.SHOP_COST): [("106", (560, 120, 60, 30))]})
     cells_read(monkeypatch, ("Burn", 1, 9003))
     visit = {"wanted": None, "sold": False}
-    assert actions.Shop.buy_offers(context, buying(wants(9003)), visit) == 0
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9003)), visit) == 0
     assert not context.tasker.controller.post_click.called
     assert visit["wanted"] is None
 
@@ -970,20 +971,20 @@ def test_an_offer_with_a_red_price_is_not_tapped_though_ocr_read_it_as_affordabl
 def sale_taps(context, monkeypatch, team, prices, *readings, slots=None):
     """Shop.sell with 100 Cost and a 180 wanted, readings (cells_read) priced prices on the grid: the cells it tapped.
     A cell tapped is picked: the Cost previews a sale (#174), read as 100 followed by more digits."""
-    lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, actions.SELL_CELLS)]
+    lines = [(str(p), (x - 3, y + 37, 26, 20)) for p, (x, y) in zip(prices, shop_actions.SELL_CELLS)]
     clicks = context.tasker.controller.post_click.call_args_list
-    texts = {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))], tuple(actions.SELL_GRID): lines}
+    texts = {tuple(shop_actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))], tuple(shop_actions.SELL_GRID): lines}
     reads(context, texts)
     shown = context.run_recognition.side_effect
 
     def run_recognition(name, image, override=None):
-        picked = any(c.args in actions.SELL_CELLS for c in clicks)
-        texts[tuple(actions.SELL_COST)] = [("100190" if picked else "100", (980, 90, 60, 30))]
+        picked = any(c.args in shop_actions.SELL_CELLS for c in clicks)
+        texts[tuple(shop_actions.SELL_COST)] = [("100190" if picked else "100", (980, 90, 60, 30))]
         return shown(name, image, override)
     context.run_recognition.side_effect = run_recognition
     cells_read(monkeypatch, *with_ids(readings))
-    actions.Shop.sell(context, shop_team(team), {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
-    return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in actions.SELL_CELLS]
+    shop_actions.Shop.sell(context, shop_team(team), {"wanted": 180, "sold": False, **({"slots": slots} if slots else {})})
+    return [c.args for c in context.tasker.controller.post_click.call_args_list if c.args in shop_actions.SELL_CELLS]
 
 
 @pytest.mark.parametrize("team, leftover, sold", [
@@ -996,7 +997,7 @@ def test_a_sale_stops_at_the_teams_highest_tier(context, monkeypatch, team, left
     # #161: three tier II fuse; the fourth, the leftover, would cover the price.
     taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 300], ("Bleed",), ("Tremor",),
                      ("Pierce",), ("Slash", leftover))
-    assert taps == ([actions.SELL_CELLS[3]] if sold else [])
+    assert taps == ([shop_actions.SELL_CELLS[3]] if sold else [])
 
 
 @pytest.mark.parametrize("team, sold", [({}, False), ({"sell_vestiges": True}, True),
@@ -1005,7 +1006,7 @@ def test_a_vestige_is_sold_only_when_the_team_allows_it(context, monkeypatch, te
     # #161: sell_vestiges alone decides (the list lets Dark Vestige go).
     taps = sale_taps(context, monkeypatch, team, [90, 60, 70, 95], ("Bleed",),
                      ("Tremor",), ("Pierce",), ("Keywordless", 1, 9991))
-    assert taps.count(actions.SELL_CELLS[3]) == int(sold)
+    assert taps.count(shop_actions.SELL_CELLS[3]) == int(sold)
 
 
 def test_a_vestige_over_the_highest_tier_sold_stays(context, monkeypatch):
@@ -1032,7 +1033,7 @@ def test_a_sale_counts_only_the_fusions_the_condition_makes(context, monkeypatch
     # the price, goes; by the others none fuses, so the dearest (300) goes.
     taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
                      *[(k, 1) for k in ("Bleed", "Tremor", "Pierce", "Slash")])
-    assert taps == [actions.SELL_CELLS[sold]]
+    assert taps == [shop_actions.SELL_CELLS[sold]]
 
 
 @pytest.mark.parametrize("slots, condition, sells", [
@@ -1046,7 +1047,7 @@ def test_a_sale_groups_by_the_slots_and_thresholds_of_the_shop(context, monkeypa
     # 3, 90) does. A visit that read no fuse page counts a shop's 3 slots.
     taps = sale_taps(context, monkeypatch, {"fusion_condition": condition}, [300, 60, 70, 90],
                      ("Bleed", 3), ("Tremor", 3), ("Pierce", 1), ("Slash", 1), slots=slots)
-    assert taps == [actions.SELL_CELLS[sells]]
+    assert taps == [shop_actions.SELL_CELLS[sells]]
 
 
 @pytest.mark.parametrize("slots, condition, made", [
@@ -1062,18 +1063,18 @@ def test_a_fusion_reads_the_tier_by_the_shop_it_is_in(context, monkeypatch, slot
 def test_a_shop_visit_counts_a_super_shops_five_slots_from_its_red_title(context, monkeypatch):
     # #263: before any fuse page was read, the sale already groups by the Super Shop's table.
     actions.RUN["team"] = shop_team({"heal": "none"})
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(shop_actions.Shop, "to_main", staticmethod(lambda context: True))
     seen = []
 
     def sell(context, team, visit):
         seen.append(visit["slots"])
         raise actions.PageGone("Shop")  # ends the visit here: what sell saw is what is asked
-    monkeypatch.setattr(actions.Shop, "sell", staticmethod(sell))
+    monkeypatch.setattr(shop_actions.Shop, "sell", staticmethod(sell))
     for name in ("Shop", "SuperShop"):
         actions.RUN.pop("shop", None)
         image = np.asarray(Image.open(SCREENS / f"{name}.png").convert("RGB"))[:, :, ::-1]
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = image
-        assert actions.Shop().run(context, argv())
+        assert shop_actions.Shop().run(context, argv())
     assert seen == [3, 5]
 
 
@@ -1109,11 +1110,11 @@ def sell_page(confirmed):
     Sell asks to confirm; confirmed(taps) says whether the sale went through."""
     def reads_now(taps):
         sold = confirmed(taps)
-        picked = actions.SELL_CELLS[0] in taps and not sold
-        asked = taps[-1:] == [actions.PAGE_OK]
-        return {tuple(actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
-                tuple(actions.SELL_COST): [("146" if sold else "51146" if picked else "51", (980, 90, 60, 30))],
-                tuple(actions.SELL_GRID): [] if sold else [("95", (680, 295, 26, 20))],
+        picked = shop_actions.SELL_CELLS[0] in taps and not sold
+        asked = taps[-1:] == [shop_actions.PAGE_OK]
+        return {tuple(shop_actions.DIALOG_TITLE): [("Sell E.G.O Gift", (500, 90, 200, 40))],
+                tuple(shop_actions.SELL_COST): [("146" if sold else "51146" if picked else "51", (980, 90, 60, 30))],
+                tuple(shop_actions.SELL_GRID): [] if sold else [("95", (680, 295, 26, 20))],
                 tuple(actions.DIALOG_TEXT): [("Sell [Today's Expression] for 95 Cost?", (460, 330, 360, 25))] if asked else []}
     return reads_now
 
@@ -1127,8 +1128,8 @@ def test_a_sale_confirms_the_sell_dialog(context, monkeypatch):
     cells_read(monkeypatch, *with_ids([("Bleed",)]))
     logs = []
     patch_all(monkeypatch, "log", logs.append)
-    assert actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
-    assert taps.index(actions.SELL_CELLS[0]) < taps.index(actions.PAGE_OK) < taps.index(actions.DIALOG_CONFIRM)
+    assert shop_actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    assert taps.index(shop_actions.SELL_CELLS[0]) < taps.index(shop_actions.PAGE_OK) < taps.index(actions.DIALOG_CONFIRM)
     assert "shop: sold cell 0 for 95: 51 -> 146 Cost" in logs
 
 
@@ -1138,7 +1139,7 @@ def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
     cells_read(monkeypatch, *with_ids([("Bleed",)]))
     logs = []
     patch_all(monkeypatch, "log", logs.append)
-    actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
+    shop_actions.Shop.sell(context, SELLER, {"wanted": 145, "sold": False})
     assert any("not sold" in line for line in logs)
     assert not any("sold cell" in line for line in logs)
 
@@ -1146,15 +1147,15 @@ def test_the_cost_preview_of_a_picked_cell_is_not_a_sale(context, monkeypatch):
 def test_a_keyword_refresh_waits_for_the_new_cost_not_a_fixed_time(context, clock):
     # Live 2026-10-19: a keyword refresh slept 1.5 + 1 + 2 + 1 s; the screen stops 0.5-0.6 s after OK.
     def reads_now(taps):
-        cost = "410" if actions.KEYWORD_REFRESH in taps else "500"
-        return {tuple(actions.SHOP_COST): [(cost, (560, 120, 60, 30))],
-                tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
-                tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
-                tuple(actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
+        cost = "410" if shop_actions.KEYWORD_REFRESH in taps else "500"
+        return {tuple(shop_actions.SHOP_COST): [(cost, (560, 120, 60, 30))],
+                tuple(shop_actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                tuple(shop_actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))],
+                tuple(shop_actions.KEYWORD_LABELS): [("Burn", (300, 400, 60, 20))]}
     taps = live_shop(context, reads_now)
     visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
-    assert actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=1), visit)
-    assert visit["refreshes"] == {"keyword": 1, "normal": 0} and taps == [actions.REFRESH["keyword"][0], (330, 360), actions.KEYWORD_REFRESH]
+    assert shop_actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=1), visit)
+    assert visit["refreshes"] == {"keyword": 1, "normal": 0} and taps == [shop_actions.REFRESH["keyword"][0], (330, 360), shop_actions.KEYWORD_REFRESH]
     assert sum(clock) < 1.5
 
 
@@ -1163,25 +1164,25 @@ def test_a_keyword_refresh_checks_the_page_before_its_first_tap(context, clock, 
     def gone(context, home, image=None):
         raise actions.PageGone(home)
     patch_all(monkeypatch, "page_guard", gone)
-    taps = live_shop(context, lambda taps: {tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))],
-                                            tuple(actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
-                                            tuple(actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
+    taps = live_shop(context, lambda taps: {tuple(shop_actions.SHOP_COST): [("500", (560, 120, 60, 30))],
+                                            tuple(shop_actions.REFRESH["normal"][1]): [("100", (970, 145, 40, 20))],
+                                            tuple(shop_actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
     visit = {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}
     with pytest.raises(actions.PageGone):
-        actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=1), visit)
+        shop_actions.Shop.buy(context, buying(wants(9053), shop_refresh_keyword=1), visit)
     assert taps == []
 
 
 def test_the_leave_dialog_is_read_with_its_spaces_dropped(context, clock, monkeypatch):
     # #160: OCR drops spaces ("LEAVE THESHOP?"); has() compacts both sides, as main's Leave does.
     actions.RUN["team"] = shop_team({"heal": "none"})
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(shop_actions.Shop, "to_main", staticmethod(lambda context: True))
     for step in ("sell", "buy", "fuse"):
-        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
-    taps = live_shop(context, lambda taps: {tuple(actions.LEAVE_DIALOG): [("LEAVE THESHOP?", (480, 325, 300, 35))]}
+        monkeypatch.setattr(shop_actions.Shop, step, staticmethod(lambda *a: False))
+    taps = live_shop(context, lambda taps: {tuple(shop_actions.LEAVE_DIALOG): [("LEAVE THESHOP?", (480, 325, 300, 35))]}
                      if taps else {})
-    assert actions.Shop().run(context, argv())
-    assert actions.LEAVE_CONFIRM in taps and actions.STUCK["flag"] is None
+    assert shop_actions.Shop().run(context, argv())
+    assert shop_actions.LEAVE_CONFIRM in taps and actions.STUCK["flag"] is None
 
 
 GOSSYPIUM = "White Gossypium"
@@ -1191,12 +1192,12 @@ NO_GOSSYPIUM = {"keyword": "Bleed", "reserve_cost": 0, "allow_white_gossypium": 
 
 def test_a_team_without_white_gossypium_fuses_it_first(context, monkeypatch):
     # #90: a Bleed team that does not hold it: its icon makes it material, ahead of the other materials.
-    reads(context, {**FUSE_PAGE, tuple(actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
+    reads(context, {**FUSE_PAGE, tuple(shop_actions.KEYWORD_LABELS): [("Bleed", (300, 400, 60, 20))]})
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, *with_ids([("Burn",), ("Tremor",), ("Pierce",)]), ("Bleed", 2, 9020), ("Bleed", 2, 9005))
-    actions.Shop.fuse(context, NO_GOSSYPIUM, {})
+    shop_actions.Shop.fuse(context, NO_GOSSYPIUM, {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert [taps.count(c) for c in actions.FUSE_CELLS[:5]] == [1, 1, 0, 1, 0]
+    assert [taps.count(c) for c in shop_actions.FUSE_CELLS[:5]] == [1, 1, 0, 1, 0]
 
 
 def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
@@ -1207,21 +1208,21 @@ def test_a_team_without_white_gossypium_does_not_buy_it(context, monkeypatch):
 
     def click(x, y):
         tapped.append((x, y))
-        if (x, y) == actions.PURCHASE:
+        if (x, y) == shop_actions.PURCHASE:
             costs.append(costs[-1] - 150)
         return MagicMock()
     context.tasker.controller.post_click.side_effect = click
 
     def run_recognition(name, image, override=None):
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
-                 tuple(actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
+        lines = {tuple(shop_actions.OFFER_GRID): offers, tuple(shop_actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
+                 tuple(shop_actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
                  tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
     cells_read(monkeypatch, ("Bleed", 2, 9020), ("Bleed", 2, 9005))
-    assert actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
+    assert shop_actions.Shop.buy_offers(context, NO_GOSSYPIUM, {"wanted": None, "sold": False}) == 1
     assert [t for t in tapped if t[1] == 268] == [(775, 268)]
 
 
@@ -1291,16 +1292,16 @@ def test_a_pack_exclusive_material_is_taken_over_a_plain_want(context, monkeypat
 def left_shop_holding(context, monkeypatch, owned):
     """A shop visit that read `owned` on its pages and was left by hand, then the next node entered: the flow that ends RUN["shop"]."""
     actions.RUN["team"] = shop_team({"heal": "none", "list": gifts.default_list()})
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
-    monkeypatch.setattr(actions.Shop, "sell", staticmethod(lambda *a: False))
+    monkeypatch.setattr(shop_actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(shop_actions.Shop, "sell", staticmethod(lambda *a: False))
     handed_over = actions.page_guard
     patch_all(monkeypatch, "page_guard", REAL_GUARD)
 
     def buy(context, team, visit):
         visit["owned"] = list(owned)
         actions.page_guard(context, "Shop")
-    monkeypatch.setattr(actions.Shop, "buy", staticmethod(buy))
-    assert actions.Shop().run(context, argv())
+    monkeypatch.setattr(shop_actions.Shop, "buy", staticmethod(buy))
+    assert shop_actions.Shop().run(context, argv())
     actions.enter_node(context)
     assert "shop" not in actions.RUN
     patch_all(monkeypatch, "page_guard", handed_over)
@@ -1356,11 +1357,11 @@ def test_a_team_without_white_gossypium_takes_it_when_it_is_the_only_card(contex
 def fusion_taps(context, monkeypatch, team, *readings, slots=3, ignored=(), confirm=3):
     """Shop.fuse on readings (with_ids) of fuse_page; (its result, how often each cell was tapped, whether Fuse was
     pressed). The confirm dialog reads "confirm/slots"."""
-    reads(context, FUSING | {tuple(actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts {confirm}/{slots}", (330, 175, 320, 30))]})
+    reads(context, FUSING | {tuple(shop_actions.FUSE_CONFIRM): [(f"Selected E.G.O Gifts {confirm}/{slots}", (330, 175, 320, 30))]})
     fuse_page(context, monkeypatch, *with_ids(readings), slots=slots, ignored=ignored)
-    fused = actions.Shop.fuse(context, shop_team(team), {})
+    fused = shop_actions.Shop.fuse(context, shop_team(team), {})
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    return fused, [taps.count(c) for c in actions.FUSE_CELLS[:len(readings)]], actions.PAGE_OK in taps
+    return fused, [taps.count(c) for c in shop_actions.FUSE_CELLS[:len(readings)]], shop_actions.PAGE_OK in taps
 
 
 def test_a_fusion_puts_in_the_materials_that_make_the_highest_tier(context, monkeypatch):
@@ -1368,9 +1369,9 @@ def test_a_fusion_puts_in_the_materials_that_make_the_highest_tier(context, monk
     # cells 1, 3 and 4 gone they are cells 0-2.
     fused, _, ok = fusion_taps(context, monkeypatch, {}, ("Bleed", 1), ("Bleed", 3), ("Pierce", 1),
                                ("Tremor", 2), ("Slash", 3), ("Sinking", 1))
-    cells = [t for t in taps(context) if t in actions.FUSE_CELLS]
-    assert fused and ok and sorted(cells[:3]) == sorted(actions.FUSE_CELLS[i] for i in (1, 3, 4))
-    assert sorted(cells[3:]) == sorted(actions.FUSE_CELLS[:3])
+    cells = [t for t in taps(context) if t in shop_actions.FUSE_CELLS]
+    assert fused and ok and sorted(cells[:3]) == sorted(shop_actions.FUSE_CELLS[i] for i in (1, 3, 4))
+    assert sorted(cells[3:]) == sorted(shop_actions.FUSE_CELLS[:3])
 
 
 @pytest.mark.parametrize("condition, made", [(None, True), ("any", True), ("upgrade", False), ("tier4", False)])
@@ -1410,7 +1411,7 @@ def test_a_refused_fusion_is_not_read_again_until_the_owned_gifts_change(context
     reads(context, FUSE_PAGE)
     fuse_slots(context, monkeypatch)
     cells_read(monkeypatch, *with_ids([("Bleed", 1)] * 3))
-    assert not actions.Shop.fuse(context, shop_team({"fusion_condition": "tier4"}), visit)
+    assert not shop_actions.Shop.fuse(context, shop_team({"fusion_condition": "tier4"}), visit)
     assert visit["fuse_scanned"]
 
 
@@ -1423,7 +1424,7 @@ def test_a_super_shop_fuses_up_to_5(context, monkeypatch):
 def lost_tap_fuse_page(context, monkeypatch):
     """A fuse page of three materials whose second one's tap puts nothing in."""
     reads(context, FUSE_PAGE)
-    fuse_slots(context, monkeypatch, ignored=[actions.FUSE_CELLS[1]])
+    fuse_slots(context, monkeypatch, ignored=[shop_actions.FUSE_CELLS[1]])
     cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
 
 
@@ -1431,10 +1432,10 @@ def test_a_material_that_does_not_show_in_the_fusion_closes_the_page(context, mo
     # #77: the second tap put nothing in (or another gift): Close, no Fuse, and not the same scan again.
     visit = {}
     lost_tap_fuse_page(context, monkeypatch)
-    assert not actions.Shop.fuse(context, shop_team({}), visit)
+    assert not shop_actions.Shop.fuse(context, shop_team({}), visit)
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list]
-    assert actions.PAGE_OK not in taps and actions.PAGE_CLOSE in taps
-    assert [taps.count(c) for c in actions.FUSE_CELLS[:3]] == [1, 2, 0]  # stopped at the second, tapped again once (#611)
+    assert shop_actions.PAGE_OK not in taps and shop_actions.PAGE_CLOSE in taps
+    assert [taps.count(c) for c in shop_actions.FUSE_CELLS[:3]] == [1, 2, 0]  # stopped at the second, tapped again once (#611)
     assert visit["fuse_scanned"]
 
 
@@ -1449,10 +1450,10 @@ def test_the_fusion_grid_is_not_scanned_again_while_the_owned_gifts_are_the_same
     scans = []
     patch_all(monkeypatch, "owned_cells", lambda *a: scans.append(a) or ([], {"page": "fuse", "at": 0}))
     team, visit = shop_team({}), {}
-    assert not actions.Shop.fuse(context, team, visit)
+    assert not shop_actions.Shop.fuse(context, team, visit)
     taps = context.tasker.controller.post_click.call_count
     assert len(scans) == 1
-    assert not actions.Shop.fuse(context, team, visit)  # nothing bought or sold since
+    assert not shop_actions.Shop.fuse(context, team, visit)  # nothing bought or sold since
     assert context.tasker.controller.post_click.call_count == taps and len(scans) == 1
 
 
@@ -2864,19 +2865,19 @@ def test_the_shop_stops_tapping_once_the_map_shows(context, monkeypatch):
         if name == "MirrorMap":  # the map shows once anything was tapped
             return SimpleNamespace(hit=True, box=[0, 0, 10, 10]) if context.tasker.controller.post_click.called else None
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        lines = {tuple(actions.OFFER_GRID): offers, tuple(actions.SHOP_COST): [("500", (560, 120, 60, 30))]}.get(roi, [])
+        lines = {tuple(shop_actions.OFFER_GRID): offers, tuple(shop_actions.SHOP_COST): [("500", (560, 120, 60, 30))]}.get(roi, [])
         results = [SimpleNamespace(text=t, box=b) for t, b in lines]
         return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
     context.run_recognition.side_effect = run_recognition
     visit = {"wanted": None, "sold": False}
-    assert not actions.Shop.buy_offers(context, buying(wants(9003, 9087)), visit)
+    assert not shop_actions.Shop.buy_offers(context, buying(wants(9003, 9087)), visit)
     assert context.tasker.controller.post_click.call_count == 1  # the second offer is never tapped
 
 
 def cost_reads(context, values):
     """The shop's Cost reads each of values in turn (None: nothing read), the last one from then on."""
     def run_recognition(name, image, override=None):
-        if tuple((override or {}).get(name, {}).get("roi", ())) != tuple(actions.SHOP_COST):
+        if tuple((override or {}).get(name, {}).get("roi", ())) != tuple(shop_actions.SHOP_COST):
             return None
         t = values.pop(0) if len(values) > 1 else values[0]
         return SimpleNamespace(all_results=[SimpleNamespace(text=t, box=(560, 120, 60, 30))]) if t else None
@@ -2886,12 +2887,12 @@ def cost_reads(context, values):
 def test_an_unread_cost_is_read_again_not_taken_as_0(context):
     # #82: one empty OCR read made the Cost 0, and the whole shop was skipped as too dear.
     cost_reads(context, [None, "33O2"])
-    assert actions.read_cost(context) == 3302
+    assert shop_actions.read_cost(context) == 3302
 
 
 def test_a_cost_that_stays_unread_is_none(context):
     cost_reads(context, [None])
-    assert actions.read_cost(context) is None
+    assert shop_actions.read_cost(context) is None
     assert context.run_recognition.call_count > 1  # read again before giving up
 
 
@@ -2973,19 +2974,19 @@ def test_event_text_taps_stop_once_the_event_is_gone(context, guarded):
 def test_a_fusion_taps_no_cell_once_the_shop_is_gone(context, guarded):
     # Live 2026-10-18: the shop left by hand mid-visit; its taps went on onto the map for ~50 s.
     reads(context, FUSE_PAGE)
-    owned_gifts(context, actions.FUSE_CELLS[10:12])
+    owned_gifts(context, shop_actions.FUSE_CELLS[10:12])
     page_until(context, "Shop", 4)  # gone after Fuse, the centre, Burn and its OK
     with pytest.raises(actions.PageGone):
-        actions.Shop.fuse(context, shop_team({}), {})
-    assert not set(taps(context)) & set(actions.FUSE_CELLS)
+        shop_actions.Shop.fuse(context, shop_team({}), {})
+    assert not set(taps(context)) & set(shop_actions.FUSE_CELLS)
 
 
 def test_a_shop_visit_left_by_hand_is_handed_back_and_forgotten_at_the_next_node(context, guarded, monkeypatch):
     actions.RUN["team"] = shop_team({"heal": "none"})
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
-    monkeypatch.setattr(actions.Shop, "sell", staticmethod(lambda *a: False))
-    monkeypatch.setattr(actions.Shop, "buy", staticmethod(lambda *a: actions.page_guard(context, "Shop")))
-    assert actions.Shop().run(context, argv())  # the shop is gone: True for MirrorHub, not a stuck
+    monkeypatch.setattr(shop_actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(shop_actions.Shop, "sell", staticmethod(lambda *a: False))
+    monkeypatch.setattr(shop_actions.Shop, "buy", staticmethod(lambda *a: actions.page_guard(context, "Shop")))
+    assert shop_actions.Shop().run(context, argv())  # the shop is gone: True for MirrorHub, not a stuck
     assert actions.STUCK["flag"] is None and "shop" in actions.RUN
     assert actions.RUN["after_shop"]  # #279: the page handled last, so RouteMap's one node is the boss
     actions.enter_node(context)
@@ -3251,10 +3252,10 @@ def test_an_event_gone_is_not_scrolled(context, guarded):
 
 def test_a_shop_gone_before_leave_is_handed_back_not_stuck(context, guarded, monkeypatch):
     actions.RUN["team"] = shop_team({"heal": "none"})
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(shop_actions.Shop, "to_main", staticmethod(lambda context: True))
     for step in ("sell", "buy", "fuse"):
-        monkeypatch.setattr(actions.Shop, step, staticmethod(lambda *a: False))
-    assert actions.Shop().run(context, argv())
+        monkeypatch.setattr(shop_actions.Shop, step, staticmethod(lambda *a: False))
+    assert shop_actions.Shop().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
 
@@ -3280,18 +3281,18 @@ def test_reward_cards_gone_after_one_card_are_handed_back(context, guarded):
 @pytest.mark.parametrize("step, visit", [("sell", {"wanted": 100, "sold": False}), ("fuse", {})])
 def test_a_shop_gone_before_the_sell_or_fuse_button_taps_nothing(context, guarded, step, visit):
     with pytest.raises(actions.PageGone):
-        getattr(actions.Shop, step)(context, shop_team({"heal": "none"}), visit)
+        getattr(shop_actions.Shop, step)(context, shop_team({"heal": "none"}), visit)
     assert moved(context) == 0
 
 
 def test_a_heal_handed_back_mid_way_is_not_paid_again(context, monkeypatch):
     actions.RUN["team"] = shop_team({"heal": "full"})
-    monkeypatch.setattr(actions.Shop, "to_main", staticmethod(lambda context: True))
+    monkeypatch.setattr(shop_actions.Shop, "to_main", staticmethod(lambda context: True))
 
     def heal(context, team):
         raise actions.PageGone("Shop")  # the heal page left by hand, or a popup over it
-    monkeypatch.setattr(actions.Shop, "heal", staticmethod(heal))
-    assert actions.Shop().run(context, argv())
+    monkeypatch.setattr(shop_actions.Shop, "heal", staticmethod(heal))
+    assert shop_actions.Shop().run(context, argv())
     assert actions.RUN["shop"]["healed"]
 
 
@@ -3385,9 +3386,9 @@ def test_a_fusion_gone_after_a_cell_tap_taps_nothing_more(context, guarded, monk
     cells_read(monkeypatch, *with_ids([("Bleed",), ("Tremor",), ("Pierce",)]))
     page_until(context, "Shop", 5)  # gone after Fuse, the centre, Burn, its OK and the first cell (no tooltip: no neutral tap, #378)
     with pytest.raises(actions.PageGone):
-        actions.Shop.fuse(context, shop_team({}), {})
-    taps_made = [t for t in taps(context) if t != actions.FUSE_NEUTRAL]
-    assert taps_made[4] in actions.FUSE_CELLS and not set(taps_made[5:]) & set(actions.FUSE_CELLS)
+        shop_actions.Shop.fuse(context, shop_team({}), {})
+    taps_made = [t for t in taps(context) if t != shop_actions.FUSE_NEUTRAL]
+    assert taps_made[4] in shop_actions.FUSE_CELLS and not set(taps_made[5:]) & set(shop_actions.FUSE_CELLS)
 
 
 def test_hands_back_leaves_the_runtime_cache_of_a_long_task_alone():

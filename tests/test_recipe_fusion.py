@@ -1,5 +1,6 @@
 """#300: a wanted fusion whose recipe the owned gifts hold is made by recipe before any ordinary fusion."""
 import actions
+import shop_actions
 import test_actions
 import test_fuse_page
 from test_actions import fusion_taps, wants
@@ -25,8 +26,8 @@ def test_a_wanted_fixed_recipe_with_its_materials_owned_is_fused_by_putting_exac
     # after it on the same page (test_fuse_page), so only the first three cells tapped are looked at here.
     readings = [*junk(3), ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
     fused, _, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings)
-    cells = [t for t in test_actions.taps(context) if t in actions.FUSE_CELLS]
-    assert fused and ok and sorted(cells[:3]) == sorted(actions.FUSE_CELLS[3:6])
+    cells = [t for t in test_actions.taps(context) if t in shop_actions.FUSE_CELLS]
+    assert fused and ok and sorted(cells[:3]) == sorted(shop_actions.FUSE_CELLS[3:6])
 
 
 def test_the_recipe_that_is_complete_is_the_one_put_in(context, monkeypatch):
@@ -71,7 +72,7 @@ def test_a_made_recipe_leaves_the_owned_gifts_to_be_read_again(context, monkeypa
     patch_all(monkeypatch, "log", logs.append)
     test_actions.reads(context, test_actions.FUSING)
     test_actions.fuse_page(context, monkeypatch, ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157))
-    assert actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
+    assert shop_actions.Shop.fuse(context, test_actions.shop_team(team(SOOTHE)), visit)
     assert test_fuse_page.read_again(logs)
     assert visit["fuse_scanned"]
 
@@ -87,7 +88,7 @@ def test_a_recipe_that_does_not_go_in_leaves_the_ordinary_fusion_to_be_made_the_
     # The page ignores the taps on the recipe's cells (9003, 9053, 9157): it is passed over for this visit, not tried
     # again and again, and the three junk gifts fuse as the round's order says (recipe first, then the ordinary one).
     readings = [("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157), *junk(3)]
-    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings, ignored=actions.FUSE_CELLS[:3])
+    fused, taps, ok = fusion_taps(context, monkeypatch, team(SOOTHE), *readings, ignored=shop_actions.FUSE_CELLS[:3])
     assert fused and ok and taps[3:] == [1, 1, 1]
 
 

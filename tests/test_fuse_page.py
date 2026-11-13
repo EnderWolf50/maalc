@@ -3,6 +3,7 @@ read again there, and the next fusion made, a wanted one first, until none is le
 import pytest
 
 import actions
+import shop_actions
 import test_actions
 import test_shop
 import test_shop_scroll
@@ -28,11 +29,11 @@ def fusing(context, monkeypatch, team, *readings):
     often grid_top ran)."""
     lines, tops, visit = [], [], {}
     patch_all(monkeypatch, "log", lines.append)
-    top = actions.grid_top
+    top = shop_actions.grid_top
     patch_all(monkeypatch, "grid_top", lambda *a: tops.append(a) or top(*a))
     reads(context, FUSING)
     fuse_page(context, monkeypatch, *readings)
-    fused = actions.Shop.fuse(context, shop_team(team), visit)
+    fused = shop_actions.Shop.fuse(context, shop_team(team), visit)
     return fused, visit, taps(context), lines, len(tops)
 
 
@@ -41,11 +42,11 @@ def test_two_fusions_on_show_are_made_on_one_page_opened_once(context, monkeypat
     # the gifts are read again after each fusion, and the page is closed only after the second.
     fused, visit, tapped, lines, tops = fusing(context, monkeypatch, {}, *with_ids([("Bleed", 2)] * 6))
     assert fused and tops == 1
-    assert tapped.count(actions.SHOP_BUTTONS["fuse"]) == 1
-    assert tapped.count(actions.FUSE_DIALOG_CONFIRM) == 2
+    assert tapped.count(shop_actions.SHOP_BUTTONS["fuse"]) == 1
+    assert tapped.count(shop_actions.FUSE_DIALOG_CONFIRM) == 2
     assert len(read_again(lines)) == 2  # the fake shows no gift made: not where the fusion puts it
-    assert actions.PAGE_CLOSE in after_last(tapped, actions.FUSE_DIALOG_CONFIRM)
-    assert actions.PAGE_CLOSE not in tapped[:tapped.index(actions.FUSE_DIALOG_CONFIRM)]
+    assert shop_actions.PAGE_CLOSE in after_last(tapped, shop_actions.FUSE_DIALOG_CONFIRM)
+    assert shop_actions.PAGE_CLOSE not in tapped[:tapped.index(shop_actions.FUSE_DIALOG_CONFIRM)]
     assert visit["fuse_scanned"]
 
 
@@ -53,10 +54,10 @@ def test_the_page_is_closed_once_the_gifts_read_again_make_no_fusion(context, mo
     # Five materials: one fusion, then the two left make none. The page is read again, and only then closed: not read
     # again this visit until the owned gifts change (#62).
     fused, visit, tapped, lines, _ = fusing(context, monkeypatch, {}, *with_ids([("Bleed", 2)] * 5))
-    assert fused and tapped.count(actions.FUSE_DIALOG_CONFIRM) == 1
+    assert fused and tapped.count(shop_actions.FUSE_DIALOG_CONFIRM) == 1
     assert read_again(lines)[0] < lines.index("shop: 2 materials on show, a fusion takes 3")
-    assert actions.PAGE_CLOSE in after_last(tapped, actions.FUSE_DIALOG_CONFIRM)
-    assert actions.PAGE_CLOSE not in tapped[:tapped.index(actions.FUSE_DIALOG_CONFIRM)]
+    assert shop_actions.PAGE_CLOSE in after_last(tapped, shop_actions.FUSE_DIALOG_CONFIRM)
+    assert shop_actions.PAGE_CLOSE not in tapped[:tapped.index(shop_actions.FUSE_DIALOG_CONFIRM)]
     assert visit["fuse_scanned"]
 
 
@@ -65,13 +66,13 @@ def test_a_recipe_and_an_ordinary_fusion_are_made_one_after_the_other_on_one_pag
     # gifts the list drops are cells 0-2, read again and fused.
     readings = [*with_ids([("Bleed", 2)] * 3), ("Burn", 3, 9003), ("Burn", 3, 9053), ("Burn", 3, 9157)]
     fused, visit, tapped, lines, tops = fusing(context, monkeypatch, {"list": wants(SOOTHE)}, *readings)
-    assert fused and tops == 1 and tapped.count(actions.SHOP_BUTTONS["fuse"]) == 1
-    cells = [t for t in tapped if t in actions.FUSE_CELLS]
-    assert sorted(cells[:3]) == sorted(actions.FUSE_CELLS[3:6]) and sorted(cells[3:]) == sorted(actions.FUSE_CELLS[:3])
+    assert fused and tops == 1 and tapped.count(shop_actions.SHOP_BUTTONS["fuse"]) == 1
+    cells = [t for t in tapped if t in shop_actions.FUSE_CELLS]
+    assert sorted(cells[:3]) == sorted(shop_actions.FUSE_CELLS[3:6]) and sorted(cells[3:]) == sorted(shop_actions.FUSE_CELLS[:3])
     recipe = next(k for k, m in enumerate(lines) if m.startswith(f"shop: recipe fusion {SOOTHE} ") and m.endswith("done"))
     ordinary = next(k for k, m in enumerate(lines) if m.startswith("shop: fuse ") and m.endswith("done"))
     assert recipe < read_again(lines)[0] < ordinary
-    assert actions.PAGE_CLOSE in after_last(tapped, actions.FUSE_DIALOG_CONFIRM)
+    assert shop_actions.PAGE_CLOSE in after_last(tapped, shop_actions.FUSE_DIALOG_CONFIRM)
     assert visit["fuse_scanned"]
 
 
@@ -80,9 +81,9 @@ def test_a_page_closes_after_fusions_per_page_and_leaves_the_rest_to_the_next_ro
     # round of Shop.run opens it again (fuse_scanned stays False).
     patch_all(monkeypatch, "FUSIONS_PER_PAGE", 2)
     fused, visit, tapped, lines, _ = fusing(context, monkeypatch, {}, *with_ids([("Bleed", 2)] * 9))
-    assert fused and tapped.count(actions.FUSE_DIALOG_CONFIRM) == 2 and len(read_again(lines)) == 1
+    assert fused and tapped.count(shop_actions.FUSE_DIALOG_CONFIRM) == 2 and len(read_again(lines)) == 1
     assert "shop: 2 fusions on one fuse page: it is closed, the next round opens it again" in lines
-    assert actions.PAGE_CLOSE in after_last(tapped, actions.FUSE_DIALOG_CONFIRM)
+    assert shop_actions.PAGE_CLOSE in after_last(tapped, shop_actions.FUSE_DIALOG_CONFIRM)
     assert not visit["fuse_scanned"]
 
 
@@ -112,7 +113,7 @@ def test_a_drag_back_the_game_took_less_of_goes_to_the_lists_top_again(context, 
     assert "shop: the owned gifts' label is not on show after the drag back: the fuse list goes to its top" in lines
 
 
-GRID = actions.OWNED_GRID["fuse"][:2]
+GRID = shop_actions.OWNED_GRID["fuse"][:2]
 # The fuse page's owned gifts (tier, keyword, id) before a fusion of the live runs of 2026-11-03/04 (#378's logs, the
 # "fuse cells" lines), the places of its materials, the tier made, the gift made and the ids after it, in order.
 LIVE = {
@@ -278,7 +279,7 @@ def show_get_popup(context, g, name):
 
     def screen():
         image = g.screen()
-        if actions.FUSE_DIALOG_CONFIRM in g.taps and actions.GET_CONFIRM not in after_last(g.taps, actions.FUSE_DIALOG_CONFIRM):
+        if shop_actions.FUSE_DIALOG_CONFIRM in g.taps and actions.GET_CONFIRM not in after_last(g.taps, shop_actions.FUSE_DIALOG_CONFIRM):
             image[160:500, 300:640] = popup[160:500, 300:640]
         return image
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = screen
@@ -331,10 +332,10 @@ def test_an_unselectable_cell_is_kept_whatever_the_list_says():
     # takes it in no fusion, so it is no material even when the list drops it.
     team = shop_team({"list": wants()})
     cell = {"i": 0, "tier": 5, "keyword": "Keywordless", "id": 9799, "unselectable": True}
-    assert actions.cell_state(cell, team["list"]) == "drop"
-    assert actions.cell_role(cell, team, "fuse", ()) == "keep"
-    assert actions.cell_role(cell, team, "fuse", (9799,)) == "keep"  # nor as a gift the team avoids
-    assert actions.cell_line({**cell, "score": 0.78}, "keep") == "0 V Keywordless 9799 A Certain Philosophy (0.78) unselectable: keep"
+    assert shop_actions.cell_state(cell, team["list"]) == "drop"
+    assert shop_actions.cell_role(cell, team, "fuse", ()) == "keep"
+    assert shop_actions.cell_role(cell, team, "fuse", (9799,)) == "keep"  # nor as a gift the team avoids
+    assert shop_actions.cell_line({**cell, "score": 0.78}, "keep") == "0 V Keywordless 9799 A Certain Philosophy (0.78) unselectable: keep"
 
 
 def test_a_cell_placed_by_the_fusion_that_is_not_there_has_the_page_opened_again(context, grid, monkeypatch):
@@ -344,7 +345,7 @@ def test_a_cell_placed_by_the_fusion_that_is_not_there_has_the_page_opened_again
     lines = []
     patch_all(monkeypatch, "log", lines.append)
     g, team = three_tiers(grid)
-    place, placed = actions.fused_cells, []
+    place, placed = shop_actions.fused_cells, []
 
     def fused_cells(*args):
         out = place(*args)
@@ -356,7 +357,7 @@ def test_a_cell_placed_by_the_fusion_that_is_not_there_has_the_page_opened_again
     patch_all(monkeypatch, "fused_cells", fused_cells)
     assert fusion(context, monkeypatch, g, team)
     assert "shop: a cell placed by the fusion is not where it was put: the fuse page is opened again" in lines
-    assert g.taps.count(actions.SHOP_BUTTONS["fuse"]) == 2 and g.taps.count(actions.FUSE_DIALOG_CONFIRM) == 2
+    assert g.taps.count(shop_actions.SHOP_BUTTONS["fuse"]) == 2 and g.taps.count(shop_actions.FUSE_DIALOG_CONFIRM) == 2
     assert sorted(g.tapped) == [4, 10, 13, 14, 15, 1001]  # each material once, nothing else
 
 
@@ -398,13 +399,13 @@ def test_a_recipe_whose_cell_is_not_where_the_fusion_put_it_is_not_counted_faile
     def place(context, cells, slots, grid, out=False):
         grid["missed"] = True
         return False
-    monkeypatch.setattr(actions.Shop, "place", staticmethod(place))
+    monkeypatch.setattr(shop_actions.Shop, "place", staticmethod(place))
     cells = [{"i": k, "x": 678 + 96 * k, "y": 294, "tier": t, "keyword": "Burn", "id": g, "score": 0.9}
              for k, (t, g) in enumerate([(1, 9003), (3, 9053), (3, 9157)])]
     for placed, failed in ((True, []), (False, [SOOTHE])):
         visit = {}
         grid = {"page": "fuse", "at": 0, "placed": placed, "missed": False}
-        assert actions.Shop.fuse_recipe(context, shop_team({"list": wants(SOOTHE)}), cells, grid, 3, visit) is False
+        assert shop_actions.Shop.fuse_recipe(context, shop_team({"list": wants(SOOTHE)}), cells, grid, 3, visit) is False
         assert visit["recipes_failed"] == failed
 
 
@@ -414,9 +415,9 @@ def test_a_recovery_reads_the_fuse_page_again_on_the_same_visit(context, monkeyp
     paid = {"healed": True, "refreshes": {"keyword": 1, "normal": 0}}
     visit = actions.RUN.setdefault("shop", {**paid, "wanted": None, "sold": False})
     lost_tap_fuse_page(context, monkeypatch)
-    actions.Shop.fuse(context, shop_team({}), visit)
+    shop_actions.Shop.fuse(context, shop_team({}), visit)
     assert visit["fuse_scanned"]
     actions.forget_game_state()  # the recovery that brought the game back
-    actions.Shop.fuse(context, shop_team({}), visit)
-    assert taps(context).count(actions.SHOP_BUTTONS["fuse"]) == 2  # opened again
+    shop_actions.Shop.fuse(context, shop_team({}), visit)
+    assert taps(context).count(shop_actions.SHOP_BUTTONS["fuse"]) == 2  # opened again
     assert {k: visit[k] for k in paid} == paid  # what the visit paid for is not paid again
