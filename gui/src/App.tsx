@@ -25,8 +25,10 @@ export const TABS = [
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
 
+type TabId = (typeof TABS)[number][0];
+
 /** The tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): the tabs that start a group. */
-const GROUP_STARTS = new Set<(typeof TABS)[number][0]>(["deployment", "events", "daily"]);
+const GROUP_STARTS = new Set<TabId>(["deployment", "events", "daily"]);
 
 /** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
 type Leave = "close" | "reload";
@@ -41,7 +43,7 @@ export default function App() {
   const [savedText, setSavedText] = useState("");
   const [loadError, setLoadError] = useState("");
   const [root, setRoot] = useState("");
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("teams");
+  const [tab, setTab] = useState<TabId>("teams");
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked

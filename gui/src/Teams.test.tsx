@@ -44,7 +44,20 @@ describe("Reset time records", () => {
     await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
     await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
     expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
+    await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+    expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
     expect(file.resets).toEqual([]);
+  });
+
+  test("the note of a reset stays with its team: the next team picked does not show it", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+    const r = renderEditor(<TeamsTab />, s);
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    await r.user.click(screen.getByRole("button", { name: zh.resetGo }));
+    await screen.findByText(zh.resetDone);
+    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    expect(screen.queryByText(zh.resetDone)).toBeNull();
   });
 
   test("asks in the page, not in a browser dialog; Cancel writes nothing, the confirm writes the marker", async () => {
@@ -253,6 +266,15 @@ describe("the E.G.O Gift Search keyword tabs", () => {
     expect(tabs().map((b) => b.textContent)).toEqual(SEARCH_TABS.map(kw));
     const on = tabs().find((b) => b.getAttribute("aria-selected") === "true")!;
     expect(on).toHaveTextContent(kw("Bleed"));
+  });
+
+  test("follow the team picked: the next team's grid opens on its own list's main keyword", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(2, "T2"), id: "t2", gift_list: "other" });
+    const r = renderEditor(<TeamsTab />, s);
+    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    const on = tabs().find((b) => b.getAttribute("aria-selected") === "true")!;
+    expect(on).toHaveTextContent(kw("Tremor"));
   });
 
   test("walk with the arrow keys, one tab stop for the row", async () => {

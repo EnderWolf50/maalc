@@ -75,10 +75,11 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
-  // The question and its note hold the team they are for, so neither shows on the next team picked; the editor itself stays
-  // mounted, so the panels left open stay open.
-  const [notice, setNotice] = useState<{ team: string; text: string } | null>(null);
-  const [askReset, setAskReset] = useState<string | null>(null); // Reset time records asks first, in the page
+  const [notice, setNotice] = useState<{ team: string; text: string } | null>(null); // its team's: a reset that ends after a switch shows nowhere
+  const [askReset, setAskReset] = useState(false); // Reset time records asks first, in the page
+  // Picking another team drops the question and the note; the editor stays mounted, so the panels left open stay open.
+  const [shownTeam, setShownTeam] = useState(team.id);
+  if (shownTeam !== team.id) { setShownTeam(team.id); setAskReset(false); setNotice(null); }
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -122,21 +123,20 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}
         </Mark>
         <span className="spacer" />
-        <button type="button" onClick={() => setAskReset(team.id)}>{t("resetTimes")}</button>
+        <button type="button" onClick={() => setAskReset(true)}>{t("resetTimes")}</button>
         <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>
       </div>
-      {askReset === team.id && (
+      {askReset && (
         // asked in the page, not in a browser dialog: the window has no system frame for one to match
         <div className="notice confirm" role="group" aria-label={t("resetTimes")}>
           <span>{t("resetConfirm")}</span>
           <button type="button" onClick={async () => {
-            setAskReset(null);
-            const id = team.id;
-            try { await resetTeamTimes(id); setNotice({ team: id, text: t("resetDone") }); }
-            catch (e) { setNotice({ team: id, text: String(e) }); }
+            setAskReset(false);
+            try { await resetTeamTimes(team.id); setNotice({ team: team.id, text: t("resetDone") }); }
+            catch (e) { setNotice({ team: team.id, text: String(e) }); }
           }}>{t("resetGo")}</button>
           {/* the focus starts on Cancel: the marker cannot be taken back */}
-          <button type="button" autoFocus onClick={() => setAskReset(null)}>{t("cancel")}</button>
+          <button type="button" autoFocus onClick={() => setAskReset(false)}>{t("cancel")}</button>
         </div>
       )}
       {notice?.team === team.id && <p className="notice">{notice.text}</p>}
@@ -380,7 +380,7 @@ function GiftSearchPanel({ i }: { i: number }) {
         </label>
         <small className="caution">{t("gift.note")}</small>
       </Mark>
-      <GiftGrid gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
+      <GiftGrid key={team.id} gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>
         <h3>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>

@@ -126,6 +126,22 @@ describe("a settings file that does not read", () => {
   });
 });
 
+test("while the settings still load, a window button that fails shows its reason alone", async () => {
+  const api = await import("./api");
+  const load = vi.spyOn(api, "loadSettings").mockReturnValue(new Promise(() => {}));
+  const spy = vi.spyOn(api, "minimizeWindow").mockRejectedValue("no permission");
+  try {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(button(zh["win.minimize"]));
+    const why = await screen.findByText(zh.loadError);
+    expect(why.parentElement!.querySelector("pre")!.textContent).toBe("no permission");
+  } finally {
+    spy.mockRestore();
+    load.mockRestore();
+  }
+});
+
 test("on the load error screen, a window button that fails adds its reason under the file's, which stays", async () => {
   win.text = "{ not json";
   const api = await import("./api");
