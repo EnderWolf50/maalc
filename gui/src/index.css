@@ -210,8 +210,8 @@ nav button {
   color: var(--muted); font-weight: 600; border-radius: 8px 8px 0 0; corner-shape: bevel;
 }
 nav button:hover:not(:disabled) { color: var(--fg); background: var(--hov); border-color: transparent; }
-/* the tabs in groups: what a run plays with, the plans, the overrides, the daily tasks */
-nav button:nth-child(4), nav button:nth-child(7), nav button:nth-child(9) { margin-left: 18px; }
+/* the tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): a short bronze rule between */
+nav .tabsep { flex: none; align-self: center; width: 1px; height: 16px; margin: 0 8px; background: var(--line-2); }
 nav button.selected { color: var(--fg); background: var(--bg); border-color: var(--line-2); }
 nav button.selected::after { content: ""; position: absolute; left: 12px; right: 12px; top: 0; height: 3px; background: var(--accent-line); }
 nav button.bad { color: var(--bad); }
@@ -264,6 +264,10 @@ p.muted { margin: 0; max-width: 56em; }
 .split aside .notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 10px; margin: 0;
   color: var(--fg-2); font-size: 12.5px; background: var(--raise); border: 1px dashed var(--line-2); }
 .split aside .notice button { padding: 1px 10px; }
+/* the team page's section index, under the team list in the sticky side column */
+nav.sections { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; margin-top: 6px; }
+nav.sections small { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+nav.sections button { padding: 2px 9px; font-size: 12.5px; color: var(--fg-2); background: none; border-color: var(--line); }
 .tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
 .split { display: flex; gap: 20px; align-items: flex-start; }
@@ -364,6 +368,7 @@ table.overrides {
   border-radius: 10px 0 10px 0; corner-shape: bevel; overflow: hidden;
 }
 table.overrides tr:last-child > td { border-bottom: none; }
+table.overrides td:last-child { width: 1%; text-align: right; white-space: nowrap; } /* Delete at the row's end */
 table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 
 .load-error { padding: 24px; }
@@ -396,6 +401,8 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 }
 .sinner:hover:not(:disabled) { border-color: var(--accent-line); }
 .sinner:disabled { opacity: 1; cursor: default; }
+/* A team on a plan: the plan's grid, quieter, so it does not read as one to click (the line above says where to change it). */
+.sinners.readonly .sinner { filter: saturate(0.45) brightness(0.85); border-style: dashed; }
 .sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--dep-top), var(--dep-bottom) 75%); }
 .sinner.deployed .banner { background: var(--dep-plate); color: var(--dep-ink); }
 .sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); background: linear-gradient(165deg, var(--bak-top), var(--bak-bottom) 75%); }
@@ -622,11 +629,14 @@ small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); backgrou
 @media (max-width: 1000px) {
   nav { padding: 6px 10px 0; }
   nav button { padding: 7px 9px 8px; }
-  nav button:nth-child(4), nav button:nth-child(7), nav button:nth-child(9) { margin-left: 8px; }
+  nav .tabsep { margin: 0 3px; }
   main { padding: 14px 14px 24px; }
   .split { gap: 14px; }
   .split aside { width: 190px; }
   .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */
+  /* a skill replacement row: the name and its steps on one line, the state, the order and the arrows on the next */
+  ol.skill-sinners > li { flex-wrap: wrap; row-gap: 4px; }
+  .skill-pillcell { flex: 1 1 auto; width: auto; }
   .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
   .sinner .num { font-size: 28px; left: 7px; }
   .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }

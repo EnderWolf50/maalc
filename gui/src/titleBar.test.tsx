@@ -1,5 +1,5 @@
 // The window's title bar (#664): the system's own bar is hidden, and the header drags the window and holds its buttons.
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
@@ -109,5 +109,19 @@ describe("the title bar", () => {
     expect(win.closed).toBe(0);
     await user.click(button(zh.closeDiscard));
     await waitFor(() => expect(win.closed).toBe(1));
+  });
+});
+
+describe("a settings file that does not read", () => {
+  beforeEach(() => { win.text = "{ not json"; });
+
+  test("keeps the title bar: it drags the window, and its buttons and a Close beside New file close it", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText(zh.loadError)).toBeInTheDocument();
+    expect(document.querySelector("header")).toHaveAttribute("data-tauri-drag-region", "deep");
+    expect(button(zh["win.minimize"])).toBeInTheDocument();
+    await user.click(within(document.querySelector("main")!).getByRole("button", { name: zh["win.close"] }));
+    expect(win.closed).toBe(1);
   });
 });

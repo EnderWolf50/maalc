@@ -19,7 +19,7 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
   const { t, bad } = useEditor();
   return (<>
     {onChange && <p className="muted">{t("order.hint")}</p>}
-    <div className={"sinners" + (bad(path) ? " bad" : "")} data-path={path}>
+    <div className={"sinners" + (onChange ? "" : " readonly") + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
         const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";

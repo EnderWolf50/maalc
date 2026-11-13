@@ -39,9 +39,32 @@ export function TeamsTab() {
           update((d) => { d.teams.push(team); });
           setSel(team.id);
         }}>+ {t("add")}</button>
+        {s.teams[i] && <SectionIndex />}
       </aside>
       <section>{s.teams[i] && <TeamEditor i={i} onRemove={remove} />}</section>
     </div>
+  );
+}
+
+/** The team page's sections, so a long page is one click from each: a closed panel opens and its heading takes the focus. */
+const SECTIONS = [
+  ["order", "team.deployment_order"], ["starlight", "team.starlight"], ["gift", "gift.title"], ["keep", "keep.title"],
+  ["skill", "skill.title"], ["more", "team.more"],
+] as const;
+function SectionIndex() {
+  const { t } = useEditor();
+  const go = (k: string) => {
+    const el = document.querySelector<HTMLElement>(`[data-section="${k}"]`);
+    if (!el) return;
+    if (el instanceof HTMLDetailsElement) el.open = true;
+    el.scrollIntoView?.({ block: "start" });
+    el.querySelector<HTMLElement>("summary, select, input, button")?.focus({ preventScroll: true });
+  };
+  return (
+    <nav className="sections" aria-label={t("team.sections")}>
+      <small>{t("team.sections")}</small>
+      {SECTIONS.map(([k, label]) => <button type="button" key={k} onClick={() => go(k)}>{t(label)}</button>)}
+    </nav>
   );
 }
 
@@ -122,7 +145,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             </Choice>
             <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
           </span>
-          {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
+          {main && <small>{t("team.main_keyword")}{t("colon")}<b>{t(kwText(main))}</b></small>}
         </Field>
         <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
           <Choice value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
@@ -137,7 +160,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </details>
       </div>
 
-      <fieldset>
+      <fieldset data-section="order">
         <legend>{t("team.deployment_order")}</legend>
         <Mark className="row" path={`${path}/deployment_order`} marked={!("custom" in team.deployment_order)}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
@@ -154,7 +177,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         </>}
       </fieldset>
 
-      <fieldset>
+      <fieldset data-section="starlight">
         <legend>{t("team.starlight")}</legend>
         <Mark className="row" path={`${path}/starlight`} marked={!("custom" in team.starlight)}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
@@ -182,7 +205,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       <KeepPanel i={i} />
       <SkillPanel i={i} />
 
-      <details className="panel" open>
+      <details className="panel" open data-section="more">
         <summary>{t("team.more")}</summary>
         <div className="options">
           <Mark className="toggle" path={`${path}/guard_turns`}>
@@ -308,7 +331,7 @@ function KeepPanel({ i }: { i: number }) {
   const path = `teams/${i}`;
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   return (
-    <details className={"panel" + (["sell_max_tier", "sell_vestiges"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")}>
+    <details className={"panel" + (["sell_max_tier", "sell_vestiges"].some((k) => bad(`${path}/${k}`)) ? " bad" : "")} data-section="keep">
       <summary>{t("keep.title")}</summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="options">
@@ -343,7 +366,7 @@ function GiftSearchPanel({ i }: { i: number }) {
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
   return (
-    <details className={"panel" + (bad(path) ? " bad" : "")} data-path={path}>
+    <details className={"panel" + (bad(path) ? " bad" : "")} data-path={path} data-section="gift">
       <summary>{t("gift.title")}{search.enabled && search.gifts.length ? ` (${search.gifts.length})` : ""}</summary>
       <Mark className="toggle" path={`${path}/enabled`}>
         <label className="check">

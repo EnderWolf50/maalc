@@ -269,7 +269,7 @@ describe("closing the window", () => {
     await edited();
     requestClose();
     expect(screen.getByRole("button", { name: zh.closeSave })).toHaveFocus();
-    const behind = document.querySelectorAll("header, nav, main");
+    const behind = document.querySelectorAll("header, nav[role=tablist], main"); // the section index is a nav inside main
     expect(behind).toHaveLength(3);
     for (const el of behind) expect(el).toHaveAttribute("inert");
   });

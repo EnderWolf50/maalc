@@ -46,3 +46,14 @@ test("the event overrides tab says what to type and how the bot matches it", () 
   renderEditor(<EventsTab />, newSettings());
   expectLines(zh["event.note"]);
 });
+
+test("a deleted row can be undone: it comes back in its place", async () => {
+  const rows = [{ trial: "Growth I", risk: 1 }, { trial: "Growth II", risk: 2 }, { trial: "Growth III", risk: 3 }];
+  const { user, settings } = renderEditor(<TrialsTab />, { ...newSettings(), trial_risk_overrides: rows });
+  await user.click(screen.getAllByRole("button", { name: zh.remove })[1]);
+  expect(settings().trial_risk_overrides.map((r) => r.trial)).toEqual(["Growth I", "Growth III"]);
+  expect(screen.getByRole("status")).toHaveTextContent("Growth II");
+  await user.click(screen.getByRole("button", { name: zh.undo }));
+  expect(settings().trial_risk_overrides).toEqual(rows);
+  expect(screen.queryByRole("status")).toBeNull();
+});

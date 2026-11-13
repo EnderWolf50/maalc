@@ -1,5 +1,5 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import * as api from "./api";
 import { TEXT, fill, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
@@ -171,16 +171,28 @@ export default function App() {
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
 
+  // The title bar alone, before the settings are read and when they do not read: the window has no system bar to fall back on.
+  const bare = (
+    <header data-tauri-drag-region="deep">
+      <h1>{t("title")}</h1>
+      <span className="path" />
+      <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError(String(e))} />
+    </header>
+  );
   if (loadError) {
-    return (
+    return (<>
+      {bare}
       <main className="load-error">
         <p>{t("loadError")}</p>
         <pre>{loadError}</pre>
-        <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); setSavedText(""); }}>{t("newFile")}</button>
+        <div className="row">
+          <button type="button" onClick={() => { setLoadError(""); setS(newSettings()); setSavedText(""); }}>{t("newFile")}</button>
+          <button type="button" onClick={() => { api.requestClose().catch(() => {}); }}>{t("win.close")}</button>
+        </div>
       </main>
-    );
+    </>);
   }
-  if (!s) return null;
+  if (!s) return bare;
 
   // marks show after the first save attempt; a marked field's controls are described by the problems' text (#695)
   const problemIds = (path: string) => (checked ? problems : [])
@@ -292,7 +304,7 @@ export default function App() {
           control (drag.js "deep"), and a double click there maximises it. */}
       <header inert={!!asking} data-tauri-drag-region="deep">
         <h1>{t("title")}</h1>
-        <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
+        <span className="muted path" title={`${root}\\config\\settings.json`}>{root}\config\settings.json</span>
         <label className="lang">{t("language")}
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
@@ -303,13 +315,17 @@ export default function App() {
         {canRevert && <button type="button" className="quiet" title={t("revert.note")} onClick={revert}>{t("revert")}</button>}
         {canUndoRevert && <button type="button" className="quiet" onClick={undoRevert}>{t("undo")}</button>}
         <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
-        <WindowButtons maximized={maximized} onError={(e) => setStatus(String(e))} />
+        <WindowButtons t={t} maximized={maximized} onError={(e) => setStatus(String(e))} />
       </header>
       <nav role="tablist" onKeyDown={walkTabs} inert={!!asking}>
-        {TABS.map(([id, label, , prefixes]) => (
-          <button type="button" role="tab" key={id} id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
-            tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
-            onClick={() => setTab(id)}>{t(label)}</button>
+        {TABS.map(([id, label, , prefixes], k) => (
+          <Fragment key={id}>
+            {/* the tabs in groups: what a run plays with, the plans, the overrides, the daily tasks */}
+            {(k === 3 || k === 6 || k === 8) && <span className="tabsep" aria-hidden />}
+            <button type="button" role="tab" id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
+              tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
+              onClick={() => setTab(id)}>{t(label)}</button>
+          </Fragment>
         ))}
       </nav>
       <main inert={!!asking}>
@@ -338,8 +354,7 @@ export default function App() {
 
 /** The window's own buttons at the title bar's right end. Close is a close request, as Alt+F4 is: with unsaved changes the
  * prompt asks first. A call the window refuses (no permission) says why in the save state, as a failed close does. */
-function WindowButtons({ maximized, onError }: { maximized: boolean; onError: (e: unknown) => void }) {
-  const { t } = useEditor();
+function WindowButtons({ t, maximized, onError }: { t: (k: Key) => string; maximized: boolean; onError: (e: unknown) => void }) {
   const button = (name: string, run: () => Promise<void>, glyph: ReactNode, className?: string) => (
     <button type="button" className={className} aria-label={name} title={name} onClick={() => { run().catch(onError); }}>
       <svg viewBox="0 0 10 10" aria-hidden="true">{glyph}</svg>
@@ -518,8 +533,16 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   const { s, update, t } = useEditor();
   const rows = s[listKey] as unknown as R[];
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
+  // the last deleted row, which Undo puts back in its place, as a deleted team or plan comes back (ui.tsx useUndo)
+  const [last, setLast] = useState<{ row: R; at: number } | null>(null);
   return (
     <>
+      {last && (
+        <p className="notice" role="status">
+          {fill(t("undo.deleted"), { name: String(last.row[cols[0].key]) || "—" })}{" "}
+          <button type="button" onClick={() => { set((l) => { l.splice(Math.min(last.at, l.length), 0, last.row); }); setLast(null); }}>{t("undo")}</button>
+        </p>
+      )}
       {rows.length ? (
         <table className="overrides">
           <thead><tr>{cols.map((c) => <th key={c.key}>{t(c.label)}</th>)}<th /></tr></thead>
@@ -533,7 +556,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                       : <Input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
                   </Mark>
                 ))}
-                <td><button type="button" className="danger" onClick={() => set((l) => { l.splice(i, 1); })}>{t("remove")}</button></td>
+                <td><button type="button" className="danger" onClick={() => { setLast({ row: r, at: i }); set((l) => { l.splice(i, 1); }); }}>{t("remove")}</button></td>
               </tr>
             ))}
           </tbody>

@@ -315,3 +315,12 @@ describe("in the whole editor", () => {
     expect(JSON.parse(file.saved[0]).teams[0].skill_replacement.sinners).toEqual([]);
   });
 });
+
+test("a removed sinner can be undone, targets and place and all", async () => {
+  const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1, false)]));
+  await expand(r);
+  await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
+  expect(listed()).toEqual(["Faust"]);
+  await r.user.click(within(panel()).getByRole("button", { name: zh.undo }));
+  expect(stored(r)).toEqual([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1, false)]);
+});

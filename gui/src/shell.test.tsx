@@ -175,3 +175,9 @@ describe("Revert", () => {
     expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Ta?");
   });
 });
+
+test("the header's file path, cut short in a narrow window, shows in full on hover", async () => {
+  render(<App />);
+  await screen.findByRole("button", { name: zh.save });
+  expect(document.querySelector("header .path")).toHaveAttribute("title", "root\\config\\settings.json");
+});

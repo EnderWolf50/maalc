@@ -262,3 +262,22 @@ describe("the E.G.O Gift Search keyword tabs", () => {
     expect(tabs()[0]).toHaveFocus();
   });
 });
+
+describe("the side column's section index", () => {
+  test("jumps to a section: a closed panel opens, and its heading takes the focus", async () => {
+    const r = renderEditor(<TeamsTab />, settings());
+    const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
+    const gift = screen.getByText(zh["gift.title"], { exact: false, selector: "summary" });
+    expect(gift.closest("details")).not.toHaveAttribute("open");
+    await r.user.click(within(jump).getByRole("button", { name: zh["gift.title"] }));
+    expect(gift.closest("details")).toHaveAttribute("open");
+    expect(gift).toHaveFocus();
+  });
+
+  test("lists the team's sections in the order the page shows them", () => {
+    renderEditor(<TeamsTab />, settings());
+    const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
+    expect(within(jump).getAllByRole("button").map((b) => b.textContent)).toEqual(
+      (["team.deployment_order", "team.starlight", "gift.title", "keep.title", "skill.title", "team.more"] as const).map((k) => zh[k]));
+  });
+});
