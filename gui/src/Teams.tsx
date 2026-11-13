@@ -9,7 +9,7 @@ import {
 } from "./model";
 import { SinnerGrid, StarlightEditor } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo, withBreaks } from "./ui";
+import { Choice, Field, Input, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
@@ -70,11 +70,11 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   });
 
   const planSelect = (value: string, plans: { id: string; name: string }[], onChange: (id: string) => void) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
+    <Choice value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">{t("custom")}</option>
       {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
       {missing(value, plans)}
-    </select>
+    </Choice>
   );
 
   // Laid out like AALC's team page: who and what on top, the sinner grid, starlight, then the rest.
@@ -82,7 +82,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
     <div className="team" data-path={path}>
       <div className="bar">
         <Field label={t("name")} path={`${path}/name`}>
-          <input value={team.name} onChange={(e) => set({ name: e.target.value })} />
+          <Input value={team.name} onChange={(e) => set({ name: e.target.value })} />
         </Field>
         <Field label={t("team.game_team")} path={`${path}/game_team`}>
           <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
@@ -99,13 +99,12 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <fieldset>
         <legend>{t("team.deployment_order")}</legend>
-        <div className={"row" + (bad(`${path}/deployment_order`) && !("custom" in team.deployment_order) ? " bad" : "")}
-          data-path={`${path}/deployment_order`}>
+        <Mark className="row" path={`${path}/deployment_order`} marked={!("custom" in team.deployment_order)}>
           {planSelect(orderSource, s.deployment_order_plans, (id) => set({
             deployment_order: id ? { plan: id } : { custom: [...(order ?? SINNERS)] },
           }))}
           {"custom" in team.deployment_order && <button type="button" onClick={saveOrderPlan}>{t("saveAsPlan")}</button>}
-        </div>
+        </Mark>
         {"custom" in team.deployment_order ? (
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
@@ -114,14 +113,14 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
       <fieldset>
         <legend>{t("team.starlight")}</legend>
-        <div className={"row" + (bad(`${path}/starlight`) && !("custom" in team.starlight) ? " bad" : "")} data-path={`${path}/starlight`}>
+        <Mark className="row" path={`${path}/starlight`} marked={!("custom" in team.starlight)}>
           {planSelect(starSource, s.starlight_plans, (id) => set({
             starlight: id ? { plan: id } : {
               custom: starPlan ? { levels: [...starPlan.levels], priority: [...starPlan.priority], convert_leftover: starPlan.convert_leftover } : defaultStarlight(),
             },
           }))}
           {"custom" in team.starlight && <button type="button" onClick={saveStarPlan}>{t("saveAsPlan")}</button>}
-        </div>
+        </Mark>
         {"custom" in team.starlight ? (
           <StarlightEditor value={team.starlight.custom} path={`${path}/starlight/custom`}
             onChange={(custom) => set({ starlight: { custom } })} />
@@ -135,35 +134,35 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
       <details className="panel" open>
         <summary>{t("team.more")}</summary>
         <div className="options">
-          <div className={"toggle" + (bad(`${path}/guard_turns`) ? " bad" : "")} data-path={`${path}/guard_turns`}>
+          <Mark className="toggle" path={`${path}/guard_turns`}>
             <label className="check">
-              <input type="checkbox" checked={team.guard_turns > 0} onChange={(e) => set({ guard_turns: e.target.checked ? 1 : 0 })} />
+              <Input type="checkbox" checked={team.guard_turns > 0} onChange={(e) => set({ guard_turns: e.target.checked ? 1 : 0 })} />
               {t("team.guard_turns")}
             </label>
-            <select value={team.guard_turns || 1} disabled={!team.guard_turns} onChange={(e) => set({ guard_turns: Number(e.target.value) })}>
+            <Choice value={team.guard_turns || 1} disabled={!team.guard_turns} onChange={(e) => set({ guard_turns: Number(e.target.value) })}>
               {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} {t("team.turns")}</option>)}
-            </select>
+            </Choice>
             <small>{t("team.guard_turns_note")}</small>
-          </div>
+          </Mark>
           <ToggleNum label={t("team.hard_from_floor")} path={`${path}/hard_from_floor`} value={team.hard_from_floor} on={1} min={1} max={5}
             note={t("team.hard_from_floor_note")} onChange={(v) => set({ hard_from_floor: v })} />
-          <div className={"toggle" + (bad(`${path}/allow_white_gossypium`) ? " bad" : "")} data-path={`${path}/allow_white_gossypium`}>
+          <Mark className="toggle" path={`${path}/allow_white_gossypium`}>
             <label className="check">
-              <input type="checkbox" checked={team.allow_white_gossypium} onChange={(e) => set({ allow_white_gossypium: e.target.checked })} />
+              <Input type="checkbox" checked={team.allow_white_gossypium} onChange={(e) => set({ allow_white_gossypium: e.target.checked })} />
               {t("team.allow_white_gossypium")}
             </label>
             <small>{t("team.allow_white_gossypium_note")}</small>
-          </div>
-          <div className={"toggle" + (bad(`${path}/usage`) ? " bad" : "")} data-path={`${path}/usage`}>
+          </Mark>
+          <Mark className="toggle" path={`${path}/usage`}>
             <label className="check">
-              <input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />
+              <Input type="checkbox" checked={team.usage !== "any"} onChange={(e) => set({ usage: e.target.checked ? "hard_only" : "any" })} />
               {t("team.usage")}
             </label>
-            <select value={team.usage === "any" ? "hard_only" : team.usage} disabled={team.usage === "any"}
+            <Choice value={team.usage === "any" ? "hard_only" : team.usage} disabled={team.usage === "any"}
               onChange={(e) => set({ usage: e.target.value })}>
               {teamEnum("usage").filter((u) => u !== "any").map((u) => <option key={u} value={u}>{tv("usage", u)}</option>)}
-            </select>
-          </div>
+            </Choice>
+          </Mark>
         </div>
         <div className="grid">
           <Field label={t("team.heal")} path={`${path}/heal`}>
@@ -179,20 +178,20 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             <Num value={team.shop_refresh_normal} min={0} onChange={(v) => set({ shop_refresh_normal: v })} />
           </Field>
           <Field label={t("team.gift_list")} path={`${path}/gift_list`} note={t("team.gift_list_note")}>
-            <select value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
+            <Choice value={team.gift_list} onChange={(e) => set({ gift_list: e.target.value })}>
               <option value="default">{t("defaultPlan")}</option>
               {s.gift_lists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {missing(team.gift_list !== "default" && team.gift_list, s.gift_lists)}
-            </select>
+            </Choice>
             {main && <small>{t("team.main_keyword")}: <b>{t(kwText(main))}</b></small>}
             <button type="button" disabled={!main} onClick={() => chooseList(team.gift_list, true)}>{t("team.edit_list")}</button>
           </Field>
           <Field label={t("team.theme_pack_plan")} path={`${path}/theme_pack_plan`}>
-            <select value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
+            <Choice value={team.theme_pack_plan} onChange={(e) => set({ theme_pack_plan: e.target.value })}>
               <option value="default">{t("defaultPlan")}</option>
               {s.theme_pack_plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               {missing(team.theme_pack_plan !== "default" && team.theme_pack_plan, s.theme_pack_plans)}
-            </select>
+            </Choice>
           </Field>
           <Field label={t("team.min_alive")} path={`${path}/min_alive`} note={t("team.min_alive_note")}>
             <Num value={team.min_alive} min={0} max={12} onChange={(v) => set({ min_alive: v })} />
@@ -269,20 +268,20 @@ function KeepPanel({ i }: { i: number }) {
       <summary>{t("keep.title")}</summary>
       <p className="muted">{t("keep.note")}</p>
       <div className="options">
-        <div className={"toggle" + (bad(`${path}/sell_max_tier`) ? " bad" : "")} data-path={`${path}/sell_max_tier`}>
+        <Mark className="toggle" path={`${path}/sell_max_tier`}>
           <span>{t("keep.sell_max_tier")}</span>
-          <select value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
+          <Choice value={team.sell_max_tier} onChange={(e) => set({ sell_max_tier: Number(e.target.value) })}>
             {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{TIERS[n]}</option>)}
-          </select>
+          </Choice>
           <small>{t("keep.sell_max_tier_note")}</small>
-        </div>
-        <div className={"toggle" + (bad(`${path}/sell_vestiges`) ? " bad" : "")} data-path={`${path}/sell_vestiges`}>
+        </Mark>
+        <Mark className="toggle" path={`${path}/sell_vestiges`}>
           <label className="check">
-            <input type="checkbox" checked={team.sell_vestiges} onChange={(e) => set({ sell_vestiges: e.target.checked })} />
+            <Input type="checkbox" checked={team.sell_vestiges} onChange={(e) => set({ sell_vestiges: e.target.checked })} />
             {t("keep.sell_vestiges")}
           </label>
           <small>{withBreaks(t("keep.sell_vestiges_note"))}</small>
-        </div>
+        </Mark>
       </div>
     </details>
   );

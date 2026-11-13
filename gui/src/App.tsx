@@ -7,7 +7,7 @@ import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Num, Select, ToggleNum, focusPath, isPickList, makeCtx, translate, useEditor, withBreaks,
+  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, isPickList, makeCtx, translate, useEditor, withBreaks,
   type Picked,
 } from "./ui";
 import { validate, type Problem } from "./validate";
@@ -25,6 +25,8 @@ export const TABS = [
 ] as const;
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The element id of the problem at this place in the problems block. */
+const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
 
@@ -155,10 +157,11 @@ export default function App() {
   }
   if (!s) return null;
 
-  const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
-  const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
+  // marks show after the first save attempt; a marked field's controls are described by the problems' text (#695)
+  const problemIds = (path: string) => (checked ? problems : [])
+    .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
-    s, bad, giftList, picked, setPicked,
+    s, problemIds, giftList, picked, setPicked,
     setS: (next) => setS((prev) => next(prev!)),
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });
@@ -234,7 +237,7 @@ export default function App() {
       <nav role="tablist" inert={asking}>
         {TABS.map(([id, label, , prefixes]) => (
           <button type="button" role="tab" key={id} aria-selected={tab === id}
-            className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
+            className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
@@ -244,7 +247,7 @@ export default function App() {
           <div className="problems" role="alert">
             <p>{t("saveBlocked")}</p>
             <ul>{problems.map((p, i) => (
-              <li key={i}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
+              <li key={i} id={problemId(i)}>{tabOf(p.paths[0]) ? <button type="button" onClick={() => goTo(p.paths[0])}>{p.text}</button> : p.text}</li>
             ))}</ul>
           </div>
         )}
@@ -282,7 +285,7 @@ function ClosePrompt({ onSave, onDiscard, onCancel }: { onSave: () => void; onDi
 }
 
 function RunTab() {
-  const { s, update, t, tv, bad } = useEditor();
+  const { s, update, t, tv } = useEditor();
   const run = s.run;
   const pastFive = run.target_floor > 5;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
@@ -303,22 +306,22 @@ function RunTab() {
         onChange={(v) => set({ runs: v })} />
       {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
       {pick("weekly_bonus_amount")}
-      <label className={"check" + (bad("run/stop_when_weekly_bonus_out") ? " bad" : "")} data-path="run/stop_when_weekly_bonus_out">
-        <input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
+      <Mark as="label" className="check" path="run/stop_when_weekly_bonus_out">
+        <Input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
         {t("run.stop_when_weekly_bonus_out")}
-      </label>
+      </Mark>
       {pick("starlight_unaffordable")}
       <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
       {pick("after_retries")}
       {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
       {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-        <label key={k} className={"check" + (bad(`run/${k}`) ? " bad" : "")} data-path={`run/${k}`}>
-          <input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
+        <Mark as="label" key={k} className="check" path={`run/${k}`}>
+          <Input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
           {t(`run.${k}`)}
-        </label>
+        </Mark>
       ))}
       <Field label={t("run.webhook_url")} path="run/webhook_url">
-        <input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
+        <Input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
       </Field>
     </div>
   );
@@ -374,7 +377,7 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
             onChange={(v) => set({ team: v || null })} />
         </Field>
         <Field label={t("lux.consecutive")} path={`${path}/consecutive`} note={t("lux.consecutive_note")}>
-          <input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
+          <Input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />
         </Field>
         <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
           <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
@@ -390,7 +393,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   cols: { key: keyof R & string; label: Key; number?: boolean }[];
   blank: R;
 }) {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t } = useEditor();
   const rows = s[listKey] as unknown as R[];
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
   return (
@@ -402,11 +405,11 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
             {rows.map((r, i) => (
               <tr key={i}>
                 {cols.map((c) => (
-                  <td key={c.key} className={bad(`${listKey}/${i}/${c.key}`) ? "bad" : ""} data-path={`${listKey}/${i}/${c.key}`}>
+                  <Mark as="td" key={c.key} path={`${listKey}/${i}/${c.key}`}>
                     {c.number
                       ? <Decimal value={r[c.key] as number} min={0} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
-                      : <input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
-                  </td>
+                      : <Input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
+                  </Mark>
                 ))}
                 <td><button type="button" className="danger" onClick={() => set((l) => { l.splice(i, 1); })}>{t("remove")}</button></td>
               </tr>

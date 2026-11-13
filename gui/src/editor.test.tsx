@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
-import { TEXT } from "./i18n";
+import { TEXT, type Key } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0 }));
@@ -81,6 +81,35 @@ describe("the problems block", () => {
     s.teams[1].game_team = 1;
     await blocked(s, zh["tab.run"]);
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
+  });
+});
+
+describe("a field marked red", () => {
+  const box = (role: "combobox" | "checkbox" | "textbox", label: Key) => () => screen.getByRole(role, { name: zh[label] });
+  test.each([
+    ["a choice of a team", (s: Settings) => { s.teams[0].theme_pack_plan = "gone"; }, "tab.teams", /teams\/0\/theme_pack_plan/,
+      box("combobox", "team.theme_pack_plan")],
+    ["a choice of the run options", (s: Settings) => { s.run.target_floor = 10; s.run.difficulty = "normal"; s.teams.forEach((x) => { x.hard_from_floor = 1; }); },
+      "tab.run", /run\/difficulty/, box("combobox", "run.difficulty")],
+    ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, "tab.teams", /teams\/0\/guard_turns/, box("checkbox", "team.guard_turns")],
+    ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; }, "tab.run",
+      /run\/auto_download/, box("checkbox", "run.auto_download")],
+    ["a cell of an override table", (s: Settings) => { s.event_overrides = [{ question: "q", option: "a" }, { question: "q", option: "b" }]; },
+      "tab.events", /event_overrides: question/, () => screen.getAllByDisplayValue("q")[1]],
+  ] as const)("%s is invalid to a screen reader, which reads the problem", async (_, change, start, text, control) => {
+    const s = settings();
+    change(s);
+    await blocked(s, zh[start]);
+    expect(control()).toHaveAttribute("aria-invalid", "true");
+    expect(control()).toHaveAccessibleDescription(problem(text).textContent!);
+  });
+
+  test("a field the checks pass is not", async () => {
+    const s = settings();
+    s.teams[0].theme_pack_plan = "gone";
+    await blocked(s, zh["tab.teams"]);
+    expect(nameBox()).not.toHaveAttribute("aria-invalid");
+    expect(nameBox()).not.toHaveAttribute("aria-describedby");
   });
 });
 

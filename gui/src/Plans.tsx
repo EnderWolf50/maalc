@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
+import { Field, Input, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -140,7 +140,7 @@ function PlanTab<P extends { id: string; name: string }>({ planKey, tab, make, e
           <>
             <div className="row">
               <Field label={t("name")} path={`${planKey}/${i}/name`}>
-                <input value={plans[i].name} onChange={(e) => set((l) => { l[i].name = e.target.value; })} />
+                <Input value={plans[i].name} onChange={(e) => set((l) => { l[i].name = e.target.value; })} />
               </Field>
               <button type="button" className="danger" onClick={remove}>
                 {t("remove")}

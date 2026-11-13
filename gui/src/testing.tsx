@@ -18,7 +18,7 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
     const [picked, setPicked] = useState<Picked>({});
     current = s;
     const ctx = makeCtx({
-      s, setS, bad: () => false, giftList, picked, setPicked,
+      s, setS, problemIds: () => "", giftList, picked, setPicked,
       chooseList: (id, open) => { setGiftList(id); if (open) opened.push(id); },
     });
     return <EditorContext.Provider value={ctx}>{ui}</EditorContext.Provider>;

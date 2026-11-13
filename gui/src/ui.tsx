@@ -1,5 +1,5 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import { TEXT, fill, type Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -12,6 +12,8 @@ export interface Ctx {
   tv: (field: string, v: string) => string;
   /** A failed check points at this path or something under it. */
   bad: (path: string) => boolean;
+  /** The element ids of the problems that point at this path or under it, space-separated; "" for none. */
+  problemIds: (path: string) => string;
   /** The gift list the gift list tab shows: "default" or a list's id. Kept here so another tab can send the user to a list. */
   giftList: string;
   /** Show that list in the gift list tab; with `open`, also switch to the tab. */
@@ -102,25 +104,54 @@ export function translate(lang: Settings["language"]): Pick<Ctx, "t" | "tv"> {
 }
 
 /** The context App and the test harness build over their settings state. */
-export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList" | "picked"> & {
+export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "problemIds" | "giftList" | "chooseList" | "picked"> & {
   setS: (next: (prev: Settings) => Settings) => void;
   setPicked: (next: (prev: Picked) => Picked) => void;
 }): Ctx {
   return {
     s, ...rest, ...translate(s.language),
+    bad: (path) => rest.problemIds(path) !== "",
     update: (fn) => setS((prev) => { const next = structuredClone(prev); fn(next); return next; }),
     pick: (list, id) => setPicked((prev) => ({ ...prev, [list]: id })),
   };
 }
 
-export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
-  const { bad } = useEditor();
+/** The problem ids of the field around a control ("" for none), for its aria attributes (useMark). */
+const MarkContext = createContext("");
+
+/** A control's aria attributes: in a field marked red, invalid and described by the problems' text, which a screen reader
+ * reads with it (#695). */
+export function useMark() {
+  const ids = useContext(MarkContext);
+  return ids ? { "aria-invalid": true, "aria-describedby": ids } as const : {};
+}
+
+/** The frame of a field, red when a check fails at `path` or under it, with the data-path a problem's jump finds (focusPath).
+ * The controls inside take the mark (Input, Choice). `as` is its tag; `marked` false keeps the mark off, for a frame whose
+ * problems are marked further in. */
+export function Mark({ as: Tag = "div", path, className, marked = true, children }: {
+  as?: "div" | "label" | "td"; path?: string; className?: string; marked?: boolean; children: ReactNode;
+}) {
+  const { problemIds } = useEditor();
+  const ids = path && marked ? problemIds(path) : "";
   return (
-    <label className={"field" + (path && bad(path) ? " bad" : "")} data-path={path}>
+    <Tag className={[className, ids && "bad"].filter(Boolean).join(" ") || undefined} data-path={path}>
+      <MarkContext.Provider value={ids}>{children}</MarkContext.Provider>
+    </Tag>
+  );
+}
+
+/** An <input> or a <select> that takes the mark of its field. */
+export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} />;
+export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} />;
+
+export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
+  return (
+    <Mark as="label" className="field" path={path}>
       <span>{label}</span>
       {children}
       {note && <small>{withBreaks(note)}</small>}
-    </label>
+    </Mark>
   );
 }
 
@@ -128,9 +159,9 @@ export function Select({ value, options, label, onChange }: {
   value: string; options: string[]; label?: (v: string) => string; onChange: (v: string) => void;
 }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
+    <Choice value={value} onChange={(e) => onChange(e.target.value)}>
       {options.map((o) => <option key={o} value={o}>{label ? label(o) : o}</option>)}
-    </select>
+    </Choice>
   );
 }
 
@@ -138,7 +169,7 @@ export function Num({ value, min, max, disabled, onChange }: {
   value: number; min: number; max?: number; disabled?: boolean; onChange: (v: number) => void;
 }) {
   return (
-    <input type="number" value={value} min={min} max={max} step={1} disabled={disabled}
+    <Input type="number" value={value} min={min} max={max} step={1} disabled={disabled}
       onChange={(e) => onChange(e.target.value === "" ? min : Math.trunc(Number(e.target.value)))} />
   );
 }
@@ -148,7 +179,7 @@ export function Num({ value, min, max, disabled, onChange }: {
 export function Decimal({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
   const [text, setText] = useState<string | null>(null); // null: not being typed in, the value shows
   return (
-    <input type="text" inputMode="decimal" className="decimal" value={text ?? String(value)} onBlur={() => setText(null)}
+    <Input type="text" inputMode="decimal" className="decimal" value={text ?? String(value)} onBlur={() => setText(null)}
       onChange={(e) => {
         setText(e.target.value);
         const v = Number(e.target.value);
@@ -162,16 +193,15 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
   label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
   onChange: (v: number | null) => void;
 }) {
-  const { bad } = useEditor();
   return (
-    <div className={"toggle" + (bad(path) ? " bad" : "")} data-path={path}>
+    <Mark className="toggle" path={path}>
       <label className="check">
-        <input type="checkbox" checked={value !== null} onChange={(e) => onChange(e.target.checked ? on : null)} />
+        <Input type="checkbox" checked={value !== null} onChange={(e) => onChange(e.target.checked ? on : null)} />
         {label}
       </label>
       <Num value={value ?? on} min={min} max={max} disabled={value === null} onChange={onChange} />
       {note && <small>{withBreaks(note)}</small>}
-    </div>
+    </Mark>
   );
 }
 
