@@ -21,7 +21,7 @@ export const EditorContext = createContext<Ctx>(null!);
 export const useEditor = () => useContext(EditorContext);
 
 /** A help text as shown: each "\n" in it starts a new line, one topic to a line (#664). A text without one stays a string. */
-export function lines(text: string): ReactNode {
+export function withBreaks(text: string): ReactNode {
   const parts = text.split("\n");
   return parts.length === 1 ? text : parts.map((part, i) => <Fragment key={i}>{i > 0 && <br />}{part}</Fragment>);
 }
@@ -32,7 +32,7 @@ export function Field({ label, path, note, children }: { label: string; path?: s
     <label className={"field" + (path && bad(path) ? " bad" : "")}>
       <span>{label}</span>
       {children}
-      {note && <small>{lines(note)}</small>}
+      {note && <small>{withBreaks(note)}</small>}
     </label>
   );
 }
@@ -83,7 +83,7 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
         {label}
       </label>
       <Num value={value ?? on} min={min} max={max} disabled={value === null} onChange={onChange} />
-      {note && <small>{lines(note)}</small>}
+      {note && <small>{withBreaks(note)}</small>}
     </div>
   );
 }

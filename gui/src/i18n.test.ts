@@ -22,33 +22,23 @@ const paragraphs = (text: string) => text.split("\n");
 const sentences = (lang: Lang, paragraph: string) =>
   (lang === "en_us" ? paragraph.split(/(?<=[.?!])\s+/) : paragraph.split(/(?<=[。？！?!])/)).filter((s) => s.trim());
 
-const every = (fn: (lang: Lang, key: string, text: string) => void) => {
-  for (const lang of Object.keys(TEXT) as Lang[]) for (const [key, text] of Object.entries(TEXT[lang])) fn(lang, key, text);
-};
+/** What `faults` finds in each text of both languages, as "<lang> <key>: <fault>"; empty when every text keeps the rule. */
+const offenders = (faults: (lang: Lang, text: string) => string[]) =>
+  (Object.keys(TEXT) as Lang[]).flatMap((lang) =>
+    Object.entries(TEXT[lang]).flatMap(([key, text]) => faults(lang, text).map((fault) => `${lang} ${key}: ${fault}`)));
 
 describe("the UI text keeps the STE rules a program can check", () => {
   test("no semicolon (R8.1)", () => {
-    const bad: string[] = [];
-    every((lang, key, text) => { if (/[;；]/.test(text)) bad.push(`${lang} ${key}`); });
-    expect(bad).toEqual([]);
+    expect(offenders((_, text) => (/[;；]/.test(text) ? [text] : []))).toEqual([]);
   });
 
   test("a sentence has at most 25 words, or 40 Chinese characters (R6.3)", () => {
-    const bad: string[] = [];
-    every((lang, key, text) => {
-      for (const p of paragraphs(text)) for (const s of sentences(lang, p)) {
-        if (words(lang, s) > LIMIT[lang]) bad.push(`${lang} ${key} (${words(lang, s)}): ${s}`);
-      }
-    });
-    expect(bad).toEqual([]);
+    expect(offenders((lang, text) => paragraphs(text).flatMap((p) => sentences(lang, p))
+      .filter((s) => words(lang, s) > LIMIT[lang]).map((s) => `(${words(lang, s)}) ${s}`))).toEqual([]);
   });
 
   test("a paragraph has at most six sentences (R6.6)", () => {
-    const bad: string[] = [];
-    every((lang, key, text) => {
-      for (const p of paragraphs(text)) if (sentences(lang, p).length > 6) bad.push(`${lang} ${key}: ${p}`);
-    });
-    expect(bad).toEqual([]);
+    expect(offenders((lang, text) => paragraphs(text).filter((p) => sentences(lang, p).length > 6))).toEqual([]);
   });
 
   test("both languages split a text into the same paragraphs", () => {

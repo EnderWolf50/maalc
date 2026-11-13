@@ -7,7 +7,7 @@ import App from "./App";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
-import { renderEditor } from "./testing";
+import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 
 // The editor reads its settings through api.ts, which falls back to the browser's localStorage; the tests give it a file's text.
@@ -120,4 +120,10 @@ describe("in the whole editor", () => {
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("other");
   });
+});
+
+test("the team page's long notes show one topic to a line", () => {
+  renderEditor(<TeamsTab />, settings());
+  const keys = ["team.gift_list_note", "team.hard_from_floor_note", "team.min_alive_note", "keep.sell_vestiges_note", "skill.note"] as const;
+  for (const key of keys) expectLines(zh[key]);
 });

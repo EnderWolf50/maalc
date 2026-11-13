@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 import { TABS } from "./App";
 import { TEXT } from "./i18n";
 import { newSettings } from "./model";
-import { renderEditor } from "./testing";
+import { expectLines, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 const DailyTab = TABS.find((tab) => tab[0] === "daily")![2];
@@ -32,4 +32,10 @@ test("count mode enables that task's count alone, and the number typed is saved"
   fireEvent.change(threadCount, { target: { value: "5" } });
   expect(settings().luxcavation.thread.count).toBe(5);
   expect(screen.getAllByText(zh["lux.count_unused"])).toHaveLength(1);
+});
+
+test("the tab's notes show one topic to a line, Lunacy's cost on the first", () => {
+  renderEditor(<DailyTab />, newSettings());
+  for (const key of ["daily.note", "lux.exp_note", "lux.thread_note", "lux.consecutive_note", "charge.note"] as const) expectLines(zh[key]);
+  expect(zh["charge.note"].split("\n")[0]).toContain("Lunacy");
 });

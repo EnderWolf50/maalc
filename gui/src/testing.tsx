@@ -1,8 +1,9 @@
 // Test harness for the editor tabs: renders a tab inside the same EditorContext App builds, over real settings state, and lets
 // the test read the settings back after the user's clicks. Not bundled (only tests import it).
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState, type ReactElement } from "react";
+import { expect } from "vitest";
 import { TEXT, type Key } from "./i18n";
 import { newSettings, type Settings } from "./model";
 import { EditorContext, type Ctx } from "./ui";
@@ -26,4 +27,13 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
     return <EditorContext.Provider value={ctx}>{ui}</EditorContext.Provider>;
   }
   return { user: userEvent.setup(), settings: () => current, opened: () => opened, ...render(<Host />) };
+}
+
+/** Expect `text`, a help text of several lines ("\n"), to show each line on its own: every element that shows it holds the
+ * lines with a <br> between each two (ui.tsx withBreaks). Fails when none does, as when the "\n" shows as a space. */
+export function expectLines(text: string) {
+  const lines = text.split("\n");
+  expect(lines.length).toBeGreaterThan(1);
+  const shown = screen.getAllByText((_, el) => !!el && el.textContent === lines.join("") && [...el.children].every((c) => c.tagName === "BR"));
+  for (const el of shown) expect(el.querySelectorAll("br")).toHaveLength(lines.length - 1);
 }

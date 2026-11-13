@@ -7,7 +7,7 @@ import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
 import { ThemePackTab } from "./Plans";
-import { renderEditor } from "./testing";
+import { expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
@@ -113,4 +113,13 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack", asyn
   expect(shown("Chachihu")).toBe(false);
   expect(shown("The Heartbreaking")).toBe(true);
   expect(screen.getAllByRole("img", { name: `${zh["packs.floorsInfinity"]} 6–10` }).length).toBeGreaterThan(0);
+});
+
+test("a plan's hint and the event pack note show one topic to a line", async () => {
+  const plan = { id: "p1", name: "Mine", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" };
+  const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan] }));
+  await r.user.click(await screen.findByText("Mine"));
+  await screen.findByText(zh["packs.eventPacks"]);
+  expectLines(zh["packs.hint"]);
+  expectLines(zh["packs.eventPacksNote"]);
 });

@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, ReorderList, Select, lines, useEditor } from "./ui";
+import { Field, ReorderList, Select, useEditor, withBreaks } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -278,7 +278,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
       <span className="spacer" />
       {chips([false, true].map(String), String(images), (v) => t(v === "true" ? "packs.images" : "packs.names"), (v) => setImages(v === "true"))}
     </div>
-    {onChange && <p className="muted">{lines(t("packs.hint"))}</p>}
+    {onChange && <p className="muted">{withBreaks(t("packs.hint"))}</p>}
     <p className="muted floorkey">
       {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
     </p>

@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { lines, useEditor } from "./ui";
+import { useEditor, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -32,7 +32,7 @@ export function SkillPanel({ i }: { i: number }) {
   return (
     <details className="panel skill-panel">
       <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
-      <p className="muted">{lines(t("skill.note"))}</p>
+      <p className="muted">{withBreaks(t("skill.note"))}</p>
       <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
         onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>
         <option value="">{t("skill.add")}</option>
