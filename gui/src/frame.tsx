@@ -28,7 +28,7 @@ export function Rail({ groups, current, onPick, label, compact }: {
       <div className="rail-items" role="tablist" aria-orientation="vertical" aria-label={label} onKeyDown={onKey}>
         {groups.map((g, i) => (
           <div key={i} className="rail-group" role="none">
-            {g.label ? <h2 className="rail-head" aria-hidden>{t(g.label)}</h2> : i > 0 && <hr aria-hidden />}
+            {g.label ? <div className="rail-head" aria-hidden>{t(g.label)}</div> : i > 0 && <hr aria-hidden />}
             {g.items.map((x) => (
               <button type="button" role="tab" key={x.id} data-tab={x.id} ref={(el) => { refs.current[x.id] = el; }}
                 aria-selected={x.id === current} tabIndex={x.id === current ? 0 : -1} title={compact ? x.label : undefined}
