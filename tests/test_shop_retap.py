@@ -4,6 +4,7 @@ the one meant gives up at once: the first tap may have been taken."""
 import pytest
 
 import actions
+import event_actions
 import shop_actions
 import test_actions
 from test_actions import live_shop, sell_page, SELLER, cells_read, with_ids
@@ -26,8 +27,8 @@ def placing(context, monkeypatch, reads, out=False):
     patch_all(monkeypatch, "still", lambda context, timeout=2.0, **k: None)
     patch_all(monkeypatch, "screen", lambda context: (len(CELLS) if out else 0, out))
     patch_all(monkeypatch, "close_tooltip", lambda context, page, force=False: next(reads))
-    monkeypatch.setattr(actions.shop, "placed", lambda image, n: image[0])
-    monkeypatch.setattr(actions.shop, "picked", lambda image, x, y, bottom=720: image[1])
+    monkeypatch.setattr(event_actions.shop, "placed", lambda image, n: image[0])
+    monkeypatch.setattr(event_actions.shop, "picked", lambda image, x, y, bottom=720: image[1])
     done = shop_actions.Shop.place(context, CELLS, 3, {"page": "fuse", "at": 0}, out=out)
     return done, tapped, lines
 

@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 
 import actions
+import event_actions
 import battle_actions
 import shop_actions
 import shop
@@ -51,8 +52,8 @@ class Game:
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
             lambda: np.full((720, 1280, 3), len(self.taps) * 20 % 256, np.uint8)
         context.run_recognition.side_effect = self.recognition
-        monkeypatch.setattr(actions.shop, "option_lit", lambda image, box: self.lit(box))
-        monkeypatch.setattr(actions.shop, "option_picked", lambda image, frame: self.picked is not None
+        monkeypatch.setattr(event_actions.shop, "option_lit", lambda image, box: self.lit(box))
+        monkeypatch.setattr(event_actions.shop, "option_picked", lambda image, frame: self.picked is not None
                             and frame == shop_actions.REPLACE_FRAMES[self.picked])
 
     def lit(self, box):
@@ -410,8 +411,8 @@ class IdGame:
         context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
             lambda: np.full((720, 1280, 3), len(self.taps) * 20 % 256, np.uint8)
         context.run_recognition.side_effect = self.recognition
-        monkeypatch.setattr(actions.shop, "option_lit", lambda image, box: self.lit(box))
-        monkeypatch.setattr(actions.shop, "option_picked", lambda image, frame: self.picked is not None
+        monkeypatch.setattr(event_actions.shop, "option_lit", lambda image, box: self.lit(box))
+        monkeypatch.setattr(event_actions.shop, "option_picked", lambda image, frame: self.picked is not None
                             and frame == shop_actions.REPLACE_FRAMES[self.picked])
         patch_all(monkeypatch, "bar_dead", lambda image: set(self.dead))
 
