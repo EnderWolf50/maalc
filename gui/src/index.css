@@ -60,12 +60,12 @@
   --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
   --season-btn: #060710; --season-btn-line: #80808c; --season-btn-ink: #e2c6a2; --season-btn-hover: #161a2e;
   /* Difficulty, as the game's banners: NORMAL yellow and HARD red-orange fills (theme pack page), INFINITY violet (no game
-   * screen), EXTREME the game's red (the user, 2026-11-14). A fill, the ink on it, and the mark of a filter chip, each as
-   * light or dark as its contrast needs. */
+   * screen), EXTREME the game's red #a50000 as it is, darker than HARD (the user, 2026-11-14; #720). A fill, the ink on it,
+   * and the mark of a filter chip, each as light or dark as its contrast needs; INFINITY has no fill, its colour is the ink. */
   --fl-n: #b89b21; --fl-n-ink: #100d03; --fl-n-mark: #b89b21;
   --fl-h: #c03b0b; --fl-h-ink: #fee5df; --fl-h-mark: #d04a21;
-  --fl-i: #c2a6ff; --fl-i-ink: #1e003f;
-  --fl-x: #c53125; --fl-x-ink: #fff2ef; --fl-x-mark: #d64335;
+  --fl-i: #c2a6ff;
+  --fl-x: #a50000; --fl-x-ink: #fff2ef; --fl-x-mark: #d64335;
   --font-ui: "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Microsoft JhengHei UI", "Segoe UI", sans-serif;
   font: 14px/1.5 var(--font-ui);
@@ -103,7 +103,7 @@
     --hazard-2: #1e1813;
     --fl-n: #987e06; --fl-n-ink: #100d03; --fl-n-mark: #987e06;
     --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
-    --fl-i: #6a40c4; --fl-i-ink: #f5f4fe;
+    --fl-i: #6a40c4;
     --fl-x: #a50000; --fl-x-ink: #fff2f0; --fl-x-mark: #a50000;
     --card-line: #b9a68c;
     --tone-dep: #9a5c00; --on-tone: #ffffff;
@@ -625,8 +625,9 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
 .lane .w.pos { color: var(--accent-ink); }
 .lane .w.neg { color: var(--fg-2); }
-.lane .packs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.lane .packs { display: flex; flex-wrap: wrap; gap: 8px 6px; flex: 1; }
 .lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line-2); margin: 8px 0; }
+.lanes.carrying .lane.add { color: var(--fg); border-color: var(--accent-line); background: var(--accent-soft); }
 .lanes .gap { height: 12px; }
 .lanes.moving .gap { background: repeating-linear-gradient(90deg, var(--accent-line) 0 6px, transparent 6px 12px) center / 100% 2px no-repeat; }
 .thr { display: flex; align-items: center; gap: 10px; color: var(--fg); font-size: 12.5px; font-weight: 600; cursor: grab; padding: 4px 0; }
@@ -636,24 +637,32 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .thr > span::after { flex: 1; }
 .thr.bad { color: var(--bad); }
 .pk {
-  display: inline-flex; align-items: center; gap: 5px; background: var(--raise); border: 1px solid var(--line); border-radius: 4px; corner-shape: bevel;
-  padding: 3px 8px; font-size: 12.5px; line-height: 1.35; cursor: default; color: var(--fg);
+  position: relative; display: inline-flex; align-items: center; gap: 4px; background: var(--raise); border: 1px solid var(--line);
+  border-radius: 4px; corner-shape: bevel; padding: 4px 6px 4px 9px; font-size: 12.5px; line-height: 1.35; cursor: default; color: var(--fg);
 }
+.pk .nm { margin-right: 4px; } /* the name stands apart from its badges */
 .pk[draggable="true"] { cursor: grab; }
 .pk[role="button"]:hover { border-color: var(--accent-line); }
 .pk small { color: var(--muted); font-size: 11.5px; }
 .pk small em { font-style: normal; color: var(--accent-ink); }
-/* Floor badges: the game's difficulty banners, a fill of the difficulty's colour with its ink. */
-small.fl, small.wk {
-  font: 700 13px/1.25 var(--font-display); letter-spacing: 0.03em; padding: 0 5px; border: 1px solid; border-radius: 2px; corner-shape: bevel;
+/* Floor badges: the game's difficulty banners, a fill of the difficulty's colour with its ink. Told apart in greyscale too
+ * (#720), by lightness and shape, each drawn inside its own box so nothing reaches past it to the chip's frame:
+ *   NORMAL    a light fill, dark ink
+ *   HARD      a mid fill, light ink
+ *   INFINITY  no fill: the ink and a dashed frame
+ *   EXTREME   the darkest fill, light ink and a light frame inside its edge */
+small.fl {
+  --c: var(--fl-n); --ink: var(--fl-n-ink); font: 700 13px/1.25 var(--font-display); letter-spacing: 0.03em; padding: 0 5px;
+  color: var(--ink); background: var(--c); border: 1px solid var(--c); border-radius: 2px; corner-shape: bevel;
 }
-small.fl { --c: var(--fl-n); --ink: var(--fl-n-ink); color: var(--ink); background: var(--c); border-color: var(--c); }
-/* Besides the hue, a ring round the fill: NORMAL none, HARD solid, INFINITY dashed, EXTREME double (and NORMAL's ink is dark,
- * HARD's light). */
-small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); outline: 1px solid var(--c); outline-offset: 1px; }
-small.fl.inf { --c: var(--fl-i); --ink: var(--fl-i-ink); outline: 1px dashed var(--c); outline-offset: 1px; }
-small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); outline: 3px double var(--c); outline-offset: 1px; }
-small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); background: var(--accent); border-color: var(--accent); } /* the "含想要" mark (#421) */
+small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); }
+small.fl.inf { color: var(--fl-i); background: none; border: 1px dashed var(--fl-i); }
+small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0 1px var(--ink); }
+/* 含想要 (#421): a dot on the chip's top right corner (#720), the amber of what is wanted, ringed in the chip's fill so the
+ * frame does not cut through it; the page's key shows the same dot. */
+.wd { display: inline-block; flex: none; width: 11px; height: 11px; border-radius: 50%; background: var(--accent-line); border: 2px solid var(--raise); }
+.pk .wd { position: absolute; top: -5px; right: -5px; }
+.floorkey .wd { width: 7px; height: 7px; border: 0; margin: 0 2px; }
 .floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 /* a pack's weight typed in place */
