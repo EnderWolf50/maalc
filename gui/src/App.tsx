@@ -6,7 +6,7 @@ import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavatio
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
-import { Decimal, EditorContext, Field, Num, Select, ToggleNum, useEditor, withBreaks, type Ctx } from "./ui";
+import { Decimal, EditorContext, Field, Num, Select, ToggleNum, makeCtx, translate, useEditor, withBreaks } from "./ui";
 import { validate, type Problem } from "./validate";
 
 export const TABS = [
@@ -95,7 +95,7 @@ export default function App() {
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
   const lang = s?.language ?? "zh_tw";
-  const t = (k: Key) => TEXT[lang][k] ?? k;
+  const { t } = translate(lang);
 
   if (loadError) {
     return (
@@ -110,12 +110,11 @@ export default function App() {
 
   const marked = new Set(checked ? problems.flatMap((p) => p.paths) : []);
   const bad = (path: string) => [...marked].some((m) => m === path || m.startsWith(path + "/"));
-  const ctx: Ctx = {
-    s, t, bad, giftList,
+  const ctx = makeCtx({
+    s, bad, giftList,
+    setS: (next) => setS((prev) => next(prev!)),
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
-    update: (fn) => setS((prev) => { const next = structuredClone(prev!); fn(next); return next; }),
-    tv: (field, v) => TEXT[lang][`${field}.${v}` as Key] ?? v,
-  };
+  });
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   const note = status === "saved" ? "" : said; // shown beside "unsaved" too: a refused save, the file read again

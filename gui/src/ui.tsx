@@ -1,6 +1,6 @@
 // Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
 import { Fragment, createContext, useContext, useState, type ReactNode } from "react";
-import type { Key } from "./i18n";
+import { TEXT, type Key } from "./i18n";
 import type { Settings } from "./model";
 
 export interface Ctx {
@@ -24,6 +24,22 @@ export const useEditor = () => useContext(EditorContext);
 export function withBreaks(text: string): ReactNode {
   const parts = text.split("\n");
   return parts.length === 1 ? text : parts.map((part, i) => <Fragment key={i}>{i > 0 && <br />}{part}</Fragment>);
+}
+
+/** The text of one language: a key, or an enum value of a field, falls back to itself. */
+export function translate(lang: Settings["language"]): Pick<Ctx, "t" | "tv"> {
+  const text = TEXT[lang];
+  return { t: (k) => text[k] ?? k, tv: (field, v) => text[`${field}.${v}` as Key] ?? v };
+}
+
+/** The context App and the test harness build over their settings state. */
+export function makeCtx({ s, setS, ...rest }: Pick<Ctx, "s" | "bad" | "giftList" | "chooseList"> & {
+  setS: (next: (prev: Settings) => Settings) => void;
+}): Ctx {
+  return {
+    s, ...rest, ...translate(s.language),
+    update: (fn) => setS((prev) => { const next = structuredClone(prev); fn(next); return next; }),
+  };
 }
 
 export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
