@@ -15,8 +15,16 @@ import { effectLines } from "./graceText";
 import { fill } from "./i18n";
 import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useSlashFocus, useUndo, withBreaks, type PlanKey } from "./ui";
 
-/** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
- * (spec 04 section 6). Read-only without onChange. */
+// #718's cards (sinner_cards/index.json: sinner -> file, each sinner's default identity), bundled at build time; a sinner
+// without one, or a build before they exist, shows its frame alone. The name is printed on the tile, so the art is decoration.
+const CARDS_DIR = "../../assets/resource/base/data/sinner_cards/";
+const CARD_URLS = import.meta.glob<string>("../../assets/resource/base/data/sinner_cards/*.webp", { eager: true, query: "?url", import: "default" });
+const CARD_INDEX = Object.values(import.meta.glob<Record<string, string>>("../../assets/resource/base/data/sinner_cards/index.json",
+  { eager: true, import: "default" }))[0] ?? {};
+const cardOf = (sinner: string): string | undefined => CARD_URLS[CARDS_DIR + CARD_INDEX[sinner]];
+
+/** The 12 sinners in the game's grid, each on its default identity's card; clicking adds one at the end of the order or
+ * leaves it out (spec 04 section 6), and a sinner left out shows its card darkened. Read-only without onChange. */
 export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
   return (<>
@@ -24,10 +32,12 @@ export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?:
     <div className={"sinners" + (onChange ? "" : " readonly") + (bad(path) ? " bad" : "")} data-path={path}>
       {SINNERS.map((s) => {
         const n = order.indexOf(s) + 1;
-        const kind = n === 0 ? "" : n <= 7 ? "deployed" : "backup";
+        const kind = n === 0 ? "out" : n <= 7 ? "deployed" : "backup";
+        const art = cardOf(s);
         return (
           <button type="button" key={s} className={"sinner " + kind} disabled={!onChange} aria-pressed={n > 0}
             onClick={() => onChange?.(toggleSinner(order, s))}>
+            {art && <img src={art} alt="" draggable={false} />}
             {n > 0 && <span className="num">{n}</span>}
             {n > 0 && <span className="banner">{t(n <= 7 ? "order.deployed" : "order.backup")}</span>}
             <span className="name">{s}</span>
@@ -248,6 +258,8 @@ const coverOf = (name: string): string | undefined => COVER_URLS[COVERS_DIR + CO
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
 const LINE = "\u0000line";
+/** The two + lanes a pack is dropped on for a new weight: above the lanes and below them (#720). */
+type AddAt = "top" | "bottom";
 /** The floor filter's chips (0: any): a run's 15 floors, 6-10 INFINITY's and 11-15 EXTREME's (#387). */
 const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 /** A floor badge's label and class per mode of the data file. */
@@ -301,20 +313,20 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   useSlashFocus(searchBox); // as on the gift list tab
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
-  // The pack whose weight is being typed: on its chip, or in the + lane for a new weight (`lane`).
-  const [typing, setTyping] = useState<{ what: string; lane: boolean } | null>(null);
-  const ask = (what: string, lane = false) => setTyping({ what, lane });
+  // The pack whose weight is being typed: on its chip, or in a + lane for a new weight, the one above the lanes or below (#720).
+  const [typing, setTyping] = useState<{ what: string; lane: AddAt | null } | null>(null); // lane null: on the chip
+  const ask = (what: string, lane: AddAt | null = null) => setTyping({ what, lane });
   const box = (what: string, current?: number) => (
     <WeightBox value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
   );
-  const typingOn = (what: string) => typing?.what === what && !typing.lane;
-  const dropOn = (w: number | null) => (e: DragEvent) => {
+  const typingOn = (what: string) => typing?.what === what && typing.lane === null;
+  const dropOn = (w: number | AddAt) => (e: DragEvent) => {
     e.preventDefault();
-    if (drag === LINE && w !== null) set({ threshold: w });
-    else if (drag && drag !== LINE) (w === null ? ask(drag, true) : weigh(drag, w));
+    if (drag === LINE && typeof w === "number") set({ threshold: w });
+    else if (drag && drag !== LINE) (typeof w === "number" ? weigh(drag, w) : ask(drag, w));
     setDrag(null);
   };
-  const target = (accepts: boolean, w: number | null) => (onChange && accepts
+  const target = (accepts: boolean, w: number | AddAt) => (onChange && accepts
     ? { onDragOver: (e: DragEvent) => e.preventDefault(), onDrop: dropOn(w) } : {});
   const dragged = (what: string) => (onChange && !typingOn(what) ? { // a box on a draggable chip would drag, not select its text
     draggable: true,
@@ -336,10 +348,13 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
     const wanted = packWanted(lists, data.pack_ids[name]).map((id) => GIFT_BY_ID.get(id)).filter((g) => g !== undefined)
       .map((g) => giftName(g, zh));
+    const isWanted = wanted.length > 0;
     const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
+    // The whole chip shows the wanted gifts on hover, the dot being too small a target (#720).
+    const tip = [cover ? name : "", isWanted ? wantedTip : ""].filter(Boolean).join("\n") || undefined;
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
-        {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
+        {...dragged(name)} {...clickable(name)} title={tip}>
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
         {!cover && <span className="nm">{name}</span>}
         {floors
@@ -348,7 +363,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
             return <small key={f.mode} className={"fl" + BADGES[f.mode][1]} role="img" title={label} aria-label={label}>{f.text}</small>;
           })
           : <small><em>{t("packNotInData")}</em></small>}
-        {wanted.length > 0 && <small className="wk" role="img" title={wantedTip} aria-label={wantedTip}>{t("packs.wanted")}</small>}
+        {isWanted && <i className="wd" role="img" aria-label={t("packs.wanted")} title={wantedTip} />}
         {typingOn(name) && box(name, weightOf(plan, name))}
       </span>
     );
@@ -365,6 +380,13 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     </div>
   );
   const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
+  const addLane = (at: AddAt) => onChange && (
+    <div className="lane add" {...target(drag !== null && drag !== LINE, at)}>
+      {typing?.lane === at
+        ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what)}</>
+        : <>＋ {t("packs.newLane")}</>}
+    </div>
+  );
   const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void, cls?: (v: T) => string) =>
     values.map((v) => (
       <button type="button" key={String(v)} className={"chip" + (cls ? cls(v) : "")} aria-pressed={v === value} onClick={() => pick(v)}>{label(v)}</button>
@@ -390,7 +412,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     <p className="muted floorkey">
       {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
     </p>
-    <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : "")}>
+    <p className="muted floorkey"><i className="wd" aria-hidden />{t("packs.wantedKey")}</p>
+    <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : drag ? " carrying" : "")}>
+      {addLane("top")}
       {line === 0 && lineBar}
       {lanes.map((w, i) => (
         <Fragment key={w}>
@@ -412,13 +436,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
         </Fragment>
       ))}
       {gapOrLine(lanes.length)}
-      {onChange && (
-        <div className="lane add" {...target(drag !== null && drag !== LINE, null)}>
-          {typing?.lane
-            ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what)}</>
-            : <>＋ {t("packs.newLane")}</>}
-        </div>
-      )}
+      {addLane("bottom")}
     </div>
     <Field label={t("packs.eventPacks")} path={path && `${path}/event_packs`} note={t("packs.eventPacksNote")}>
       {onChange
