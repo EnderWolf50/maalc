@@ -198,12 +198,13 @@ export default function App() {
   // in it (Enter closes its box) fires no blur.
   const held = typed && typed.field === document.activeElement ? typed : null;
   const shown = held ? problems.flatMap((p) => asBefore(p, held.at, held.before)) : problems;
-  /** What the hold takes as shown from now on: `now`, and while a schema error stops the checks across objects (validate),
-   * what they showed before it, so that they show again at once when it is typed away. */
-  const remember = (now: Problem[]) => {
-    const stopped = held && problems.some((p) => p.say.key === "problem.schema");
-    return [...(stopped ? held.before.filter((p) => p.say.key !== "problem.schema") : []), ...now];
-  };
+  // A schema error stops the checks across objects (validate): what they showed last before it, kept past a blur or a save
+  // until it goes, so that they show again at once when it is typed away.
+  const stopped = problems.some((p) => p.say.key === "problem.schema");
+  const crossShown = useRef<Problem[]>([]);
+  useEffect(() => { if (!stopped) crossShown.current = shown; });
+  /** What the hold takes as shown from now on: `now`, and while a schema error stands, what the checks it stops showed. */
+  const remember = (now: Problem[]) => [...(stopped ? crossShown.current : []), ...now];
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
