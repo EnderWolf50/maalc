@@ -436,6 +436,12 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   font: 700 18px/26px var(--font-display); background: var(--gold); color: #1a1406;
 }
 .grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-shadow: var(--season-shadow); }
+/* the pick button is the card's name: no plate of its own; its focus rings the whole card */
+.grace button.name { display: block; width: 100%; padding: 0; border: none; border-radius: 0; background: none; color: inherit; cursor: inherit; }
+.grace button.name:hover:not(:disabled) { background: none; }
+.grace button.name:disabled { opacity: 1; cursor: default; }
+.grace button.name:focus-visible { outline: none; }
+.grace:has(button.name:focus-visible) { outline: 2px solid var(--fg); outline-offset: 2px; }
 .grace .name small { display: block; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em; opacity: 0.85; }
 .grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.4; flex: 1; }
 .grace li.sub { list-style: none; margin-left: 4px; opacity: 0.85; }

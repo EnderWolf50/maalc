@@ -1,5 +1,5 @@
 // Named plans (spec 04 sections 6–8) and the editors teams reuse for their custom values.
-import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { loadThemePacks } from "./api";
 import {
   EVENT_MODES, GRACES, LEVELS, MODE_KEYS, SINNERS, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, floorBadges, freeName,
@@ -45,6 +45,7 @@ export function StarlightEditor({ value, onChange, path }: {
   const zh = s.language === "zh_tw";
   const order = buyOrder(value);
   const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
+  const id = useId(); // the cards' rank, price and effects describe their pick buttons
   return (
     <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
     <div className={"starlight" + (onChange ? "" : " readonly")} data-path={path}>
@@ -55,15 +56,18 @@ export function StarlightEditor({ value, onChange, path }: {
           const rank = order.indexOf(n) + 1;
           const effects = g.effects[level as "plus" | "plus2"] ?? g.effects.base;
           return (
-            <div key={g.en} className={`grace ${level}`} role="button" tabIndex={onChange ? 0 : -1} aria-pressed={rank > 0}
+            // A group, not a button around buttons: its name is a pick button beside + and ++. A click anywhere on the card
+            // picks it, as in the game; from the keyboard the pick button does, its click reaching the card.
+            <div key={g.en} className={`grace ${level}`} role="group" aria-label={graceName(g, zh)}
               aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
-              onClick={() => set((v) => clickCard(v, n))}
-              // the card's own keys only: Enter or Space on its + / ++ is that button's click, not a click on the card
-              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
-              {rank > 0 && <span className="rank">{rank}</span>}
-              <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
-              <span className="name">{graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}</span>
-              {zh && <ul>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
+              onClick={() => set((v) => clickCard(v, n))}>
+              {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
+              <span className="price" id={`${id}-price-${n}`}>★ {gracePrice(n, level === "none" ? "base" : level)}</span>
+              <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0} aria-label={graceName(g, zh)}
+                aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
+                {graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}
+              </button>
+              {zh && <ul id={`${id}-fx-${n}`}>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}

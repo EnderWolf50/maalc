@@ -313,6 +313,16 @@ test("a plan's hint and the event pack note show one topic to a line", async () 
   expectLines(zh["packs.eventPacksNote"]);
 });
 
+test("a grace card is a group named by its grace: a pick button says whether it is picked, the effects describe it", () => {
+  renderEditor(<StarlightTab />, settings({ starlight_plans: [{ id: "s1", name: "Plan", ...defaultStarlight() }] }));
+  const card = screen.getByRole("group", { name: GRACES[0].zh });
+  expect(card).not.toHaveAttribute("role", "button");
+  const pick = within(card).getByRole("button", { name: GRACES[0].zh });
+  expect(pick).toHaveAttribute("aria-pressed");
+  expect(pick).toHaveAccessibleDescription(new RegExp(GRACES[0].effects.base[0].replace(/^-/, "").replace(/[+()]/g, "\\$&")));
+  expect(within(card).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([GRACES[0].zh, `${GRACES[0].zh} +`, `${GRACES[0].zh} ++`]);
+});
+
 test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and the card's own keys still pick it", async () => {
   const r = renderEditor(<StarlightTab />, settings({ starlight_plans: [{ id: "s1", name: "Plan", ...defaultStarlight() }] }));
   const name = GRACES[0].zh;
@@ -323,7 +333,7 @@ test("a grace's + and ++ take Enter and Space from the keyboard, as a click, and
   screen.getByRole("button", { name: `${name} ++` }).focus();
   await r.user.keyboard(" ");
   expect(levels()[0]).toBe("plus2");
-  (document.querySelectorAll(".grace")[1] as HTMLElement).focus();
+  screen.getByRole("button", { name: GRACES[1].zh }).focus();
   await r.user.keyboard("{Enter}");
   expect(levels()[1]).toBe("base");
 });
