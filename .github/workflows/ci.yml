@@ -14,7 +14,9 @@ concurrency:
 jobs:
   # Which jobs a run needs. A PR picks them by its changed files. A push to main skips them all when a PR run already
   # passed every job on the same tree, and otherwise runs them all, as workflow_dispatch does.
-  # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows).
+  # code: a changed file outside docs and gui/ (agent, assets, tests, tools, configs, lock files, workflows), or one of
+  # the docs, gui/ and *.md files the Python tests read (the readfilter step; tests/ci_filter.py fails a test run that
+  # opens one it lacks, #684).
   # gui: any changed file outside docs; gui/ imports agent/, assets/ and tests/ files.
   # bot: a changed file the pipeline job reads: the bot's data and code (assets/, agent/), the screens maa-tools tests
   # against (tests/screens/), its config and dependencies, the OCR fetch, and this workflow. Anything else leaves
@@ -27,7 +29,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      code: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.code == 'true') }}
+      code: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' || steps.readfilter.outputs.read == 'true') }}
       gui: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.filter.outputs.gui == 'true') }}
       bot: ${{ steps.tested.outputs.tested != 'true' && (github.event_name != 'pull_request' || steps.botfilter.outputs.bot == 'true') }}
       tree: ${{ steps.tree.outputs.tree }}
@@ -74,6 +76,22 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'tools/fetch_ocr.py'
               - '.github/workflows/ci.yml'
+      # The non-code files the Python tests open, found by recording the opens of one full pytest run (#684). A new one
+      # is added here when tests/ci_filter.py says so.
+      - if: github.event_name == 'pull_request'
+        id: readfilter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            read:
+              - 'docs/agents/subagent-preamble.md'
+              - 'docs/agents/triage-labels.md'
+              - 'docs/agents/watchdog-prompt.md'
+              - 'gui/package.json'
+              - 'gui/src-tauri/Cargo.toml'
+              - 'gui/src-tauri/tauri.conf.json'
+              - 'gui/src/graces.json'
+              - 'gui/src/i18n.ts'
 
   # The bot runs on Windows only, so the jobs that test it run there too (#636): a test that holds on Linux alone proves
   # nothing about the bot. The jobs that run no test (changes, shard-balance, review-lint, ci-ok) stay on Linux, which
@@ -207,7 +225,8 @@ jobs:
     steps:
       - if: needs.changes.result != 'success' || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1
-      # Only a run that ran every job proves the whole tree, so a docs-only or gui-only PR leaves no marker.
+      # Only a run that ran every job proves the whole tree, so a docs-only or gui-only PR leaves no marker,
+      # unless the gui file it changes is one the Python tests read: then the agent and gui jobs both ran.
       # A PR that skipped pipeline for lack of bot files still leaves one: its bot files equal its base's, which main's
       # own green run covered.
       - if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true' && needs.changes.outputs.gui == 'true' && needs.changes.outputs.tree != ''
