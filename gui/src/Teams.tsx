@@ -1,6 +1,8 @@
 // Teams (spec 04 section 9): the list order is the team queue (#501).
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
+import { iconUrl } from "./giftCatalog";
+import { GiftEffectCard, useGiftTip } from "./GiftPopover";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill } from "./i18n";
@@ -280,13 +282,24 @@ function refName(g: GiftRef, zh: boolean) {
   return zh && known?.zh ? known.zh : g.name;
 }
 
-/** The E.G.O Gift Search page's gifts, keyword tabs and tiers like the game's page; a click adds or removes one.
+/** The E.G.O Gift Search page's gifts, keyword tabs and tiers like the game's page; a click adds or removes one. A gift is its
+ * icon with its name under it, as the game's page draws it; hovering or focusing it opens its card (both names, its effect, #721).
  * mark: what a picked gift shows (its place in the list), null when it is not picked. */
 function GiftGrid({ gifts, start, full, mark, onToggle }: {
   gifts: GiftRef[]; start: string; full: boolean; mark: (g: SearchGift) => string | null; onToggle: (g: GiftRef) => void;
 }) {
   const { s, t } = useEditor();
   const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
+  const { open, tip } = useGiftTip();
+  const shown = open !== null;
+  useEffect(() => { // Esc closes the card, as on the gift list tab
+    if (!shown) return;
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") tip.hide(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [shown, tip]);
+  /** A gift the full grid cannot take: not picked while 3 are. */
+  const blocked = (g: SearchGift) => full && !mark(g);
   const zh = s.language === "zh_tw";
   const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -314,18 +327,26 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
             {SEARCH_GIFTS.filter((g) => g.keyword === tab && g.tier === tier).map((g) => {
               const m = mark(g);
               return (
+                // Pointer events, not mouse ones: React drops onMouseEnter on a disabled button, and a full grid's card still
+                // shows. The full note is in the card, not a title: its native tooltip would sit over the card.
                 <button type="button" key={g.en} className={"gift" + (m ? " picked" : "")} aria-pressed={!!m}
-                  disabled={!m && full} title={!m && full ? t("gift.full") : undefined}
+                  disabled={blocked(g)} aria-description={blocked(g) ? t("gift.full") : undefined}
+                  onPointerEnter={(e) => tip.show(g.id, e.currentTarget)} onPointerLeave={tip.leave}
+                  onFocus={(e) => tip.show(g.id, e.currentTarget)}
+                  onBlur={(e) => { if (!(e.relatedTarget as Element | null)?.closest(".gl-tip")) tip.hide(); }}
                   onClick={() => onToggle({ keyword: g.keyword, tier: g.tier, name: g.en })}>
+                  <img src={iconUrl(g.id)} alt="" loading="lazy" />
                   {m && <span className="rank">{m}</span>}
                   <span className="name">{zh && g.zh ? g.zh : g.en}</span>
-                  {zh && g.zh && <small>{g.en}</small>}
+                  {/* the English name shows on the card; a screen reader still reads it with the tile, as before */}
+                  {zh && g.zh && <small className="sr-only">{g.en}</small>}
                 </button>
               );
             })}
           </div>
         </div>
       ))}
+      {open && <GiftEffectCard id={open.id} anchor={open.anchor} tip={tip} note={blocked(SEARCH_GIFTS.find((g) => g.id === open.id)!) ? t("gift.full") : undefined} />}
     </div>
   );
 }

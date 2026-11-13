@@ -41,12 +41,23 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   expect(gifts).toHaveAttribute("aria-selected", "true");
   expect(gifts).toHaveFocus();
   await user.keyboard("{ArrowLeft}{ArrowLeft}");
-  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveFocus();
+  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveFocus();
   await user.keyboard("{End}");
-  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: zh["tab.trials"] })).toHaveAttribute("aria-selected", "true");
   await user.keyboard("{Home}");
   expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.run"] }).id);
+});
+
+test("the tabs come in four groups: what the bot runs (the run, the daily tasks), the team, the plans, the overrides (#721)", async () => {
+  render(<App />);
+  await screen.findByRole("tab", { name: zh["tab.teams"] });
+  // a separator between two groups shows as "|"
+  const row = [...screen.getByRole("tablist").children].map((x) => (x.getAttribute("role") === "tab" ? x.textContent : "|"));
+  expect(row).toEqual([
+    zh["tab.run"], zh["tab.daily"], "|", zh["tab.teams"], zh["tab.gifts"], "|",
+    zh["tab.deployment"], zh["tab.starlight"], zh["tab.themepacks"], "|", zh["tab.events"], zh["tab.trials"],
+  ]);
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {
@@ -118,7 +129,7 @@ test("an edit after a refused save still shows the refusal, with the unsaved cha
   expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
 });
 
-test("a problem made before any save already says Save must wait, on the plate and on Save; the fields are not marked yet", async () => {
+test("a problem typed before any save says Save must wait, on the plate and on Save, with the field marked, once the field is left", async () => {
   const ok = newSettings();
   ok.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
   file.text = JSON.stringify(ok, null, 2) + "\n";
@@ -127,14 +138,17 @@ test("a problem made before any save already says Save must wait, on the plate a
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(screen.getAllByRole("listitem")[1]);
   const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
-  fireEvent.change(slot, { target: { value: "1" } });
+  await user.type(slot, "{Backspace}"); // TEAMS #2 emptied: the lowest, #1, the first team's
   const plate = document.querySelector(".status")!;
+  expect(plate).toHaveAttribute("data-state", "dirty"); // still being typed in
+  expect(save).toHaveClass("armed");
+  await user.tab();
   expect(plate).toHaveAttribute("data-state", "blocked");
   expect(plate).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
   expect(save).toHaveClass("refused");
   expect(save).not.toHaveClass("armed");
-  expect(slot).not.toHaveAttribute("aria-invalid");
-  expect(screen.queryByRole("alert")).toBeNull();
+  expect(slot).toHaveAttribute("aria-invalid", "true");
+  expect(screen.getByRole("alert")).toHaveTextContent(zh.saveBlocked);
 });
 
 describe("Revert", () => {

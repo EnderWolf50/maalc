@@ -17,7 +17,7 @@ SOLD = set(RECIPES["shop"]["sells"])  # what a shop may sell (#626)
 KEYWORD_GIFTS = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
 KNOWN = {g["id"] for g in KEYWORD_GIFTS} | VESTIGES  # what a list may name
 ICON_IDS = KNOWN
-MAX_BYTES = 900_000  # 466 icons weigh 677 KB (1.4 KB each)
+MAX_BYTES = 2_000_000  # 466 icons of 112 px weigh 1,572 KB (3.4 KB each; 677 KB at 56 px, soft on a 2x screen, #721)
 
 
 def test_default_list_ids_all_exist():

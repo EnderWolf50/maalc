@@ -1,7 +1,8 @@
-// The hover popover of a gift tile (#291 GUI, #307): the gift's name, a "set to" row and what the list and the recipes make of it.
-// One popover for the whole tab: a tile shows it for itself (GiftEdit.tip), the tab renders it.
+// The hover card of a gift tile (#291 GUI, #307): the gift's icon and name, and under them what the page has to say about it. The
+// gift list tab's says "set to" and what the list and the recipes make of it; the team page's Gift Search says its effect (#721).
+// One card for a page: a tile shows it for itself (a GiftTip), the page renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FUSION_BY_ID, GIFT_BY_ID, giftName, iconUrl, packName, packsOf, usedIn } from "./giftCatalog";
+import { FUSION_BY_ID, GIFT_BY_ID, giftEffect, giftName, iconUrl, packName, packsOf, usedIn } from "./giftCatalog";
 import { plan, STATES, useGiftEdit, type GiftTip } from "./giftEdit";
 import { lockers, materialsOf, purchases, queue, type GiftState } from "./gifts";
 import { fill, TEXT, type Key } from "./i18n";
@@ -10,21 +11,32 @@ import { useEditor } from "./ui";
 
 /** How long the popover stays after the pointer leaves the tile and the popover. */
 export const LEAVE_MS = 160;
-const OFFSET_X = 14, OFFSET_Y = 2, MARGIN = 6;
+/** The popover's left edge from the tile's; its gap to the tile, under, over or beside it; its least distance to the window's edge. */
+const OFFSET_X = 14, GAP = 2, MARGIN = 6;
 /** At most this many uses are named; the rest are a count. */
 const USED_MAX = 4;
 
 export interface Box { left: number; top: number; right: number; bottom: number }
 
-/** Where the popover goes (its top-left corner): its left edge 14 px right of the tile's left, 2 px under the tile; when it does not
- * fit to the right it is mirrored (its right edge 14 px left of the tile's right), when it does not fit below it goes above the tile;
- * at last it is pushed into the window. */
-export function place(tile: Box, size: { w: number; h: number }, view: { w: number; h: number }): { left: number; top: number } {
-  let left = tile.left + OFFSET_X, top = tile.bottom + OFFSET_Y;
-  if (left + size.w > view.w - MARGIN) left = tile.right - OFFSET_X - size.w;
-  if (top + size.h > view.h - MARGIN) top = tile.top - OFFSET_Y - size.h;
+/** Where the popover goes (its top-left corner), never over its tile (#721): its left edge 14 px right of the tile's left, 2 px
+ * under the tile; when it does not fit to the right it is mirrored (its right edge 14 px left of the tile's right), when it does not
+ * fit below it goes above the tile. When it fits neither below nor above (a tall popover in a short window) it goes beside the tile,
+ * 2 px off its right edge (its left edge when there is no room to the right), level with the tile's top. When it fits on no side (a
+ * wide tile mid-window) it goes under or over the tile, whichever has more room, and `maxHeight` cuts it to that room (it scrolls).
+ * At last it is pushed into the window. */
+export function place(tile: Box, size: { w: number; h: number }, view: { w: number; h: number }): { left: number; top: number; maxHeight?: number } {
+  const fitsX = (left: number) => left >= MARGIN && left + size.w <= view.w - MARGIN;
   const clamp = (v: number, room: number) => Math.max(MARGIN, Math.min(v, room - MARGIN));
-  return { left: clamp(left, view.w - size.w), top: clamp(top, view.h - size.h) };
+  let left = tile.left + OFFSET_X;
+  if (!fitsX(left)) left = tile.right - OFFSET_X - size.w;
+  const under = view.h - MARGIN - (tile.bottom + GAP), over = tile.top - GAP - MARGIN; // the room under and over the tile
+  if (size.h <= under) return { left: clamp(left, view.w - size.w), top: tile.bottom + GAP };
+  if (size.h <= over) return { left: clamp(left, view.w - size.w), top: tile.top - GAP - size.h };
+  const beside = [tile.right + GAP, tile.left - GAP - size.w].find(fitsX);
+  if (beside !== undefined) return { left: beside, top: clamp(tile.top, view.h - size.h) };
+  return under >= over
+    ? { left: clamp(left, view.w - size.w), top: tile.bottom + GAP, maxHeight: under }
+    : { left: clamp(left, view.w - size.w), top: MARGIN, maxHeight: over };
 }
 
 /** The popover's state for the tab: which gift it shows and the tile it hangs from, and the GiftTip the tiles use. Scrolling,
@@ -69,10 +81,55 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="gl-tip-row"><span className="k">{label}</span><div className="v">{children}</div></div>;
 }
 
+/** The card's frame: the gift's icon, its name and, in Chinese, its English name, then `children`. Placed against its tile
+ * (`place`) and kept open while the pointer is on it; focus going anywhere but its tile or itself closes it. */
+export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children: ReactNode }) {
+  const { s } = useEditor();
+  const box = useRef<HTMLDivElement>(null);
+  const zh = s.language === "zh_tw";
+  const g = GIFT_BY_ID.get(id)!, name = giftName(g, zh);
+
+  // After every render (its height changes with the content): place it against the tile.
+  useLayoutEffect(() => {
+    if (!anchor.isConnected) return tip.hide(); // its tile left the page (a search, another tab): no mouseleave or blur comes
+    const el = box.current!, a = anchor.getBoundingClientRect();
+    el.style.maxHeight = ""; // measured at its own height, not the cut of the last placing
+    const { left, top, maxHeight } = place(a, { w: el.offsetWidth, h: el.offsetHeight }, { w: window.innerWidth, h: window.innerHeight });
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    if (maxHeight !== undefined) el.style.maxHeight = `${maxHeight}px`;
+  });
+
+  return (
+    // tabIndex -1: a click on the card's own text keeps the focus inside it.
+    <div ref={box} className="gl-tip" role="dialog" aria-label={name} tabIndex={-1} onMouseEnter={tip.keep} onMouseLeave={tip.leave}
+      onBlur={(e) => { const to = e.relatedTarget as Element | null; if (to !== anchor && !to?.closest(".gl-tip")) tip.hide(); }}>
+      <div className="gl-tip-head">
+        <img src={iconUrl(id)} alt="" />
+        <div><b>{name}</b>{zh && <small>{g.en}</small>}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** The Gift Search's card (#721): the gift's effect, as the game words it, in the GUI's language; `note` under it (why it cannot
+ * be picked). */
+export function GiftEffectCard({ id, anchor, tip, note }: { id: number; anchor: HTMLElement; tip: GiftTip; note?: string }) {
+  const { s } = useEditor();
+  const effect = giftEffect(id, s.language === "zh_tw");
+  return (
+    <GiftCard id={id} anchor={anchor} tip={tip}>
+      {effect && <p className="gl-tip-effect">{effect}</p>}
+      {note && <p className="gl-tip-note">{note}</p>}
+    </GiftCard>
+  );
+}
+
+/** The gift list tab's card: "set to", and what the list and the recipes make of the gift. */
 export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement }) {
   const { s, t } = useEditor();
   const { list, readOnly, apply, goto, tip } = useGiftEdit();
-  const box = useRef<HTMLDivElement>(null);
   const zh = s.language === "zh_tw";
   const g = GIFT_BY_ID.get(id)!, fusion = FUSION_BY_ID.get(id);
   const name = (x: number) => giftName(GIFT_BY_ID.get(x)!, zh);
@@ -85,15 +142,6 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const forFusion = at ? null : purchases(list).find(([i]) => i === id)?.[1]; // a wanted fusion's material, bought after the wants
   const packs = g.kind === "buyable" ? packsOf(id) : []; // the only packs a pack's own gift shows in (#626)
 
-  // After every render (its height changes with the content): place it against the tile.
-  useLayoutEffect(() => {
-    if (!anchor.isConnected) return tip.hide(); // its tile left the page (a search, another tab): no mouseleave or blur comes
-    const el = box.current!, a = anchor.getBoundingClientRect();
-    const { left, top } = place(a, { w: el.offsetWidth, h: el.offsetHeight }, { w: window.innerWidth, h: window.innerHeight });
-    el.style.left = `${left}px`;
-    el.style.top = `${top}px`;
-  });
-
   /** A material of the recipe; locked (tinted, padlock) while the fusion is wanted. */
   const chip = (m: number) => (
     <span key={m} className={"gl-mat" + (shown === "want" ? " locked" : "")}>
@@ -105,13 +153,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
     : forFusion ? fill(t("gl.tip_buy_fusion"), { name: name(forFusion) }) : t("gl.tip_buy_none");
 
   return (
-    // tabIndex -1: a click on the popover's own text keeps the focus inside it. Focus going anywhere but its tile or itself closes it.
-    <div ref={box} className="gl-tip" role="dialog" aria-label={name(id)} tabIndex={-1} onMouseEnter={tip.keep} onMouseLeave={tip.leave}
-      onBlur={(e) => { const to = e.relatedTarget as Element | null; if (to !== anchor && !to?.closest(".gl-tip")) tip.hide(); }}>
-      <div className="gl-tip-head">
-        <img src={iconUrl(id)} alt="" />
-        <div><b>{name(id)}</b>{zh && <small>{g.en}</small>}</div>
-      </div>
+    <GiftCard id={id} anchor={anchor} tip={tip}>
       <div className="gl-tip-set">
         <span className="k">{t("gl.tip_set")}</span>
         <div className="gl-tip-seg" role="group" aria-label={t("gl.tip_set_group")}>
@@ -181,6 +223,6 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
         )}
         <Row label={t("gl.tip_rank")}><span>{rank}</span></Row>
       </div>
-    </div>
+    </GiftCard>
   );
 }
