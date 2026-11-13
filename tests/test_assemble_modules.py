@@ -144,8 +144,9 @@ def test_fractions_reads_n_over_cap_left_to_right():
 
 
 def panel(monkeypatch, tmp_path, frames):
-    """AssemblePanel on a fake context: frames is what each screenshot shows, (Modules tab prompt read, fractions); a
-    run takes one before it taps the Modules tab, the next after."""
+    """AssemblePanel on a fake context: frames is what each screenshot shows, (Modules tab prompt read, fractions), with
+    True third when the game's too-many-Modules refusal shows; a run takes one before it taps the Modules tab, the next
+    after."""
     from unittest.mock import MagicMock
 
     import actions
@@ -154,11 +155,12 @@ def panel(monkeypatch, tmp_path, frames):
     taps = []
     monkeypatch.setattr(actions, "ROOT", tmp_path)
     monkeypatch.setattr(actions, "screen", lambda context: next(shots))
-    monkeypatch.setattr(actions, "too_many", lambda context, image: False)
+    monkeypatch.setattr(actions, "too_many", lambda context, image: image[2:] == (True,))
     monkeypatch.setattr(actions, "on_modules_tab", lambda context, image: image[0])
     monkeypatch.setattr(actions, "read_fractions", lambda context, image, node: image[1])
     monkeypatch.setattr(actions, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     monkeypatch.setattr(actions, "stop", lambda context, reason, **kw: taps.append("stop") or False)
+    monkeypatch.setattr(actions, "back", lambda context: taps.append("back"))
     actions.TASK.clear()
     actions.TASK.update(runs=0, done=None)
     return actions, MagicMock(), taps
@@ -186,6 +188,16 @@ def test_the_modules_tab_is_confirmed_once_the_most_button_stops_changing(monkey
     actions, context, taps = panel(monkeypatch, tmp_path, frames)
     assert actions.AssemblePanel().run(context, None) is True
     assert taps == [actions.MODULES_TAB, actions.ASSEMBLE_MAX, actions.PANEL_CONFIRM] and actions.TASK["assemble"]["before"] == 42
+
+
+def test_the_refusal_over_the_window_ends_the_task_with_back_and_no_confirm(monkeypatch, tmp_path):
+    # The game refuses with too many Modules in storage: as the window opens, or once >> asked for more.
+    for frames, after_most in [([(False, [], True)], False),
+                               ([(False, []), (True, [(42, 136), (42, 136)]), (True, [], True)], True)]:
+        actions, context, taps = panel(monkeypatch, tmp_path, frames)
+        assert actions.AssemblePanel().run(context, None) is True
+        assert taps == [*([MODULES_TAB, actions.ASSEMBLE_MAX] if after_most else []), "back"]
+        assert actions.TASK["assemble"]["end"] == "too many Enkephalin Modules in storage"
 
 
 def test_assemble_modules_is_a_task_of_the_interface():
