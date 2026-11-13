@@ -11,7 +11,7 @@ import {
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill } from "./i18n";
-import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useUndo, withBreaks, type PlanKey } from "./ui";
+import { Field, Input, Mark, ReorderList, Select, useEditor, usePick, useSlashFocus, useUndo, withBreaks, type PlanKey } from "./ui";
 
 /** The 12 sinners in the game's grid; clicking adds one at the end of the order or leaves it out
  * (spec 04 section 6). Read-only without onChange. */
@@ -273,19 +273,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
-  const named = (n: string) => n.toLowerCase().includes(query.trim().toLowerCase());
-  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra].filter(named);
-  // / jumps to the search from anywhere on the page but a field or a dialog, as on the gift list tab
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      const typing = (e.target as HTMLElement).closest("input, select, textarea, [role=dialog], [role=alertdialog]");
-      if (e.key !== "/" || typing || e.ctrlKey || e.metaKey || e.altKey) return;
-      e.preventDefault();
-      searchBox.current?.focus();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  const matchesQuery = (n: string) => n.toLowerCase().includes(query.trim().toLowerCase());
+  const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra].filter(matchesQuery);
+  useSlashFocus(searchBox); // as on the gift list tab
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
   const weigh = (what: string, w: number) => (what === UNLISTED ? set({ unlisted: w }) : set({ weights: { ...plan.weights, [what]: w } }));
   // The pack whose weight is being typed: on its chip, or in the + lane for a new weight (`lane`).

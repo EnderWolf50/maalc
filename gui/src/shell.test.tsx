@@ -181,3 +181,16 @@ test("the header's file path, cut short in a narrow window, shows in full on hov
   await screen.findByRole("button", { name: zh.save });
   expect(document.querySelector("header .path")).toHaveAttribute("title", "root\\config\\settings.json");
 });
+
+test("after 放棄變更, an edit and its undoing drop the Undo: the edits it would bring back are no longer the newest", async () => {
+  const ok = newSettings();
+  ok.teams = [newTeam(1, "Ta")];
+  file.text = JSON.stringify(ok, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  await user.click(screen.getByRole("button", { name: zh.revert }));
+  await user.type(screen.getByRole("textbox", { name: zh.name }), "?{Backspace}");
+  expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("Ta");
+  expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
+});

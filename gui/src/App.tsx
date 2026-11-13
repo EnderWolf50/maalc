@@ -7,7 +7,8 @@ import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor, withBreaks,
+  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor,
+  useUndoRow, withBreaks,
   type Picked,
 } from "./ui";
 import { sayProblem, validate, type Problem } from "./validate";
@@ -23,6 +24,9 @@ export const TABS = [
   ["trials", "tab.trials", TrialsTab, ["trial_risk_overrides"]],
   ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
 ] as const;
+
+/** The tabs in groups (what a run plays with, the plans, the overrides, the daily tasks): the tabs that start a group. */
+const GROUP_STARTS = new Set<string>(["deployment", "events", "daily"]);
 
 /** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
 type Leave = "close" | "reload";
@@ -176,7 +180,7 @@ export default function App() {
     <header data-tauri-drag-region="deep">
       <h1>{t("title")}</h1>
       <span className="path" />
-      <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError(String(e))} />
+      <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError((why) => `${why}\n${String(e)}`)} />
     </header>
   );
   if (loadError) {
@@ -199,7 +203,8 @@ export default function App() {
     .flatMap((p, i) => (p.paths.some((m) => m === path || m.startsWith(path + "/")) ? [problemId(i)] : [])).join(" ");
   const ctx = makeCtx({
     s, problemIds, giftList, picked, setPicked,
-    setS: (next) => setS((prev) => next(prev!)),
+    // any edit makes the edits 放棄變更 dropped no longer the newest: its Undo goes
+    setS: (next) => { setRevertedFrom(null); setS((prev) => next(prev!)); },
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });
   const dirty = toText(s) !== savedText;
@@ -318,10 +323,9 @@ export default function App() {
         <WindowButtons t={t} maximized={maximized} onError={(e) => setStatus(String(e))} />
       </header>
       <nav role="tablist" onKeyDown={walkTabs} inert={!!asking}>
-        {TABS.map(([id, label, , prefixes], k) => (
+        {TABS.map(([id, label, , prefixes]) => (
           <Fragment key={id}>
-            {/* the tabs in groups: what a run plays with, the plans, the overrides, the daily tasks */}
-            {(k === 3 || k === 6 || k === 8) && <span className="tabsep" aria-hidden />}
+            {GROUP_STARTS.has(id) && <span className="tabsep" aria-hidden />}
             <button type="button" role="tab" id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
               tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
               onClick={() => setTab(id)}>{t(label)}</button>
@@ -533,16 +537,10 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
   const { s, update, t } = useEditor();
   const rows = s[listKey] as unknown as R[];
   const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
-  // the last deleted row, which Undo puts back in its place, as a deleted team or plan comes back (ui.tsx useUndo)
-  const [last, setLast] = useState<{ row: R; at: number } | null>(null);
+  const [undoNote, removeRow] = useUndoRow(set);
   return (
     <>
-      {last && (
-        <p className="notice" role="status">
-          {fill(t("undo.deleted"), { name: String(last.row[cols[0].key]) || "—" })}{" "}
-          <button type="button" onClick={() => { set((l) => { l.splice(Math.min(last.at, l.length), 0, last.row); }); setLast(null); }}>{t("undo")}</button>
-        </p>
-      )}
+      {undoNote}
       {rows.length ? (
         <table className="overrides">
           <thead><tr>{cols.map((c) => <th key={c.key}>{t(c.label)}</th>)}<th /></tr></thead>
@@ -556,7 +554,7 @@ function OverrideTable<R extends Record<string, string | number>>({ listKey, col
                       : <Input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
                   </Mark>
                 ))}
-                <td><button type="button" className="danger" onClick={() => { setLast({ row: r, at: i }); set((l) => { l.splice(i, 1); }); }}>{t("remove")}</button></td>
+                <td><button type="button" className="danger" onClick={() => removeRow(rows, i, String(r[cols[0].key]))}>{t("remove")}</button></td>
               </tr>
             ))}
           </tbody>

@@ -72,6 +72,44 @@ export function useUndo() {
   return [note, remove] as const;
 }
 
+/** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
+ * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
+ * when the list got shorter) until the next delete. The teams and plans, which the Agent can reorder, use useUndo. */
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void) {
+  const { t } = useEditor();
+  const [last, setLast] = useState<{ row: T; at: number; name: string } | null>(null);
+  const note = last && (
+    <p className="notice" role="status">
+      {fill(t("undo.deleted"), { name: last.name })}{" "}
+      <button type="button" onClick={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }}>
+        {t("undo")}
+      </button>
+    </p>
+  );
+  const remove = (rows: T[], i: number, name: string) => {
+    setLast({ row: rows[i], at: i, name: name || "—" });
+    edit((list) => { list.splice(i, 1); });
+  };
+  return [note, remove] as const;
+}
+
+/** `/` focuses a search box from anywhere on the page but a field or a dialog, which have their own keys (the gift list, the theme
+ * pack plan). */
+export function useSlashFocus(box: { current: HTMLElement | null }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || typingIn(e.target)) return;
+      e.preventDefault();
+      box.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [box]);
+}
+/** Whether a key's target is a field or inside a dialog, whose keys are its own. */
+export const typingIn = (target: EventTarget | null) =>
+  !!(target as HTMLElement | null)?.closest?.("input, select, textarea, [role=dialog], [role=alertdialog]");
+
 const FOCUSABLE = "input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /** Scroll to and focus the field a problem path points at: the element in <main> whose data-path is that path or the nearest

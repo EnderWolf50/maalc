@@ -41,12 +41,14 @@ export function TeamsTab() {
         }}>+ {t("add")}</button>
         {s.teams[i] && <SectionIndex />}
       </aside>
-      <section>{s.teams[i] && <TeamEditor i={i} onRemove={remove} />}</section>
+      {/* keyed by the team: what one team's editor holds (a question open, a deleted row to undo) never reaches the next */}
+      <section>{s.teams[i] && <TeamEditor key={s.teams[i].id} i={i} onRemove={remove} />}</section>
     </div>
   );
 }
 
-/** The team page's sections, so a long page is one click from each: a closed panel opens and its heading takes the focus. */
+/** The team page's sections, so a long page is one click from each: a closed panel opens and its summary takes the focus, or a
+ * section's first control. */
 const SECTIONS = [
   ["order", "team.deployment_order"], ["starlight", "team.starlight"], ["gift", "gift.title"], ["keep", "keep.title"],
   ["skill", "skill.title"], ["more", "team.more"],

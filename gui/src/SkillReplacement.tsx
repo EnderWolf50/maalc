@@ -1,13 +1,12 @@
 // A team's skill replacement (#264, #454, spec 04 section 9): the shop's Replace <sinner>'s Skill and ID Skill Search. Only the
 // sinners to change are listed, in priority order (the layout the user adopted on 2026-11-06): S1 follows the S2 and S3 steppers,
 // the row shows the swaps its target needs and, when it needs two kinds, which one to try first.
-import { useState } from "react";
 import { useDragSort } from "./dragSort";
 import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { Choice, Input, Mark, useEditor, withBreaks } from "./ui";
+import { Choice, Input, Mark, useEditor, useUndoRow, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -29,8 +28,7 @@ export function SkillPanel({ i }: { i: number }) {
   const rest = SINNERS.filter((n) => !sr.sinners.some((x) => x.sinner === n));
   const dragItem = useDragSort((from, to) => edit((d) => { d.sinners = move(d.sinners, Number(from), Number(to)); }), () => true);
 
-  // the last removed sinner, which Undo puts back with its targets in its place
-  const [last, setLast] = useState<{ row: SkillReplacement["sinners"][number]; at: number } | null>(null);
+  const [undoNote, removeRow] = useUndoRow<SkillReplacement["sinners"][number]>((fn) => edit((d) => fn(d.sinners)));
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
   return (
     <details className="panel skill-panel" data-section="skill">
@@ -41,12 +39,7 @@ export function SkillPanel({ i }: { i: number }) {
         <option value="">{t("skill.add")}</option>
         {rest.map((n) => <option key={n} value={n}>{n}</option>)}
       </select>
-      {last && (
-        <p className="notice" role="status">
-          {fill(t("undo.deleted"), { name: last.row.sinner })}{" "}
-          <button type="button" onClick={() => { edit((d) => { d.sinners.splice(Math.min(last.at, d.sinners.length), 0, last.row); }); setLast(null); }}>{t("undo")}</button>
-        </p>
-      )}
+      {undoNote}
       {!sr.sinners.length && <p className="muted">{t("skill.empty")}</p>}
       <ol className="skill-sinners">
         {sr.sinners.map((x, j) => {
@@ -103,7 +96,7 @@ export function SkillPanel({ i }: { i: number }) {
                 <button type="button" className="icon" aria-label={`${t("down")} ${x.sinner}`} title={t("down")} disabled={j === sr.sinners.length - 1}
                   onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}>↓</button>
                 <button type="button" className="icon" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
-                  onClick={() => { setLast({ row: x, at: j }); edit((d) => { d.sinners.splice(j, 1); }); }}>✕</button>
+                  onClick={() => removeRow(sr.sinners, j, x.sinner)}>✕</button>
               </span>
             </li>
           );

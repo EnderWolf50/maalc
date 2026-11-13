@@ -37,6 +37,16 @@ const mainOf = () => screen.getByText(zh["team.main_keyword"], { exact: false })
 describe("Reset time records", () => {
   beforeEach(() => { file.resets = []; });
 
+  test("a question left open goes with its team: the next team picked is not asked, and gets no marker", async () => {
+    const s = settings();
+    s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+    const r = renderEditor(<TeamsTab />, s);
+    await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
+    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
+    expect(file.resets).toEqual([]);
+  });
+
   test("asks in the page, not in a browser dialog; Cancel writes nothing, the confirm writes the marker", async () => {
     const confirm = vi.spyOn(window, "confirm");
     const r = renderEditor(<TeamsTab />, settings());
@@ -265,7 +275,7 @@ describe("the E.G.O Gift Search keyword tabs", () => {
 });
 
 describe("the side column's section index", () => {
-  test("jumps to a section: a closed panel opens, and its heading takes the focus", async () => {
+  test("jumps to a section: a closed panel opens, and its summary takes the focus", async () => {
     const r = renderEditor(<TeamsTab />, settings());
     const jump = screen.getByRole("navigation", { name: zh["team.sections"] });
     const gift = screen.getByText(zh["gift.title"], { exact: false, selector: "summary" });

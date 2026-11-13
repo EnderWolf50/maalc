@@ -50,7 +50,7 @@
    * cream price and + / ++ on near-black buttons with a grey outline; a picked card turns white. The same in both themes,
    * as the game's page is. */
   --season-bg-1: #131728; --season-bg-2: #050817; --season-side: #050817;
-  --season-card-top: #37383c; --season-card-mid: #1a1d31; --season-card-bottom: #0f1124; --season-frame: #4d5a92;
+  --season-card-top: #37383c; --season-card-mid: #1a1d31; --season-card-bottom: #0f1124; --season-frame: #54619a;
   --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-hint: #5ee4fe; --season-shadow: 0 1px 2px #000;
   --season-price: #d5bb9c;
   --season-pick-top: #ffffff; --season-pick-mid: #e6eefb; --season-pick-bottom: #cfdcf1; --season-pick-ink: #0b1530; --season-pick-line: #ffffff;
@@ -614,9 +614,9 @@ small.fl, small.wk {
   font: 700 13px/1.25 var(--font-display); letter-spacing: 0.03em; padding: 0 5px; border: 1px solid; border-radius: 2px; corner-shape: bevel;
 }
 small.fl { --c: var(--fl-n); --ink: var(--fl-n-ink); color: var(--ink); background: var(--c); border-color: var(--c); }
-/* Besides the hue: NORMAL dark ink on a light fill, HARD light ink on a dark one; INFINITY has a dashed ring round its fill,
- * EXTREME a double one. */
-small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); }
+/* Besides the hue, a ring round the fill: NORMAL none, HARD solid, INFINITY dashed, EXTREME double (and NORMAL's ink is dark,
+ * HARD's light). */
+small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); outline: 1px solid var(--c); outline-offset: 1px; }
 small.fl.inf { --c: var(--fl-i); --ink: var(--fl-i-ink); outline: 1px dashed var(--c); outline-offset: 1px; }
 small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); outline: 3px double var(--c); outline-offset: 1px; }
 small.wk { font: 700 12px/1.35 var(--font-ui); color: var(--on-accent); background: var(--accent); border-color: var(--accent); } /* the "含想要" mark (#421) */
