@@ -9,10 +9,9 @@ import threading
 
 import numpy as np
 from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, run_task, screen
-from recovery import L3_PER_TASK
+from recovery import L3_FAILED_IN_A_ROW, L3_PER_TASK, Restarts, focused_package
 from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASONAL_TAB, WEEKLY_TAB
 from agent_patch import rebind
-import recovery
 
 TITLE_TAP = (540, 300, 200, 120)
 SCREENS = {**PASS_SCREENS, "title": "Title.png"}
@@ -89,7 +88,7 @@ def child():
     game = Game()
     game.set()
     # MaaFramework's Linux build (CI) passes no post_shell to a custom controller: read the model's dumpsys directly.
-    rebind("foreground", lambda context: recovery.focused_package(game.shell("dumpsys window", 0)))
+    rebind("foreground", lambda context: focused_package(game.shell("dumpsys window", 0)))
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (model, restarts_used) in {
@@ -97,13 +96,13 @@ def child():
         # the restarted game lets the banner's first tap go by: its 4th tap in all, past PassBanner's max_hit 3
         "frozen_late": ({"frozen": True, "ignored_after": 1}, 0),
         "frozen_again": ({"frozen": True, "refreezes": True}, 0),
-        "frozen_restarts_used": ({"frozen": True}, recovery.L3_FAILED_IN_A_ROW),
+        "frozen_restarts_used": ({"frozen": True}, L3_FAILED_IN_A_ROW),
         "late": ({"live": True, "ignored": 1}, 0),
         "never": ({"live": True, "ignored": math.inf}, 0),
         "title_frozen": ({"frozen": True, "screen": "title"}, 0),
     }.items():
         game.set(**model)
-        actions.STUCK["restarts"] = recovery.Restarts()
+        actions.STUCK["restarts"] = Restarts()
         for _ in range(restarts_used):
             actions.STUCK["restarts"].attempt("PassBanner")
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)

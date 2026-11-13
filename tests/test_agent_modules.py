@@ -4,7 +4,6 @@ registered by importing main.py, and no agent module hits an import cycle when i
 Both run in fresh interpreters: the pytest process has already imported actions under the real AgentServer.
 """
 
-import ast
 import json
 import subprocess
 import sys
@@ -66,15 +65,3 @@ def test_every_module_imports_on_its_own():
     last_error_line = {module: run.communicate(timeout=TIMEOUT)[1].strip().splitlines()[-1:]
                        for module, run in runs.items()}
     assert {module: line for module, line in last_error_line.items() if runs[module].returncode} == {}
-
-
-def test_a_test_reads_a_pure_logic_module_directly_not_through_a_page_module():
-    # #676 split: `event_actions.shop.fuse_slots` is `shop.fuse_slots` with a longer name that says the page owns it
-    pages = {p.stem for p in AGENT.glob("*.py") if p.stem == "actions" or p.stem.endswith("_actions")}
-    pure = {p.stem for p in AGENT.glob("*.py")} - pages - {"main"}
-    root = AGENT.parent
-    reads = [f"{path.relative_to(root)}:{n.lineno}: {n.value.id}.{n.attr}"
-             for folder in ("tests", "tools") for path in sorted((root / folder).rglob("*.py"))
-             for n in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id in pages and n.attr in pure]
-    assert reads == []

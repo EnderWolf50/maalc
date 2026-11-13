@@ -47,7 +47,7 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
-    import settle_actions
+    import ocrtext
     import shop_actions
     import shop
     from test_shop import skill_entry
@@ -97,9 +97,9 @@ def child():
                     out["nodes"][name] = [n for n in ("Shop", "Connecting") if actions.seen(context, image, n)]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
-                    if image.shape[:2] == (720, 1280) and settle_actions.has(actions.text(context, image, shop_actions.DIALOG_TITLE), *shop_actions.REPLACE_MARK):
+                    if image.shape[:2] == (720, 1280) and ocrtext.has(actions.text(context, image, shop_actions.DIALOG_TITLE), *shop_actions.REPLACE_MARK):
                         out["mark_sweep"].append(path.stem)
-                    if image.shape[:2] == (720, 1280) and settle_actions.has(actions.text(context, image, shop_actions.SELECT_TITLE), "Select a Sinner"):
+                    if image.shape[:2] == (720, 1280) and ocrtext.has(actions.text(context, image, shop_actions.SELECT_TITLE), "Select a Sinner"):
                         out["select_sweep"].append(path.stem)
                 swaps = actions.data("shop.yaml")["skill_replacement"]
                 for name in ID_GRIDS:

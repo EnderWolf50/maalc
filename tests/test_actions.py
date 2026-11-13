@@ -1768,7 +1768,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert run_start_actions.SelectTeam().run(context, argv())
     assert taps(context) == [(1145, 587)]  # TEAMS #3 already on the title: Confirm, no back arrow (97, 42)
-    assert actions.RUN["team"] == {**team, "keyword": "Burn", "list": actions.resolve_list("default", [])}
+    assert actions.RUN["team"] == {**team, "keyword": "Burn", "list": gifts.resolve_list("default", [])}
 
 
 def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
