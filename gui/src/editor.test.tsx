@@ -178,6 +178,22 @@ describe("a problem shows while editing, before any save", () => {
     marked(slot(), zh["tab.teams"]);
   });
 
+  test("a problem already shown keeps its marks while typing brings the typed field into it; the field is marked once left", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
+    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 12 });
+    const user = await openOn(s, zh["tab.teams"]);
+    await pickInList(user, "Tc");
+    await user.type(slot(), "{Backspace}"); // Tc's TEAMS #12 becomes #1
+    expect(slot()).toHaveValue(1);
+    const bad = () => [...document.querySelectorAll("aside li")].map((r) => r.classList.contains("bad"));
+    expect(bad()).toEqual([true, true, false]);
+    expect(slot()).not.toHaveAttribute("aria-invalid");
+    await user.tab();
+    expect(bad()).toEqual([true, true, true]);
+    marked(slot(), zh["tab.teams"]);
+  });
+
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
     const s = settings();
     s.teams.push({ ...newTeam(3, "Tc"), id: "c" });

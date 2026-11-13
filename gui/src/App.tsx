@@ -37,9 +37,9 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
 const tabOf = (path: string) => TABS.find((x) => (x[3] as readonly string[]).includes(path.split("/")[0]));
-/** A problem's marks across edits: its kind at each field it marks, not its words, which name what the user is typing. Two
- * of three teams left on one TEAMS # still share a mark with the problem all three were. */
-const problemMarks = (p: Problem) => p.paths.map((m) => `${p.say.key} ${m}`);
+/** One mark of a problem across edits: its kind at one field it marks, not its words, which name what the user is typing.
+ * Two of three teams left on one TEAMS # keep two of the three marks. */
+const problemMark = (p: Problem, path: string) => `${p.say.key} ${path}`;
 /** The controls a value is typed into, not picked from (a select, a switch, a drag). */
 const TYPED = new Set(["text", "search", "url", "number"]);
 const typesText = (el: EventTarget) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && TYPED.has(el.type));
@@ -53,8 +53,8 @@ export default function App() {
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
-  // The field being typed in, and the marks (problemMarks) that showed before its last keystroke: a problem the typing makes
-  // waits until the field loses focus, a save is tried or another writer changes the file; null: every problem shows (#717).
+  // The field being typed in, and the marks (problemMark) that showed before its last keystroke: a mark the typing makes waits
+  // until the field loses focus, a save is tried or another writer changes the file; null: every problem shows (#717).
   const [typed, setTyped] = useState<{ field: EventTarget; marks: Set<string> } | null>(null);
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
@@ -182,10 +182,13 @@ export default function App() {
   }, [jump]);
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
-  // What the marks, the tab markers, the problems block and the save plate show; a fix shows at once, typing or not. The
-  // hold is the field's only while it has the focus: a field that goes with the focus in it (Enter closes its box) fires no blur.
+  // What the marks, the tab markers, the problems block and the save plate show, each problem with the fields it marks now;
+  // a fix shows at once, typing or not. The hold is the field's only while it has the focus: a field that goes with the focus
+  // in it (Enter closes its box) fires no blur.
   const held = typed && typed.field === document.activeElement ? typed.marks : null;
-  const shown = held ? problems.filter((p) => problemMarks(p).some((m) => held.has(m))) : problems;
+  const shown = held
+    ? problems.flatMap((p) => { const paths = p.paths.filter((m) => held.has(problemMark(p, m))); return paths.length ? [{ ...p, paths }] : []; })
+    : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
@@ -350,7 +353,8 @@ export default function App() {
           word does not turn red. Leaving the field shows what waited. A select, a switch or a drag marks at once. */}
       <main inert={!!asking}
         onChange={(e) => {
-          if (e.target === document.activeElement && typesText(e.target)) setTyped({ field: e.target, marks: new Set(shown.flatMap(problemMarks)) });
+          if (!(e.target === document.activeElement && typesText(e.target))) return;
+          setTyped({ field: e.target, marks: new Set(shown.flatMap((p) => p.paths.map((m) => problemMark(p, m)))) });
         }}
         onBlur={() => setTyped(null)}>
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
