@@ -12,6 +12,7 @@ import pytest
 from PIL import Image
 
 import actions
+import battle_actions
 import shop_actions
 import shop
 import test_actions
@@ -384,7 +385,7 @@ ID_SLOT = slot_tap(0)
 
 
 def portrait(sinner):
-    return shop_actions.SHOP_PORTRAIT_X[actions.battle.SINNERS.index(sinner)], 655
+    return shop_actions.SHOP_PORTRAIT_X[battle_actions.battle.SINNERS.index(sinner)], 655
 
 
 class IdGame:
@@ -849,7 +850,7 @@ HARD_ALIVE = ["Ryōshū", "Meursault", "Gregor"]  # #453's and #456's runs: the 
 
 
 @pytest.mark.parametrize("name, alive", [
-    *[(n, list(actions.battle.SINNERS)) for n in ("Shop", "ShopHeal", "SuperShop")],
+    *[(n, list(battle_actions.battle.SINNERS)) for n in ("Shop", "ShopHeal", "SuperShop")],
     *[(n, HARD_ALIVE) for n in ("ShopReplaceSkillCancelled", "ShopReplaceSkillDone", "ShopReplaceSkillRefreshed",
                                 "ShopReplaceSkillClippedGregor", "ShopReplaceSkillClippedMeursault", "SuperShopIdSkillSearch",
                                 "SuperShopScrolled", "ShopIdSkillSearchDone", "ShopIdSkillSearchSelect")],
@@ -858,7 +859,7 @@ def test_the_dead_are_the_grey_portraits_of_the_shops_main_page(name, alive):
     # Every capture of tests/screens that shows the shop's main page (or the select mode over it): the bar the heal and ID
     # Skill Search read. A dead portrait reads up to 51, over the old 30.
     image = capture(name)
-    assert [s for s in actions.battle.SINNERS if s not in shop_actions.bar_dead(image)] == alive
+    assert [s for s in battle_actions.battle.SINNERS if s not in shop_actions.bar_dead(image)] == alive
 
 
 def test_the_grey_portrait_sweep_over_the_shop_captures():

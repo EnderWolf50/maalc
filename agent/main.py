@@ -13,6 +13,7 @@ if (ROOT / "maafw").is_dir():
 from maa.agent.agent_server import AgentServer  # noqa: E402
 
 import actions  # noqa: E402,F401  registers custom actions
+import battle_actions  # noqa: E402,F401  registers custom actions
 import lux_actions  # noqa: E402,F401  registers custom actions
 import map_actions  # noqa: E402,F401  registers custom actions
 import shop_actions  # noqa: E402,F401  registers custom actions

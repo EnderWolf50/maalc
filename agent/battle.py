@@ -1,6 +1,6 @@
 """Battle decisions, free of MaaFramework (docs/spec/03-decisions.md sections 3, 8, 9).
 
-actions.py reads the formation page and the DEFEAT dialog and taps; everything here is plain data.
+battle_actions.py reads the formation page and the DEFEAT dialog and taps; everything here is plain data.
 """
 
 from functools import cache

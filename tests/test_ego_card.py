@@ -90,8 +90,8 @@ def test_every_battle_hub_closes_the_ego_card_before_the_turn():
 def test_a_held_finger_lifts_for_the_ego_card():
     # The daily run's card was up after `turn 1: started` (what opened it is unverified), where hold_turn holds the
     # finger for up to 6 s: it lifts as soon as the card shows, and BattleHUD closes it.
-    import actions
-    assert "EgoCard" in actions.BATTLE_LEFT
+    import battle_actions
+    assert "EgoCard" in battle_actions.BATTLE_LEFT
 
 
 def test_the_tap_lands_off_the_card_and_off_the_turns_buttons():
@@ -100,10 +100,10 @@ def test_the_tap_lands_off_the_card_and_off_the_turns_buttons():
     # card 5, two cards 4), within 0.35 s, the bot frozen mid-hold; with the bot running, its EgoCard tap there closed
     # one card and two (`screen changed after 0.3 s`). The tap (the target's centre) is hold_turn's HOLD_SPOT, the corner kept free of buttons on every
     # battle screen (docs/spec/03-decisions.md): a tap that comes when the card has already gone presses nothing.
-    import actions
+    import battle_actions
     param = load_nodes()["EgoCard"]["custom_action_param"]
     assert param["left"] is True  # waits for the card to go, no OCR
     x, y, w, h = param["target"]
     tap = (x + w // 2, y + h // 2, 1, 1)
-    assert tap[:2] == actions.HOLD_SPOT
+    assert tap[:2] == battle_actions.HOLD_SPOT
     assert not any(touches(tap, box) for box in (CARD_BOX, CARDS_ROW, TWO_CARDS, *TOP_BUTTONS))
