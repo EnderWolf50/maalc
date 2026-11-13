@@ -34,7 +34,7 @@
 .gl-flash { font-size: 13px; color: var(--gl-accentink); min-height: 1.45em; }
 .gl-flash.warn { color: var(--gl-bad); font-weight: 600; }
 
-/* Keyword tabs: separate rounded buttons, the chosen one in the selection fill and bold, no border change. */
+/* Keyword tabs: separate chamfered buttons, the chosen one in the selection fill and bold, no border change. */
 .gl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
 .gl-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 4px; corner-shape: bevel; color: var(--gl-muted); }
 .gl-tab:hover { color: var(--gl-fg); }

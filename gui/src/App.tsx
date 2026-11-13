@@ -1,13 +1,13 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
-import { TEXT, type Key } from "./i18n";
+import { TEXT, fill, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { GiftListsTab } from "./GiftLists";
 import { TeamsTab } from "./Teams";
 import {
-  Decimal, EditorContext, Field, Num, Select, ToggleNum, focusPath, isPickList, makeCtx, translate, useEditor, withBreaks,
+  Decimal, EditorContext, Field, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor, withBreaks,
   type Picked,
 } from "./ui";
 import { validate, type Problem } from "./validate";
@@ -40,6 +40,7 @@ export default function App() {
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
   const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
+  const [refused, setRefused] = useState(false); // the last save stopped at the checks, and its problems are not all fixed
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -124,6 +125,7 @@ export default function App() {
   }, [jump]);
 
   const problems: Problem[] = useMemo(() => (s ? validate(s) : []), [s]);
+  useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
 
@@ -152,10 +154,14 @@ export default function App() {
   const save = async () => {
     setChecked(true);
     setFailed(false);
+    setRefused(false);
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
-        if (validate(current).length) return setStatus("");
+        if (validate(current).length) {
+          setRefused(true);
+          return setStatus("");
+        }
         const written = toText(current);
         try {
           await api.saveSettings(written, disk.current);
@@ -188,19 +194,20 @@ export default function App() {
   };
 
   const Current = TABS.find((x) => x[0] === tab)![2];
-  const blocked = checked && problems.length > 0;
-  // The save state plate: a refused save not yet fixed (with the count, edited or not), a write that failed, unsaved, saved,
-  // or a note.
+  const blocked = checked && problems.length > 0; // the marks show: a save cannot go through until they are fixed
+  // The save state plate: problems to fix (a refused save, or problems made after the checks first ran), a write that failed,
+  // unsaved, saved, or a note; Save takes the crimson frame while it cannot go through, the caution stripe while it can.
   const state = blocked ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
-  const stateText = [blocked && t("blocked").replace("{n}", String(problems.length)), dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!blocked && t("clean"))]
-    .filter(Boolean).join(" · ");
+  const stateText = [
+    blocked && fill(t(refused ? "saveState.blocked" : "saveState.toFix"), { n: problems.length }),
+    dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!blocked && t("saveState.clean")),
+  ].filter(Boolean).join(" · ");
+  const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: ReactKeyboardEvent) => {
-    const at = TABS.findIndex((x) => x[0] === tab);
-    const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
-    if (to === undefined) return;
+    const next = nextTab(TABS.map((x) => x[0]), tab, e.key);
+    if (!next) return;
     e.preventDefault();
-    const next = TABS[(to + TABS.length) % TABS.length][0];
     setTab(next);
     document.getElementById(`tab-${next}`)?.focus();
   };
@@ -216,12 +223,11 @@ export default function App() {
           </select>
         </label>
         <span className="status" data-state={state} aria-live="polite">{stateText}</span>
-        {/* armed (the caution stripe) only while a save can go through; a refused save gets the crimson frame instead */}
-        <button type="button" className={"primary" + (blocked || failed ? " refused" : dirty ? " armed" : "")} onClick={save}>{t("save")}</button>
+        <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
       </header>
       <nav role="tablist" onKeyDown={walkTabs}>
         {TABS.map(([id, label, , prefixes]) => (
-          <button type="button" role="tab" key={id} id={`tab-${id}`} aria-selected={tab === id} aria-controls="tabpanel"
+          <button type="button" role="tab" key={id} id={`tab-${id}`} data-tab={id} aria-selected={tab === id} aria-controls="tabpanel"
             tabIndex={tab === id ? 0 : -1} className={(tab === id ? "selected" : "") + (prefixes.some(bad) ? " bad" : "")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
@@ -255,7 +261,7 @@ function RunTab() {
     </Field>
   );
   // Four groups by what they decide: the run itself, the weekly bonuses, what happens when something fails, what the bot does
-  // on its own. The controls and their order inside a group are the same as before.
+  // on its own.
   return (
     <div className="groups">
       <fieldset>

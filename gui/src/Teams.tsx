@@ -10,7 +10,7 @@ import {
 } from "./model";
 import { SinnerGrid, StarlightEditor, StarlightReceipt } from "./Plans";
 import { SkillPanel } from "./SkillReplacement";
-import { Field, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo, withBreaks } from "./ui";
+import { Field, Num, ReorderList, Select, ToggleNum, nextTab, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, tv, bad } = useEditor();
@@ -57,6 +57,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
   const order = "custom" in team.deployment_order ? team.deployment_order.custom
     : s.deployment_order_plans.find((p) => p.id === orderSource)?.order;
+  const orderPlan = s.deployment_order_plans.find((p) => p.id === orderSource);
   const starSource = "plan" in team.starlight ? team.starlight.plan : "";
   const starPlan = s.starlight_plans.find((p) => p.id === starSource);
   const star = "custom" in team.starlight ? team.starlight.custom : starPlan;
@@ -139,7 +140,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
         ) : order && <>
-          <p className="muted">{fill(t("team.plan_note"), { name: s.deployment_order_plans.find((p) => p.id === orderSource)!.name, tab: t("tab.deployment"), custom: t("custom") })}</p>
+          <p className="muted">{fill(t("team.plan_note"), { name: orderPlan!.name, tab: t("tab.deployment"), custom: t("custom") })}</p>
           <SinnerGrid order={order} path={`${path}/deployment_order`} />
         </>}
       </fieldset>
@@ -251,8 +252,8 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
   const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const walk = (e: KeyboardEvent) => {
-    const next = SEARCH_TABS[SEARCH_TABS.indexOf(tab) + (e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0)];
-    if (next === tab || !next) return;
+    const next = nextTab(SEARCH_TABS, tab, e.key);
+    if (!next || next === tab) return;
     e.preventDefault();
     setTab(next);
     refs.current[next]?.focus();

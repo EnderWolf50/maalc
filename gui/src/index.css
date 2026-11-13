@@ -1,7 +1,7 @@
 /* The settings window drawn in the Mirror Dungeon's own UI language: a warm near-black ground, bronze rules, chamfered frames,
  * condensed numerals, amber for what is in use, teal for what is kept, crimson for errors, the caution stripe for what needs
  * care. Dark is the primary theme; the light theme inverts lightness and keeps every colour's job, the game-styled panels'
- * too. Grace of the Star alone wears the season's colours. */
+ * too. Grace of the Star alone wears the season's colours (and a team's one-line receipt of a starlight plan, its rule). */
 :root {
   color-scheme: dark;
   --bg: #120e0b;
@@ -23,7 +23,6 @@
   --accent-soft: #3a2a12;
   --stripe: #4f3c14;
   --bad: #ff7a68;
-  --bad-fill: #a3241a;
   --bad-soft: #2d1210;
   --keep: #4fcab7; /* teal: kept, backup */
   --keep-soft: #11302b;
@@ -32,7 +31,8 @@
   --hazard: #ffd34d; /* the caution stripe: the starlight's gold, one yellow for both */
   --hazard-2: #17120c;
   /* The season: Mirror Dungeon 8, "Mirror of Sisyphe": its cobalt title plate and the cyan of its map (game captures of
-   * 2026-11-08). Only the season's own page, Grace of the Star, wears it; a new season changes the --season-* tokens. */
+   * 2026-11-08). Only the season's own page, Grace of the Star, wears it (and the rule of a starlight plan's receipt); a
+   * new season changes the --season-* tokens. */
   --season-plate: #4e61ba;
   --gold: #ffd34d;
   /* The game panels. Sinner frames: */
@@ -50,7 +50,7 @@
   --fl-n: #d6c6ad;
   --fl-h: #ff8a4c;
   --fl-i: #c2a6ff;
-  --fl-x: #ff6fa3;
+  --fl-x: #ff6ec0;
   --font-ui: "Segoe UI", "Microsoft JhengHei UI", system-ui, sans-serif;
   --font-display: "Barlow Condensed", "Microsoft JhengHei UI", "Segoe UI", sans-serif;
   font: 14px/1.5 var(--font-ui);
@@ -80,7 +80,6 @@
     --accent-soft: #fae5bd;
     --stripe: #f2c56f;
     --bad: #b3231b;
-    --bad-fill: #b3231b;
     --bad-soft: #fbe3df;
     --keep: #0a6b60;
     --keep-soft: #d7efea;
@@ -90,7 +89,7 @@
     --fl-n: #40352a;
     --fl-h: #a63700;
     --fl-i: #6a40c4;
-    --fl-x: #a8124f;
+    --fl-x: #a3137a;
     --card-top: #fbf8f3; --card-bottom: #ece4d7; --card-line: #b9a68c; --card-fg: #1e1813;
     --dep-top: #fdf0d4; --dep-bottom: #f6dca6; --bak-top: #e3f5f1; --bak-bottom: #c1e7df;
     --tone-dep: #9a5c00; --tone-bak: #0a6b60; --on-tone: #ffffff;
@@ -152,7 +151,6 @@ header .status {
   display: inline-flex; align-items: center; gap: 8px; max-width: 34em; padding: 3px 10px; font-size: 13px; color: var(--fg-2);
   border: 1px solid transparent; border-radius: 4px; corner-shape: bevel;
 }
-header .status:empty { display: none; }
 header .status::before { content: ""; flex: none; width: 9px; height: 9px; transform: rotate(45deg); background: var(--muted); }
 header .status[data-state="dirty"] { color: var(--accent-ink); border-color: var(--accent-line); background: var(--accent-soft); font-weight: 600; }
 header .status[data-state="dirty"]::before { background: var(--accent); }
@@ -297,8 +295,7 @@ details.panel > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 /* The run options, in groups. */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 16px; align-items: start; }
 .groups .grid { width: 100%; }
-.groups .grid > .check { align-self: end; padding-bottom: 6px; }
-.groups .grid > .check.wide { grid-column: 1 / -1; align-self: start; padding-bottom: 0; }
+.groups .grid > .check.wide { grid-column: 1 / -1; }
 
 ol.reorder { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 220px; }
 ol.reorder li {

@@ -6,7 +6,7 @@ import {
   gracePrice,
   lanesOf, lineAt, newId, newPackPlan, onFloor, parseThemePacks, selectAll, starlightCost, toggleSinner, weightOf,
   type DeploymentPlan, type Order, type PackMode, type PackPlanValues, type StarlightPlan, type StarlightValues, type ThemePackPlan,
-  type Team, type ThemePacks,
+  type Grace, type Team, type ThemePacks,
 } from "./model";
 import { GIFT_BY_ID, giftName } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
@@ -62,12 +62,12 @@ export function StarlightEditor({ value, onChange, path }: {
               onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); set((v) => clickCard(v, n)); } }}>
               {rank > 0 && <span className="rank">{rank}</span>}
               <span className="price">★ {gracePrice(n, level === "none" ? "base" : level)}</span>
-              <span className="name">{zh && g.zh ? g.zh : g.en}{zh && g.zh && <small>{g.en}</small>}</span>
+              <span className="name">{graceName(g, zh)}{zh && g.zh && <small>{g.en}</small>}</span>
               {zh && <ul>{effects.map((line, j) => <li key={j} className={line.startsWith("-") ? "sub" : ""}>{line.replace(/^-/, "")}</li>)}</ul>}
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
-                    aria-label={`${zh && g.zh ? g.zh : g.en} ${"+".repeat(plus)}`} className={level === LEVELS[plus + 1] ? "lit" : ""}
+                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`} className={level === LEVELS[plus + 1] ? "lit" : ""}
                     onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}>{"+".repeat(plus)}</button>
                 ))}
               </span>
@@ -107,6 +107,9 @@ function PlanUsers({ planKey, id }: { planKey: PlanKey; id: string }) {
   return <p className="muted">{names.length ? fill(t("plan.usedBy"), { names: names.join(t("gl.sep")) }) : t("plan.unused")}</p>;
 }
 
+/** A grace's name in the GUI's language: the Chinese one when the data has it. */
+const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
+
 /** A starlight plan on one line, for a team that uses it: the picks in buying order with their level, and the total. */
 export function StarlightReceipt({ value }: { value: StarlightValues }) {
   const { s, t } = useEditor();
@@ -117,7 +120,7 @@ export function StarlightReceipt({ value }: { value: StarlightValues }) {
       <ol>
         {order.map((n, i) => {
           const g = GRACES[n - 1], level = value.levels[n - 1];
-          return <li key={n}><b>{i + 1}</b>{zh && g.zh ? g.zh : g.en}{level !== "base" && <i>{level === "plus" ? "+" : "++"}</i>}</li>;
+          return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{"+".repeat(LEVELS.indexOf(level) - 1)}</i>}</li>;
         })}
       </ol>
       <span className="total">{t("starlight.total")} <b>★ {starlightCost(value.levels)}</b></span>

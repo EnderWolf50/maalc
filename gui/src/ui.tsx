@@ -113,6 +113,14 @@ export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "bad" |
   };
 }
 
+/** The tab a key moves to in a row of tabs: the arrows step, round at the ends; Home and End jump to them. Undefined for
+ * any other key. */
+export function nextTab<T>(tabs: readonly T[], at: T, key: string): T | undefined {
+  const i = tabs.indexOf(at), n = tabs.length;
+  const to = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: n - 1 } as Record<string, number>)[key];
+  return to === undefined ? undefined : tabs[(to + n) % n];
+}
+
 export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
   const { bad } = useEditor();
   return (

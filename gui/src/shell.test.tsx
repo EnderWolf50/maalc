@@ -1,5 +1,5 @@
 // The editor's shell (App.tsx): the main tabs from the keyboard, and the save state in the header when a save is refused.
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
@@ -53,7 +53,7 @@ test("with nothing edited the header says there is nothing to save", async () =>
   render(<App />);
   await screen.findByRole("button", { name: zh.save });
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "clean");
-  expect(document.querySelector(".status")).toHaveTextContent(zh.clean);
+  expect(document.querySelector(".status")).toHaveTextContent(zh["saveState.clean"]);
 });
 
 test("a write that fails shows as a failure in the header, not as plain unsaved changes; the next good save clears it", async () => {
@@ -82,9 +82,29 @@ test("a refused save shows in the header with the number of problems, also when 
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(save);
   await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked"));
-  expect(document.querySelector(".status")).toHaveTextContent(fill(zh.blocked, { n: 1 }));
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
   expect(save).not.toHaveClass("armed");
   expect(file.saved).toEqual([]);
+});
+
+test("a problem made after a good save asks to fix it before saving: no save was refused", async () => {
+  const ok = newSettings();
+  ok.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+  file.text = JSON.stringify(ok, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  const save = await screen.findByRole("button", { name: zh.save });
+  await user.click(save);
+  await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "saved"));
+  await user.click(screen.getAllByRole("listitem")[1]);
+  const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
+  fireEvent.change(slot, { target: { value: "1" } });
+  const plate = document.querySelector(".status")!;
+  expect(plate).toHaveAttribute("data-state", "blocked");
+  expect(plate).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
+  expect(plate).not.toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
+  await user.click(save);
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
 });
 
 test("an edit after a refused save still shows the refusal, with the unsaved changes", async () => {
@@ -94,6 +114,6 @@ test("an edit after a refused save still shows the refusal, with the unsaved cha
   await user.click(await screen.findByRole("button", { name: zh.save }));
   await user.type(screen.getByRole("textbox", { name: zh.name }), "!");
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked");
-  expect(document.querySelector(".status")).toHaveTextContent(fill(zh.blocked, { n: 1 }));
+  expect(document.querySelector(".status")).toHaveTextContent(fill(zh["saveState.blocked"], { n: 1 }));
   expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
 });
