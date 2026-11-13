@@ -323,7 +323,7 @@ PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy�
 | 檔案 | 寫入者 | 內容 | 用途 | 來源 |
 |---|---|---|---|---|
 | `<root>/config/settings.json` | GUI；Agent 只改 `teams` 的順序 | 本章的使用者設定；`teams` 的順序就是隊伍佇列 | Agent 在任務開始時讀取；領獎後把那一隊移到最後 | #19、#501 |
-| `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算整局時間上限；不用於接續判斷 | #14、#19 |
+| `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算每層時間上限；不用於接續判斷 | #14、#19 |
 | `<root>/logs/evidence/<時間>/` | Agent | 停止時保存的證據 | 除錯與通知 | #14、#19 |
 
 - Agent 沒有狀態檔：下一局輪到誰在設定檔的隊伍佇列（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)），其他狀態每次都從畫面讀（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。（#8、#501）
