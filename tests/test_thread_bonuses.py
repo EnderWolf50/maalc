@@ -16,8 +16,9 @@ NONE = ["LuxExp.png", "MainWindow.png"]
 def child():
     """Read every capture's Daily Bonuses; print {image: n read}."""
     def body(context, actions, out):
+        import lux_actions
         for name in [*BONUSES, *NONE]:
-            out[name] = actions.luxcavation.read_bonuses(actions.ocr_texts(context, screen(name), "ThreadBonuses"))
+            out[name] = lux_actions.luxcavation.read_bonuses(actions.ocr_texts(context, screen(name), "ThreadBonuses"))
 
     probe_child(body)
 

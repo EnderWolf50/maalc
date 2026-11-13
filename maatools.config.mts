@@ -75,7 +75,7 @@ const screens: [image: string, hits: string[]][] = [
   ['MainWindowLater.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],  // live 2026-10-26: other numbers on the resource panel
   // Synthetic (#370): MainWindowLater.png with the bar's "22" painted down to "2": under a module's 20 Enkephalin.
   ['MainWindowLowEnkephalin.synthetic.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
-  // ModuleIcon (the Modules panel's round icon, actions.module_count) hits wherever the resource panel shows: the
+  // ModuleIcon (the Modules panel's round icon, lux_actions.module_count) hits wherever the resource panel shows: the
   // main window, Drive, Luxcavation, the Mailbox (0.93-1.0); 0.51 at most elsewhere.
   // Live 2026-10-26: the Charge Enkephalin window over Drive, the tab bar dimmed under it: neither tab here. The
   // Enkephalin bar still reads under the dimming (#370), as on every screen that shows the resource panel.

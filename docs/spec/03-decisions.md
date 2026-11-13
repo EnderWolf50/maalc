@@ -605,14 +605,14 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
   - 按 Claim 後視窗沒有關掉，而且不是上面相符的確認對話框，就停止、不再點任何東西（模組不夠時的畫面還沒見過，這樣不會誤點購買）。這局在 `runs.jsonl` 記為「停止」。
   - 只有知道這局的隊伍時才移動佇列：bot 自己開局或在選隊頁選的隊伍，或接續的局從佇列推回的隊伍；推不回隊伍的局不動（第 1 節，#436）。
   - 「限制局數」只算這個任務開始後領到獎勵（`claim_ok`）的局；放棄獎勵（沒過第 5 層、放棄這局）與停止的局不算。達到時在入口頁停止，不開新局。（2026-10-16 定案）
-- **開新局前的腦啡肽模組門檻**（#369）：入口頁左下沒有腦啡肽模組面板（`EntryNewRun.png` 等），所以導航經過 Drive 頁時讀：`NavDrive` 是自訂動作 `OpenDrive`，點 Mirror Dungeons 之前用 `actions.module_count` 讀一次，存在任務狀態 `TASK["modules"]`（讀不到存 None）。`PlanRun` 開新局前用 `settlement.new_run_gate` 判斷：這趟讀到 m < 5（Claim 的費用，`settlement.CLAIM_COST`）→ log 腦啡肽模組數、`done()` 成功結束；m ≥ 5 或 None → 開局，讀不到不擋。這趟沒經過 Drive（例如上一局 Claim 後直接停在入口頁）→ 按返回鍵（最多 `BACKS` 次），由 hub 的導航重新走過 Drive 讀；返回鍵沒有把人帶到有面板的頁就不查、照常開局。值只用一次：`PlanRun` 取走，每層 `PickThemePack` 也清掉（Claim 會扣 5，舊值不能沿用）。接手暫停中的局不走這裡。返回鍵從入口頁會到哪一頁還沒有截圖，待實機。
+- **開新局前的腦啡肽模組門檻**（#369）：入口頁左下沒有腦啡肽模組面板（`EntryNewRun.png` 等），所以導航經過 Drive 頁時讀：`NavDrive` 是自訂動作 `OpenDrive`，點 Mirror Dungeons 之前用 `lux_actions.module_count` 讀一次，存在任務狀態 `TASK["modules"]`（讀不到存 None）。`PlanRun` 開新局前用 `settlement.new_run_gate` 判斷：這趟讀到 m < 5（Claim 的費用，`settlement.CLAIM_COST`）→ log 腦啡肽模組數、`done()` 成功結束；m ≥ 5 或 None → 開局，讀不到不擋。這趟沒經過 Drive（例如上一局 Claim 後直接停在入口頁）→ 按返回鍵（最多 `BACKS` 次），由 hub 的導航重新走過 Drive 讀；返回鍵沒有把人帶到有面板的頁就不查、照常開局。值只用一次：`PlanRun` 取走，每層 `PickThemePack` 也清掉（Claim 會扣 5，舊值不能沿用）。接手暫停中的局不走這裡。返回鍵從入口頁會到哪一頁還沒有截圖，待實機。
 
 ## 15. 日常 Luxcavation 的腦啡肽模組與計次
 
 經驗本（`ExpLuxcavation`）與紐本（`ThreadLuxcavation`）的腦啡肽模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`、`fights`（`tests/test_luxcavation.py` 列舉情況），兩個任務共用，只有每場的消耗與今天已打的讀法不同：經驗本 3、紐本 2（Level Select 每級都是 2）。（#367、#368、#362、#429、#431）
 
-- **讀腦啡肽模組數**（`actions.module_count`）：左下面板有兩個數字：黃色卡片圖示旁的是 Enkephalin Box，**圓形圖示旁的是 Enkephalin Module**（實機 2026-10-26）。面板的 x 隨頁面移動（主畫面、Drive 在 393，Luxcavation 頁在 242），所以先用模板 `ModuleIcon` 找圓形圖示，再把圖示右邊那一行當一個數字 OCR。圖示不在畫面上或數字讀不出來回 None。鏡牢開局前的門檻（#369）重用這個函式。截圖：`tests/screens/MainWindow.png`、`Drive.png`、`LuxExp.png` 等，`tests/test_module_count.py`。
-- **兩種模式**（`luxcavation.<任務>.mode`，#431，使用者 2026-11-05；兩個任務預設都是每日模式）。這次要打的場數是 `luxcavation.fights(mode, 目標, 今天已贏)`，判斷在 `actions.plan`，兩個任務共用：
+- **讀腦啡肽模組數**（`lux_actions.module_count`）：左下面板有兩個數字：黃色卡片圖示旁的是 Enkephalin Box，**圓形圖示旁的是 Enkephalin Module**（實機 2026-10-26）。面板的 x 隨頁面移動（主畫面、Drive 在 393，Luxcavation 頁在 242），所以先用模板 `ModuleIcon` 找圓形圖示，再把圖示右邊那一行當一個數字 OCR。圖示不在畫面上或數字讀不出來回 None。鏡牢開局前的門檻（#369）重用這個函式。截圖：`tests/screens/MainWindow.png`、`Drive.png`、`LuxExp.png` 等，`tests/test_module_count.py`。
+- **兩種模式**（`luxcavation.<任務>.mode`，#431，使用者 2026-11-05；兩個任務預設都是每日模式）。這次要打的場數是 `luxcavation.fights(mode, 目標, 今天已贏)`，判斷在 `lux_actions.plan`，兩個任務共用：
   - **自訂次數**（`count`，#362 D5）：這次打贏 `count` 場，不讀今天打過幾場：經驗本不走通行證頁（`ExpLuxcavation` 先試 `ExpCountMode`，自訂辨識 `LuxCountMode` 在這個模式命中，直接到 `ExpHome`），紐本不讀 Daily Bonuses。`LuxHome` 讀完腦啡肽模組就 `plan`，log 例如 `EXP Luxcavation: count mode, 1 this run: Modules 182 >= 3 needed, fight 1`。
   - **每日模式**（`daily`，#429）：打今天還沒打的。當天的場數 `luxcavation.DAILY`：經驗本 1（通行證 Daily 的一列），紐本 3（3 次 Daily Bonuses）；當天已經打贏的場數（手動打的也算）先扣掉，這次只打 max(0, 當天的場數 − 今天已贏) 場。不用 `count`。
   - **經驗本（每日模式）**：開頭先 `GoHome`，走通行證頁（`ExpPassHub`，同 `ClaimPassMissions` 的 `PassBanner` → `PassMissionsTab`，停在 Weekly／Seasonal 分頁就點 Daily，`ExpPassDaily`），在 Daily 分頁用 OCR 找 `Clear EXP Luxcavation 1 time(s)` 那一列（`PassExpRow`，最近的 `pass_missions.ROWS_Y`），看它的樣子（`pass_missions.row_done`：進度條滿或蓋了 CLEAR 章，可領或已領）：完成算今天已贏 1 場，進行中算 0 場（`ExpPassRead`）。這一列只分得出 0 和「至少 1」。不點任何一列。60 秒都沒到通行證頁（`ExpPassLost`）或 3 秒內找不到這一列：算讀不到。然後 `ExpHome`（`LuxHome`）回主畫面讀腦啡肽模組、`plan`。

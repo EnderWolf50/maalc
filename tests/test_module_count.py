@@ -1,4 +1,4 @@
-"""The Enkephalin Modules number in the bottom-left panel (#367): read by actions.module_count on the captures in
+"""The Enkephalin Modules number in the bottom-left panel (#367): read by lux_actions.module_count on the captures in
 tests/screens that show the panel, and None where it does not (a page without it, a screen where the icon is not there).
 
 The same function gives #369's Mirror Dungeon threshold. It runs inside a real MaaFramework task (resource bundle loaded,
@@ -19,10 +19,11 @@ NONE = ["Title.png", "MirrorMap.png", "Shop.png", "Loading.png", "EntryNewRun.pn
 
 
 def child():
-    """Read every capture through actions.module_count in a MaaFramework task; print {image: number read}."""
+    """Read every capture through lux_actions.module_count in a MaaFramework task; print {image: number read}."""
     def body(context, actions, out):
+        import lux_actions
         for name in [*MODULES, *NONE]:
-            out[name] = actions.module_count(context, screen(name))
+            out[name] = lux_actions.module_count(context, screen(name))
 
     probe_child(body)
 
