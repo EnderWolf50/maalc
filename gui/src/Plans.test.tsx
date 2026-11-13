@@ -9,7 +9,9 @@ import {
   GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
 } from "./model";
 import css from "./index.css?raw";
-import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
+import { DeploymentTab } from "./Deployment";
+import { StarlightTab } from "./Starlight";
+import { ThemePackTab } from "./ThemePacks";
 import { cssRules, expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 

@@ -10,8 +10,9 @@ import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
-import { SinnerGrid, StarlightEditor, StarlightReceipt } from "./Plans";
+import { SinnerGrid } from "./Deployment";
 import { SkillPanel } from "./SkillReplacement";
+import { StarlightEditor, StarlightReceipt } from "./Starlight";
 import { Choice, Field, Input, Mark, Num, ReorderList, Select, ToggleNum, nextTab, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
 export function TeamsTab() {

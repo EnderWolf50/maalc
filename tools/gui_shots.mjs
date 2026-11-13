@@ -71,7 +71,7 @@ const SHOTS = [
   { name: "save-blocked", settings: "clash", steps: `await $.tab("teams", ${TAB.teams}); await $.click("header button.primary");` },
   // Unsaved changes: a team renamed and not saved, so the header shows what an edit leaves before Save.
   { name: "unsaved", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); await $.type(".bar input", "Team b (edited)");` },
-  // The prompt F5 opens over unsaved changes (App.tsx LeavePrompt).
+  // The prompt F5 opens over unsaved changes (WindowControls.tsx LeavePrompt).
   { name: "leave", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); await $.type(".bar input", "Team b (edited)");
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "F5", bubbles: true })); await $.settle();` },
 ];

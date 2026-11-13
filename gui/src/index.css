@@ -243,7 +243,7 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .problems li button:hover { color: var(--bad); }
 .problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
-/* The close prompt (App.tsx ClosePrompt), over the dimmed editor. */
+/* The close prompt (WindowControls.tsx LeavePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ask {
   background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px 0 12px 0; corner-shape: bevel; padding: 16px 18px;
