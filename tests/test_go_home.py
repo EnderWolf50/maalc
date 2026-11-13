@@ -26,10 +26,12 @@ TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE
 
 
 class SleptClock:
-    """The agent's time module during a GoHome scenario of SLEPT (#677): its sleeps are real, so the agent keeps MaaFramework's
-    pace, but its monotonic() moves only by what it slept. A screenshot or a recognition that a busy CI machine makes
-    slow takes no time on this clock, so the waits the agent logs and the model's back_lag read the same on any machine:
-    a fixed 2 s sleep still shows 2 s, a wait for a screen that comes after 0.4 s of polling shows 0.4 s."""
+    """The agent's time module during a GoHome scenario not in WALL (#677): its sleeps are real, so the agent keeps
+    MaaFramework's pace, but its monotonic() moves only by what it slept. A screenshot or a recognition that a busy CI
+    machine makes slow takes no time on this clock, so the waits the agent logs, how many looks a wait's timeout allows,
+    and the model's back_lag read the same on any machine: a fixed 2 s sleep still shows 2 s, a wait for a screen that
+    comes after 0.8 s of polling shows 0.8 s. A loop that reads monotonic() without sleeping would never end on it;
+    the agent's waits (until()) sleep between looks. MaaFramework's own waits (a node's timeout) stay on the real clock."""
 
     def __init__(self):
         self.now = time.monotonic()  # from the real clock's reading: what the agent kept before compares as before
@@ -45,9 +47,9 @@ class SleptClock:
         return getattr(time, name)
 
 
-# The scenarios whose tests read the agent's time run on a SleptClock; the others keep the real one, since a wait that
-# runs out (a back key that changes nothing) would last its timeout in sleeps alone, its screenshots on top.
-SLEPT = ("entry_slow", "closed")
+# The GoHome scenarios whose back key changes nothing keep the real clock: each of their waits runs out, and on a
+# SleptClock it would last its timeout in sleeps alone, its screenshots on top. Their tests count keys, not seconds.
+WALL = ("stuck", "restart", "restarts_used", "event")
 
 
 def child():
@@ -203,7 +205,7 @@ def child():
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         actions.LOG.clear()
-        actions.time = clock = SleptClock() if scenario in SLEPT else time
+        actions.time = clock = time if scenario in WALL else SleptClock()
         began = clock.monotonic()
         try:
             detail = run_task(tasker, scenario, "GoHome", override)
