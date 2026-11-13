@@ -7,7 +7,7 @@ import App from "./App";
 import { TEXT, type Key } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
 
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0 }));
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0, reloaded: 0 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
@@ -15,8 +15,9 @@ vi.mock("./api", async (original) => ({
   rootDir: () => Promise.resolve("root"),
   onCloseRequested: (keepOpen: () => boolean) => { file.keepOpen = keepOpen; return () => {}; },
   closeWindow: () => { file.closed++; return Promise.resolve(); },
+  reloadPage: () => { file.reloaded++; },
 }));
-beforeEach(() => { file.saved = []; file.keepOpen = undefined; file.closed = 0; });
+beforeEach(() => { file.saved = []; file.keepOpen = undefined; file.closed = 0; file.reloaded = 0; });
 
 const zh = TEXT.zh_tw;
 const two = (prefix: string) => [1, 2].map((n) => ({ id: `${prefix}${n}`, name: `${prefix.toUpperCase()}${n}` }));
@@ -302,6 +303,117 @@ describe("closing the window", () => {
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(screen.getByRole("searchbox", { name: zh["gl.search"] })).toHaveValue("Burn");
+  });
+});
+
+describe("reloading the page (F5, Ctrl+R)", () => {
+  beforeEach(() => { file.text = JSON.stringify(settings()); });
+  type Reload = [string, KeyboardEventInit];
+  const KEYS: Reload[] = [
+    ["F5", { key: "F5", code: "F5" }],
+    ["Ctrl+R", { key: "r", code: "KeyR", ctrlKey: true }],
+    ["Ctrl+F5", { key: "F5", code: "F5", ctrlKey: true }],
+    ["Ctrl+Shift+R", { key: "R", code: "KeyR", ctrlKey: true, shiftKey: true }],
+  ];
+  /** Press a reload key on the focused element; true when the editor kept the browser from reloading. */
+  const press = (init: KeyboardEventInit) => {
+    const e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    act(() => { (document.activeElement ?? document.body).dispatchEvent(e); });
+    return e.defaultPrevented;
+  };
+
+  test.each(KEYS)("%s with unsaved changes reloads nothing and asks first", async (_, init) => {
+    await edited();
+    expect(press(init)).toBe(true);
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(zh.reloadAsk);
+    expect(file.reloaded).toBe(0);
+  });
+
+  test.each(KEYS)("%s with nothing unsaved is left to the browser, which reloads", async (_, init) => {
+    render(<App />);
+    await screen.findByRole("tab", { name: zh["tab.run"] });
+    expect(press(init)).toBe(false);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("also after a save: nothing is unsaved then", async () => {
+    const user = await edited();
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await screen.findByText(zh.saved);
+    expect(press(KEYS[0][1])).toBe(false);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("other keys with a modifier are not reloads: Ctrl+Alt+R, Ctrl+E", async () => {
+    await edited();
+    expect(press({ key: "r", code: "KeyR", ctrlKey: true, altKey: true })).toBe(false);
+    expect(press({ key: "e", code: "KeyE", ctrlKey: true })).toBe(false);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  test("Reload without saving reloads and writes nothing", async () => {
+    const user = await edited();
+    press(KEYS[0][1]);
+    await user.click(screen.getByRole("button", { name: zh.reloadDiscard }));
+    expect(file.reloaded).toBe(1);
+    expect(file.saved).toEqual([]);
+  });
+
+  test("Save and reload saves, then reloads", async () => {
+    const user = await edited();
+    press(KEYS[1][1]);
+    await user.click(screen.getByRole("button", { name: zh.reloadSave }));
+    await waitFor(() => expect(file.reloaded).toBe(1));
+    expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
+  });
+
+  test("Save and reload with a save the checks refuse stays, shows the problems and does not reload", async () => {
+    const s = settings();
+    s.teams[1].game_team = 1;
+    file.text = JSON.stringify(s);
+    const user = await edited();
+    press(KEYS[0][1]);
+    await user.click(screen.getByRole("button", { name: zh.reloadSave }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(file.reloaded).toBe(0);
+    expect(file.saved).toEqual([]);
+  });
+
+  test.each([
+    ["Cancel", (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByRole("button", { name: zh.cancel }))],
+    ["Esc", (user: ReturnType<typeof userEvent.setup>) => user.keyboard("{Escape}")],
+  ])("%s keeps the page, the edits and the field the user was typing in", async (_, dismiss) => {
+    const user = await edited();
+    press(KEYS[0][1]);
+    await dismiss(user);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(file.reloaded).toBe(0);
+    expect(nameBox()).toHaveValue("Ta!");
+    await waitFor(() => expect(nameBox()).toHaveFocus());
+  });
+
+  test("starts on Save and reload; a second press while it asks reloads nothing and keeps the one prompt", async () => {
+    await edited();
+    press(KEYS[0][1]);
+    expect(screen.getByRole("button", { name: zh.reloadSave })).toHaveFocus();
+    expect(press(KEYS[0][1])).toBe(true);
+    expect(press(KEYS[1][1])).toBe(true);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    expect(file.reloaded).toBe(0);
+  });
+
+  test("closing the window while the reload prompt asks turns it into the close prompt", async () => {
+    await edited();
+    press(KEYS[0][1]);
+    expect(requestClose()).toBe(true);
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(zh.closeAsk);
+  });
+
+  test("the english prompt names the reload too", () => {
+    expect(TEXT.en_us.reloadAsk).toMatch(/reload/i);
+    expect(TEXT.en_us.reloadSave).toMatch(/reload/i);
+    expect(TEXT.en_us.reloadDiscard).toMatch(/reload/i);
   });
 });
 

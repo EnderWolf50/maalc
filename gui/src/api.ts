@@ -41,6 +41,9 @@ export function onCloseRequested(keepOpen: () => boolean): () => void {
 /** Close the window without asking again. */
 export const closeWindow = (): Promise<void> => (tauri ? getCurrentWindow().destroy() : Promise.resolve());
 
+/** Load the page again, as F5 does; whatever was not saved is gone. */
+export const reloadPage = (): void => window.location.reload();
+
 /** Spec 04 section 12 / spec 06: a reset marker holds only the team id and the time. */
 export function resetTeamTimes(teamId: string): Promise<void> {
   const line = JSON.stringify({ reset: teamId, time: new Date().toISOString() });

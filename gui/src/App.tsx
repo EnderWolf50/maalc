@@ -41,7 +41,8 @@ export default function App() {
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
-  const [asking, setAsking] = useState(false); // the window was closed with unsaved changes: the close prompt shows
+  // The window was closed, or the page asked to reload (F5, Ctrl+R), with unsaved changes: the prompt for that shows (#695, #702).
+  const [asking, setAsking] = useState<false | "close" | "reload">(false);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -120,15 +121,28 @@ export default function App() {
 
   // Closing the window with unsaved changes asks first; with none it closes.
   const focusBefore = useRef<Element | null>(null); // what had the focus when the prompt opened: it gets it back when the prompt goes
+  const unsaved = () => { const { s, savedText } = latest.current; return s !== null && toText(s) !== savedText; };
+  const ask = (kind: "close" | "reload") => {
+    focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
+    setAsking((was) => (kind === "close" ? kind : was || kind)); // a close outranks a reload; a reload keeps the prompt that shows
+  };
   useEffect(() => api.onCloseRequested(() => {
-    const { s, savedText } = latest.current;
-    const keep = s !== null && toText(s) !== savedText;
-    if (keep) {
-      focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
-      setAsking(true);
-    }
+    const keep = unsaved();
+    if (keep) ask("close");
     return keep;
   }), []);
+  // F5 and Ctrl+R would reload the page and drop the edits (WebView2 keeps the browser's keys on). With unsaved changes the
+  // prompt asks first; with none the key is left alone and the browser reloads (#702).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const r = e.key === "Process" ? e.code === "KeyR" : e.key.toLowerCase() === "r";
+      if (!(e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && r)) || !unsaved()) return;
+      e.preventDefault();
+      ask("reload");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   useEffect(() => {
     if (asking || !focusBefore.current) return;
     (focusBefore.current as HTMLElement).focus?.();
@@ -203,10 +217,12 @@ export default function App() {
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
   const close = () => api.closeWindow().catch((e) => setStatus(String(e)));
+  /** What the prompt's Save and Discard end with: the window closes or the page loads again. */
+  const leave = async (kind: "close" | "reload") => { if (kind === "close") await close(); else api.reloadPage(); };
   const closePrompt = asking && (
-    <ClosePrompt onCancel={() => setAsking(false)}
-      onSave={async () => { setAsking(false); if (await save()) await close(); }}
-      onDiscard={() => { setAsking(false); close(); }} />
+    <ClosePrompt kind={asking} onCancel={() => setAsking(false)}
+      onSave={async () => { setAsking(false); if (await save()) await leave(asking); }}
+      onDiscard={() => { setAsking(false); leave(asking); }} />
   );
 
   /** Show where a problem points: its tab and the team, plan or gift list it names; the effect above then focuses its field. */
@@ -222,7 +238,7 @@ export default function App() {
   const Current = TABS.find((x) => x[0] === tab)![2];
   return (
     <EditorContext.Provider value={ctx}>
-      <header inert={asking}>
+      <header inert={!!asking}>
         <h1>{t("title")}</h1>
         <span className="muted path" title={t("file")}>{root}\config\settings.json</span>
         <label className="lang">{t("language")}{" "}
@@ -234,14 +250,14 @@ export default function App() {
         <span className="status">{dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said}</span>
         <button type="button" className="primary" onClick={save}>{t("save")}</button>
       </header>
-      <nav role="tablist" inert={asking}>
+      <nav role="tablist" inert={!!asking}>
         {TABS.map(([id, label, , prefixes]) => (
           <button type="button" role="tab" key={id} aria-selected={tab === id}
             className={(tab === id ? "selected" : "") + (prefixes.some(ctx.bad) ? " bad" : "")}
             onClick={() => setTab(id)}>{t(label)}</button>
         ))}
       </nav>
-      <main inert={asking}>
+      <main inert={!!asking}>
         {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
         {checked && problems.length > 0 && (
           <div className="problems" role="alert">
@@ -258,9 +274,11 @@ export default function App() {
   );
 }
 
-/** Asked when the window closes with unsaved changes: save and close, close without saving, or stay (Esc). The focus starts
- * on the choice that keeps the edits. */
-function ClosePrompt({ onSave, onDiscard, onCancel }: { onSave: () => void; onDiscard: () => void; onCancel: () => void }) {
+/** Asked when the window closes, or the page reloads (F5, Ctrl+R), with unsaved changes: save and go on, go on without saving,
+ * or stay (Esc). The focus starts on the choice that keeps the edits. */
+function ClosePrompt({ kind, onSave, onDiscard, onCancel }: {
+  kind: "close" | "reload"; onSave: () => void; onDiscard: () => void; onCancel: () => void;
+}) {
   const { t } = useEditor();
   const cancel = useRef(onCancel);
   cancel.current = onCancel;
@@ -273,10 +291,10 @@ function ClosePrompt({ onSave, onDiscard, onCancel }: { onSave: () => void; onDi
   return (
     <div className="ask-back">
       <div className="ask" role="alertdialog" aria-modal="true" aria-labelledby="close-ask">
-        <p id="close-ask">{t("closeAsk")}</p>
+        <p id="close-ask">{t(`${kind}Ask`)}</p>
         <div className="ask-buttons">
-          <button type="button" className="primary" autoFocus onClick={onSave}>{t("closeSave")}</button>
-          <button type="button" className="danger" onClick={onDiscard}>{t("closeDiscard")}</button>
+          <button type="button" className="primary" autoFocus onClick={onSave}>{t(`${kind}Save`)}</button>
+          <button type="button" className="danger" onClick={onDiscard}>{t(`${kind}Discard`)}</button>
           <button type="button" onClick={onCancel}>{t("cancel")}</button>
         </div>
       </div>
