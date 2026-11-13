@@ -118,6 +118,49 @@ def test_freeze_suspends_the_bot_tree_and_resumes_it(tmp_path, monkeypatch):
     assert log == [("suspend", 1), ("suspend", 2), ("resume", 1), ("resume", 2)] and ctl.calls == []
 
 
+def proc(pid, name, under=()):
+    """A process of the bot's tree: its name and the pids under it; suspend and resume go to `log`."""
+    p = SimpleNamespace(pid=pid, name=lambda: name, log=[])
+    p.suspend, p.resume = (lambda what=what: p.log.append(what) for what in ("suspend", "resume"))
+    p.children = lambda recursive: [SimpleNamespace(pid=n) for n in under]
+    return p
+
+
+def freeze_tree(tmp_path, monkeypatch, capsys, *procs):
+    """A freeze over `procs`; returns what each was told, by pid, and what the freeze printed."""
+    monkeypatch.setattr(dv, "connect", lambda port: FakeCtl())
+    monkeypatch.setattr(dv, "bot_tree", lambda pid: list(procs))
+    monkeypatch.setattr(dv, "tail", lambda path: iter(["packs"]))
+    dv.main(["freeze", "--log", str(tmp_path / "run.log"), "--fire", "packs", "--pid", "9", "--max", "0.1"])
+    return {p.pid: p.log for p in procs}, capsys.readouterr().out
+
+
+def test_freeze_keeps_the_adb_server_and_what_runs_under_it_running(tmp_path, monkeypatch, capsys):
+    # #687: the bot's tree holds the adb server; suspended with it, the freeze's own shot and tap would hang on it.
+    told, out = freeze_tree(tmp_path, monkeypatch, capsys, proc(1, "python.exe"), proc(2, "adb.exe", under=[4]),
+                            proc(3, "ADB"), proc(4, "conhost.exe"), proc(5, "ping.exe"))
+    assert told == {1: ["suspend", "resume"], 2: [], 3: [], 4: [], 5: ["suspend", "resume"]}
+    assert "['1:python.exe', '5:ping.exe']" in out and "kept running" in out and "['2:adb.exe', '3:ADB', '4:conhost.exe']" in out
+
+
+def test_freeze_without_an_adb_process_suspends_them_all(tmp_path, monkeypatch, capsys):
+    told, out = freeze_tree(tmp_path, monkeypatch, capsys, proc(1, "python.exe"), proc(2, "adbfake.exe"), proc(3, "adbd"))
+    assert set(map(tuple, told.values())) == {("suspend", "resume")}
+    assert [line for line in out.splitlines() if line.startswith("kept running")][0].endswith(" []")
+
+
+def test_is_adb_names_the_adb_binary_only():
+    assert [dv.is_adb(proc(1, n)) for n in ("adb.exe", "ADB.exe", "adb", "adbd", "python.exe")] == [True, True, True, False, False]
+
+
+def test_a_process_that_ended_is_not_adb_and_has_no_name():
+    def gone():
+        raise ProcessLookupError("ended")
+
+    p = SimpleNamespace(pid=1, name=gone)
+    assert not dv.is_adb(p) and dv.proc_name(p) == "?"
+
+
 def test_freeze_resumes_the_rest_when_one_process_ended(tmp_path, monkeypatch):
     log = []
 
