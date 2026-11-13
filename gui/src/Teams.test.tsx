@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
+import { GIFT_KEYWORDS, GRACES, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { expectLines, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
@@ -183,6 +183,25 @@ describe("a team on a starlight plan", () => {
     expect(document.querySelector(".receipt")).toBeNull();
     expect(document.querySelector(".starlight")!.closest("details")).toBeNull();
   });
+});
+
+test("the queue names a team that is off and a team kept to one difficulty", () => {
+  const s = settings();
+  s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(2, "T2"), enabled: false, usage: "hard_only" }];
+  renderEditor(<TeamsTab />, s);
+  const [first, second] = within(document.querySelector("aside")!).getAllByRole("listitem");
+  expect(first).not.toHaveTextContent(zh["team.disabled"]);
+  expect(first).not.toHaveTextContent(zh["usage.hard_only"]);
+  expect(second).toHaveTextContent(zh["team.disabled"]);
+  expect(second).toHaveTextContent(zh["usage.hard_only"]);
+});
+
+test("a team on a deployment order plan says where that plan is changed", () => {
+  const s = settings();
+  s.deployment_order_plans = [{ id: "d1", name: "Bleed order", order: [...SINNERS] }];
+  s.teams[0].deployment_order = { plan: "d1" };
+  renderEditor(<TeamsTab />, s);
+  expect(screen.getByText(fill(zh["team.plan_note"], { name: "Bleed order", tab: zh["tab.deployment"], custom: zh.custom }))).toBeInTheDocument();
 });
 
 describe("the E.G.O Gift Search keyword tabs", () => {

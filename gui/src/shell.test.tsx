@@ -7,11 +7,15 @@ import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam } from "./model";
 
 const zh = TEXT.zh_tw;
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
+const file = vi.hoisted(() => ({ text: "", saved: [] as string[], fail: "" }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
-  saveSettings: (text: string) => { file.saved.push(text); return Promise.resolve(); },
+  saveSettings: (text: string) => {
+    if (file.fail) return Promise.reject(new Error(file.fail));
+    file.saved.push(text);
+    return Promise.resolve();
+  },
   rootDir: () => Promise.resolve("root"),
 }));
 
@@ -23,7 +27,7 @@ function clash() {
   return JSON.stringify(s, null, 2) + "\n";
 }
 
-beforeEach(() => { file.text = JSON.stringify(newSettings(), null, 2) + "\n"; file.saved = []; });
+beforeEach(() => { file.text = JSON.stringify(newSettings(), null, 2) + "\n"; file.saved = []; file.fail = ""; });
 
 test("the arrow keys move along the main tabs and open the one they reach; Home and End go to the ends", async () => {
   const user = userEvent.setup();
@@ -50,6 +54,25 @@ test("with nothing edited the header says there is nothing to save", async () =>
   await screen.findByRole("button", { name: zh.save });
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "clean");
   expect(document.querySelector(".status")).toHaveTextContent(zh.clean);
+});
+
+test("a write that fails shows as a failure in the header, not as plain unsaved changes; the next good save clears it", async () => {
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta")];
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  file.fail = "disk full";
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  const save = screen.getByRole("button", { name: zh.save });
+  await user.click(save);
+  await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "failed"));
+  expect(document.querySelector(".status")).toHaveTextContent("disk full");
+  expect(save).toHaveClass("refused");
+  file.fail = "";
+  await user.click(save);
+  await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "saved"));
+  expect(save).not.toHaveClass("refused");
 });
 
 test("a refused save shows in the header with the number of problems, also when nothing was edited", async () => {

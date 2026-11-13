@@ -1,5 +1,5 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
 import { TEXT, type Key } from "./i18n";
 import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
@@ -39,6 +39,7 @@ export default function App() {
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
   const [checked, setChecked] = useState(false); // marks show after the first save attempt
   const [status, setStatus] = useState(""); // a TEXT key, or text as it is (an error, the gift ids a load dropped)
+  const [failed, setFailed] = useState(false); // the last save did not write the file (a conflict or an error)
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
   const latest = useRef({ s, savedText });
@@ -150,6 +151,7 @@ export default function App() {
 
   const save = async () => {
     setChecked(true);
+    setFailed(false);
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
@@ -160,6 +162,7 @@ export default function App() {
         } catch (e) {
           if (!api.isChanged(e)) throw e;
           if (tries < 3) continue; // it changed between that read and this write
+          setFailed(true);
           return setStatus("saveConflict");
         }
         disk.current = written;
@@ -168,6 +171,7 @@ export default function App() {
         return setStatus("saved");
       }
     } catch (e) {
+      setFailed(true);
       setStatus(String(e));
     }
   };
@@ -185,12 +189,13 @@ export default function App() {
 
   const Current = TABS.find((x) => x[0] === tab)![2];
   const blocked = checked && problems.length > 0;
-  // The save state plate: a refused save not yet fixed (with the count, edited or not), unsaved, saved, or a note.
-  const state = blocked ? "blocked" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  // The save state plate: a refused save not yet fixed (with the count, edited or not), a write that failed, unsaved, saved,
+  // or a note.
+  const state = blocked ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
   const stateText = [blocked && t("blocked").replace("{n}", String(problems.length)), dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!blocked && t("clean"))]
     .filter(Boolean).join(" · ");
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
-  const walkTabs = (e: KeyboardEvent) => {
+  const walkTabs = (e: ReactKeyboardEvent) => {
     const at = TABS.findIndex((x) => x[0] === tab);
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: TABS.length - 1 }[e.key];
     if (to === undefined) return;
@@ -212,7 +217,7 @@ export default function App() {
         </label>
         <span className="status" data-state={state} aria-live="polite">{stateText}</span>
         {/* armed (the caution stripe) only while a save can go through; a refused save gets the crimson frame instead */}
-        <button type="button" className={"primary" + (blocked ? " refused" : dirty ? " armed" : "")} onClick={save}>{t("save")}</button>
+        <button type="button" className={"primary" + (blocked || failed ? " refused" : dirty ? " armed" : "")} onClick={save}>{t("save")}</button>
       </header>
       <nav role="tablist" onKeyDown={walkTabs}>
         {TABS.map(([id, label, , prefixes]) => (

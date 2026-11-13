@@ -126,7 +126,7 @@ button.danger:hover:not(:disabled) { border-color: var(--bad); background: var(-
 button.icon { padding: 0 6px; border-color: transparent; background: none; color: var(--muted); }
 button.icon:hover:not(:disabled) { color: var(--accent-ink); background: none; border-color: transparent; }
 select, input:not([type="checkbox"]) {
-  border: 1px solid var(--line-2); padding: 4px 8px; background: var(--field); min-width: 0; border-radius: 4px; corner-shape: bevel;
+  border: 1px solid var(--line-2); padding: 4px 8px; background: var(--field); min-width: 0; border-radius: 2px;
 }
 input[type="number"], input.decimal { width: 7em; font-variant-numeric: tabular-nums; }
 input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: none; }
@@ -160,9 +160,9 @@ header .status[data-state="clean"] { color: var(--muted); }
 header .status[data-state="clean"]::before { background: none; border: 1px solid var(--muted); }
 header .status[data-state="saved"] { color: var(--keep); }
 header .status[data-state="saved"]::before { background: var(--keep); }
-header .status[data-state="blocked"] { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); font-weight: 600; }
+header .status:is([data-state="blocked"], [data-state="failed"]) { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); font-weight: 600; }
 /* blocked: a cross, not the diamond, so the state reads without its colour */
-header .status[data-state="blocked"]::before {
+header .status:is([data-state="blocked"], [data-state="failed"])::before {
   width: 11px; height: 11px; transform: none;
   background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
     linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%);
@@ -229,6 +229,9 @@ p.caution { margin: 0; max-width: 56em; }
 .toggle small.caution::before { left: 0; }
 p.muted { margin: 0; max-width: 56em; }
 .notice { color: var(--accent-ink); margin: 4px 0; }
+.split aside .notice { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 10px; margin: 0;
+  color: var(--fg-2); font-size: 12.5px; background: var(--raise); border: 1px dashed var(--line-2); }
+.split aside .notice button { padding: 1px 10px; }
 .tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
 .split { display: flex; gap: 20px; align-items: flex-start; }
@@ -289,6 +292,7 @@ details.panel.bad > summary { color: var(--bad); }
 .toggle .check { min-width: 9em; }
 .toggle small { color: var(--muted); font-size: 12px; flex-basis: 100%; padding-left: 23px; }
 .rewards { max-width: 380px; }
+details.panel > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 /* The run options, in groups. */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 16px; align-items: start; }
@@ -312,6 +316,9 @@ ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--mute
 .queue ol.reorder li { counter-increment: q; }
 .queue ol.reorder li::before { content: counter(q) "."; min-width: 18px; text-align: right; font: 600 15px/20px var(--font-display); color: var(--muted); }
 .queue ol.reorder li.selected::before { color: var(--fg); }
+.qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
+  border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
+.qtag.off { color: var(--muted); border-style: dashed; }
 .queue ol.reorder .item small {
   margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
 }

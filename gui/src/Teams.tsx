@@ -3,6 +3,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
+import { fill } from "./i18n";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
@@ -12,7 +13,7 @@ import { SkillPanel } from "./SkillReplacement";
 import { Field, Num, ReorderList, Select, ToggleNum, useEditor, usePick, useUndo, withBreaks } from "./ui";
 
 export function TeamsTab() {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t, tv, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const [undoNote, removeAt] = useUndo();
   const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
@@ -25,7 +26,10 @@ export function TeamsTab() {
             badAt={(j) => bad(`teams/${j}`)}
             onChange={(teams) => update((d) => { d.teams = teams; })}
             render={(x) => (
-              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>TEAMS #{x.game_team}</small></span>
+              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>TEAMS #{x.game_team}</small>
+                {!x.enabled && <em className="qtag off">{t("team.disabled")}</em>}
+                {x.usage !== "any" && <em className="qtag">{tv("usage", x.usage)}</em>}
+              </span>
             )} />
         ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
         {undoNote}
@@ -134,7 +138,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         {"custom" in team.deployment_order ? (
           <SinnerGrid order={team.deployment_order.custom} path={`${path}/deployment_order/custom`}
             onChange={(custom) => set({ deployment_order: { custom } })} />
-        ) : order && <SinnerGrid order={order} path={`${path}/deployment_order`} />}
+        ) : order && <>
+          <p className="muted">{fill(t("team.plan_note"), { name: s.deployment_order_plans.find((p) => p.id === orderSource)!.name, tab: t("tab.deployment"), custom: t("custom") })}</p>
+          <SinnerGrid order={order} path={`${path}/deployment_order`} />
+        </>}
       </fieldset>
 
       <fieldset>
@@ -152,6 +159,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
             onChange={(custom) => set({ starlight: { custom } })} />
         ) : starPlan && <>
           {/* a plan is edited on its own tab: here its picks on one line, the cards folded away */}
+          <p className="muted">{fill(t("team.plan_note"), { name: starPlan.name, tab: t("tab.starlight"), custom: t("custom") })}</p>
           <StarlightReceipt value={starPlan} />
           <details className="hint">
             <summary>{t("starlight.cards")}</summary>
