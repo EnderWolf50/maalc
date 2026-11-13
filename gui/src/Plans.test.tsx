@@ -1,12 +1,14 @@
-// Component tests of the theme pack plan screen's "含想要" mark (#421, spec 04 section 8): which packs carry it and what its
-// tooltip lists, for the list the teams using the plan hold.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+// Component tests of the plan tabs: the theme pack screen's "含想要" mark (#421, spec 04 section 8), its filters, badges and
+// weights typed in place, and for every plan tab which teams use a plan and how a deleted one comes back (#679).
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, onTestFinished, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
-import { GIFT_KEYWORDS, SINNERS, defaultGorder, newSettings, newTeam, type GiftList, type Settings } from "./model";
-import { DeploymentTab, ThemePackTab } from "./Plans";
+import {
+  GIFT_KEYWORDS, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
+} from "./model";
+import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
 import { expectLines, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
@@ -67,6 +69,100 @@ describe("the 含想要 mark", () => {
   });
 });
 
+describe("a pack's weight, typed in place (no prompt dialog)", () => {
+  const plan = () => ({ id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" });
+  /** The theme pack tab on plan Mine; window.prompt only counts calls. */
+  async function open() {
+    const asked = vi.spyOn(window, "prompt").mockReturnValue(null);
+    onTestFinished(() => asked.mockRestore());
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan()] }));
+    await r.user.click(await screen.findByText("Mine"));
+    return { ...r, asked, weights: () => r.settings().theme_pack_plans[0].weights };
+  }
+  const chipOf = async (name: string) => (await screen.findByText(name, { selector: ".nm" })).closest(".pk") as HTMLElement;
+  const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
+
+  test("clicking a pack opens a box on it with its weight; Enter keeps the new one", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    expect(box()).toHaveFocus();
+    expect(box()).toHaveValue(0);
+    await r.user.clear(box());
+    await r.user.type(box(), "3{Enter}");
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(r.asked).not.toHaveBeenCalled();
+  });
+
+  test("Esc leaves the weight as it was", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Outcast"));
+    await r.user.clear(box());
+    await r.user.type(box(), "5{Escape}");
+    expect(r.weights()).toEqual({ "The Outcast": -1 });
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  test("a weight outside -10..10 says so beside the box and keeps the old one", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Outcast"));
+    await r.user.clear(box());
+    await r.user.type(box(), "11{Enter}");
+    expect(screen.getByText(zh["packs.weightRange"])).toBeInTheDocument();
+    expect(box()).toBeInTheDocument();
+    expect(r.weights()).toEqual({ "The Outcast": -1 });
+  });
+
+  test("a pack dropped on + asks for the new lane's weight in that lane", async () => {
+    const r = await open();
+    const lane = screen.getByText(new RegExp(zh["packs.newLane"])).closest(".lane")!;
+    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
+    const chip = await chipOf("The Forgotten");
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(lane, { dataTransfer });
+    fireEvent.drop(lane, { dataTransfer });
+    fireEvent.dragEnd(chip, { dataTransfer });
+    expect(lane).toContainElement(box());
+    await r.user.type(box(), "-2{Enter}");
+    expect(r.weights()["The Forgotten"]).toBe(-2);
+    expect(r.asked).not.toHaveBeenCalled();
+  });
+
+  test("Enter on a focused pack opens the box too, and the unlisted packs' chip has one", async () => {
+    const r = await open();
+    (await chipOf("The Forgotten")).focus();
+    await r.user.keyboard("{Enter}");
+    expect(box()).toHaveFocus();
+    await r.user.keyboard("{Escape}");
+    await r.user.click(await chipOf(zh["packs.unlisted"]));
+    await r.user.clear(box());
+    await r.user.type(box(), "-4{Enter}");
+    expect(r.settings().theme_pack_plans[0].unlisted).toBe(-4);
+  });
+
+  test("keys the box does not use still reach the window: Ctrl+S saves from it", async () => {
+    const r = await open();
+    const heard: string[] = [];
+    const listen = (e: KeyboardEvent) => { heard.push(e.key); };
+    window.addEventListener("keydown", listen);
+    onTestFinished(() => window.removeEventListener("keydown", listen));
+    await r.user.click(await chipOf("The Outcast"));
+    await r.user.keyboard("{Control>}s{/Control}");
+    expect(heard).toContain("s");
+  });
+
+  test("a click on the chip around the box keeps the box and what was typed", async () => {
+    const r = await open();
+    const chip = await chipOf("The Outcast");
+    await r.user.click(chip);
+    await r.user.clear(box());
+    await r.user.type(box(), "7");
+    await r.user.click(within(chip).getByText("The Outcast"));
+    expect(box()).toHaveValue(7);
+    expect(box()).toHaveFocus();
+  });
+});
+
 describe("dragging a pack chip", () => {
   test("onto another weight's lane sets that weight, whatever the marks beside the chips", async () => {
     const plan = { id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" };
@@ -103,6 +199,20 @@ test("the floor filter reaches floor 15: an EXTREME-only pack shows on floors 11
   expect(shown("Chachihu")).toBe(false);
 });
 
+test("the difficulty filter names the difficulties as the floor badges do: 普通 and 困難 in Chinese, NORMAL and HARD in English", async () => {
+  const { user, unmount } = renderEditor(<ThemePackTab />, newSettings());
+  await waitFor(() => expect(shown("Chachihu")).toBe(true));
+  expect(screen.queryByRole("button", { name: "NORMAL" })).toBeNull();
+  await user.click(chip(zh["packs.floorsHard"]));
+  expect(chip(zh["packs.floorsHard"])).toHaveAttribute("aria-pressed", "true");
+  expect(shown("Chachihu")).toBe(false); // EXTREME only
+  expect(chip(zh["packs.floorsNormal"])).toBeInTheDocument();
+  unmount();
+  renderEditor(<ThemePackTab />, { ...newSettings(), language: "en_us" });
+  expect(chip("NORMAL")).toBeInTheDocument();
+  expect(chip("HARD")).toBeInTheDocument();
+});
+
 test("INFINITY and EXTREME are choices of the filter and badges of a pack", async () => {
   const { user } = renderEditor(<ThemePackTab />, newSettings());
   await waitFor(() => expect(shown("Chachihu")).toBe(true));
@@ -127,6 +237,39 @@ describe("deleting a plan", () => {
     expect(r.settings().deployment_order_plans).toEqual(plans);
     expect(screen.getByRole("textbox", { name: zh.name })).toHaveValue("D2");
     expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
+  });
+});
+
+describe("which teams use a plan", () => {
+  const teams = () => [
+    { ...newTeam(1, "Ta"), deployment_order: { plan: "d1" } },
+    { ...newTeam(2, "Tb"), theme_pack_plan: "p1" },
+    { ...newTeam(3, "Tc"), deployment_order: { plan: "d1" } },
+  ];
+  const plans = ["D1", "D2"].map((name) => ({ id: name.toLowerCase(), name, order: [...SINNERS] }));
+
+  test("a plan lists the teams that use it, and says so when none does", async () => {
+    const r = renderEditor(<DeploymentTab />, settings({ deployment_order_plans: plans, teams: teams() }));
+    expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Ta、Tc" }))).toBeInTheDocument();
+    await r.user.click(within(document.querySelector("aside")!).getByText("D2"));
+    expect(screen.getByText(zh["plan.unused"])).toBeInTheDocument();
+  });
+
+  test("a starlight plan and a named theme pack plan list theirs too", async () => {
+    const star = { ...defaultStarlight(), id: "s1", name: "S1" };
+    const t = teams();
+    t[2].starlight = { plan: "s1" };
+    renderEditor(<StarlightTab />, settings({ starlight_plans: [star], teams: t }));
+    expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Tc" }))).toBeInTheDocument();
+    cleanup();
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [{ id: "p1", name: "P1", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" }], teams: teams() }));
+    await r.user.click(await screen.findByText("P1"));
+    expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Tb" }))).toBeInTheDocument();
+  });
+
+  test("the theme packs' default plan lists the teams on the default", async () => {
+    renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [{ id: "p1", name: "P1", weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" }], teams: teams() }));
+    expect(await screen.findByText(fill(zh["plan.usedBy"], { names: "Ta、Tc" }))).toBeInTheDocument();
   });
 });
 

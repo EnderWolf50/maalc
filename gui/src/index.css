@@ -224,7 +224,7 @@ h3.bad, h4.bad, p.bad, .check.bad, .field.bad > label > span:first-child, .toggl
 
 /* One card for every section: fieldset, details.panel and the team's top bar. A fieldset's legend sits inside the card
  * like a details summary, not on its border. */
-fieldset, details.panel, .bar, .plan-card, .card, .pack-card, .split section > .rows, .split section > .row:first-child {
+fieldset, details.panel, .bar, .plan-card, .card, .pack-card, .plan-head, .split section > .rows {
   margin: 0; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 18px;
 }
 fieldset { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
@@ -234,8 +234,10 @@ fieldset > .rows { align-self: stretch; }
 .tabpanel > fieldset + fieldset { margin-top: 16px; } /* Run and Daily: cards straight in the tab; a team's are spaced by its gap */
 /* On a plan tab the cards are the name row (Delete at its end, like a team's top bar), the plan's own settings outside its
  * editor (the theme pack plan's event packs) and a deployment or starlight plan's editor (as the same editor sits on a team). */
-.split section > .row:first-child { align-items: flex-end; }
-.split section > .row:first-child > .danger { margin-left: auto; }
+.plan-head { display: flex; flex-direction: column; gap: 10px; }
+.plan-head > .row { align-items: flex-end; }
+.plan-head > .row > .danger { margin-left: auto; }
+.plan-head > p.muted { margin: 0; font-size: 12.5px; }
 .plan-card { display: flex; flex-direction: column; gap: 10px; }
 
 /* The drawn icons (ui.tsx Icon, Grip), one stroke weight. */
@@ -525,6 +527,10 @@ small.fl.ext { background: var(--fl-x-bg); color: var(--fl-x-fg); }
 small.wk { background: var(--wk-bg); color: var(--wk-fg); font-size: 11px; font-weight: 600; padding: 0 4px; border-radius: 3px; } /* the "含想要" mark (#421) */
 .floorkey { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 12px; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
+/* a pack's weight typed in place */
+.weigh { display: inline-flex; align-items: center; gap: 4px; }
+.weigh input { width: 4.5em; padding: 0 4px; }
+.weigh small { color: var(--bad); }
 .pk.bad { border-color: var(--bad); outline: 1px solid var(--bad); }
 .lanes.images .pk { flex-wrap: wrap; justify-content: center; width: 128px; text-align: center; padding: 4px; }
 .lanes.images .pk .img { display: block; flex: none; width: 120px; aspect-ratio: 180 / 322; object-fit: cover; border-radius: 4px; margin-bottom: 4px; background: linear-gradient(160deg, #3a3f4b, #151821); }
