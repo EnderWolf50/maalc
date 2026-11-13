@@ -50,18 +50,15 @@
    * pixel of the art the name keeps 4.5:1 on 67% shade and more (the foot is 78% and more up to 34% of the tile; two lines of
    * a narrow tile's name reach 31%), the numbers on their 85% plates 6.6:1 and 10.6:1. */
   --art-shade: #0b0806; --art-top: #2c2219; --art-ink: #edcda6; --art-dep: #f0a632; --art-bak: #22fde3;
-  /* Grace of the Star as the game draws it (its four states, captures of 2026-11-13, #719): a dark slate card on a faint
-   * blueprint grid in a dim blue frame, on a near-black page; a selected card turns a saturated blue in a glowing blue frame;
-   * + and ++ light their button (a steel plate, the glyph orange) and the values they change show in yellow. Cream price
-   * and glyphs on near-black buttons with a grey outline. The same in both themes, as the game's page is. */
-  --season-bg-1: #131728; --season-bg-2: #050817; --season-side: #050817;
-  --season-card-top: #2b2f45; --season-card-bottom: #12152a; --season-frame: #4a5584; --season-grid: #ffffff0b;
-  --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-hint: #5ee4fe; --season-shadow: 0 1px 2px #000;
-  --season-price: #e8d3a6;
-  --season-pick-top: #2c3dc4; --season-pick-bottom: #121b72; --season-pick-line: #8391ff; --season-pick-glow: #3a4cff;
-  --season-up: #ffd43b; /* a value + or ++ changed: 5.7:1 on the selected card's lightest blue */
-  --season-btn: #060710; --season-btn-line: #80808c; --season-btn-ink: #e2c6a2; --season-btn-hover: #161a2e;
-  --season-lit: #3a4470; --season-lit-line: #b4c0ee; --season-lit-ink: #ffad3b; /* the orange glyph: 5:1 on the lit plate */
+  /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
+   * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the
+   * game's light ink, the same in both themes, as the game's page is: each holds 5:1 and more over the face's lightest
+   * pixels where it sits (the 99th percentile of the price strip, the title band, the English name's line and the effects,
+   * unselected and selected). */
+  --season-bg: #050817; /* under the page's texture */
+  --season-ink: #e6eefc; --season-ink-2: #b9c7e4; --season-shadow: 0 1px 2px #000;
+  --season-price: #e8d3a6; --season-btn-ink: #e2c6a2;
+  --season-up: #ffd43b; /* a value + or ++ changed: 5.9:1 on the face's effects, 7.8:1 on the selected face's */
   /* Difficulty, as the game's banners: NORMAL yellow and HARD red-orange fills (theme pack page), INFINITY violet (no game
    * screen), EXTREME the game's red #a50000 as it is, darker than HARD (the user, 2026-11-14; #720). A fill, the ink on it,
    * and the mark of a filter chip, each as light or dark as its contrast needs; INFINITY has no fill, its colour is the ink. */
@@ -452,50 +449,63 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   text-transform: uppercase; color: var(--art-ink); text-align: right; text-shadow: 0 1px 2px var(--art-shade);
 }
 
-/* Starlight, drawn after the game's "Grace of the Star" page in its four states (#719): unselected, a dark slate card in a dim
- * frame; selected, a saturated blue card in a glowing blue frame; + and ++ light their own button and add "+" or "++" to the
- * title, and the values they change show in yellow. */
+/* Starlight, the game's "Grace of the Star" page drawn with its own textures (#719, #726): the card's face, the selected
+ * card's glowing face, the pointer's hover frame; the + / ++ plates unlit and lit and their glyphs; the starlight icon of the
+ * price and the total; the Enhance All panel and the page. A card is laid out in the face texture's pixels, 380 across:
+ * --u is one of them at the card's width, so the title sits in the face's title band and the price on its price strip. */
 .starlight :focus-visible { outline-color: var(--season-ink); } /* the page stays dark in the light theme: a light ring */
 .starlight {
   color-scheme: dark; /* the game's page in both themes: its checkbox and scrollbars dark too */
-  display: flex; gap: 14px; align-items: flex-start; padding: 12px; color: var(--season-ink);
+  display: flex; flex-direction: column; gap: 14px; padding: 12px; color: var(--season-ink);
   border: 1px solid var(--season-plate); border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: radial-gradient(ellipse at 50% 30%, var(--season-bg-1), var(--season-bg-2) 75%);
+  background: var(--season-bg) url("./grace_card/page.webp") center / cover;
 }
-.graces { flex: 1; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.graces { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 12px; min-width: 0; }
 .graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; }
 .grace {
-  --fill: linear-gradient(180deg, var(--season-card-top), var(--season-card-bottom));
-  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 28px 8px 8px; overflow-wrap: anywhere;
-  border: 1px solid var(--season-frame); border-radius: 6px 0 6px 0; corner-shape: bevel; cursor: pointer; user-select: none;
-  background: /* the game's blueprint grid over the card's fill */
-    linear-gradient(var(--season-grid) 1px, transparent 1px) 0 0 / 14px 14px,
-    linear-gradient(90deg, var(--season-grid) 1px, transparent 1px) 0 0 / 14px 14px, var(--fill);
-  color: var(--season-ink);
+  --u: calc(100cqw / 380);
+  container-type: inline-size; position: relative; isolation: isolate; display: flex; flex-direction: column; min-width: 0;
+  overflow-wrap: anywhere; cursor: pointer; user-select: none; color: var(--season-ink);
 }
-.grace:hover { border-color: var(--season-hint); }
 .grace[aria-disabled="true"] { cursor: default; }
-.starlight.readonly .grace:hover { border-color: var(--season-frame); }
-/* Selected, at any level: the card turns blue and its frame glows, as in the game. */
-.grace:not(.none) {
-  --fill: linear-gradient(180deg, var(--season-pick-top), var(--season-pick-bottom));
-  border-color: var(--season-pick-line); box-shadow: 0 0 0 1px var(--season-pick-line), 0 0 14px 2px var(--season-pick-glow);
+/* The face keeps its top (the price strip, the title band, the icon's bracket) and its foot (the eye, the corner marks); its
+ * middle stretches with the text, as the game stretches its own card (the 380 x 438 face drawn at 450 x 569). */
+.grace::before, .grace::after { content: ""; position: absolute; inset: 0; z-index: -1; border: 0 solid transparent; pointer-events: none; }
+.grace::before {
+  border-image: url("./grace_card/face.webp") 150 30 110 30 fill / calc(150 * var(--u)) calc(30 * var(--u)) calc(110 * var(--u)) calc(30 * var(--u));
 }
-.starlight.readonly .grace:not(.none):hover { border-color: var(--season-pick-line); }
+.grace:not(.none)::before { border-image-source: url("./grace_card/face-picked.webp"); border-image-slice: 153 30 113 30 fill; } /* 444 tall */
+/* Under the pointer, the game's hover frame (its Hover image, 9-sliced at 105 px), its line on the face's frame line: the
+ * image draws it 22-25 px in, the selected face 14-18 px, so the frame stands 6-8 px out of the card. */
+.grace::after {
+  inset: calc(-8 * var(--u)) calc(-7 * var(--u)) calc(-8 * var(--u)) calc(-6 * var(--u)); opacity: 0; transition: opacity 0.12s ease-out;
+  border-image: url("./grace_card/hover.webp") 105 fill / calc(105 * var(--u));
+}
+.grace:hover::after { opacity: 1; }
+.grace[aria-disabled="true"]::after { display: none; }
+/* The price on the face's price strip, after the game's starlight icon: the "★" stays in the text for a screen reader. */
 .grace .price {
-  position: absolute; top: 0; right: 0; padding: 1px 8px 1px 12px; background: var(--season-btn); color: var(--season-price);
-  font: 700 16px/1.3 var(--font-display); clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%);
+  position: absolute; top: calc(19 * var(--u)); right: calc(30 * var(--u)); height: calc(28 * var(--u)); display: flex; align-items: center;
+  color: var(--season-price); font: 700 calc(27 * var(--u))/1 var(--font-display); text-shadow: var(--season-shadow);
+}
+.starlight .star {
+  display: inline-block; width: 1.15em; height: 1.15em; margin-right: 0.1em; vertical-align: -0.2em; overflow: hidden; color: transparent;
+  background: url("./grace_card/star.webp") center / contain no-repeat;
 }
 /* Its place in the buying order (spec 04 section 7): the bot's, not the game's, so it keeps the starlight's gold. */
 .grace .rank {
-  position: absolute; top: 0; left: 0; min-width: 24px; padding: 0 10px 0 6px; text-align: left;
+  position: absolute; top: calc(14 * var(--u)); left: calc(17 * var(--u)); min-width: 24px; padding: 0 10px 0 6px; text-align: left;
   font: 700 16px/1.3 var(--font-display); background: var(--gold); color: #1a1406;
   clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
-/* The game's icon beside the title; the English name below them, the full width of the card (cards are narrow at 1100 px). */
-.grace .head { display: flex; align-items: center; gap: 5px; }
-.grace .icon { flex: none; width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 1px 1px #000); }
-.grace .name { font-weight: 700; font-size: 14px; line-height: 1.2; text-align: right; text-wrap: balance; text-shadow: var(--season-shadow); }
+/* The game's icon in the face's bracket, the title right of it in the title band. The title grows with the card: at 6.8 % of
+ * its width per em, "傾落的流星雨++" (7.2 em) takes 49 % of a band 55 % wide, on one line from 191 px up. */
+.grace .head {
+  display: flex; align-items: center; min-height: calc(72 * var(--u)); margin: calc(55 * var(--u)) calc(30 * var(--u)) 0;
+}
+.grace .icon { flex: none; width: calc(115 * var(--u)); height: calc(64 * var(--u)); object-fit: contain; filter: drop-shadow(0 1px 1px #000); }
+.grace .name { text-align: right; text-wrap: balance; text-shadow: var(--season-shadow); }
+.grace .title { font-size: clamp(13px, 6.8cqw, 19px); font-weight: 700; line-height: 1.15; }
 /* the pick button is the card's name: no plate of its own; its focus rings the whole card */
 .grace button.name { flex: 1; min-width: 0; padding: 0; border: none; border-radius: 0; background: none; color: inherit; cursor: inherit; }
 .grace button.name:hover:not(:disabled) { background: none; }
@@ -503,34 +513,41 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .grace button.name:focus-visible { outline: none; }
 .grace:has(button.name:focus-visible) { outline: 2px solid var(--season-ink); outline-offset: 3px; }
 .grace small.en {
-  margin-top: -4px; text-align: right; text-wrap: balance; font: 600 12px/1.2 var(--font-display); letter-spacing: 0.02em;
-  opacity: 0.85; text-shadow: var(--season-shadow);
+  margin: calc(4 * var(--u)) calc(30 * var(--u)) 0; text-align: right; text-wrap: balance; font: 600 12px/1.2 var(--font-display);
+  letter-spacing: 0.02em; color: var(--season-ink-2); text-shadow: var(--season-shadow);
 }
-.grace ul { margin: 0; padding-left: 14px; font-size: 12px; line-height: 1.45; flex: 1; text-shadow: var(--season-shadow); }
+/* At least the face's own shape (380 x 438): the effects, or the + / ++ row when no effects show (en_us), hold the card that
+ * tall; a longer text makes it taller. */
+.grace ul {
+  flex: 1; min-height: calc(190 * var(--u)); margin: calc(10 * var(--u)) calc(28 * var(--u)) calc(10 * var(--u)) calc(30 * var(--u));
+  padding-left: 15px; font-size: 13px; line-height: 1.5; text-shadow: var(--season-shadow);
+}
+.grace .head + .enhance { margin-top: calc(225 * var(--u)); }
 .grace li.sub { list-style: none; opacity: 0.9; } /* the game's "· " detail of the line above */
 .grace mark { background: none; color: var(--season-up); font-weight: 700; } /* a value + or ++ changed, a line it added */
-.grace .enhance { display: flex; gap: 6px; }
-/* + / ++ and the page's own buttons share the game's plate: near-black with a grey outline; lit, a steel plate with an orange glyph. */
+/* + and ++ at the face's foot, left of its eye, as in the game */
+.grace .enhance { display: flex; gap: calc(8 * var(--u)); margin: auto calc(48 * var(--u)) calc(40 * var(--u)) calc(26 * var(--u)); }
+/* + / ++ and the page's own buttons are the game's plate (9-sliced at 25 px); lit, the plate with the game's lighter Focused
+ * plate over it and the orange glyph. */
 .grace .enhance button, .grace-side button {
-  border: 1px solid var(--season-btn-line); background: var(--season-btn); color: var(--season-btn-ink); font-weight: 700;
+  border: 0 solid transparent; border-radius: 0; background: none; color: var(--season-btn-ink); font-weight: 700;
+  border-image: url("./grace_card/button.webp") 25 fill / 11px;
 }
-.grace .enhance button { flex: 1; padding: 0; font: 700 18px/1.15 var(--font-display); } /* the game's glyphs are big */
-.grace .enhance button:hover:not(:disabled), .grace-side button:hover:not(:disabled) { border-color: var(--season-hint); background: var(--season-btn-hover); }
+.grace .enhance button { flex: 1; height: calc(46 * var(--u)); display: flex; align-items: center; justify-content: center; padding: 0; }
+.grace .enhance button:hover:not(:disabled), .grace-side button:hover:not(:disabled) { background: none; filter: brightness(1.35); }
 .grace .enhance button:disabled { opacity: 1; cursor: default; }
 .grace .enhance button[aria-pressed="true"], .grace-side button[aria-pressed="true"] {
-  border-color: var(--season-lit-line); background: var(--season-lit); color: var(--season-ink); box-shadow: inset 0 1px 0 #ffffff40;
+  border-image-source: url("./grace_card/button-lit.webp"); color: var(--season-ink);
 }
-.grace .enhance button[aria-pressed="true"], .grace-side button.boost[aria-pressed="true"] { color: var(--season-lit-ink); }
-.grace .enhance button[aria-pressed="true"]:hover:not(:disabled), .grace-side button[aria-pressed="true"]:hover:not(:disabled) {
-  border-color: var(--season-hint); background: var(--season-lit);
-}
-.starlight { flex-direction: column; align-items: stretch; }
+.starlight .glyph { display: inline-block; width: 15px; height: 15px; background: url("./grace_card/plus.webp") center / 12px auto no-repeat; }
+.starlight button[aria-pressed="true"] .glyph { background-image: url("./grace_card/plus-lit.webp"); background-size: 23px auto; } /* its + is 20 of 39 px */
+/* Select All, Enhance All and the total, on the game's Enhance All panel (9-sliced). */
 .grace-side {
-  order: -1; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border: 2px solid var(--season-plate);
-  background: var(--season-side); border-radius: 0 6px 0 6px; corner-shape: bevel;
+  order: -1; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 14px 20px 12px;
+  border: 0 solid transparent; border-image: url("./grace_card/side.webp") 96 60 54 60 fill / 26px 16px 15px 16px;
 }
-.grace-side button { padding: 3px 14px; }
-.grace-side button.boost { min-width: 52px; padding: 1px 14px; font: 700 18px/1.2 var(--font-display); }
+.grace-side button { padding: 5px 16px; }
+.grace-side button.boost { min-width: 56px; display: inline-flex; align-items: center; justify-content: center; padding: 7px 14px; }
 .grace-side .muted { color: var(--season-ink-2); font-size: 12.5px; margin-left: 8px; } /* a label for the + / ++ beside it, not a link */
 .grace-side .total { margin-left: auto; display: flex; align-items: baseline; gap: 8px; color: var(--season-ink-2); }
 .grace-side .total b { font: 700 26px/1 var(--font-display); color: var(--season-ink); }
@@ -712,7 +729,6 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   .sinner .num { font-size: 24px; padding: 5px 6px 2px 7px; }
   .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }
   .sinner .name { font-size: 13px; }
-  .graces { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .groups { grid-template-columns: 1fr; }
 }
 

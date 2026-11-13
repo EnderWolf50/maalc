@@ -90,6 +90,8 @@ jobs:
               - 'gui/package.json'
               - 'gui/src-tauri/Cargo.toml'
               - 'gui/src-tauri/tauri.conf.json'
+              - 'gui/src/grace_card/**'
+              - 'gui/src/grace_icons/**'
               - 'gui/src/graces.json'
               - 'gui/src/i18n.ts'
 
