@@ -54,7 +54,7 @@ def test_needed(count, cost, need):
 
 
 def test_a_thread_battle_takes_2_modules_and_an_exp_battle_3():
-    # #640 (luxcavation.py): live 2026-10-26, Thread Lv20-60 all take 2, EXP stages 4-9 take 3; actions.py reads them from here.
+    # #640 (luxcavation.py): live 2026-10-26, Thread Lv20-60 all take 2, EXP stages 4-9 take 3; lux_actions.py reads them from here.
     assert (luxcavation.THREAD_COST, luxcavation.EXP_COST) == (2, 3)
     assert [lux_actions.LUX[k][1] for k in ("thread", "exp")] == [2, 3]
     thread = luxcavation.THREAD_COST
@@ -215,7 +215,7 @@ def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monke
     assert got == 2 and actions.LOG[-1].endswith("Consecutive Battle (exp): shows x2 after closing the row, wanted x4")
 
 
-# The task's steps in actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
+# The task's steps in lux_actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
 # and test_thread_luxcavation.py once ran in MaaFramework, test_actions.py's fake context around them.
 
 def lux_start(context, monkeypatch, key, **opts):
