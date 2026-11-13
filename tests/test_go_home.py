@@ -25,6 +25,33 @@ TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE
         (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main")]
 
 
+class SleptClock:
+    """The agent's time module during a GoHome scenario not in WALL (#677): its sleeps are real, so the agent keeps
+    MaaFramework's pace, but its monotonic() moves only by what it slept. A screenshot or a recognition that a busy CI
+    machine makes slow takes no time on this clock, so the waits the agent logs, how many looks a wait's timeout allows,
+    and the model's back_lag read the same on any machine: a fixed 2 s sleep still shows 2 s, a wait for a screen that
+    comes after 0.8 s of polling shows 0.8 s. A loop that reads monotonic() without sleeping would never end on it;
+    the agent's waits (until()) sleep between looks. MaaFramework's own waits (a node's timeout) stay on the real clock."""
+
+    def __init__(self):
+        self.now = time.monotonic()  # from the real clock's reading: what the agent kept before compares as before
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        time.sleep(seconds)
+        self.now += seconds
+
+    def __getattr__(self, name):  # time(), strftime() ...: the real module's
+        return getattr(time, name)
+
+
+# The GoHome scenarios whose back key changes nothing keep the real clock: each of their waits runs out, and on a
+# SleptClock it would last its timeout in sleeps alone, its screenshots on top. Their tests count keys, not seconds.
+WALL = ("stuck", "restart", "restarts_used", "event")
+
+
 def child():
     """Run GoHome from each start, and a daily task's own steps that run it (go_home, #514); print one JSON line
     {scenario: {succeeded, nodes, clicks, keys, starts ...}}."""
@@ -44,7 +71,7 @@ def child():
             self.back_lag, self.back_at = back_lag, None  # back_lag: s of black after the entry page's back key
 
         def screencap(self):
-            if self.back_at is not None and time.monotonic() >= self.back_at:
+            if self.back_at is not None and actions.time.monotonic() >= self.back_at:
                 self.screen, self.back_at = "drive", None
             if self.pending:
                 self.pending[1] -= 1
@@ -68,7 +95,7 @@ def child():
         def on_key(self, keycode):
             if keycode == 4 and self.screen == "entry":  # the entry page's back: the Drive tab
                 if self.back_lag:
-                    self.screen, self.back_at = "black", time.monotonic() + self.back_lag
+                    self.screen, self.back_at = "black", actions.time.monotonic() + self.back_lag
                 else:
                     self.screen = "drive"
             return True
@@ -133,9 +160,9 @@ def child():
     for scenario, (start, focus, *model) in {
         "drive": ("drive", GAME), "sinners": ("sinners", GAME), "main": ("main", GAME), "mailbox": ("mailbox", GAME),
         "settings": ("settings", GAME), "entry": ("entry", GAME), "closed": ("black", "com.android.launcher"),
-        # the entry page's back key: 0.4 s of a screen GoHome knows nothing of before the Drive page (#58); short, so a
-        # slow glance on a busy CI machine still finds the Drive page well inside HomeBack's 2 s
-        "entry_slow": ("entry", GAME, 0, 0, 0, 0.4),
+        # the entry page's back key: 0.8 s of a screen GoHome knows nothing of before the Drive page (#58), on the
+        # agent's SleptClock, so a busy CI machine's slow glances do not stretch it (#677)
+        "entry_slow": ("entry", GAME, 0, 0, 0, 0.8),
         # the Window tab's page shows 4 screenshots after the tap; the game shows black for 15 before its title
         "drive_late": ("drive", GAME, 4), "closed_slow": ("black", "com.android.launcher", 0, 15),
         # the tapped Window tab glows on the Drive page for 2 screenshots before the main window (#496)
@@ -178,10 +205,14 @@ def child():
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
         actions.LOG.clear()
-        began = time.monotonic()
-        detail = run_task(tasker, scenario, "GoHome", override)
+        actions.time = clock = time if scenario in WALL else SleptClock()
+        began = clock.monotonic()
+        try:
+            detail = run_task(tasker, scenario, "GoHome", override)
+        finally:
+            actions.time = time
         out[scenario] = {**result(detail, game, actions), "starts": game.starts,
-                         "seconds": time.monotonic() - began, "log": list(actions.LOG),
+                         "seconds": clock.monotonic() - began, "log": list(actions.LOG),
                          "stops": game.stops, "in_a_row": actions.STUCK["restarts"].in_a_row,
                          "stopped": len(list(actions.ROOT.joinpath("logs").rglob("agent.log"))) - stops,
                          "halted": actions.STUCK["halted"]}
@@ -212,11 +243,12 @@ def test_go_home_reaches_the_main_window_from_each_start():
 
 def test_the_back_key_waits_for_a_screen_go_home_knows_not_a_fixed_2_s():
     # #58: HomeBack slept 2 s after the key whatever came. It waits for the next screen GoHome knows now, at most those
-    # 2 s; one that comes within them gets no second back key, and the wait ends when it comes.
+    # 2 s; one that comes within them gets no second back key, and the wait ends when it comes. The waits read on the
+    # agent's SleptClock (#677): the Drive page comes 0.8 s after the key, and the next look, 0.2 s on at most, sees it.
     o = run_child(__file__)["entry_slow"]
     assert o["succeeded"] and o["keys"] == [4] and len(o["clicks"]) == 1 and o["nodes"][-1] == "HomeReached", json.dumps(o)
     waits = [float(line.split("after ")[1].split(" s")[0]) for line in o["log"] if "HomeBack: screen changed after" in line]
-    assert len(waits) == 1 and 0.4 <= waits[0] < 2, json.dumps(o)
+    assert len(waits) == 1 and 0.8 <= waits[0] <= 1.0, json.dumps(o)
     o = run_child(__file__)["entry"]
     assert any("HomeBack: screen changed after" in line for line in o["log"]), json.dumps(o)  # within the 2 s
 
@@ -235,8 +267,8 @@ def test_go_home_waits_for_the_screens_not_for_fixed_delays():
     o = run_child(__file__)["closed_slow"]
     assert o["succeeded"] and o["starts"] == 1 and "GoHomeLost" not in o["nodes"] and "HomeGameUp" in o["nodes"]
     assert "NavTitle" in o["nodes"] and o["nodes"][-1] == "HomeReached"
-    # A fixed wait in the agent's own steps. The child runs every node's post_delay at 0 (#480), so HomeGameAway's old
-    # 10 s one is test_pipeline.py's to catch.
+    # A fixed wait in the agent's own steps, on its SleptClock (#677): what it slept, not how slow the machine is. The
+    # child runs every node's post_delay at 0 (#480), so HomeGameAway's old 10 s one is test_pipeline.py's to catch.
     assert run_child(__file__)["closed"]["seconds"] < 10
 
 
