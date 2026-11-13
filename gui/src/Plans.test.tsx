@@ -18,18 +18,26 @@ const mine = (want: number[]): GiftList => ({
 });
 const settings = (patch: Partial<Settings> = {}): Settings => ({ ...newSettings(), language: "zh_tw", ...patch });
 
-/** The mark on a pack's chip, or null; the chips load with the data file, so wait for the chip. */
-async function markOf(pack: string) {
-  const chip = (await screen.findByText(pack, { selector: ".nm" })).closest(".pk") as HTMLElement;
-  return chip.querySelector<HTMLElement>(".wk");
-}
+const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: ".nm" })).closest(".pk") as HTMLElement;
+/** The 含想要 mark on a pack's chip, by the name a screen reader reads, or null; the chips load with the data file. */
+const markOf = async (pack: string) => within(await chipNamed(pack)).queryByRole("img", { name: zh["packs.wanted"] });
 
 describe("the 含想要 mark", () => {
-  test("the default list marks LCB Regular Check-up and lists the two materials of 9780", async () => {
+  test("the default list marks LCB Regular Check-up with a dot, which lists the two materials of 9780 on hover", async () => {
     renderEditor(<ThemePackTab />, settings());
+    const tip = zh["packs.wantedTip"].replace("{names}", "常規作戰用裝備、作戰批准卡");
     const mark = await markOf("LCB Regular Check-up");
-    expect(mark?.textContent).toBe(zh["packs.wanted"]);
-    expect(mark?.getAttribute("title")).toBe(zh["packs.wantedTip"].replace("{names}", "常規作戰用裝備、作戰批准卡"));
+    expect(mark).toHaveAccessibleDescription(tip);
+    expect(mark).toHaveTextContent(/^$/); // a dot in the corner (#720), not a word in the row
+    const chip = await chipNamed("LCB Regular Check-up");
+    expect(chip).not.toHaveTextContent(zh["packs.wanted"]);
+    expect(chip).toHaveAttribute("title", tip); // the whole chip shows the gifts on hover, not just the dot
+  });
+
+  test("one line of the page says what the dot means, with the same dot", async () => {
+    renderEditor(<ThemePackTab />, settings());
+    const key = (await screen.findByText(zh["packs.wantedKey"])).closest("p")!;
+    expect(key.querySelector(".wd")).not.toBeNull();
   });
 
   test("a pack whose own gifts none is wanted shows no mark", async () => {
@@ -42,7 +50,7 @@ describe("the 含想要 mark", () => {
     const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "default" };
     renderEditor(<ThemePackTab />, settings({ gift_lists: [mine([own])], teams: [team] }));
     const mark = await markOf("The Outcast");
-    expect(mark?.getAttribute("title")).toBe(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
+    expect(mark).toHaveAccessibleDescription(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
   });
 
   test("changing a pack's own gift to wanted in the list shows the mark on that pack", async () => {
@@ -57,7 +65,7 @@ describe("the 含想要 mark", () => {
     expect(await markOf("The Outcast")).toBeNull();
     await r.user.click(screen.getByRole("button", { name: "want it" }));
     const mark = await markOf("The Outcast");
-    expect(mark?.getAttribute("title")).toBe(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
+    expect(mark).toHaveAccessibleDescription(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
   });
 
   test("a list only a team of another plan holds does not count, and a plan no team uses reads the default list", async () => {
@@ -144,9 +152,9 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     expect(r.weights()).toEqual({ "The Outcast": -1 });
   });
 
-  test("a pack dropped on + asks for the new lane's weight in that lane", async () => {
+  test("a pack dropped on the + below the lanes asks for the new lane's weight in that lane", async () => {
     const r = await open();
-    const lane = screen.getByText(new RegExp(zh["packs.newLane"])).closest(".lane")!;
+    const [, lane] = screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
     const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
     const chip = await chipOf("The Forgotten");
     fireEvent.dragStart(chip, { dataTransfer });
@@ -157,6 +165,25 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     await r.user.type(box(), "-2{Enter}");
     expect(r.weights()["The Forgotten"]).toBe(-2);
     expect(r.asked).not.toHaveBeenCalled();
+  });
+
+  test("a + above the lanes takes a pack too, so a score higher than every lane needs no drag past the list (#720)", async () => {
+    const r = await open();
+    const [top, bottom] = screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
+    const scored = [...document.querySelectorAll(".lane:not(.add)")];
+    expect(top.compareDocumentPosition(scored[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bottom.compareDocumentPosition(scored[scored.length - 1]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
+    const chip = await chipOf("The Forgotten");
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(top, { dataTransfer });
+    fireEvent.drop(top, { dataTransfer });
+    fireEvent.dragEnd(chip, { dataTransfer });
+    expect(top).toContainElement(box());
+    expect(bottom).not.toContainElement(box());
+    await r.user.type(box(), "4{Enter}");
+    expect(r.weights()["The Forgotten"]).toBe(4);
+    expect(document.querySelector(".lane:not(.add) .w")).toHaveTextContent("+4");
   });
 
   test("Enter on a focused pack opens the box too, and the unlisted packs' chip has one", async () => {
