@@ -1425,8 +1425,9 @@ def data(name):
 
 
 def owned_now(visit):
-    """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read (note_owned), else
-    only what this visit bought (visit["bought"]): an owned gift not read counts as none (spec 03), a gift bought counts."""
+    """A copy of the gifts the visit counts as owned (gifts.purchases): visit["owned"] once a page was read
+    (shop_actions.note_owned), else only what this visit bought (visit["bought"]): an owned gift not read counts as none
+    (spec 03), a gift bought counts."""
     return list(visit["owned"] if visit.get("owned") is not None else visit.get("bought", ()))
 
 
