@@ -2,10 +2,10 @@
 // each listing the gifts the list wants and the shop sells. Drag a keyword or a gift, or use its ▲▼, to change the order.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDragSort } from "./dragSort";
-import { GIFT_BY_ID, giftName, iconUrl } from "./giftCatalog";
+import { GIFT_BY_ID, iconUrl } from "./giftCatalog";
 import { buyList, moveGift, moveKeyword, nudgeGift, useGiftEdit } from "./giftEdit";
 import { mainKeyword, queue } from "./gifts";
-import { fill } from "./i18n";
+import { fill, localName } from "./i18n";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
@@ -20,9 +20,8 @@ function Arrows({ id, labels, at, last, onMove }: { id: string; labels: [string,
 }
 
 export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
-  const { s, t } = useEditor();
+  const { t, zh } = useEditor();
   const { list, editable, change } = useGiftEdit();
-  const zh = s.language === "zh_tw";
   const [open, setOpen] = useState(() => new Set(list.order.slice(0, 1))); // the first keyword to begin with
   const [notice, setNotice] = useState("");
   const box = useRef<HTMLDivElement>(null);
@@ -103,7 +102,7 @@ export function BuyOrderDialog({ onClose }: { onClose: () => void }) {
                 {isOpen && (gifts.length ? (
                   <ul className="gl-rows">
                     {gifts.map((id, j) => {
-                      const g = GIFT_BY_ID.get(id)!, label = giftName(g, zh), n = all.indexOf(id) + 1;
+                      const g = GIFT_BY_ID.get(id)!, label = localName(g, zh), n = all.indexOf(id) + 1;
                       return (
                         <li key={id} className="gl-sortrow gl-gr" data-gift={id} {...dragItem(String(id), k)}>
                           <span className="gl-grip" aria-hidden>⠿</span>

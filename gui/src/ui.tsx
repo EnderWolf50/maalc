@@ -10,6 +10,8 @@ export interface Ctx {
   t: (k: Key) => string;
   /** Translate an enum value, "difficulty" + "hard" -> 困難. */
   tv: (field: string, v: string) => string;
+  /** The GUI shows Chinese: a game name (i18n localName) is the data's Chinese one, the English one shown beside it. */
+  zh: boolean;
   /** A failed check points at this path or something under it. */
   bad: (path: string) => boolean;
   /** The element ids of the problems that point at this path or under it, space-separated; "" for none. */
@@ -43,6 +45,15 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
   return [i, (id: string | undefined) => pick(list, id)] as const;
 }
 
+/** useState for one team of the team page (or another item a page shows one at a time): it goes back to `initial` when
+ * `scope`, the team's id, changes, so a question asked or an Undo offered for one team shows neither on the next team picked
+ * nor on the first one again (#664). Reset in the render, not by a remount (`key`): the panels the user left open stay open. */
+export function useScopedState<T>(scope: string, initial: T): [T, (value: T) => void] {
+  const [held, setHeld] = useState({ scope, value: initial });
+  if (held.scope !== scope) setHeld({ scope, value: initial });
+  return [held.scope === scope ? held.value : initial, (value) => setHeld({ scope, value })];
+}
+
 /** Delete with one step back: `remove` takes item `i` out of a list tab's items (`edit` changes that list in the settings, `pick`
  * shows an item), and the note names it with an Undo button until the next delete or until the tab closes. Undo puts it back
  * before the item that followed it, which stays right when the Agent reorders the list meanwhile (#501). A confirmation
@@ -71,9 +82,7 @@ export function useUndo() {
  * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
  * note, so an Undo never puts a row into the next team picked. The teams and plans, which the Agent can reorder, use useUndo. */
 export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "") {
-  const [last, setLast] = useState<{ row: T; at: number; name: string } | null>(null);
-  const [shownScope, setShownScope] = useState(scope);
-  if (shownScope !== scope) { setShownScope(scope); setLast(null); }
+  const [last, setLast] = useScopedState<{ row: T; at: number; name: string } | null>(scope, null);
   const note = last && (
     <UndoNote name={last.name}
       onUndo={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }} />
@@ -150,7 +159,7 @@ export function makeCtx({ s, setS, setPicked, ...rest }: Pick<Ctx, "s" | "proble
   setPicked: (next: (prev: Picked) => Picked) => void;
 }): Ctx {
   return {
-    s, ...rest, ...translate(s.language),
+    s, ...rest, ...translate(s.language), zh: s.language === "zh_tw",
     bad: (path) => rest.problemIds(path) !== "",
     update: (fn) => setS((prev) => { const next = structuredClone(prev); fn(next); return next; }),
     pick: (list, id) => setPicked((prev) => ({ ...prev, [list]: id })),

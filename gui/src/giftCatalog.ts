@@ -4,7 +4,8 @@ import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import effects from "./gift_effects.json";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { SEARCH_GIFTS, SHOP_GIFTS, VESTIGES, parseThemePacks } from "./model";
+import { GIFT_SOURCES, SHOP_GIFTS, parseThemePacks } from "./model";
+import { webpFolder } from "./webpFolder";
 
 /** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
  * fusion: made by fusing, so wantable but never bought; material: a recipe's material no shop sells; other: no shop sells it
@@ -17,34 +18,31 @@ const SOLD = new Set(SHOP_GIFTS.map((g) => g.id));
 const USED = new Set(FUSIONS.flatMap(materialsOf));
 const kindOf = (g: { id: number }, unsold: Kind): Kind => (SOLD.has(g.id) ? "buyable" : USED.has(g.id) ? "material" : unsold);
 
-/** The data files' order: the Gift Search page's gifts in page order, then fusion gifts, materials, other gifts and vestiges. */
+const plain = ({ id, keyword, tier, en, zh }: Omit<CatalogGift, "kind">) => ({ id, keyword, tier, en, zh });
+/** The data files' order (GIFT_SOURCES): the Gift Search page's gifts in page order, then fusion gifts, materials, other gifts and
+ * vestiges. */
 export const CATALOG: CatalogGift[] = [
-  ...SEARCH_GIFTS.map((g): CatalogGift => ({ ...g, kind: kindOf(g, "other") })),
-  ...recipes.gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: "fusion" })),
-  ...recipes.materials.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: kindOf(g, "material") })),
-  ...recipes.extra_gifts.map((g): CatalogGift => ({ id: g.id, keyword: g.keyword, tier: g.tier, en: g.en, zh: g.zh, kind: kindOf(g, "other") })),
-  ...VESTIGES.map((g): CatalogGift => ({ ...g, kind: "vestige" })),
+  ...GIFT_SOURCES.search.map((g): CatalogGift => ({ ...g, kind: kindOf(g, "other") })),
+  ...GIFT_SOURCES.fusion.map((g): CatalogGift => ({ ...plain(g), kind: "fusion" })),
+  ...GIFT_SOURCES.material.map((g): CatalogGift => ({ ...plain(g), kind: kindOf(g, "material") })),
+  ...GIFT_SOURCES.other.map((g): CatalogGift => ({ ...plain(g), kind: kindOf(g, "other") })),
+  ...GIFT_SOURCES.vestige.map((g): CatalogGift => ({ ...g, kind: "vestige" })),
 ];
 export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));
 
 /** Whether the list may want it: the shop sells it or fusing makes it. */
 export const wantable = (g: CatalogGift) => g.kind === "buyable" || g.kind === "fusion";
 
-/** The gift's name in the GUI's language, English when the data has no Chinese one. */
-export const giftName = (g: CatalogGift, zh: boolean) => (zh && g.zh ? g.zh : g.en);
-
 const EFFECTS: Record<string, { en: string; zh: string }> = effects.effects;
 /** The gift's effect text in the GUI's language: the game's, for the Gift Search page's gifts (gift_effects.json, #721); none
  * for the others. */
 export const giftEffect = (id: number, zh: boolean): string | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
 
-const ICONS = import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" });
 /** The icon's URL (assets/.../gift_icons/<id>.webp). */
-export const iconUrl = (id: number): string | undefined => ICONS[`../../assets/resource/base/data/gift_icons/${id}.webp`];
+export const iconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" }));
 
-const KW_ICONS = import.meta.glob<string>("../../assets/resource/base/data/keyword_icons/*.webp", { eager: true, query: "?url", import: "default" });
 /** The keyword's game icon URL (assets/.../keyword_icons/<keyword>.webp); Keywordless has none. */
-export const keywordIconUrl = (keyword: string): string | undefined => KW_ICONS[`../../assets/resource/base/data/keyword_icons/${keyword}.webp`];
+export const keywordIconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/keyword_icons/*.webp", { eager: true, query: "?url", import: "default" }));
 
 /** A keyword's gifts by tier, highest tier first: the list's own order (`gorder`) for what the shop sells, then the rest in data order. */
 export function tiersOf(gorder: Record<string, number[]>, keyword: string): { tier: number; ids: number[] }[] {

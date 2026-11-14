@@ -1,12 +1,13 @@
 // The team queue (#501): the order of the teams list is the queue the Agent rotates, and after a claim the Agent moves that
 // team to the end of settings.json. The editor shows the order on disk, keeps the user's unsaved edits on top of it, and
 // never saves its own stale order over the Agent's.
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
 import { MIGRATIONS, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
+import { sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
 const file = vi.hoisted(() => ({ text: "" as string | null, saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
@@ -73,7 +74,7 @@ describe("rebase: the editor's settings once another writer changed the file", (
 
 describe("in the editor", () => {
   beforeEach(() => { file.text = text(queue("a", "b", "c")); file.saved = []; file.beforeSave = undefined; });
-  const shown = () => within(document.querySelector("aside")!).getAllByRole("listitem").map((li) => li.textContent!.match(/T\w/)![0]);
+  const shown = () => sideList().getAllByRole("listitem").map((li) => li.textContent!.match(/T\w/)![0]);
   const nameBox = () => screen.getByRole("textbox", { name: zh.name });
   const agentClaims = (id: string) => { file.text = text(claimed(JSON.parse(file.text!), id)); };
 
@@ -86,7 +87,7 @@ describe("in the editor", () => {
   test("dragging a team onto another moves it there in the queue", async () => {
     render(<App />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
-    const rows = () => within(document.querySelector("aside")!).getAllByRole("listitem");
+    const rows = () => sideList().getAllByRole("listitem");
     const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
     fireEvent.dragStart(rows()[2], { dataTransfer: dt() });
     fireEvent.dragOver(rows()[0], { dataTransfer: dt() });

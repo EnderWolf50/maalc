@@ -1,10 +1,10 @@
 // The gift list tab's keyword tabs and the grid of one keyword: tier blocks of icon tiles, one tile per gift.
 import { useRef, useState, type KeyboardEvent } from "react";
-import { CATALOG, GIFT_BY_ID, giftName, iconUrl, keywordIconUrl, tiersOf } from "./giftCatalog";
+import { CATALOG, GIFT_BY_ID, iconUrl, keywordIconUrl, tiersOf } from "./giftCatalog";
 import { useDragSort, type DragProps } from "./dragSort";
 import { moveGift, useGiftEdit } from "./giftEdit";
 import { effective, lockers, mainKeyword, state, type GiftState, type ListRules } from "./gifts";
-import { fill, type Key } from "./i18n";
+import { fill, localName, type Key } from "./i18n";
 import { GIFT_KEYWORDS } from "./model";
 import { useEditor } from "./ui";
 
@@ -96,10 +96,9 @@ function useTileGrid(owns: (id: number) => boolean, first: number | undefined) {
 
 /** One keyword's header and its tier blocks. */
 export function KeywordPanel({ keyword }: { keyword: string }) {
-  const { s, t } = useEditor();
+  const { t, zh } = useEditor();
   const { list, change, editable } = useGiftEdit();
   const dragItem = useDragSort((from, to) => change((l) => moveGift(l, Number(from), Number(to))), editable);
-  const zh = s.language === "zh_tw";
   const c = counts(list, keyword), blocks = tiersOf(list.gorder, keyword);
   const { grid, stop, walk, onFocus } = useTileGrid((id) => GIFT_BY_ID.get(id)?.keyword === keyword, blocks[0]?.ids[0]);
 
@@ -141,9 +140,9 @@ export function KeywordPanel({ keyword }: { keyword: string }) {
 
 /** The gifts whose Chinese name, English name or id (all of it) match what was typed, grouped by keyword in the list's order. */
 export function SearchResults({ query, onClear }: { query: string; onClear: () => void }) {
-  const { s, t } = useEditor();
+  const { t, zh } = useEditor();
   const { list } = useGiftEdit();
-  const zh = s.language === "zh_tw", q = query.trim().toLowerCase();
+  const q = query.trim().toLowerCase();
   const hit = new Set(CATALOG.filter((g) => g.zh.toLowerCase().includes(q) || g.en.toLowerCase().includes(q) || String(g.id) === q).map((g) => g.id));
   const groups = list.order
     .map((keyword) => ({ keyword, ids: tiersOf(list.gorder, keyword).flatMap((b) => b.ids).filter((id) => hit.has(id)) }))
@@ -180,7 +179,7 @@ export const LockIcon = ({ className }: { className: string }) => (
 /** The corner badge of a locked gift: what locks it, for a glance (the user, 2026-10-30: the dashed frame alone did not tell). */
 function FusionBadge({ by, zh }: { by: number[]; zh: boolean }) {
   const { t } = useEditor();
-  const names = by.map((f) => giftName(GIFT_BY_ID.get(f)!, zh)).join(t("gl.sep"));
+  const names = by.map((f) => localName(GIFT_BY_ID.get(f)!, zh)).join(t("gl.sep"));
   return (
     <span className="gl-fbadge" title={fill(t("gl.fusion_badge"), { names })}>
       <img src={iconUrl(by[0])} alt="" />{by.length > 1 && <b>+{by.length - 1}</b>}
@@ -197,7 +196,7 @@ function GiftTile({ id, zh, tabStop, onFocus, drag }: {
   const { list, apply, tip } = useGiftEdit();
   const g = GIFT_BY_ID.get(id)!;
   const { shown, locked } = look(list, id);
-  const label = fill(t("gl.tile"), { name: giftName(g, zh), tier: TIERS[g.tier], state: t(`state.${shown}`), lock: locked ? t("gl.locked") : "" });
+  const label = fill(t("gl.tile"), { name: localName(g, zh), tier: TIERS[g.tier], state: t(`state.${shown}`), lock: locked ? t("gl.locked") : "" });
   return (
     <button type="button" className={`gl-tile ${shown}${locked ? " locked" : ""}`} aria-label={label} data-gift={id} tabIndex={tabStop ? 0 : -1}
       draggable={false} {...drag}

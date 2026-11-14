@@ -4,19 +4,20 @@ import { Fragment, useId } from "react";
 import {
   GRACES, LEVELS, allEnhanced, allSelected, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, gracePrice, selectAll,
   starlightCost,
-  type Grace, type StarlightPlan, type StarlightValues,
+  type StarlightPlan, type StarlightValues,
 } from "./model";
 import { effectLines } from "./graceText";
+import { localName } from "./i18n";
 import { PlanTab } from "./Plans";
 import { Input, Mark, useEditor } from "./ui";
+import { webpFolder } from "./webpFolder";
 
 /** The game's "Grace of the Star" page: click a card to select it at base, + / ++ to enhance it
  * (spec 04 section 7). The number on a selected card is its place in the buying order. Read-only without onChange. */
 export function StarlightEditor({ value, onChange, path }: {
   value: StarlightValues; onChange?: (v: StarlightValues) => void; path: string;
 }) {
-  const { s, t, tv, bad } = useEditor();
-  const zh = s.language === "zh_tw";
+  const { t, tv, bad, zh } = useEditor();
   const order = buyOrder(value);
   const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
   const id = useId(); // the cards' rank, price and effects describe their pick buttons
@@ -31,7 +32,7 @@ export function StarlightEditor({ value, onChange, path }: {
           return (
             // A group, not a button around buttons: its name is a pick button beside + and ++. A click anywhere on the card
             // picks it, as in the game; from the keyboard the pick button does, its click reaching the card.
-            <div key={g.en} className={`grace ${level}`} role="group" aria-label={graceName(g, zh)}
+            <div key={g.en} className={`grace ${level}`} role="group" aria-label={localName(g, zh)}
               aria-disabled={!onChange} title={`${n}. ${g.en} (${tv("level", level)})`}
               onClick={() => set((v) => clickCard(v, n))}>
               {rank > 0 && <span className="rank" id={`${id}-rank-${n}`}>{rank}</span>}
@@ -40,7 +41,7 @@ export function StarlightEditor({ value, onChange, path }: {
                 <img className="icon" src={graceIconUrl(n)} alt="" />
                 <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0}
                   aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
-                  <span className="title">{graceName(g, zh)}{plusOf(level)}</span>
+                  <span className="title">{localName(g, zh)}{plusOf(level)}</span>
                 </button>
               </div>
               {zh && g.zh && <small className="en">{g.en}</small>}
@@ -56,7 +57,7 @@ export function StarlightEditor({ value, onChange, path }: {
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
-                    aria-label={`${graceName(g, zh)} ${"+".repeat(plus)}`}
+                    aria-label={`${localName(g, zh)} ${"+".repeat(plus)}`}
                     onClick={(e) => { e.stopPropagation(); set((v) => clickEnhance(v, n, plus)); }}><Glyphs n={plus} /></button>
                 ))}
               </span>
@@ -87,11 +88,8 @@ export function StarlightEditor({ value, onChange, path }: {
   );
 }
 
-/** A grace's name in the GUI's language: the Chinese one when the data has it. */
-const graceName = (g: Grace, zh: boolean) => (zh && g.zh ? g.zh : g.en);
-const GRACE_ICONS = import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" });
 /** The game's icon of grace n (1-10): ./grace_icons/<n>.webp (tools/grace_icons.py). */
-const graceIconUrl = (n: number): string | undefined => GRACE_ICONS[`./grace_icons/${n}.webp`];
+const graceIconUrl = webpFolder(import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" }));
 /** A "★" the stylesheet covers with the game's starlight icon (gui/src/grace_card/star.webp): a screen reader and a copy keep it. */
 const Star = () => <span className="star">★</span>;
 /** The game's + glyph n times, for a + or ++ button; the button's aria-label names it. */
@@ -101,8 +99,7 @@ const plusOf = (level: string) => "+".repeat(Math.max(0, LEVELS.indexOf(level) -
 
 /** A starlight plan on one line, for a team that uses it: the picks in buying order with their level, and the total. */
 export function StarlightReceipt({ value }: { value: StarlightValues }) {
-  const { s, t } = useEditor();
-  const zh = s.language === "zh_tw";
+  const { t, zh } = useEditor();
   const order = buyOrder(value);
   return (
     <div className="receipt">
@@ -110,7 +107,7 @@ export function StarlightReceipt({ value }: { value: StarlightValues }) {
         <ol>
           {order.map((n, i) => {
             const g = GRACES[n - 1], level = value.levels[n - 1];
-            return <li key={n}><b>{i + 1}</b>{graceName(g, zh)}{level !== "base" && <i>{plusOf(level)}</i>}</li>;
+            return <li key={n}><b>{i + 1}</b>{localName(g, zh)}{level !== "base" && <i>{plusOf(level)}</i>}</li>;
           })}
         </ol>
       ) : <span className="muted">{t("starlight.none")}</span>}

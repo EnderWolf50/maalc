@@ -8,7 +8,7 @@ import { iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
-import { cssRules, expectLines, renderEditor } from "./testing";
+import { cssRules, expectLines, pickInList, renderEditor, sideList } from "./testing";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
@@ -44,9 +44,9 @@ describe("Reset time records", () => {
     s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
     const r = renderEditor(<TeamsTab />, s);
     await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
-    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    await pickInList(r.user, "T2");
     expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
-    await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+    await pickInList(r.user, "T1");
     expect(screen.queryByRole("group", { name: zh.resetTimes })).toBeNull();
     expect(file.resets).toEqual([]);
   });
@@ -58,9 +58,9 @@ describe("Reset time records", () => {
     await r.user.click(screen.getByRole("button", { name: zh.resetTimes }));
     await r.user.click(screen.getByRole("button", { name: zh.resetGo }));
     await screen.findByText(zh.resetDone);
-    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    await pickInList(r.user, "T2");
     expect(screen.queryByText(zh.resetDone)).toBeNull();
-    await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+    await pickInList(r.user, "T1");
     expect(screen.getByText(zh.resetDone)).toBeTruthy();
   });
 
@@ -175,7 +175,7 @@ describe("deleting a team", () => {
   test("can be undone: the team comes back in its place, in the editor", async () => {
     const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
     const r = renderEditor(<TeamsTab />, { ...newSettings(), language: "zh_tw", teams });
-    await r.user.click(within(document.querySelector("aside")!).getByText("Tb"));
+    await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
     expect(r.settings().teams.map((x) => x.id)).toEqual(["a", "c"]);
     expect(screen.getByRole("status")).toHaveTextContent(fill(zh["undo.deleted"], { name: "Tb" }));
@@ -192,7 +192,7 @@ describe("deleting a team", () => {
       return <button onClick={() => update((s) => { s.teams.push(...s.teams.splice(0, 1)); })}>claim a</button>;
     }
     const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", teams });
-    await r.user.click(within(document.querySelector("aside")!).getByText("Tb"));
+    await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
     await r.user.click(screen.getByRole("button", { name: "claim a" }));
     expect(r.settings().teams.map((x) => x.id)).toEqual(["c", "a"]);
@@ -247,7 +247,7 @@ test("the queue names a team that is off and a team kept to one difficulty", () 
   const s = settings();
   s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(2, "T2"), enabled: false, usage: "hard_only" }];
   renderEditor(<TeamsTab />, s);
-  const [first, second] = within(document.querySelector("aside")!).getAllByRole("listitem");
+  const [first, second] = sideList().getAllByRole("listitem");
   expect(first).not.toHaveTextContent(zh["team.disabled"]);
   expect(first).not.toHaveTextContent(zh["usage.hard_only"]);
   expect(second).toHaveTextContent(zh["team.disabled"]);
@@ -276,7 +276,7 @@ describe("the E.G.O Gift Search keyword tabs", () => {
     const s = settings();
     s.teams.push({ ...newTeam(2, "T2"), id: "t2", gift_list: "other" });
     const r = renderEditor(<TeamsTab />, s);
-    await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+    await pickInList(r.user, "T2");
     const on = tabs().find((b) => b.getAttribute("aria-selected") === "true")!;
     expect(on).toHaveTextContent(kw("Tremor"));
   });

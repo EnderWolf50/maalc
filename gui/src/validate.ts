@@ -3,8 +3,8 @@
 // tests/settings_cases.json holds the cases both test suites run.
 // The schema layer is compiled at build time (settingsValidator.ts): the built GUI's CSP allows no run-time compile (#220).
 import { settings as schemaCheck } from "virtual:settings-validator";
-import { GIFT_BY_ID, giftName } from "./giftCatalog";
-import { TEXT, fill, type Key } from "./i18n";
+import { GIFT_BY_ID } from "./giftCatalog";
+import { TEXT, fill, localName, type Key } from "./i18n";
 import { skillPlan, type Settings, type SkillFault } from "./model";
 
 /** What the editor says of a problem, in its own language: a TEXT key and what fills it. A value that is a TEXT key ({ key })
@@ -22,7 +22,7 @@ export function sayProblem(p: Problem, lang: Settings["language"]) {
     if ("key" in v) return [k, text[v.key]];
     if ("names" in v) return [k, v.names.map((n) => (zh ? `「${n}」` : `"${n}"`)).join(zh ? "、" : ", ")];
     const g = GIFT_BY_ID.get(v.gift);
-    return [k, g ? giftName(g, zh) : `#${v.gift}`];
+    return [k, g ? localName(g, zh) : `#${v.gift}`];
   }));
   return fill(text[p.say.key], vars);
 }

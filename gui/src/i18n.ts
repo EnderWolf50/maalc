@@ -4,6 +4,10 @@
 /** Fill the {name} placeholders of a text. */
 export const fill = (text: string, vars: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 
+/** A name from the game data (a gift, a grace) in the GUI's language: the Chinese one in the Chinese GUI when the data has it,
+ * else the English one. */
+export const localName = (x: { en: string; zh?: string }, zh: boolean) => (zh && x.zh ? x.zh : x.en);
+
 const zh_tw = {
   title: "maalc 設定",
   save: "儲存",

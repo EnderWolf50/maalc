@@ -2,15 +2,16 @@
 // above the user's own.
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { loadThemePacks } from "./api";
-import { GIFT_BY_ID, giftName } from "./giftCatalog";
+import { GIFT_BY_ID } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
-import { fill } from "./i18n";
+import { fill, localName } from "./i18n";
 import {
   EVENT_MODES, MODE_KEYS, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, parseThemePacks, weightOf,
   type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
 import { Field, Select, useEditor, useSlashFocus, withBreaks } from "./ui";
+import { webpFolder } from "./webpFolder";
 
 export function ThemePackTab() {
   const { t } = useEditor();
@@ -31,14 +32,12 @@ export function ThemePackTab() {
   );
 }
 
-// #241's cards (theme_pack_covers/index.json: pack name -> file), bundled at build time; a pack without one, or a
-// build before they exist, shows its name on a blank card. The title is printed on the card, so the name is the tooltip.
-const COVERS_DIR = "../../assets/resource/base/data/theme_pack_covers/";
-const COVER_URLS = import.meta.glob<string>("../../assets/resource/base/data/theme_pack_covers/*.webp",
-  { eager: true, query: "?url", import: "default" });
-const COVER_INDEX = Object.values(import.meta.glob<Record<string, string>>("../../assets/resource/base/data/theme_pack_covers/index.json",
-  { eager: true, import: "default" }))[0] ?? {};
-const coverOf = (name: string): string | undefined => COVER_URLS[COVERS_DIR + COVER_INDEX[name]];
+// #241's cards (theme_pack_covers/index.json: pack name -> file); a pack without one, or a build before they exist, shows
+// its name on a blank card. The title is printed on the card, so the name is the tooltip.
+const coverOf = webpFolder(
+  import.meta.glob<string>("../../assets/resource/base/data/theme_pack_covers/*.webp", { eager: true, query: "?url", import: "default" }),
+  import.meta.glob<Record<string, string>>("../../assets/resource/base/data/theme_pack_covers/index.json", { eager: true, import: "default" }),
+);
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
 const LINE = "\u0000line";
@@ -80,9 +79,8 @@ function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | nul
 function PackPlanEditor({ data, plan, planId, path, onChange }: {
   data: ThemePacks; plan: PackPlanValues; planId: string; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
-  const { s, t, tv, bad } = useEditor();
+  const { s, t, tv, bad, zh } = useEditor();
   const lists = listsOfPlan(planId, s.teams, s.gift_lists);
-  const zh = s.language === "zh_tw";
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
@@ -131,7 +129,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
     const wanted = packWanted(lists, data.pack_ids[name]).map((id) => GIFT_BY_ID.get(id)).filter((g) => g !== undefined)
-      .map((g) => giftName(g, zh));
+      .map((g) => localName(g, zh));
     const isWanted = wanted.length > 0;
     const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
     // The whole chip shows the wanted gifts on hover, the dot being too small a target (#720).

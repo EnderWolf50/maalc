@@ -12,7 +12,7 @@ import css from "./index.css?raw";
 import { DeploymentTab } from "./Deployment";
 import { StarlightTab } from "./Starlight";
 import { ThemePackTab } from "./ThemePacks";
-import { cssRules, expectLines, renderEditor } from "./testing";
+import { cssRules, expectLines, pickInList, renderEditor } from "./testing";
 import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
@@ -306,7 +306,7 @@ describe("deleting a plan", () => {
   test("can be undone: the plan comes back in its place, in the editor", async () => {
     const plans = ["D1", "D2", "D3"].map((name) => ({ id: name.toLowerCase(), name, order: [...SINNERS] }));
     const r = renderEditor(<DeploymentTab />, settings({ deployment_order_plans: plans }));
-    await r.user.click(within(document.querySelector("aside")!).getByText("D2"));
+    await pickInList(r.user, "D2");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
     expect(r.settings().deployment_order_plans.map((p) => p.name)).toEqual(["D1", "D3"]);
     expect(screen.getByRole("status")).toHaveTextContent(fill(zh["undo.deleted"], { name: "D2" }));
@@ -328,7 +328,7 @@ describe("which teams use a plan", () => {
   test("a plan lists the teams that use it, and says so when none does", async () => {
     const r = renderEditor(<DeploymentTab />, settings({ deployment_order_plans: plans, teams: teams() }));
     expect(screen.getByText(fill(zh["plan.usedBy"], { names: "Ta、Tc" }))).toBeInTheDocument();
-    await r.user.click(within(document.querySelector("aside")!).getByText("D2"));
+    await pickInList(r.user, "D2");
     expect(screen.getByText(zh["plan.unused"])).toBeInTheDocument();
   });
 

@@ -6,6 +6,7 @@ import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
 import { TEXT, fill, type Key } from "./i18n";
 import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
+import { pickInList } from "./testing";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0, reloaded: 0 }));
 vi.mock("./api", async (original) => ({
@@ -31,8 +32,6 @@ const settings = (): Settings => ({
 
 const tab = (name: string) => screen.getByRole("tab", { name });
 const nameBox = () => screen.getByRole("textbox", { name: zh.name });
-const pickInList = async (user: ReturnType<typeof userEvent.setup>, name: string) =>
-  user.click(within(document.querySelector("aside")!).getByText(name));
 
 describe("a tab switch", () => {
   beforeEach(() => { file.text = JSON.stringify(settings()); });
