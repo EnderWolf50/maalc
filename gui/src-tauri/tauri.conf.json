@@ -11,7 +11,7 @@
   },
   "app": {
     "windows": [{
-      "title": "maalc", "width": 1500, "height": 760, "minWidth": 800, "minHeight": 480, "dragDropEnabled": false,
+      "title": "maalc", "width": 1500, "height": 860, "minWidth": 800, "minHeight": 480, "dragDropEnabled": false,
       "decorations": false, "center": true, "preventOverflow": true
     }],
     "security": {
