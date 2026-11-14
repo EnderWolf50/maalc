@@ -38,6 +38,7 @@ What the run of `tools/gui_devtools.mjs` showed:
 
 ## Seeing the window
 
+- The order numbers' contrast on the deployment cards: `uv run python tools/number_contrast.py --port <port>` (the port `gui_devtools.mjs open` printed) holds each number over white art against the ring 1–2 CSS px out, its median and 90th percentile, at 1500 × 860, 1280 × 720 and 800 × 480 in both schemes. [#756]
 - `get_window_state` with `include_accessibility_tree:false` returns a screenshot of that one window plus its bounds; `--screenshot-out-file <png>` on `cua-driver call` saves it. It never captures the screen. `get_desktop_state` captures the whole display: not for a GUI check. [run; cua docs `describe get_window_state`]
 - Sizes differ by setup: the window is 1500x860 in `tauri.conf.json` (1100x760 before #732, 1500x760 before #741); in the [run], `list_windows` reported 1654x1187 and the screenshot was 1455x1044. Action coordinates are pixels of the latest screenshot, not window or screen pixels. A retro report names 1620x1500 for another setup: read the sizes again each run. [run; retro]
 - Each `cua-driver call` is a session of its own. A `drag` or `click` needs a `get_window_state` of the same window in the same session first, else it fails with `screenshot_context_missing` / `window_never_read`. Pass the same `"session":"<name>"` to every call (read, then act, then read), or put the steps in one `run_script`. [run]
