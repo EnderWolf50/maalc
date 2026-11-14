@@ -4,11 +4,11 @@ status: accepted（修訂 ADR 0005）
 
 # 資源包從 maalc 發佈到 maalc-resource，已安裝的 maalc 與 lc-helper 在執行時更新
 
-lc-helper（戰鬥時疊在遊戲上的輔助視窗）讀 maalc 的事件表、飾品表、試煉表、圖示與模板，目前用 `tools/sync_maalc.py` 從旁邊的 maalc checkout 複製、轉換後 commit 進自己的 repo。每季換主題包與事件時，兩個工具各更新一次，已安裝的 bot 也要等新的 zip。使用者 2026-11-14 至 11-15 決定：兩個工具共用一份**資源包**，換季時只在 maalc 更新一次，已安裝的 maalc 與 lc-helper 不必換 zip 就拿得到。來源仍在 maalc，由 workflow 發佈到另一個公開 repo，做法和 MAA 的 [MaaResource](https://github.com/MaaAssistantArknights/MaaResource)（由 MAA 主 repo 的 `resource/` 同步）、AALC 的 AALCImageResources（[研究筆記](../research/aalc/01-architecture.md) §10.2）相同。
+[lc-helper](https://github.com/EnderWolf50/lc-helper)（戰鬥時疊在遊戲上的輔助視窗）讀 maalc 的事件表、飾品表、試煉表、圖示與模板，目前用 `tools/sync_maalc.py` 從旁邊的 maalc checkout 複製、轉換後 commit 進自己的 repo。每季換主題包與事件時，兩個工具各更新一次，已安裝的 bot 也要等新的 zip。使用者 2026-11-14 至 11-15 決定：兩個工具共用一份**資源包**，換季時只在 maalc 更新一次，已安裝的 maalc 與 lc-helper 不必換 zip 就拿得到。來源仍在 maalc，由 workflow 發佈到另一個公開 repo，做法和 MAA 的 [MaaResource](https://github.com/MaaAssistantArknights/MaaResource)（由 MAA 主 repo 的 `resource/` 同步）、AALC 的 AALCImageResources（[研究筆記](../research/aalc/01-architecture.md) §10.2）相同。
 
 ## 資源包
 
-- 內容：`assets/resource/base/` 的 `data/`、`image/` 與 `pipeline/`，不含 OCR 模型所在的 `model/`。設定 GUI 自己放的 `gui/src/gift_effects.json`、`graces.json`、`grace_icons/`、`grace_card/` 搬進 `data/`。英文與中文都在包內，LLC 簡體轉繁體只在 maalc 做一次。lc-helper 只取它用到的檔。
+- 內容：`assets/resource/base/` 的 `data/`、`image/` 與 `pipeline/`，不含 OCR 模型所在的 `model/`。設定 GUI 自己放的 `gui/src/gift_effects.json`、`graces.json`、`grace_icons/`、`grace_card/` 搬進 `data/`。lc-helper 自己從客戶端匯出的罪孽圖示與飾品格底板也搬到 maalc 的 `data/`，匯出它們的工具搬到 maalc 的 `tools/`，NOTICE 跟著補上它們的來源（#755）。英文與中文都在包內，LLC 簡體轉繁體只在 maalc 做一次。lc-helper 只取它用到的檔。
 - 版本號：發佈日期，例如 `2026.11.14`，同一天第二次是 `2026.11.14.2`。包內另記它取自哪一版遊戲客戶端。
 - **格式版本**管資料：欄位結構改變才加一。欄位的意義改變時改欄位名，讓欄位結構的檢查抓到，格式版本跟著加一。
 - **模板版本**管模板與 pipeline：要配新的 Agent 程式或 `assets/interface.json` 時才加一。CI 檢查：一個 PR 同時改了 `image/` 或 `pipeline/`，又改了 `agent/` 或 `assets/interface.json`，模板版本卻沒變，就失敗；commit 寫一行理由可以略過，和 `tools/review_lint.py` 的 `Removed-name-ok:` 一樣。
@@ -25,7 +25,7 @@ lc-helper（戰鬥時疊在遊戲上的輔助視窗）讀 maalc 的事件表、�
 
 - **maalc**：Agent 在任務開始（`TaskStart`）時檢查，最多等 10 秒。逾時或失敗就用上次下載的那份，沒有就用 zip 內附的，記一行 log，任務照常跑。下載完驗 sha256 才換檔。換檔後清掉資料檔的快取（`agent/settings.py` 的 `@cache`；MFAAvalonia 的 Agent 會跨任務存活），再用 `resource.clear()` 與 `post_bundle()` 重新載入，等載入完成才往下走，同一次任務就用新的模板與 pipeline。要重新載入，是因為 MXU 只在選資源時、MFAAvalonia 只在連線時載入一次：pipeline 在載入時就解析進記憶體，模板第一次比對時讀檔後快取（MaaFramework v5.14.3 `PipelineResMgr.cpp`、`TemplateResMgr.cpp`）。MaaFramework 對任務中途重新載入沒有保護（※ 原始碼裡沒看到），實作時先實機驗證；不行就改成任務結束時換檔並重新載入，下一次任務生效。
 - **設定 GUI**：遊戲資料與圖改成執行時從 `resource/base/data/` 讀，像現在的 `load_theme_packs`，顯示 Agent 下載好的那份。換季後第一次任務跑完之前，GUI 顯示的是舊的。
-- **lc-helper**：公開並發佈 dist zip，zip 內附一份資源包，啟動時檢查。從 maalc 複製的 8 張模板改從資源包取，lc-helper 自己的模板留在 lc-helper。OCR 模型不在資源包裡，由 lc-helper 自己抓。開發時用 lock 檔記資源包的版本，由工具抓到 gitignore 的資料夾，測試與 build 都用它。lc-helper 的測試截圖仍是 maalc 的 `tests/screens`，CI 只抓指定 commit 的那個資料夾。
+- **lc-helper**：已公開，發佈 dist zip；zip 內附一份資源包，啟動時檢查。從 maalc 複製的 8 張模板改從資源包取，lc-helper 自己的模板留在 lc-helper。OCR 模型不在資源包裡，由 lc-helper 自己抓。數字用的 Barlow Condensed 字型不是遊戲素材，也留在 lc-helper。lc-helper 改讀資源包之前，LLC 中文與遊戲素材的授權寫在它自己的 `NOTICE.md`；改讀之後，這兩段改為指向資源包附的 `NOTICE.md`。開發時用 lock 檔記資源包的版本，由工具抓到 gitignore 的資料夾，測試與 build 都用它。lc-helper 的測試截圖仍是 maalc 的 `tests/screens`，CI 只抓指定 commit 的那個資料夾。
 
 ## Considered Options
 
