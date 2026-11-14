@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
 import { SINNERS, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
-import { renderEditor } from "./testing";
+import { pickInList, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
@@ -322,10 +322,10 @@ test("a team switch drops a removed sinner's Undo, also on the way back, and the
   const r = renderEditor(<TeamsTab />, s);
   await expand(r);
   await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));
-  await r.user.click(within(document.querySelector("aside")!).getByText("T2"));
+  await pickInList(r.user, "T2");
   expect(panel().open).toBe(true);
   expect(within(panel()).queryByRole("button", { name: zh.undo })).toBeNull();
-  await r.user.click(within(document.querySelector("aside")!).getByText("T1"));
+  await pickInList(r.user, "T1");
   expect(within(panel()).queryByRole("button", { name: zh.undo })).toBeNull();
 });
 

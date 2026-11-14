@@ -5,14 +5,17 @@ import { iconUrl } from "./giftCatalog";
 import { GiftEffectCard, useGiftTip } from "./GiftPopover";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
-import { fill } from "./i18n";
+import { fill, localName } from "./i18n";
 import {
   MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
-import { SinnerGrid, StarlightEditor, StarlightReceipt } from "./Plans";
+import { SinnerGrid } from "./Deployment";
 import { SkillPanel } from "./SkillReplacement";
-import { Choice, Field, Input, Mark, Num, ReorderList, Select, ToggleNum, nextTab, useEditor, usePick, useUndo, withBreaks } from "./ui";
+import { StarlightEditor, StarlightReceipt } from "./Starlight";
+import {
+  Choice, Field, Input, Mark, Num, ReorderList, Select, ToggleNum, nextTab, useEditor, usePick, useScopedState, useUndo, withBreaks,
+} from "./ui";
 
 export function TeamsTab() {
   const { s, update, t, tv, bad } = useEditor();
@@ -78,11 +81,8 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
   const set = (patch: Partial<Team>) => update((d) => { Object.assign(d.teams[i], patch); });
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const [notice, setNotice] = useState<{ team: string; text: string } | null>(null); // shown on its own team only, also when the reset ends after a switch
-  const [askReset, setAskReset] = useState(false); // Reset time records asks first, in the page
-  // Picking another team drops the question (its Cancel takes the focus); the editor stays mounted, so the panels left open
-  // stay open.
-  const [shownTeam, setShownTeam] = useState(team.id);
-  if (shownTeam !== team.id) { setShownTeam(team.id); setAskReset(false); }
+  // Reset time records asks first, in the page; picking another team drops the question (its Cancel takes the focus).
+  const [askReset, setAskReset] = useScopedState(team.id, false);
 
   // "plan id" or "" for custom. Switching to custom copies the plan's values (spec 04 section 9).
   const orderSource = "plan" in team.deployment_order ? team.deployment_order.plan : "";
@@ -276,10 +276,10 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
 
 const sameRef = (a: GiftRef, g: SearchGift) => a.keyword === g.keyword && a.tier === g.tier && a.name === g.en;
 
-/** A gift's name in the GUI's language: the Chinese one when the data has it. */
+/** A picked gift's name in the GUI's language, its name as the settings hold it for one the search page lacks. */
 function refName(g: GiftRef, zh: boolean) {
   const known = SEARCH_GIFTS.find((x) => sameRef(g, x));
-  return zh && known?.zh ? known.zh : g.name;
+  return known ? localName(known, zh) : g.name;
 }
 
 /** The E.G.O Gift Search page's gifts, keyword tabs and tiers like the game's page; a click adds or removes one. A gift is its
@@ -288,7 +288,7 @@ function refName(g: GiftRef, zh: boolean) {
 function GiftGrid({ gifts, start, full, mark, onToggle }: {
   gifts: GiftRef[]; start: string; full: boolean; mark: (g: SearchGift) => string | null; onToggle: (g: GiftRef) => void;
 }) {
-  const { s, t } = useEditor();
+  const { t, zh } = useEditor();
   const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
   const { open, tip } = useGiftTip();
   const shown = open !== null;
@@ -300,7 +300,6 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
   }, [shown, tip]);
   /** A gift the full grid cannot take: not picked while 3 are. */
   const blocked = (g: SearchGift) => full && !mark(g);
-  const zh = s.language === "zh_tw";
   const count = (k: string) => gifts.filter((g) => g.keyword === k).length;
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const walk = (e: KeyboardEvent) => {
@@ -337,7 +336,7 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
                   onClick={() => onToggle({ keyword: g.keyword, tier: g.tier, name: g.en })}>
                   <img src={iconUrl(g.id)} alt="" loading="lazy" />
                   {m && <span className="rank">{m}</span>}
-                  <span className="name">{zh && g.zh ? g.zh : g.en}</span>
+                  <span className="name">{localName(g, zh)}</span>
                   {/* the English name shows on the card; a screen reader still reads it with the tile, as before */}
                   {zh && g.zh && <small className="sr-only">{g.en}</small>}
                 </button>
@@ -384,13 +383,12 @@ function KeepPanel({ i }: { i: number }) {
 
 /** E.G.O Gift Search (spec 04 section 9): keyword tabs and tiers like the game's page; a click adds or removes. */
 function GiftSearchPanel({ i }: { i: number }) {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t, bad, zh } = useEditor();
   const team = s.teams[i];
   const search = team.gift_search;
   const main = teamKeyword(team.gift_list, s.gift_lists);
   const path = `teams/${i}/gift_search`;
   const set = (patch: Partial<Team["gift_search"]>) => update((d) => { Object.assign(d.teams[i].gift_search, patch); });
-  const zh = s.language === "zh_tw";
   const rank = (g: SearchGift) => search.gifts.findIndex((x) => sameRef(x, g)) + 1;
   const full = search.gifts.length >= MAX_GIFTS;
   return (
@@ -402,6 +400,8 @@ function GiftSearchPanel({ i }: { i: number }) {
         </label>
         <small className="caution">{t("gift.note")}</small>
       </Mark>
+      {/* keyed by the team: a team picked mounts the grid anew, its tabs on that team's main keyword and no card open; it
+          holds nothing to keep across teams (ui.tsx useScopedState) */}
       <GiftGrid key={team.id} gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>

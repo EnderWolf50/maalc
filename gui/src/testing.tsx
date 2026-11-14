@@ -1,7 +1,7 @@
 // Test harness for the editor tabs: renders a tab inside the same EditorContext App builds, over real settings state, and lets
 // the test read the settings back after the user's clicks. Not bundled (only tests import it).
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, within } from "@testing-library/react";
+import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { useState, type ReactElement } from "react";
 import { expect } from "vitest";
 import { newSettings, type Settings } from "./model";
@@ -25,6 +25,12 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
   }
   return { user: userEvent.setup(), settings: () => current, opened: () => opened, ...render(<Host />) };
 }
+
+/** The side list of a tab that shows one item at a time (the team queue, a plan tab's plans): queries inside its <aside>. */
+export const sideList = () => within(document.querySelector("aside")!);
+
+/** Pick the team or plan named `name` in the side list, as the user clicks it. */
+export const pickInList = (user: UserEvent, name: string) => user.click(sideList().getByText(name));
 
 /** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets (`import css from "./index.css?raw"`). */
 export function cssRules(text: string) {

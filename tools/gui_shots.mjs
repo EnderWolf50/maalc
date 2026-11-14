@@ -12,6 +12,8 @@
 // validator's Ajv helpers to the browser as CommonJS modules, and loading the `valid` case there fails ("func3 is not a function"). Each still starts from a fresh load, at the window size of
 // gui/src-tauri/tauri.conf.json, in the colour scheme asked for. A still named *-full is as tall as its page.
 // Writes <out>/<scheme>/<name>.png and prints one line per still. Needs Node 22 or later (global WebSocket), no packages.
+// A refactor's "looks the same": stills of the build before and of the build after, each shot twice, then
+// tools/gui_compare.py --before <dir> <dir> --after <dir> <dir>.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,12 +55,16 @@ const SHOTS = [
   { name: "run-full", steps: `await $.tab("run", ${TAB.run});` },
   { name: "teams", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b");` },
   { name: "teams-full", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); $.openAll();` },
+  // The panels as the page opens them: a closed one's disclosure triangle points right.
+  { name: "teams-closed-full", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b");` },
   { name: "gifts", steps: `await $.tab("gifts", ${TAB.gifts}); await $.select(".gl select", "g1");` },
   { name: "gifts-tip", steps: `await $.tab("gifts", ${TAB.gifts}); await $.select(".gl select", "g1");`, hover: ["[data-gift='9053']", ".gl-tile"] },
   { name: "gifts-buy", steps: `await $.tab("gifts", ${TAB.gifts}); await $.select(".gl select", "g1"); await $.click(".gl-buy");` },
   { name: "deployment", steps: `await $.tab("deployment", ${TAB.deployment});` },
   { name: "starlight", steps: `await $.tab("starlight", ${TAB.starlight});` },
   { name: "themepacks-full", steps: `await $.tab("themepacks", ${TAB.themepacks}); await $.pick("aside li", "Mine");` },
+  // The packs as their cover cards (the view's second chip), the window's height: the covers come from the WebP folder.
+  { name: "themepacks-images", steps: `await $.tab("themepacks", ${TAB.themepacks}); await $.pick("aside li", "Mine"); await $.click(".seg.view button:last-child");` },
   { name: "events", steps: `await $.tab("events", ${TAB.events});` },
   { name: "trials", steps: `await $.tab("trials", ${TAB.trials});` },
   { name: "daily-full", steps: `await $.tab("daily", ${TAB.daily});` },
@@ -66,11 +72,24 @@ const SHOTS = [
   { name: "save-blocked", settings: "clash", steps: `await $.tab("teams", ${TAB.teams}); await $.click("header button.primary");` },
   // Unsaved changes: a team renamed and not saved, so the header shows what an edit leaves before Save.
   { name: "unsaved", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); await $.type(".bar input", "Team b (edited)");` },
+  // The prompt F5 opens over unsaved changes (WindowControls.tsx LeavePrompt).
+  { name: "leave", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); await $.type(".bar input", "Team b (edited)");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "F5", bubbles: true })); await $.settle();` },
 ];
 
 const PAGE_HELPERS = `window.$ = {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-  async settle() { await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); await this.sleep(150); },
+  // The fonts and the transitions too: a still taken while a face of the condensed font swaps in, or while a transition runs,
+  // made two runs of one build differ (2026-11-14).
+  async frames() { await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); },
+  async settle() {
+    // every face the stylesheet declares, not only the ones a text has asked for yet: fonts.ready alone left the title's face to
+    // swap in after the still now and then
+    await Promise.all([...document.fonts].map((f) => f.load().catch(() => {})));
+    await this.frames(); await this.sleep(150); await document.fonts.ready;
+    await Promise.race([Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))), this.sleep(2000)]);
+    await this.frames();
+  },
   async tab(id, i) {
     const tab = document.querySelector("[data-tab='" + id + "']") ?? document.querySelector("[role=tablist]")?.querySelectorAll("[role=tab]")[i];
     if (!tab) throw new Error("no main tab " + id);
@@ -199,9 +218,12 @@ async function browserUrl(profile) {
 
 async function launch() {
   const profile = mkdtempSync(join(tmpdir(), "gui-shots-"));
+  // Drawn without the GPU, with grayscale text at whole-pixel glyph positions: between two runs of one build the GPU's raster
+  // gave a gradient or a border a level or two apart and the page's text came out a pixel apart (2026-11-14), so a still
+  // compared pixel by pixel (tools/gui_compare.py) differed with nothing changed. The text still does now and then: shoot twice.
   const proc = spawn(findBrowser(), [
     "--headless=new", `--remote-debugging-port=${opt.port}`, `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
-    "--disable-extensions", "--disable-sync", "--mute-audio", "about:blank",
+    "--disable-extensions", "--disable-sync", "--mute-audio", "--disable-gpu", "--disable-lcd-text", "--disable-font-subpixel-positioning", "about:blank",
   ], { stdio: "ignore" });
   const ws = new WebSocket(await browserUrl(profile));
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error("cannot connect to the browser")); });
@@ -239,7 +261,7 @@ async function open(cdp, scheme, shot, texts) {
       const box = await evaluate(cdp, s, `(() => { const el = ${JSON.stringify(shot.hover)}.map((q) => document.querySelector(q)).find(Boolean);
         if (!el) throw new Error("nothing to hover"); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
       await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: box.x, y: box.y }, s);
-      await evaluate(cdp, s, `(async () => { await $.sleep(400); await $.images(); })()`);
+      await evaluate(cdp, s, `(async () => { await $.sleep(400); await $.images(); await $.settle(); })()`);
     }
     if (shot.name.endsWith("-full")) {
       const full = await evaluate(cdp, s, "$.fullHeight()");

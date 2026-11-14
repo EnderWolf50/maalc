@@ -2,10 +2,10 @@
 // gift list tab's says "set to" and what the list and the recipes make of it; the team page's Gift Search says its effect (#721).
 // One card for a page: a tile shows it for itself (a GiftTip), the page renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FUSION_BY_ID, GIFT_BY_ID, giftEffect, giftName, iconUrl, packName, packsOf, usedIn } from "./giftCatalog";
+import { FUSION_BY_ID, GIFT_BY_ID, giftEffect, iconUrl, packName, packsOf, usedIn } from "./giftCatalog";
 import { plan, STATES, useGiftEdit, type GiftTip } from "./giftEdit";
 import { lockers, materialsOf, purchases, queue, type GiftState } from "./gifts";
-import { fill, TEXT, type Key } from "./i18n";
+import { fill, localName, TEXT, type Key } from "./i18n";
 import { LockIcon, look, TIERS } from "./KeywordGrid";
 import { useEditor } from "./ui";
 
@@ -84,10 +84,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 /** The card's frame: the gift's icon, its name and, in Chinese, its English name, then `children`. Placed against its tile
  * (`place`) and kept open while the pointer is on it; focus going anywhere but its tile or itself closes it. */
 export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children: ReactNode }) {
-  const { s } = useEditor();
+  const { zh } = useEditor();
   const box = useRef<HTMLDivElement>(null);
-  const zh = s.language === "zh_tw";
-  const g = GIFT_BY_ID.get(id)!, name = giftName(g, zh);
+  const g = GIFT_BY_ID.get(id)!, name = localName(g, zh);
 
   // After every render (its height changes with the content): place it against the tile.
   useLayoutEffect(() => {
@@ -116,8 +115,8 @@ export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HT
 /** The Gift Search's card (#721): the gift's effect, as the game words it, in the GUI's language; `note` under it (why it cannot
  * be picked). */
 export function GiftEffectCard({ id, anchor, tip, note }: { id: number; anchor: HTMLElement; tip: GiftTip; note?: string }) {
-  const { s } = useEditor();
-  const effect = giftEffect(id, s.language === "zh_tw");
+  const { zh } = useEditor();
+  const effect = giftEffect(id, zh);
   return (
     <GiftCard id={id} anchor={anchor} tip={tip}>
       {effect && <p className="gl-tip-effect">{effect}</p>}
@@ -128,11 +127,10 @@ export function GiftEffectCard({ id, anchor, tip, note }: { id: number; anchor: 
 
 /** The gift list tab's card: "set to", and what the list and the recipes make of the gift. */
 export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement }) {
-  const { s, t } = useEditor();
+  const { s, t, zh } = useEditor();
   const { list, readOnly, apply, goto, tip } = useGiftEdit();
-  const zh = s.language === "zh_tw";
   const g = GIFT_BY_ID.get(id)!, fusion = FUSION_BY_ID.get(id);
-  const name = (x: number) => giftName(GIFT_BY_ID.get(x)!, zh);
+  const name = (x: number) => localName(GIFT_BY_ID.get(x)!, zh);
   const { shown, locked } = look(list, id);
   const by = lockers(list, id), byNames = by.map(name).join(t("gl.sep"));
   const refused = (v: GiftState) => "locked" in plan(list, id, v); // as the tab's apply refuses it

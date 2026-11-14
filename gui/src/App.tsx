@@ -1,17 +1,19 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
-import { TEXT, fill, type Key } from "./i18n";
-import { LUX_MODES, newSettings, parseSettings, rebase, runEnum, type Luxcavation, type LuxMode, type Settings } from "./model";
-import { DeploymentTab, StarlightTab, ThemePackTab } from "./Plans";
+import { DailyTab } from "./Daily";
+import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
+import { TEXT, fill, type Key } from "./i18n";
+import { newSettings, parseSettings, rebase, type Settings } from "./model";
+import { EventsTab, TrialsTab } from "./Overrides";
+import { RunTab } from "./Run";
+import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
-import {
-  Decimal, EditorContext, Field, Input, Mark, Num, Select, ToggleNum, focusPath, nextTab, isPickList, makeCtx, translate, useEditor,
-  useUndoRow, withBreaks,
-  type Picked,
-} from "./ui";
+import { ThemePackTab } from "./ThemePacks";
+import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
 import { sayProblem, validate, type Problem } from "./validate";
+import { LeavePrompt, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
@@ -31,8 +33,6 @@ type TabId = (typeof TABS)[number][0];
  * the tabs that start a group. */
 const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
-/** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
-type Leave = "close" | "reload";
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** The element id of the problem at this place in the problems block. */
 const problemId = (i: number) => `problem-${i}`;
@@ -389,243 +389,5 @@ export default function App() {
       </main>
       {leavePrompt}
     </EditorContext.Provider>
-  );
-}
-
-/** The window's own buttons at the title bar's right end. Close is a close request, as Alt+F4 is: with unsaved changes the
- * prompt asks first. A call the window refuses (no permission) says why in the save state, as a failed close does. */
-function WindowButtons({ t, maximized, onError }: { t: (k: Key) => string; maximized: boolean; onError: (e: unknown) => void }) {
-  const button = (name: string, run: () => Promise<void>, glyph: ReactNode, className?: string) => (
-    <button type="button" className={className} aria-label={name} title={name} onClick={() => { run().catch(onError); }}>
-      <svg viewBox="0 0 10 10" aria-hidden="true">{glyph}</svg>
-    </button>
-  );
-  return (
-    <div className="winctl">
-      {button(t("win.minimize"), api.minimizeWindow, <path d="M0 5.5h10" />)}
-      {button(t(maximized ? "win.restore" : "win.maximize"), api.toggleMaximize, maximized
-        ? <path d="M2.5 2.5V.5h7v7h-2M.5 2.5h7v7h-7z" />
-        : <rect x="0.5" y="0.5" width="9" height="9" />)}
-      {button(t("win.close"), api.requestClose, <path d="M0 0l10 10M10 0L0 10" />, "close")}
-    </div>
-  );
-}
-
-/** Asked when the window closes, or the page reloads (F5, Ctrl+R), with unsaved changes: save and go on, go on without saving,
- * or stay (Esc). The focus starts on the choice that keeps the edits. */
-function LeavePrompt({ kind, onSave, onDiscard, onCancel }: {
-  kind: Leave; onSave: () => void; onDiscard: () => void; onCancel: () => void;
-}) {
-  const { t } = useEditor();
-  const cancel = useRef(onCancel);
-  cancel.current = onCancel;
-  useEffect(() => {
-    // from the document: a click on the dimmed page behind takes the focus out of the prompt
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") cancel.current(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-  return (
-    <div className="ask-back">
-      <div className="ask" role="alertdialog" aria-modal="true" aria-labelledby="close-ask">
-        <p id="close-ask">{t(`${kind}Ask`)}</p>
-        <div className="ask-buttons">
-          <button type="button" className="primary" autoFocus onClick={onSave}>{t(`${kind}Save`)}</button>
-          <button type="button" className="danger" onClick={onDiscard}>{t(`${kind}Discard`)}</button>
-          <button type="button" onClick={onCancel}>{t("cancel")}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RunTab() {
-  const { s, update, t, tv } = useEditor();
-  const run = s.run;
-  const pastFive = run.target_floor > 5;
-  const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
-  const pick = (k: "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries" | "theme_pack_refresh", note?: string) => (
-    <Field label={t(`run.${k}`)} path={`run/${k}`} note={note}>
-      <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
-    </Field>
-  );
-  // Four groups by what they decide: the run itself, the weekly bonuses, what happens when something fails, what the bot does
-  // on its own.
-  return (
-    <div className="groups">
-      <fieldset>
-        <legend>{t("run.group_run")}</legend>
-        <div className="grid">
-          {pick("difficulty")}
-          <Field label={t("run.target_floor")} path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
-            <Select value={String(run.target_floor)} options={runEnum("target_floor").map(String)} label={(v) => tv("target_floor", v)} onChange={(v) => set({ target_floor: Number(v) })} />
-            {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
-            {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
-          </Field>
-          <ToggleNum label={t("run.runs")} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
-            onChange={(v) => set({ runs: v })} />
-          {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>{t("run.group_weekly")}</legend>
-        <div className="grid">
-          {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
-          {pick("weekly_bonus_amount")}
-          <Mark as="label" className="check wide" path="run/stop_when_weekly_bonus_out">
-            <Input type="checkbox" checked={run.stop_when_weekly_bonus_out} onChange={(e) => set({ stop_when_weekly_bonus_out: e.target.checked })} />
-            {t("run.stop_when_weekly_bonus_out")}
-          </Mark>
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>{t("run.group_failure")}</legend>
-        <div className="grid">
-          {pick("starlight_unaffordable")}
-          <Field label={t("run.wipe_retries")} path="run/wipe_retries"><Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} /></Field>
-          {pick("after_retries")}
-          <Field label={t("run.webhook_url")} path="run/webhook_url">
-            <Input type="url" value={run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
-          </Field>
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>{t("run.group_auto")}</legend>
-        <div className="options">
-          {(["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const).map((k) => (
-            <Mark as="label" key={k} className="check" path={`run/${k}`}>
-              <Input type="checkbox" checked={run[k]} onChange={(e) => set({ [k]: e.target.checked })} />
-              {t(`run.${k}`)}
-            </Mark>
-          ))}
-        </div>
-      </fieldset>
-    </div>
-  );
-}
-
-/** The daily tasks' options (#362); the client's task list picks and orders the tasks. */
-function DailyTab() {
-  const { t } = useEditor();
-  return (
-    <div className="stack">
-      <p className="muted">{withBreaks(t("daily.note"))}</p>
-      <LuxFields task="exp" />
-      <LuxFields task="thread" />
-      <ChargeFields />
-    </div>
-  );
-}
-
-function ChargeFields() {
-  const { s, update, t } = useEditor();
-  return (
-    <fieldset>
-      <legend>{t("charge.title")}</legend>
-      <p className="caution">{withBreaks(t("charge.note"))}</p>
-      <div className="grid">
-        <Field label={t("charge.count")} path="charge_enkephalin/count">
-          <Num value={s.charge_enkephalin.count} min={0} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
-        </Field>
-      </div>
-    </fieldset>
-  );
-}
-
-function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
-  const { s, update, t, tv } = useEditor();
-  const opts = s.luxcavation[task];
-  const set = (patch: Partial<Luxcavation>) => update((d) => { Object.assign(d.luxcavation[task], patch); });
-  const path = `luxcavation/${task}`;
-  return (
-    <fieldset>
-      <legend>{t(`lux.${task}`)}</legend>
-      <p className="muted">{withBreaks(t(`lux.${task}_note`))}</p>
-      <div className="grid">
-        <Field label={t("lux.mode")} path={`${path}/mode`}>
-          <Select value={opts.mode} options={LUX_MODES} label={(v) => tv("lux_mode", v)} onChange={(v) => set({ mode: v as LuxMode })} />
-        </Field>
-        <Field label={t("lux.count")} path={`${path}/count`} note={opts.mode === "daily" ? t("lux.count_unused") : undefined}>
-          <Num value={opts.count} min={1} disabled={opts.mode === "daily"} onChange={(v) => set({ count: v })} />
-        </Field>
-        <Field label={t("lux.team")} path={`${path}/team`} note={t("lux.team_note")}>
-          <Select value={opts.team ?? ""} options={["", ...s.teams.map((x) => x.id)]}
-            label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
-            onChange={(v) => set({ team: v || null })} />
-        </Field>
-        {/* a switch as on the other tabs: the label's text the size of theirs, the note under it (#721) */}
-        <Mark className="toggle" path={`${path}/consecutive`}>
-          <label className="check">
-            <Input type="checkbox" checked={opts.consecutive} onChange={(e) => set({ consecutive: e.target.checked })} />{t("lux.consecutive")}
-          </label>
-          <small>{withBreaks(t("lux.consecutive_note"))}</small>
-        </Mark>
-        <Field label={t("lux.retries")} path={`${path}/retries`} note={t("lux.retries_note")}>
-          <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
-        </Field>
-      </div>
-    </fieldset>
-  );
-}
-
-/** One editable table for both override lists (spec 04 sections 10 and 11). */
-function OverrideTable<R extends Record<string, string | number>>({ listKey, cols, blank }: {
-  listKey: "event_overrides" | "trial_risk_overrides";
-  cols: { key: keyof R & string; label: Key; number?: boolean }[];
-  blank: R;
-}) {
-  const { s, update, t } = useEditor();
-  const rows = s[listKey] as unknown as R[];
-  const set = (fn: (rows: R[]) => void) => update((d) => fn(d[listKey] as unknown as R[]));
-  const [undoNote, removeRow] = useUndoRow(set);
-  return (
-    <>
-      {undoNote}
-      {rows.length ? (
-        <table className="overrides">
-          <thead><tr>{cols.map((c) => <th key={c.key}>{t(c.label)}</th>)}<th /></tr></thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                {cols.map((c) => (
-                  <Mark as="td" key={c.key} path={`${listKey}/${i}/${c.key}`}>
-                    {c.number
-                      ? <Decimal value={r[c.key] as number} min={0} onChange={(v) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = v; })} />
-                      : <Input value={r[c.key] as string} onChange={(e) => set((l) => { (l[i] as Record<string, unknown>)[c.key] = e.target.value; })} />}
-                  </Mark>
-                ))}
-                <td><button type="button" className="danger" onClick={() => removeRow(rows, i, String(r[cols[0].key]))}>{t("remove")}</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : <p className="muted">{t("noRows")}</p>}
-      <button type="button" onClick={() => set((l) => { l.push({ ...blank }); })}>+ {t("add")}</button>
-    </>
-  );
-}
-
-function EventsTab() {
-  const { t } = useEditor();
-  return (
-    <div className="stack">
-      <p className="muted">{withBreaks(t("event.note"))}</p>
-      <OverrideTable listKey="event_overrides" blank={{ question: "", option: "" }}
-        cols={[{ key: "question", label: "event.question" }, { key: "option", label: "event.option" }]} />
-    </div>
-  );
-}
-
-function TrialsTab() {
-  const { t } = useEditor();
-  return (
-    <div className="stack">
-      <details className="hint">
-        <summary>{t("trial.help")}</summary>
-        <p>{withBreaks(t("trial.note"))}</p>
-      </details>
-      <OverrideTable listKey="trial_risk_overrides" blank={{ trial: "", risk: 1 }}
-        cols={[{ key: "trial", label: "trial.trial" }, { key: "risk", label: "trial.risk", number: true }]} />
-    </div>
   );
 }

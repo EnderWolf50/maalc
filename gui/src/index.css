@@ -243,7 +243,7 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .problems li button:hover { color: var(--bad); }
 .problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
-/* The close prompt (App.tsx ClosePrompt), over the dimmed editor. */
+/* The close prompt (WindowControls.tsx LeavePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ask {
   background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px 0 12px 0; corner-shape: bevel; padding: 16px 18px;
@@ -322,9 +322,10 @@ details.panel { padding: 0 14px; display: flex; flex-direction: column; }
 details.panel[open] { padding-bottom: 14px; }
 details.panel > summary { cursor: pointer; padding: 10px 0; list-style: none; }
 details.panel > summary::-webkit-details-marker { display: none; }
+/* the disclosure triangle: a 6 x 10 box cut to a right-pointing triangle */
 details.panel > summary::before {
-  content: ""; width: 0; height: 0; border-left: 6px solid var(--accent-line); border-top: 5px solid transparent;
-  border-bottom: 5px solid transparent; transition: transform 0.15s ease-out; flex: none;
+  content: ""; width: 6px; height: 10px; background: var(--accent-line); clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transition: transform 0.15s ease-out; flex: none;
 }
 details.panel[open] > summary::before { transform: rotate(90deg); }
 details.panel[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }

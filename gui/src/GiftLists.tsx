@@ -4,11 +4,11 @@
 // GiftEdit (giftEdit.ts) for the list being shown, the picked state, and `apply`/`flash`.
 import { useEffect, useRef, useState } from "react";
 import "./giftlists.css";
-import { GIFT_BY_ID, giftName } from "./giftCatalog";
+import { GIFT_BY_ID } from "./giftCatalog";
 import { BuyOrderDialog } from "./BuyOrder";
 import { plan, resetToDefault, setState, GiftEditContext, STATES, type GiftEdit } from "./giftEdit";
 import { DEFAULT_LIST, queue, type GiftState } from "./gifts";
-import { fill } from "./i18n";
+import { fill, localName } from "./i18n";
 import { FUSION_CONDITIONS, GIFT_KEYWORDS, type GiftList } from "./model";
 import { HelpPopover } from "./GiftHelp";
 import { GiftListOptions } from "./GiftListOptions";
@@ -19,7 +19,7 @@ import { typingIn, useEditor, useSlashFocus } from "./ui";
 const FLASH_MS = 4200;
 
 export function GiftListsTab() {
-  const { s, update, t, tv, giftList: chosen, chooseList: setChosen } = useEditor();
+  const { s, update, t, tv, giftList: chosen, chooseList: setChosen, zh } = useEditor();
   // What is being edited is UI state, not saved (the editor keeps it): "default" (the data file's list, read-only) or the id of one of the user's lists.
   const [pick, setPick] = useState<GiftState>("want");
   const [tab, setTab] = useState(GIFT_KEYWORDS[0]);
@@ -33,7 +33,6 @@ export function GiftListsTab() {
   const readOnly = at < 0; // also when the chosen list is gone (deleted): back to the default, and the select says so
   const shownId = readOnly ? "default" : chosen;
   const list = readOnly ? DEFAULT_LIST : s.gift_lists[at];
-  const zh = s.language === "zh_tw";
 
   const flash = (text: string, warn = false) => {
     setMessage({ text, warn });
@@ -45,9 +44,9 @@ export function GiftListsTab() {
 
   const apply = (id: number, to = pick) => {
     if (!editable()) return;
-    const name = giftName(GIFT_BY_ID.get(id)!, zh), result = plan(list, id, to);
+    const name = localName(GIFT_BY_ID.get(id)!, zh), result = plan(list, id, to);
     if ("locked" in result) {
-      const by = result.locked.map((b) => giftName(GIFT_BY_ID.get(b)!, zh)).join(t("gl.sep"));
+      const by = result.locked.map((b) => localName(GIFT_BY_ID.get(b)!, zh)).join(t("gl.sep"));
       return flash(fill(t("locked" in plan(list, id, "want") ? "gl.lock_why_nowant" : "gl.lock_why"), { name, by }), true);
     }
     update((d) => setState(d.gift_lists[at], id, result.to));
@@ -83,7 +82,7 @@ export function GiftListsTab() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // the purchase order dialog, the list options and the close prompt (App.tsx) close themselves
+        // the purchase order dialog, the list options and the close prompt (WindowControls.tsx) close themselves
         if (buying || document.querySelector(".gl-opt-pop, [role=alertdialog]")) return;
         if (open) tip.hide();
         else if (help) setHelp(false);
