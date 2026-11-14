@@ -12,7 +12,8 @@
 // validator's Ajv helpers to the browser as CommonJS modules, and loading the `valid` case there fails ("func3 is not a function"). Each still starts from a fresh load, at the window size of
 // gui/src-tauri/tauri.conf.json, in the colour scheme asked for. A still named *-full is as tall as its page.
 // Writes <out>/<scheme>/<name>.png and prints one line per still. Needs Node 22 or later (global WebSocket), no packages.
-// A refactor's "looks the same": stills of the build before and of the build after, then tools/gui_compare.py on the two folders.
+// A refactor's "looks the same": stills of the build before and of the build after, each shot twice, then
+// tools/gui_compare.py --before <dir> <dir> --after <dir> <dir>.
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -217,11 +218,12 @@ async function browserUrl(profile) {
 
 async function launch() {
   const profile = mkdtempSync(join(tmpdir(), "gui-shots-"));
-  // Drawn without the GPU: its raster gave a gradient or a border a level or two apart between two runs of one build
-  // (2026-11-14), so a still compared pixel by pixel (tools/gui_compare.py) differed with nothing changed.
+  // Drawn without the GPU and with grayscale text: the GPU's raster gave a gradient or a border a level or two apart, and the
+  // whole page's text came out with or without subpixel antialiasing, between two runs of one build (2026-11-14), so a still
+  // compared pixel by pixel (tools/gui_compare.py) differed with nothing changed.
   const proc = spawn(findBrowser(), [
     "--headless=new", `--remote-debugging-port=${opt.port}`, `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
-    "--disable-extensions", "--disable-sync", "--mute-audio", "--disable-gpu", "about:blank",
+    "--disable-extensions", "--disable-sync", "--mute-audio", "--disable-gpu", "--disable-lcd-text", "--disable-font-subpixel-positioning", "about:blank",
   ], { stdio: "ignore" });
   const ws = new WebSocket(await browserUrl(profile));
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error("cannot connect to the browser")); });

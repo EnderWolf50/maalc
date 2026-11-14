@@ -1,14 +1,16 @@
 """Compare two sets of settings GUI stills (tools/gui_shots.mjs) pixel by pixel: "looks the same" for a refactor (#729).
 
-Usage: uv run python tools/gui_compare.py <before dir> <after dir> [--diff <dir>]
+Usage: uv run python tools/gui_compare.py --before <dir> [<dir> ...] --after <dir> [<dir> ...] [--diff <dir>]
 Each dir is a gui_shots.mjs `--out` folder (`<scheme>/<name>.png`, or any tree of PNGs); a still is matched by its path in
-it. Prints one line per still: `same`, `size WxH -> WxH`, `N px differ, box (x0, y0)-(x1, y1)` (the box's last pixel
-inclusive, in the still's own pixels, device pixels at --scale 2) or `only before` / `only after`; then a summary line.
-With --diff, writes `<diff>/<path>` for each still that differs: the after still dimmed, the differing pixels in magenta.
-Exits 1 when any still differs or is missing on one side, else 0.
+it. Several dirs on a side are runs of the same build: a still is `same` when one run before and one run after match pixel for
+pixel. Prints one line per still: `same`, `size WxH -> WxH`, `N px differ, box (x0, y0)-(x1, y1)` (the first runs' difference;
+the box's last pixel inclusive, in the still's own pixels, device pixels at --scale 2) or `only before` / `only after`; then a
+summary line. With --diff, writes `<diff>/<path>` for each still that differs: the after still dimmed, the differing pixels in
+magenta. Exits 1 when any still differs or is missing on one side, else 0.
 
-Shoot both sides from the built app, one build per side, at the same window size and scale: two runs of one build gave
-the same pixels on 2026-11-14 (28 stills, light and dark, Edge headless), so a difference is the change, not noise.
+Shoot each side from the built app, one build per side, at the same window size and scale, twice: gui_shots.mjs gives the same
+pixels run after run, but now and then a light still came out with all its text drawn a pixel apart (2026-11-14: 3 of about 40
+runs of the team page and run options stills, the unchanged build too), and a second run settles it.
 """
 
 import argparse
@@ -47,35 +49,38 @@ def diff_image(after: Path, mask: np.ndarray) -> Image.Image:
     return Image.fromarray(im)
 
 
-def run(before: Path, after: Path, diff: Path | None = None, out=sys.stdout) -> int:
+def run(before: list[Path], after: list[Path], diff: Path | None = None, out=sys.stdout) -> int:
     """Print the comparison; the number of stills that differ or are on one side only."""
-    a, b = stills(before), stills(after)
+    a, b = [stills(d) for d in before], [stills(d) for d in after]
+    names = sorted({n for runs in (a, b) for r in runs for n in r})
     bad = 0
-    for name in sorted(a.keys() | b.keys()):
-        if name not in b or name not in a:
-            print(f"{name}: only {'before' if name in a else 'after'}", file=out)
+    for name in names:
+        olds, news = [r[name] for r in a if name in r], [r[name] for r in b if name in r]
+        if not olds or not news:
+            print(f"{name}: only {'before' if olds else 'after'}", file=out)
             bad += 1
             continue
-        what, mask = compare(a[name], b[name])
-        print(f"{name}: {what}", file=out)
-        if what == "same":
+        if any(compare(o, n)[0] == "same" for o in olds for n in news):
+            print(f"{name}: same", file=out)
             continue
+        what, mask = compare(olds[0], news[0])
+        print(f"{name}: {what}", file=out)
         bad += 1
         if diff is not None and mask is not None:
             dest = diff / name
             dest.parent.mkdir(parents=True, exist_ok=True)
-            diff_image(b[name], mask).save(dest)
-    print(f"{len(a.keys() | b.keys()) - bad} same, {bad} differ", file=out)
+            diff_image(news[0], mask).save(dest)
+    print(f"{len(names) - bad} same, {bad} differ", file=out)
     return bad
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("before", type=Path)
-    ap.add_argument("after", type=Path)
+    ap.add_argument("--before", type=Path, nargs="+", required=True, help="the old build's stills, one dir per run")
+    ap.add_argument("--after", type=Path, nargs="+", required=True, help="the new build's stills, one dir per run")
     ap.add_argument("--diff", type=Path, help="write the differing stills here, the changed pixels in magenta")
     args = ap.parse_args(argv)
-    for d in (args.before, args.after):
+    for d in args.before + args.after:
         if not d.is_dir():
             raise SystemExit(f"{d}: not a folder")
     return 1 if run(args.before, args.after, args.diff) else 0
