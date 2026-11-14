@@ -289,7 +289,7 @@ p.muted { margin: 0; max-width: 56em; }
  * with the top of the scrolling page on the page's own ground, so what scrolls under it is hidden. It takes main's top padding
  * into its own (the same 16 px, 14 in a narrow window), so its row lines up with the team list's first line. A section it
  * jumps to stops below it (scroll-margin-top): how far the index reaches below main's top padding (--sections-shown, one row
- * or two, see .grace-side) plus 24 px, the padding's 16 and 8 to spare (10 below 1000 px wide, where the padding is 14), so
+ * or two, see .grace-side) plus 24 px, the padding's 16 and 8 to spare (10 at 1000 px wide and less, where it is 14), so
  * the section's heading shows in full under either (#746). */
 nav.sections {
   position: sticky; top: -16px; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;

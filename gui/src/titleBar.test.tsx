@@ -122,9 +122,14 @@ describe("a title bar with less room than its parts ask for (#746)", () => {
   // inner room too, 776 with the language's label hidden; with nothing unsaved (no Discard changes) 763 as drawn, the state
   // reading "Same as the file" ("Saved" is shorter).
   let room = 800;
-  const UNSAVED = [906, 862, 838, 776, 776];
-  const asks = (bar: HTMLElement) =>
-    [...bar.querySelectorAll("button")].some((b) => b.textContent === en.revert) ? UNSAVED[stepsOf(bar).length] : 763;
+  const UNSAVED = { "": 906, spacing: 862, padding: 838, label: 776, wrap: 776 };
+  const CLEAN = 763;
+  const asks = (bar: HTMLElement) => {
+    if (![...bar.querySelectorAll("button")].some((b) => b.textContent === en.revert)) return CLEAN;
+    const last = stepsOf(bar).slice(-1)[0] ?? "";
+    if (!(last in UNSAVED)) throw new Error(`no width measured for the step ${last}`); // a new step needs its measurement
+    return UNSAVED[last as keyof typeof UNSAVED];
+  };
   const stepsOf = (bar: HTMLElement) => (bar.dataset.fit ?? "").split(" ").filter(Boolean);
   const bar = () => document.querySelector("header")!;
   beforeEach(() => {
