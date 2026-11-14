@@ -56,10 +56,11 @@ export class Cdp {
     this.listeners.push({ method, fn });
   }
 
-  /** The expression's value (a Promise awaited); a page exception throws with its description. */
-  async evaluate(expression, sessionId) {
-    const r = await this.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, sessionId);
+  /** The expression's value (a Promise awaited), or with `byValue` false its RemoteObject (an element's objectId); a page
+   * exception throws with its description. */
+  async evaluate(expression, sessionId, byValue = true) {
+    const r = await this.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: byValue }, sessionId);
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
-    return r.result.value;
+    return byValue ? r.result.value : r.result;
   }
 }

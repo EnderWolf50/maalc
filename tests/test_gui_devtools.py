@@ -5,6 +5,7 @@ The page side (press, drag, scheme, stills) is proven on the real window: the to
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -57,7 +58,10 @@ def test_an_unknown_command_exits_2_and_names_it():
     (["press", "1,2", "--port", "9333", "--keep", "soon"], "--keep"),
     (["press", "1,2", "--port", "9333", "--viewport", "800"], "--viewport"),
     (["press", "1,2", "--port", "9333", "--colour", "red"], "--colour"),  # an option no command takes
+    (["still", "x.png", "--element", "10,20", "--port", "9333"], "element"),
+    (["still", "x.png", "--mask", "10,20", "--port", "9333"], "element"),
     (["open"], "--root"),
+    (["open", "--root", "r", "--port", "70000"], "--port"),
     (["close"], "--root"),
     (["drag", ".a", "--port", "9333", "--keep", "forever"], "seconds"),  # a drag in the air ends by itself
 ])
@@ -258,6 +262,22 @@ def test_close_on_a_missing_root_has_nothing_to_stop(tmp_path):
     r = run("close", "--root", str(tmp_path / "never"))
     assert r.returncode == 0
     assert json.loads(r.stdout.splitlines()[-1]) == {"stopped": []}
+
+
+def test_open_on_a_port_in_use_leaves_the_root_as_it_was(tmp_path):
+    root = tmp_path / "gui-root"
+    (root / "config").mkdir(parents=True)
+    (root / gp.MARKER).write_text("x")
+    (root / "config" / "settings.json").write_text("edited")
+    exe = tmp_path / "built.exe"
+    exe.write_bytes(b"MZ")
+    with socket.socket() as busy:
+        busy.bind(("127.0.0.1", 0))
+        busy.listen()
+        r = run("open", "--root", str(root), "--exe", str(exe), "--port", str(busy.getsockname()[1]))
+    assert r.returncode == 1
+    assert "in use" in r.stderr
+    assert (root / "config" / "settings.json").read_text() == "edited"
 
 
 def test_open_on_a_folder_the_probe_did_not_make_starts_nothing(tmp_path):

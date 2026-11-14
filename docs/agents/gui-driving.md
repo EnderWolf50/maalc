@@ -6,8 +6,8 @@ What `cua-driver` needs to operate the Tauri settings app (`gui/`) on Windows. E
 
 Two ways act on the window, and they prove different things:
 
-- **cua-driver, background delivery**: what a user's click, typing, select or scroll does. Its input goes to the window through Windows, as a user's would, and leaves the user's cursor and focused window alone. Use it for every control a user clicks.
-- **`tools/gui_devtools.mjs`**, over the page's DevTools port: what cua's background delivery cannot do. A press held for a time, a drag-and-drop, keys with modifiers (Shift+Tab), the light or dark scheme, the page at another size (800 × 480), an element's box, a still of the page with the header's path blacked out, the accessibility node, the console. Its input enters the page (Chromium's own input path), not the window: it never touches the user's cursor, and it does not prove what the window itself does (its frame, the title bar's drag region, a system key such as Alt+F4 closing it).
+- **cua-driver, background delivery**: what a user's click, typing, select or scroll does. Its input goes to the window through Windows, as a user's would, and leaves the user's cursor and focused window alone. Use it for every control a user clicks. [cua docs WINDOWS.md `delivery_mode`]
+- **`tools/gui_devtools.mjs`**, over the page's DevTools port: what cua's background delivery cannot do. A press held for a time, a drag-and-drop, keys with modifiers (Shift+Tab), the light or dark scheme, the page at another size (800 × 480), an element's box, a still of the page with the header's path blacked out, the accessibility node, the console. Its input enters the page (Chromium's own input path), not the window: it never touches the user's cursor, and it does not prove what the window itself does (its frame, the title bar's drag region, a system key): Alt+F4 sent this way reached the page and left the window open. A still of the window with its frame is cua's `get_window_state`. [devtools run]
 
 A cua click on a tab (the pixels come from the latest `get_window_state` screenshot):
 
@@ -16,7 +16,7 @@ A cua click on a tab (the pixels come from the latest `get_window_state` screens
 The same window over DevTools: `open` holds it in the background and prints `{"pid", "hwnd", "port", ...}`, then each command acts on the page at that port (`--help` lists them all):
 
     node tools/gui_devtools.mjs open --root <main checkout>/.local/scratch/<task>/gui-root     (a background command)
-    node tools/gui_devtools.mjs drag "js:[...document.querySelectorAll('aside li')][0]" "js:[...document.querySelectorAll('aside li')][1]" --port <port> --then "document.querySelector('header').innerText"
+    node tools/gui_devtools.mjs drag "js:[...document.querySelectorAll('aside li')][0]" "js:[...document.querySelectorAll('aside li')][1]" --port <port> --then "[...document.querySelectorAll('aside li .item')].map((i) => i.textContent)"
 
 What the run of `tools/gui_devtools.mjs` showed:
 

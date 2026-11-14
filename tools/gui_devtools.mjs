@@ -21,11 +21,11 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
       {"pid", "hwnd", "port", "root", "holder", "viewport"}. hwnd is cua's window_id. Then it holds, in the
       background: stopping it (Ctrl-C, a background task's stop, taskkill) ends the app with it (libuv puts a child
       that is not detached in a job that is killed with the parent: src/win/process.c) and its WebView2 ends with the
-      app (seen on 2026-11-14); the app closing ends it. Whatever still
-      runs from the root (an app tools/gui_probe.py started there) is stopped by the next open or close on that root.
+      app (seen on 2026-11-14); the app closing ends it.
   close --root <dir>
-      Stops what runs from that root: its maalc-gui.exe and the WebView2 processes on its data folder. A folder that
-      exists without gui_probe's marker is refused, so the real install/ is never touched.
+      Stops what runs from that root: its maalc-gui.exe and the WebView2 processes on its data folder, whoever started
+      them (an app tools/gui_probe.py left there too). open does the same first. A folder that exists without
+      gui_probe's marker is refused, so the real install/ is never touched.
 
   Page commands: each opens a DevTools session on the page at --port N, does its steps and ends.
   eval <expression> | --file F       prints the expression's value as JSON (a Promise is awaited)
@@ -33,7 +33,8 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
                                      width, height (--all: every match)
   still <out.png> [--element T] [--pad N] [--mask T]...
                                      a PNG of the page, or of element T with N px around it; each --mask element is
-                                     drawn black (the header's "header .path" shows a local path)
+                                     drawn black (the header's "header .path" shows a local path). The page only: the
+                                     window with its frame is cua's get_window_state
   scheme <light|dark>                emulates prefers-color-scheme, kept until stopped (or --keep S)
   press <target> [--hold MS] [--move DX,DY] [--steps N] [--button left|right|middle]
                                      presses the mouse at the target, holds it MS (100; 600 with --move), moving by DX,DY
@@ -85,9 +86,10 @@ const COMMANDS = {
   eval: { page: true, options: { file: str } },
   box: { page: true, options: { all: flag } },
   still: { page: true, options: { element: str, pad: str, mask: { type: "string", multiple: true } } },
-  scheme: { page: true, keep: null },
+  // holds: the command's effect is a state its session holds, so it is kept until stopped unless --keep says otherwise
+  scheme: { page: true, holds: true },
   press: { page: true, options: { hold: str, move: str, steps: str, button: str } },
-  hover: { page: true, keep: null, options: { force: flag } },
+  hover: { page: true, holds: true, options: { force: flag } },
   key: { page: true, options: { ime: flag, delay: str } },
   drag: { page: true, options: { steps: str, cancel: flag } },
   a11y: { page: true },
@@ -101,10 +103,21 @@ const number = (text, name, { min = 0, integer = false } = {}) => {
   }
   return n;
 };
+const portNumber = (text) => {
+  const port = number(text, "--port", { min: 1, integer: true });
+  if (port > 65535) usage(`--port takes a port number, not ${port}`);
+  return port;
+};
+const POINT = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/; // "x,y" in CSS px
 const pair = (text, name) => {
-  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(text ?? "");
+  const m = POINT.exec(text ?? "");
   if (!m) usage(`${name} takes DX,DY, as 0,40`);
   return { x: Number(m[1]), y: Number(m[2]) };
+};
+const element = (text, name) => {
+  const t = parseTarget(text);
+  if (t.kind === "point") usage(`${name} takes an element, not a point`);
+  return t;
 };
 
 /** The command line as {command, args, options, port, scheme, viewport, keepMs (null: until stopped), then}; throws a
@@ -124,13 +137,12 @@ export function parseCommand(argv) {
   const out = { command, args, options };
   if (!spec.page) {
     if (!options.root) usage(`${command} needs --root <dir>`);
-    if (options.port !== undefined) out.port = number(options.port, "--port", { min: 1, integer: true });
+    if (options.port !== undefined) out.port = portNumber(options.port);
     if (options.timeout !== undefined) number(options.timeout, "--timeout");
     return out;
   }
   if (options.port === undefined) usage(`${command} needs --port N, the port open printed`);
-  out.port = number(options.port, "--port", { min: 1, integer: true });
-  if (out.port > 65535) usage(`--port takes a port number, not ${out.port}`);
+  out.port = portNumber(options.port);
   if (options.scheme !== undefined && !["light", "dark"].includes(options.scheme)) usage("--scheme takes light or dark");
   out.scheme = options.scheme ?? null;
   if (options.viewport !== undefined) {
@@ -151,11 +163,13 @@ export function parseCommand(argv) {
       if (!args.length && !options.file) usage("eval needs an expression or --file F");
       break;
     case "box":
-      if (targets(1, Infinity, "a target").some((t) => t.kind === "point")) usage("box measures elements, not points");
+      targets(1, Infinity, "a target");
+      for (const a of args) element(a, "box");
       break;
     case "still":
       if (args.length !== 1 || !/\.png$/i.test(args[0])) usage("still needs the out .png path");
-      if (options.element) parseTarget(options.element);
+      if (options.element) element(options.element, "--element");
+      for (const m of options.mask ?? []) element(m, "--mask");
       if (options.pad !== undefined) number(options.pad, "--pad");
       break;
     case "scheme":
@@ -170,10 +184,12 @@ export function parseCommand(argv) {
       if (options.button !== undefined && !["left", "right", "middle"].includes(options.button)) usage("--button takes left, right or middle");
       break;
     case "hover":
-      if (targets(1, 1, "a target")[0].kind === "point" && options.force) usage("hover --force takes an element, not a point");
+      targets(1, 1, "a target");
+      if (options.force) element(args[0], "hover --force");
       break;
     case "a11y":
-      if (targets(1, 1, "a target")[0].kind === "point") usage("a11y takes an element, not a point");
+      targets(1, 1, "a target");
+      element(args[0], "a11y");
       break;
     case "key":
       if (!args.length) usage("key needs a key, as Shift+Tab");
@@ -190,7 +206,7 @@ export function parseCommand(argv) {
       if (options.seconds !== undefined) number(options.seconds, "--seconds");
       break;
   }
-  if (options.keep === undefined) out.keepMs = inAir ? 10000 : spec.keep === null ? null : 0;
+  if (options.keep === undefined) out.keepMs = inAir ? 10000 : spec.holds ? null : 0;
   else if (options.keep === "forever") {
     if (inAir) usage("a drag in the air is kept for a number of seconds (--keep S), then cancelled; not forever");
     out.keepMs = null;
@@ -203,11 +219,13 @@ export function parseCommand(argv) {
 
 /** A target: {kind: "point", x, y} for "x,y", {kind: "js", expr} for "js:<expression>", else {kind: "css", selector}. */
 export function parseTarget(text) {
-  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(text);
+  const m = POINT.exec(text);
   if (m) return { kind: "point", x: Number(m[1]), y: Number(m[2]) };
   if (text.startsWith("js:")) return { kind: "js", expr: text.slice(3) };
   return { kind: "css", selector: text };
 }
+
+const targetText = (t) => (t.kind === "css" ? t.selector : t.kind === "js" ? `js:${t.expr}` : `${t.x},${t.y}`);
 
 // --- keys ---------------------------------------------------------------------------------------------------------
 
@@ -340,19 +358,21 @@ function listProcesses() {
 
 const taskkill = (pid) => spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)], { stdio: "ignore" });
 
-/** Stops what runs from a probe root (its app with its process tree, then any WebView2 left on its data folder); returns the
- * pids found. */
+/** Stops what runs from a probe root (its app with its process tree, then any WebView2 left on its data folder) and waits
+ * until none is left, so the root's files are free; returns the pids found. */
 async function stopStarted(root) {
   if (rootState(root) !== "probe") return [];
-  const stopped = [];
-  for (let i = 0; i < 10; i++) {
-    const left = startedFrom(listProcesses(), root).filter((pid) => !stopped.includes(pid));
-    if (!left.length) break;
-    for (const pid of left) taskkill(pid);
-    stopped.push(...left);
+  const found = new Set();
+  for (let i = 0; i < 20; i++) {
+    const left = startedFrom(listProcesses(), root);
+    if (!left.length) return [...found];
+    for (const pid of left) {
+      found.add(pid);
+      taskkill(pid);
+    }
     await sleep(300);
   }
-  return stopped;
+  throw new Error(`could not stop what runs from ${root}: ${startedFrom(listProcesses(), root).join(", ")}`);
 }
 
 const foreign = (root) => new Error(`${root} exists and has no ${MARKER} marker: tools/gui_probe.py did not make it, so nothing there is started, stopped or deleted`);
@@ -413,12 +433,13 @@ async function open(c) {
   const timeout = (c.options.timeout === undefined ? 30 : Number(c.options.timeout)) * 1000;
   const left = await stopStarted(root);
   if (left.length) console.error(`gui_devtools: stopped what an earlier run left on ${root}: ${left.join(", ")}`);
+  // The port before the root: laying the root out again deletes what the last run left in it (an edited settings.json).
+  const port = c.port ?? await freePort();
+  if (!(await portFree(port))) throw new Error(`port ${port} is in use: pass another --port`);
   const settings = c.options.settings ? ["--settings", resolve(c.options.settings)] : [];
   const prep = spawnSync("uv", ["run", "python", PROBE, "--exe", exe, "--root", root, ...settings, "--prepare-only"], { cwd: REPO, encoding: "utf8" });
   if (prep.status !== 0) throw new Error(`gui_probe.py --prepare-only failed: ${(prep.stderr || prep.stdout || prep.error?.message || "").trim()}`);
   const copied = JSON.parse(prep.stdout.trim().split("\n").pop()).exe;
-  const port = c.port ?? await freePort();
-  if (!(await portFree(port))) throw new Error(`port ${port} is in use: pass another --port`);
 
   // The variables WebView2 reads (Microsoft's WebView2 docs, CreateCoreWebView2EnvironmentWithOptions): the port, and a data
   // folder of its own, since a WebView2 that finds another app's browser on its data folder joins it and drops the port.
@@ -437,12 +458,16 @@ async function open(c) {
       if (!page) await sleep(200);
     }
     const cdp = await Cdp.connect(page.webSocketDebuggerUrl);
-    // Asked again until the tabs show: the page may still be navigating to the app, which ends an evaluation under way.
+    // Asked again until the page holds a <main>, which App.tsx draws once the settings are read (before, only the title
+    // bar): the page may still be navigating to the app, which ends an evaluation under way.
     let viewport = null;
     while (!viewport) {
       if (exited !== null) throw new Error(`the app exited (${exited}) before its page rendered`);
-      viewport = await cdp.evaluate(`document.querySelector("[role=tablist]") ? { width: innerWidth, height: innerHeight, dpr: devicePixelRatio } : null`)
-        .catch(() => null);
+      viewport = await cdp.evaluate(`(() => { const main = document.querySelector("main");
+        if (!main) return null;
+        if (main.classList.contains("load-error")) return { loadError: main.innerText.slice(0, 300) };
+        return { width: innerWidth, height: innerHeight, dpr: devicePixelRatio }; })()`).catch(() => null);
+      if (viewport?.loadError) throw new Error(`the app could not read its settings: ${viewport.loadError}`);
       if (viewport) break;
       if (Date.now() > end) {
         const text = await cdp.evaluate(`document.body?.innerText.slice(0, 300) || "(empty page)"`).catch((e) => e.message);
@@ -485,8 +510,10 @@ function elementCode(t, all = false) {
 }
 
 const HELPERS = `const round = (v) => Math.round(v * 100) / 100;
+  // an element by tag, id, classes and the start of its label or text; not the page's (the header shows a local path)
   const describe = (el) => { if (!el) return null;
-    const text = (el.getAttribute("aria-label") || el.textContent || "").trim().replace(/\\s+/g, " ").slice(0, 24);
+    const whole = el === document.body || el === document.documentElement;
+    const text = whole ? "" : (el.getAttribute("aria-label") || el.textContent || "").trim().replace(/\\s+/g, " ").slice(0, 24);
     return el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + [...el.classList].map((c) => "." + c).join("") + (text ? " " + JSON.stringify(text) : ""); };
   const box = (el) => { const r = el.getBoundingClientRect();
     return { top: round(r.top), bottom: round(r.bottom), left: round(r.left), right: round(r.right), width: round(r.width), height: round(r.height) }; };`;
@@ -505,18 +532,17 @@ async function pointOf(cdp, t) {
     const hit = document.elementFromPoint(x, y);
     return { x: round(x), y: round(y), hit: describe(hit), covered: !(hit && el.contains(hit)) };
   })()`);
-  if (!at) throw new Error(`nothing matches ${t.kind === "css" ? t.selector : "js:" + t.expr}`);
+  if (!at) throw new Error(`nothing matches ${targetText(t)}`);
   return at;
 }
 
-/** The DOM node id of an element target (DOM enabled). */
-async function nodeOf(cdp, t) {
+/** The objectId of an element target, with DOM enabled for DOM.requestNode and DOM.describeNode. */
+async function objectOf(cdp, t) {
   await cdp.send("DOM.enable");
   await cdp.send("DOM.getDocument", { depth: 0 });
-  const r = await cdp.send("Runtime.evaluate", { expression: elementCode(t), returnByValue: false });
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
-  if (!r.result.objectId || r.result.subtype !== "node") throw new Error(`nothing matches ${t.kind === "css" ? t.selector : "js:" + t.expr}`);
-  return r.result.objectId;
+  const found = await cdp.evaluate(elementCode(t), undefined, false);
+  if (!found.objectId || found.subtype !== "node") throw new Error(`nothing matches ${targetText(t)}`);
+  return found.objectId;
 }
 
 const frames = (cdp) => cdp.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))");
@@ -607,7 +633,7 @@ const STEPS = {
   async hover(cdp, c, undo) {
     const t = parseTarget(c.args[0]);
     if (c.options.force) {
-      const objectId = await nodeOf(cdp, t);
+      const objectId = await objectOf(cdp, t);
       const { nodeId } = await cdp.send("DOM.requestNode", { objectId });
       await cdp.send("CSS.enable");
       await cdp.send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
@@ -673,7 +699,7 @@ const STEPS = {
   },
 
   async a11y(cdp, c) {
-    const objectId = await nodeOf(cdp, parseTarget(c.args[0]));
+    const objectId = await objectOf(cdp, parseTarget(c.args[0]));
     const { node } = await cdp.send("DOM.describeNode", { objectId });
     const { nodes } = await cdp.send("Accessibility.getPartialAXTree", { backendNodeId: node.backendNodeId, fetchRelatives: false });
     const n = nodes.find((x) => x.backendDOMNodeId === node.backendNodeId) ?? nodes[0];
