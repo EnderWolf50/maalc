@@ -109,6 +109,16 @@ describe("a problem shows while editing, before any save", () => {
     expect(file.saved).toEqual([]);
   });
 
+  test.each([
+    ["zh_tw", "有錯誤，請修正標紅的欄位："],
+    ["en_us", "There are errors. Fix the fields marked in red:"],
+  ] as const)("the block's heading in %s says there are errors, not that a save failed: none was tried (#734)", async (language, heading) => {
+    const s = { ...settings(), language };
+    s.teams[1].game_team = 1;
+    await openOn(s, TEXT[language]["tab.teams"]);
+    expect(within(screen.getByRole("alert")).getByText(heading, { selector: "p" })).toBeInTheDocument();
+  });
+
   test("a choice made wrong, at once; put right, every mark goes at once", async () => {
     const s = settings();
     s.run.target_floor = 10;

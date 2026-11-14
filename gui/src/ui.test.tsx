@@ -1,9 +1,21 @@
 // The shared controls of ui.tsx. ReorderList: a list that selects (teams, plans) is reached and picked from the keyboard too.
+// Choice and Select: every dropdown draws the same chevron.
 import { screen } from "@testing-library/react";
 import { useState } from "react";
 import { expect, test } from "vitest";
-import { renderEditor } from "./testing";
+import giftListsCss from "./giftlists.css?raw";
+import indexCss from "./index.css?raw";
+import { cssRules, renderEditor } from "./testing";
 import { ReorderList } from "./ui";
+
+test("no rule but the base one gives a select the background shorthand, which would clear its drawn chevron (#734)", () => {
+  const base = 'select, input:not([type="checkbox"])'; // the chevron rule follows it at the same specificity
+  const reachesSelect = (selector: string) => selector.split(",").some((s) => /(^|[\s>+~])select\b/.test(s.trim()));
+  const clearing = [...cssRules(indexCss), ...cssRules(giftListsCss)]
+    .filter((r) => r.selector !== base && reachesSelect(r.selector) && /(^|[;\s])background\s*:/.test(r.body))
+    .map((r) => r.selector);
+  expect(clearing).toEqual([]);
+});
 
 function Picker({ onPick }: { onPick?: (name: string) => void }) {
   const [items, setItems] = useState(["Ta", "Tb", "Tc"]);

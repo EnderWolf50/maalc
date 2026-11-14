@@ -138,6 +138,15 @@ button.icon:hover:not(:disabled) { color: var(--accent-ink); background: none; b
 select, input:not([type="checkbox"]) {
   border: 1px solid var(--line-2); padding: 4px 8px; background: var(--field); min-width: 0; border-radius: 2px;
 }
+/* Every dropdown's chevron is drawn (#718, #734): two strokes in the text's colour, 16 px in from the right edge, the room
+ * 「＋ 加入罪人」 got first; the native one keeps its own inset of a few pixels whatever the padding. */
+select {
+  appearance: none; cursor: pointer; padding-right: 40px;
+  background-repeat: no-repeat; background-size: 5px 5px; /* 10 x 5, the native chevron's size */
+  background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
+    linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
+  background-position: right 20px center, right 15px center; /* measured: 16 px from the edge to the ink */
+}
 input[type="number"], input.decimal { width: 7em; font-variant-numeric: tabular-nums; }
 input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: none; }
 input:disabled, select:disabled { opacity: 0.45; cursor: default; }
@@ -566,15 +575,8 @@ details.skill-panel > summary + * { margin-top: 0; }
 details.skill-panel > p { margin-bottom: 0; }
 /* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
-/* 「＋ 加入罪人」(#718): its chevron is drawn, two strokes in the text's colour, as far in from the right edge as the text is from
- * the left; the native one keeps its own inset of a few pixels whatever the padding. */
-.skill-add {
-  align-self: flex-start; appearance: none; cursor: pointer; padding: 4px 40px 4px 12px;
-  background-color: var(--field); background-repeat: no-repeat; background-size: 5px 5px; /* 10 x 5, the native chevron's size */
-  background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
-    linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
-  background-position: right 20px center, right 15px center; /* measured: 16 px from each edge to the ink, like the text's */
-}
+/* A select straight in a panel's column (「＋ 加入罪人」) keeps its own width, as one in a line does */
+details.panel > select { align-self: flex-start; }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
 ol.skill-sinners > li {
@@ -601,13 +603,14 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-spin button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
 .skill-spin button:focus-visible { outline-offset: -2px; }
 .skill-spin .n { width: 22px; flex: none; padding: 5px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-.skill-pillcell { width: 11em; flex: none; }
+.skill-pillcell { width: 10.5em; flex: none; } /* the widest pill, 「S1→S2 ×4、S1→S3 ×3」, is 140 px */
 /* A status tag, not a button: square, no border of its own. */
 .skill-pill { display: inline-block; padding: 1px 8px; font-size: 12.5px; white-space: nowrap; border-radius: 3px; corner-shape: bevel; }
 .skill-pill.off { color: var(--muted); }
 .skill-pill.on { background: var(--accent-soft); color: var(--accent-ink); font: 700 14px/1.4 var(--font-display); letter-spacing: 0.02em; }
 .skill-pill.err { background: var(--bad-soft); color: var(--bad); white-space: normal; font-weight: 600; }
-.skill-first { width: 8.5em; flex: none; }
+/* 「先換 S1→S3」 (74 px) beside the drawn chevron's 40 px (#734); the pill cell gave up the 7 px, so DON QUIXOTE keeps its room */
+.skill-first { width: 9em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
 
 /* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, a gift's icon with its

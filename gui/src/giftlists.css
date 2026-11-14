@@ -10,7 +10,8 @@
   --gl-accent: var(--accent); --gl-accentink: var(--accent-ink); --gl-bad: var(--bad);
   color: var(--gl-fg);
 }
-.gl button, .gl select { background: var(--gl-panel); border-color: var(--line-2); color: var(--gl-fg); }
+/* the colour alone: the shorthand would clear a select's drawn chevron (#734) */
+.gl button, .gl select { background-color: var(--gl-panel); border-color: var(--line-2); color: var(--gl-fg); }
 .gl button:hover:not(:disabled) { background: var(--gl-hov); border-color: var(--accent-line); }
 .gl :focus-visible { outline-color: var(--fg); }
 .gl .spacer { flex: 1; }

@@ -34,7 +34,7 @@ export function SkillPanel({ i }: { i: number }) {
     <details className="panel skill-panel" data-section="skill">
       <summary className={bad(path) ? "bad" : ""}>{t("skill.title")}{changed ? ` (${changed})` : ""}</summary>
       <p className="muted">{withBreaks(t("skill.note"))}</p>
-      <select className="skill-add" aria-label={t("skill.add")} value="" disabled={!rest.length}
+      <select aria-label={t("skill.add")} value="" disabled={!rest.length}
         onChange={(e) => { const sinner = e.target.value; edit((d) => { d.sinners.push({ sinner, target: { ...GAME_DECK }, s1_s3_first: true }); }); }}>
         <option value="">{t("skill.add")}</option>
         {rest.map((n) => <option key={n} value={n}>{n}</option>)}
