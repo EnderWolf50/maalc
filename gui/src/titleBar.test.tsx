@@ -119,7 +119,8 @@ describe("a title bar with less room than its parts ask for (#746)", () => {
   const en = TEXT.en_us;
   // jsdom lays nothing out, so the header's width is stubbed with what the real window measured (English, 2026-11-14): with
   // unsaved changes its parts ask 906 px as drawn, 862 with the gaps tightened and the file path gone, 838 with the plates'
-  // inner room too, 776 with the language's label hidden; saved (no Discard changes) they ask 763 as drawn.
+  // inner room too, 776 with the language's label hidden; with nothing unsaved (no Discard changes) 763 as drawn, the state
+  // reading "Same as the file" ("Saved" is shorter).
   let room = 800;
   const UNSAVED = [906, 862, 838, 776, 776];
   const asks = (bar: HTMLElement) =>
