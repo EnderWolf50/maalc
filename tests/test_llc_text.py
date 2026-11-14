@@ -22,7 +22,11 @@ def test_every_gift_and_grace_has_a_chinese_name_and_the_graces_their_effects():
     assert len(graces) == 10
     for g in graces:
         assert g["zh"] and set(g["effects"]) == {"base", "plus", "plus2"}, g["en"]
-        assert all(g["effects"][level] and all(g["effects"][level]) for level in g["effects"]), g["en"]
+        for level, lines in g["effects"].items():
+            assert lines, (g["en"], level)
+            for runs in lines:  # a line is runs of text, each yellow or not, the next one the other
+                assert runs and all(r["text"] and isinstance(r["up"], bool) for r in runs), (g["en"], level)
+                assert all(a["up"] != b["up"] for a, b in zip(runs, runs[1:])), (g["en"], level)
 
 
 def test_every_gift_search_gift_has_its_effect_in_english_and_chinese_as_plain_text():
@@ -63,11 +67,35 @@ def test_the_data_matches_the_llc_release_when_it_is_downloaded():
         assert {g["id"]: g["zh"] for g in gifts(DATA[key])} == {g["id"]: names[g["id"]] for g in gifts(DATA[key])}, key
 
 
+def plain(text):
+    """An effect line with nothing in yellow, as effect_lines gives it."""
+    return [{"text": text, "up": False}]
+
+
 def test_traditional_conversion_keeps_the_game_s_words():
     import llc_text
     assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 松肉锤") == "生鏽的指針 通過階層 鏡像迷宮 刷新 鬆肉錘"
-    assert llc_text.effect_line("<color=#5bffde>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == "初始經費 +150(最多100)"
-    assert llc_text.effect_line("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == "獲得2層 守護"
+    assert llc_text.effect_lines("<color=#627eff>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == [plain("初始經費 +150(最多100)")]
+    assert llc_text.effect_lines("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == [plain("獲得2層 守護")]
+
+
+def test_an_effect_marks_up_what_its_template_colours_yellow_and_shows_the_keywords_blue_plain():
+    # #733: the game prints what a + or ++ level changed in its yellow, <color=#f8c200>; the template says which words
+    import llc_text
+    assert llc_text.effect_lines("初始<color=#627eff>经费</color> <color=#f8c200>+{0}</color>", {"value": 250}, {}) == [
+        [{"text": "初始經費 ", "up": False}, {"text": "+250", "up": True}]]
+    # a yellow span across a line break marks the text on both lines
+    assert llc_text.effect_lines("获得1件<color=#627eff>饰品</color>\n<color=#f8c200>· 第5层：1~3级\n· 第6层：2~3级</color>", {}, {}) == [
+        plain("獲得1件飾品"), [{"text": "· 第5層：1~3級", "up": True}], [{"text": "· 第6層：2~3級", "up": True}]]
+    # colours nest: the inner one holds until its own closing tag (TextMeshPro's colour stack)
+    assert llc_text.effect_lines("获得<color=#627eff>黯淡的残影、<color=#f8c200>微茫的残影</color></color>各1个", {}, {}) == [
+        [{"text": "獲得黯淡的殘影、", "up": False}, {"text": "微茫的殘影", "up": True}, {"text": "各1個", "up": False}]]
+
+
+def test_a_template_colour_other_than_the_game_s_yellow_and_blue_is_an_error():
+    import llc_text
+    with pytest.raises(ValueError, match="#5bffde"):
+        llc_text.effect_lines("<color=#5bffde>初始经费</color> +{0}", {"value": 150}, {})
 
 
 def test_a_rerun_without_a_release_keeps_the_one_the_data_carries(tmp_path, monkeypatch):
@@ -81,7 +109,7 @@ def test_a_rerun_without_a_release_keeps_the_one_the_data_carries(tmp_path, monk
 def test_an_effect_missing_a_value_its_template_needs_is_an_error():
     import llc_text
     with pytest.raises(ValueError):
-        llc_text.effect_line("获得{0}层", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"})
+        llc_text.effect_lines("获得{0}层", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"})
 
 
 def test_the_gift_effects_match_the_llc_release_and_the_client_text_when_both_are_there():

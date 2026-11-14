@@ -18,7 +18,10 @@ export const VERSION: number = P.version.const;
 /** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
  * effect text from LLC (graces.json carries its source and license). */
 export const GRACES: Grace[] = graces.graces;
-export interface Grace { en: string; zh: string; effects: { base: string[]; plus?: string[]; plus2?: string[] } }
+/** A piece of a grace's effect line; `up` where the game prints it yellow, what a + or ++ level changed (#733). */
+export interface TextRun { text: string; up: boolean }
+/** Each level's effect lines, a line as its runs. */
+export interface Grace { en: string; zh: string; effects: { base: TextRun[][]; plus?: TextRun[][]; plus2?: TextRun[][] } }
 
 /** Enum values of a run or team field, in schema order. */
 export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k] as { enum: string[] }).enum;
