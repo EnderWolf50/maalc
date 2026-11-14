@@ -14,8 +14,8 @@
 // Writes <out>/<scheme>/<name>.png and prints one line per still. Needs Node 22 or later (global WebSocket), no packages.
 // A refactor's "looks the same": stills of the build before and of the build after, each shot twice, then
 // tools/gui_compare.py --before <dir> <dir> --after <dir> <dir>.
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -218,18 +218,42 @@ async function browserUrl(profile) {
   return `ws://127.0.0.1:${lines[0].trim()}${lines[1].trim()}`;
 }
 
+/** Stops every process whose command line names `profile`, then deletes it. The msedge.exe this spawns hands over to the
+ * browser and exits, so neither its pid nor a kill of this process's tree reaches the browser, and a run stopped with a kill
+ * left it running with its profile (21 crash handlers and 408 profiles in the temp folder by 2026-11-14). */
+async function discard(profile) {
+  const named = profile.replaceAll("'", "''");
+  spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command",
+    `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${named}') } | ` +
+    "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"], { stdio: "ignore" });
+  for (let i = 0; i < 10; i++) {
+    try { rmSync(profile, { recursive: true, force: true }); return; } catch { await sleep(300); }
+  }
+}
+
+const running = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
+
+/** Discards what runs that ended without cleaning up left (a --hold stopped with a kill): a profile is named by its run's pid. */
+async function sweep() {
+  for (const name of readdirSync(tmpdir())) {
+    const pid = Number(/^gui-shots-(\d+)-/.exec(name)?.[1]);
+    if (pid && !running(pid)) await discard(join(tmpdir(), name));
+  }
+}
+
 async function launch() {
-  const profile = mkdtempSync(join(tmpdir(), "gui-shots-"));
+  await sweep();
+  const profile = mkdtempSync(join(tmpdir(), `gui-shots-${process.pid}-`));
   // Drawn without the GPU, with grayscale text at whole-pixel glyph positions: between two runs of one build the GPU's raster
   // gave a gradient or a border a level or two apart and the page's text came out a pixel apart (2026-11-14), so a still
   // compared pixel by pixel (tools/gui_compare.py) differed with nothing changed. The text still does now and then: shoot twice.
-  const proc = spawn(findBrowser(), [
+  spawn(findBrowser(), [
     "--headless=new", `--remote-debugging-port=${opt.port}`, `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
     "--disable-extensions", "--disable-sync", "--mute-audio", "--disable-gpu", "--disable-lcd-text", "--disable-font-subpixel-positioning", "about:blank",
   ], { stdio: "ignore" });
   const ws = new WebSocket(await browserUrl(profile));
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error("cannot connect to the browser")); });
-  return { cdp: new Cdp(ws), proc, profile, ws };
+  return { cdp: new Cdp(ws), profile, ws };
 }
 
 async function evaluate(cdp, session, expression) {
@@ -294,7 +318,7 @@ async function main() {
   const only = opt.only ? new Set(opt.only.split(",")) : null;
   const shots = SHOTS.filter((x) => !only || only.has(x.name) || only.has(x.name.replace(/-full$/, "")));
   const texts = settingsText();
-  const { cdp, proc, profile, ws } = await launch();
+  const { cdp, profile, ws } = await launch();
   let failed = 0;
   try {
     if (opt.hold) {
@@ -324,11 +348,7 @@ async function main() {
   } finally {
     await cdp.send("Browser.close").catch(() => {});
     ws.close();
-    for (let i = 0; i < 30 && proc.exitCode === null; i++) await sleep(100);
-    if (proc.exitCode === null) proc.kill();
-    for (let i = 0; i < 10; i++) {
-      try { rmSync(profile, { recursive: true, force: true }); break; } catch { await sleep(300); }
-    }
+    await discard(profile);
   }
   process.exit(failed ? 1 : 0);
 }
