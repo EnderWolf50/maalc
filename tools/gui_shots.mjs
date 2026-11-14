@@ -218,9 +218,9 @@ async function browserUrl(profile) {
 
 async function launch() {
   const profile = mkdtempSync(join(tmpdir(), "gui-shots-"));
-  // Drawn without the GPU and with grayscale text: the GPU's raster gave a gradient or a border a level or two apart, and the
-  // whole page's text came out with or without subpixel antialiasing, between two runs of one build (2026-11-14), so a still
-  // compared pixel by pixel (tools/gui_compare.py) differed with nothing changed.
+  // Drawn without the GPU, with grayscale text at whole-pixel glyph positions: between two runs of one build the GPU's raster
+  // gave a gradient or a border a level or two apart and the page's text came out a pixel apart (2026-11-14), so a still
+  // compared pixel by pixel (tools/gui_compare.py) differed with nothing changed. The text still does now and then: shoot twice.
   const proc = spawn(findBrowser(), [
     "--headless=new", `--remote-debugging-port=${opt.port}`, `--user-data-dir=${profile}`, "--no-first-run", "--no-default-browser-check",
     "--disable-extensions", "--disable-sync", "--mute-audio", "--disable-gpu", "--disable-lcd-text", "--disable-font-subpixel-positioning", "about:blank",

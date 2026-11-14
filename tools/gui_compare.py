@@ -9,8 +9,8 @@ summary line. With --diff, writes `<diff>/<path>` for each still that differs: t
 magenta. Exits 1 when any still differs or is missing on one side, else 0.
 
 Shoot each side from the built app, one build per side, at the same window size and scale, twice: gui_shots.mjs gives the same
-pixels run after run, but now and then a light still came out with all its text drawn a pixel apart (2026-11-14: 3 of about 40
-runs of the team page and run options stills, the unchanged build too), and a second run settles it.
+pixels run after run, but now and then a light still came out with all its text drawn a pixel apart (2026-11-14: 3 of 32 runs
+of the team page and run options stills, the unchanged build too), and a second run settles it.
 """
 
 import argparse
