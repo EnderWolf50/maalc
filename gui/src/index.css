@@ -575,7 +575,7 @@ details.skill-panel > summary + * { margin-top: 0; }
 details.skill-panel > p { margin-bottom: 0; }
 /* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
-/* 「＋ 加入罪人」: a select in the panel's column keeps its own width, as one in a line does */
+/* A select straight in a panel's column (「＋ 加入罪人」) keeps its own width, as one in a line does */
 details.panel > select { align-self: flex-start; }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }

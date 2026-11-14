@@ -216,12 +216,14 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
   });
 
   test("past the -10..10 range the prefill stops at its end, a score Enter keeps (#734)", async () => {
-    await open(plan({ "The Forgotten": 10, "The Outcast": -10 }));
+    const r = await open(plan({ "The Forgotten": 10, "The Outcast": -10 }));
     await dropOn(addLanes()[0], "Flat-broke Gamblers");
     expect(box()).toHaveValue(10);
-    fireEvent.keyDown(box(), { key: "Escape" });
+    await r.user.keyboard("{Escape}");
     await dropOn(addLanes()[1], "Flat-broke Gamblers");
     expect(box()).toHaveValue(-10);
+    await r.user.keyboard("{Enter}"); // into the -10 lane there already is
+    expect(r.weights()["Flat-broke Gamblers"]).toBe(-10);
   });
 
   test("Enter on a focused pack opens the box too, and the unlisted packs' chip has one", async () => {
