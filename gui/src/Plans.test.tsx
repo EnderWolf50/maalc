@@ -1,9 +1,8 @@
-// Component tests of the plan tabs: the theme pack screen's "含想要" mark (#421, spec 04 section 8), its filters, badges and
-// weights typed in place, and for every plan tab which teams use a plan and how a deleted one comes back (#679).
+// Component tests of the plan tabs: the theme pack screen (spec 04 section 8), with no "含想要" mark (#739), its filters,
+// badges and weights typed in place, and for every plan tab which teams use a plan and how a deleted one comes back (#679).
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, onTestFinished, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
 import {
   GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
@@ -13,7 +12,6 @@ import { DeploymentTab } from "./Deployment";
 import { StarlightTab } from "./Starlight";
 import { ThemePackTab } from "./ThemePacks";
 import { cssRules, expectLines, pickInList, renderEditor, textOf } from "./testing";
-import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
 const mine = (want: number[]): GiftList => ({
@@ -22,61 +20,33 @@ const mine = (want: number[]): GiftList => ({
 const settings = (patch: Partial<Settings> = {}): Settings => ({ ...newSettings(), language: "zh_tw", ...patch });
 
 const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: ".nm" })).closest(".pk") as HTMLElement;
-/** The 含想要 mark on a pack's chip, by the name a screen reader reads, or null; the chips load with the data file. */
-const markOf = async (pack: string) => within(await chipNamed(pack)).queryByRole("img", { name: zh["packs.wanted"] });
 
-describe("the 含想要 mark", () => {
-  test("the default list marks LCB Regular Check-up with a dot, which lists the two materials of 9780 on hover", async () => {
-    renderEditor(<ThemePackTab />, settings());
-    const tip = zh["packs.wantedTip"].replace("{names}", "常規作戰用裝備、作戰批准卡");
-    const mark = await markOf("LCB Regular Check-up");
-    expect(mark).toHaveAccessibleDescription(tip);
-    expect(mark).toHaveTextContent(/^$/); // a dot in the corner (#720), not a word in the row
-    const chip = await chipNamed("LCB Regular Check-up");
-    expect(chip).not.toHaveTextContent(zh["packs.wanted"]);
-    expect(chip).toHaveAttribute("title", tip); // the whole chip shows the gifts on hover, not just the dot
-  });
-
-  test("one line of the page says what the dot means, with the same dot", async () => {
-    renderEditor(<ThemePackTab />, settings());
-    const key = (await screen.findByText(zh["packs.wantedKey"])).closest("p")!;
-    expect(key.querySelector(".wd")).not.toBeNull();
-  });
-
-  test("a pack whose own gifts none is wanted shows no mark", async () => {
-    renderEditor(<ThemePackTab />, settings());
-    expect(await markOf("The Outcast")).toBeNull();
-  });
-
-  test("wanting one of a pack's own gifts in the list a team of the plan holds marks that pack", async () => {
-    const own = recipes.pack_gifts["1002"][0]; // The Outcast
+// #739: the plan screen shows nothing of what the gift lists want (the user, 2026-11-14: the two are not directly related,
+// and a mark for it confuses). A team of the default plan wants The Outcast's first own gift; the default list's materials
+// of 9780 are LCB Regular Check-up's (what #421 marked).
+describe("no 含想要 on the theme pack plan screen", () => {
+  const PACKS = ["The Outcast", "LCB Regular Check-up"]; // a wanted own gift, and the default list's materials
+  const wanting = () => {
     const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "default" };
-    renderEditor(<ThemePackTab />, settings({ gift_lists: [mine([own])], teams: [team] }));
-    const mark = await markOf("The Outcast");
-    expect(mark).toHaveAccessibleDescription(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
-  });
+    return settings({ gift_lists: [mine([recipes.pack_gifts["1002"][0]])], teams: [team] });
+  };
 
-  test("changing a pack's own gift to wanted in the list shows the mark on that pack", async () => {
-    // #421: the edit goes through the same settings update the gift list editor uses
-    const own = recipes.pack_gifts["1002"][0];
-    const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "default" };
-    function WantIt() {
-      const { update } = useEditor();
-      return <button onClick={() => update((s) => { s.gift_lists[0].want = [own]; })}>want it</button>;
+  test("no dot on a pack, no key line and no wanted gifts on hover", async () => {
+    renderEditor(<ThemePackTab />, wanting());
+    for (const pack of PACKS) {
+      const chip = await chipNamed(pack);
+      expect(within(chip).queryByRole("img", { name: "含想要" })).toBeNull();
+      expect(chip).not.toHaveAttribute("title"); // its name is on it: nothing to show on hover
     }
-    const r = renderEditor(<><ThemePackTab /><WantIt /></>, settings({ gift_lists: [mine([])], teams: [team] }));
-    expect(await markOf("The Outcast")).toBeNull();
-    await r.user.click(screen.getByRole("button", { name: "want it" }));
-    const mark = await markOf("The Outcast");
-    expect(mark).toHaveAccessibleDescription(zh["packs.wantedTip"].replace("{names}", GIFT_BY_ID.get(own)!.zh));
+    expect(document.body).not.toHaveTextContent("含想要");
   });
 
-  test("a list only a team of another plan holds does not count, and a plan no team uses reads the default list", async () => {
-    const own = recipes.pack_gifts["1002"][0];
-    const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "someone-else" };
-    renderEditor(<ThemePackTab />, settings({ gift_lists: [mine([own])], teams: [team] }));
-    expect(await markOf("The Outcast")).toBeNull();
-    expect(await markOf("LCB Regular Check-up")).not.toBeNull();
+  test("in picture mode a pack's hover is its name alone", async () => {
+    const r = renderEditor(<ThemePackTab />, wanting());
+    await r.user.click(await screen.findByRole("button", { name: zh["packs.images"] }));
+    for (const pack of PACKS) {
+      expect(screen.getByRole("img", { name: pack }).closest(".pk")).toHaveAttribute("title", pack);
+    }
   });
 });
 
@@ -155,6 +125,87 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     await r.user.type(box(), "5{Escape}");
     expect(r.weights()).toEqual({ "The Outcast": -1 });
     expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  // #739: a score typed is not lost when the box loses the focus (the user, 2026-11-14).
+  test("a score typed and the focus moved away keeps it, as Enter does, on a pack and in a + lane", async () => {
+    const r = await open();
+    const search = screen.getByRole("searchbox", { name: zh["packs.search"] });
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3"); // over the selected 0
+    await r.user.click(search);
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    await dropOn(addLanes()[1], "Flat-broke Gamblers");
+    await r.user.keyboard("-6");
+    await r.user.click(search);
+    expect(r.weights()["Flat-broke Gamblers"]).toBe(-6);
+  });
+
+  test("a click on another pack keeps the score typed into the first, then opens the second's box", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    await r.user.click(await chipOf("Flat-broke Gamblers"));
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(within(await chipOf("Flat-broke Gamblers")).getByRole("spinbutton")).toHaveFocus();
+    await r.user.keyboard("{Escape}");
+    expect(r.weights()).toEqual({ "The Outcast": -1, "The Forgotten": 3 });
+  });
+
+  test("the pack pressed opens though the chips moved before the button came up", async () => {
+    // Keeping the first score moves its pack to another lane, and the packs after it close up before a person's click ends:
+    // the press starts on Flat-broke Gamblers, and the button comes up over the pack now in its place.
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    await r.user.pointer([{ keys: "[MouseLeft>]", target: await chipOf("Flat-broke Gamblers") }, { keys: "[/MouseLeft]", target: await chipOf("The Unloving") }]);
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(within(await chipOf("Flat-broke Gamblers")).getByRole("spinbutton")).toHaveFocus();
+  });
+
+  test("a press on another pack while a box is open drags nothing, and its release opens that pack", async () => {
+    // Keeping the first score moves packs between the press and the drag, which would start from whatever is now under the
+    // press: while a box is open a press is a click.
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    const chip = await chipOf("Flat-broke Gamblers");
+    await r.user.pointer({ keys: "[MouseLeft>]", target: chip });
+    await dropOn((await chipOf("The Outcast")).closest(".lane")!, "Flat-broke Gamblers");
+    expect(r.weights()).toEqual({ "The Outcast": -1, "The Forgotten": 3 });
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    await r.user.pointer({ keys: "[/MouseLeft]", target: chip });
+    expect(within(chip).getByRole("spinbutton")).toHaveFocus();
+    await r.user.keyboard("{Escape}");
+    await dropOn((await chipOf("The Outcast")).closest(".lane")!, "Flat-broke Gamblers"); // no box open: it drags
+    expect(r.weights()["Flat-broke Gamblers"]).toBe(-1);
+  });
+
+  test("a right press on another pack keeps the first score and opens nothing", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    await r.user.pointer({ keys: "[MouseRight]", target: await chipOf("Flat-broke Gamblers") });
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  test("leaving the box untouched, empty or with a score out of range closes it with the weight as it was and no warning", async () => {
+    const r = await open();
+    const search = screen.getByRole("searchbox", { name: zh["packs.search"] });
+    for (const typed of ["", "{Backspace}", "11", "11{Enter}"]) {
+      await r.user.click(await chipOf("The Outcast"));
+      if (typed) await r.user.keyboard(typed);
+      await r.user.click(search);
+      expect(screen.queryByRole("spinbutton"), typed).toBeNull();
+      expect(screen.queryByText(zh["packs.weightRange"]), typed).toBeNull();
+      expect(r.weights(), typed).toEqual({ "The Outcast": -1 });
+    }
+    await dropOn(addLanes()[0], "The Forgotten"); // its box opens on +1, left as it is: no new lane
+    await r.user.click(search);
+    expect(r.weights()).toEqual({ "The Outcast": -1 });
+    expect([...document.querySelectorAll(".lane:not(.add) .w")].map((w) => w.textContent)).toEqual(["0", "-1"]);
   });
 
   test("a weight outside -10..10 says so beside the box and keeps the old one", async () => {

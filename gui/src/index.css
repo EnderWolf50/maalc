@@ -565,11 +565,23 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 }
 .starlight .glyph { display: inline-block; width: 15px; height: 15px; background: url("./grace_card/plus.webp") center / 12px auto no-repeat; }
 .starlight button[aria-pressed="true"] .glyph { background-image: url("./grace_card/plus-lit.webp"); background-size: 23px auto; } /* its + is 20 of 39 px */
-/* Select All, Enhance All and the total, on the game's Enhance All panel (9-sliced). */
+/* Select All, Enhance All and the total, on the game's Enhance All panel (9-sliced). It stays in view while the cards scroll
+ * (#740): flush with the top of the scrolling page (a sticky inset counts from inside main's 16 px top padding), and on the
+ * team page right under its section index. How far the index reaches below that padding, --sections-shown, is measured by
+ * the page (Teams.tsx SectionIndex): 32.75 px on one row (its 23.75 px row of buttons, 8 px of padding and its line), 60.8
+ * on two (English at 800 px wide). The bar starts 0.75 px higher, under the index's line (z-index 4 to its 5), so no gap
+ * opens between the two at any scaling. The page's ground under the panel's glowing edge hides the cards under it. */
 .grace-side {
-  order: -1; flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 14px 20px 12px;
+  order: -1; flex: none; position: sticky; top: -16px; z-index: 4; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px 10px; padding: 14px 20px 12px; background: var(--season-bg);
   border: 0 solid transparent; border-image: url("./grace_card/side.webp") 96 60 54 60 fill / 26px 16px 15px 16px;
 }
+.team .grace-side { top: calc(var(--sections-shown, 32.75px) - 0.75px); }
+/* A card's button the keyboard's focus scrolls up to stops below the bar, not under it (WCAG 2.4.11), with about 9 px to
+ * spare: the bar is at most 95 px tall (two rows, at 800 px wide), from the page's top on the starlight plan tab, and on the
+ * team page from main's top padding (16 px, 14 below 1000 px wide) plus the index's --sections-shown. */
+.grace button { scroll-margin-top: 104px; }
+.team .grace button { scroll-margin-top: calc(var(--sections-shown, 32.75px) + 120px); }
 .grace-side button { padding: 5px 16px; }
 .grace-side button.boost { min-width: 56px; display: inline-flex; align-items: center; justify-content: center; padding: 7px 14px; }
 .grace-side .muted { color: var(--season-ink-2); font-size: 12.5px; margin-left: 8px; } /* a label for the + / ++ beside it, not a link */
@@ -693,7 +705,7 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .thr > span::after { flex: 1; }
 .thr.bad { color: var(--bad); }
 .pk {
-  position: relative; display: inline-flex; align-items: center; gap: 4px; background: var(--raise); border: 1px solid var(--line);
+  display: inline-flex; align-items: center; gap: 4px; background: var(--raise); border: 1px solid var(--line);
   border-radius: 4px; corner-shape: bevel; padding: 4px 6px 4px 9px; font-size: 12.5px; line-height: 1.35; cursor: default; color: var(--fg);
 }
 .pk .nm { margin-right: 4px; } /* the name stands apart from its badges */
@@ -714,11 +726,6 @@ small.fl {
 small.fl.hard { --c: var(--fl-h); --ink: var(--fl-h-ink); }
 small.fl.inf { color: var(--fl-i); background: none; border: 1px dashed var(--fl-i); }
 small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0 1px var(--ink); }
-/* 含想要 (#421): a dot on the chip's top right corner (#720), the amber of what is wanted, ringed in the chip's fill so the
- * frame does not cut through it; the page's key shows the same dot. */
-.wd { display: inline-block; flex: none; width: 11px; height: 11px; border-radius: 50%; background: var(--accent-line); border: 2px solid var(--raise); }
-.pk .wd { position: absolute; top: -5px; right: -5px; }
-.floorkey .wd { width: 7px; height: 7px; border: 0; margin: 0 2px; }
 .floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
 /* a pack's weight typed in place */
@@ -737,7 +744,8 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   nav[role="tablist"] .tabsep { margin: 0 3px; }
   main { padding: 14px 14px 24px; }
   nav.sections { top: -14px; margin-top: -14px; padding-top: 14px; column-gap: 4px; }
-  nav.sections button { padding: 2px 7px; } /* the six still fit one row in the narrowest window (800 px) */
+  .grace-side { top: -14px; } /* main's top padding here; on the team page it still sits under the index */
+  nav.sections button { padding: 2px 7px; } /* the six fit one row at 800 px in Chinese; English takes two (#740) */
   .split { gap: 14px; }
   .split aside { width: 190px; }
   .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */

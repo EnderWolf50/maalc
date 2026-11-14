@@ -122,19 +122,6 @@ export function wantKind(list: ListRules, id: number, runPacks: number[] | null 
   return wanted ? "want" : "material";
 }
 
-/** The lists the teams using theme pack plan `planId` hold ("default": the data file's plan), enabled teams or not; the default
- * list when no team uses the plan (a team naming a list that is gone adds none). */
-export function listsOfPlan(planId: string, teams: { theme_pack_plan: string; gift_list: string }[], lists: GiftList[]): ListRules[] {
-  const used = teams.filter((t) => t.theme_pack_plan === planId).map((t) => resolveList(t.gift_list, lists));
-  return used.length ? used.filter((l): l is ListRules => !!l) : [DEFAULT_LIST];
-}
-
-/** The gifts of theme pack `packId`'s own pool that any of `lists` wants or still needs as a material (the screen cannot know the
- * run's packs or what is held), in pool order. */
-export function packWanted(lists: ListRules[], packId: number, tables: GiftTables = GAME_TABLES): number[] {
-  return (tables.pack_gifts[String(packId)] ?? []).filter((id) => lists.some((l) => wantKind(l, id, null, [], tables) !== null));
-}
-
 /** The materials to put in for a fusion, or undefined: the first recipe `owned` (id to count) has all of; for groups the
  * first `need` owned ids of each group in data-file order. A set needing more than `slots` materials (none: any) is passed over. */
 function pick(f: Fusion, owned: Map<number, number>, slots = Infinity): number[] | undefined {

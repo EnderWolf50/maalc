@@ -59,6 +59,17 @@ const SECTIONS = [
 ] as const;
 function SectionIndex() {
   const { t } = useEditor();
+  const nav = useRef<HTMLElement>(null);
+  // The starlight bar sticks right under this row (#740), which wraps to two rows where its buttons do not fit (English at
+  // 800 px wide): how far it reaches below main's top padding goes to the page as --sections-shown.
+  useEffect(() => {
+    const el = nav.current, page = el?.parentElement;
+    if (!el || !page || typeof ResizeObserver === "undefined") return; // jsdom has none: the stylesheet's one-row default
+    const watch = new ResizeObserver(() => page.style.setProperty("--sections-shown",
+      `${el.getBoundingClientRect().height - parseFloat(getComputedStyle(el).paddingTop)}px`));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   const go = (k: string) => {
     const el = document.querySelector<HTMLElement>(`[data-section="${k}"]`);
     if (!el) return;
@@ -67,7 +78,7 @@ function SectionIndex() {
     el.querySelector<HTMLElement>("summary, select, input, button")?.focus({ preventScroll: true });
   };
   return (
-    <nav className="sections" aria-label={t("team.sections")}>
+    <nav ref={nav} className="sections" aria-label={t("team.sections")}>
       <small>{t("team.sections")}</small>
       {SECTIONS.map(([k, label]) => <button type="button" key={k} onClick={() => go(k)}>{t(label)}</button>)}
     </nav>
