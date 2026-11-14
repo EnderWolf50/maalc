@@ -1,6 +1,7 @@
 """Launch the built settings GUI in a throwaway root and print its window, for the `maalc-gui-check` skill.
 
     uv run python tools/gui_probe.py --exe gui/src-tauri/target/release/maalc-gui.exe --root <dir> [--settings FILE] [--title maalc] [--timeout 30]
+    uv run python tools/gui_probe.py --exe ... --root <dir> [--settings FILE] --prepare-only
 
 The GUI reads and writes `<folder of its exe>/config/settings.json` (gui/src-tauri/src/lib.rs `root`), so the
 probe copies the exe into `--root`, writes the demo settings there (the `valid` case of tests/settings_cases.json
@@ -10,6 +11,8 @@ unless `--settings` names a file) and links `assets/` beside it, which `load_the
 Prints one JSON line `{"pid", "hwnd", "title", "rect": [left, top, right, bottom], "width", "height", "root"}` when the
 window shows. Exits 1 and kills the process when no window of the exe with that title shows within `--timeout`, and exits 1 before
 starting anything when `--root` exists without the marker file the probe writes (the folder is not deleted).
+`--prepare-only` lays out the root, prints `{"exe", "root"}` and starts nothing: `tools/gui_devtools.mjs open` starts the
+copied exe itself, with a DevTools port.
 """
 import argparse
 import json
@@ -100,6 +103,7 @@ def main(argv=None) -> int:
     ap.add_argument("--settings", type=Path, help="settings.json to start with (default: the `valid` case of tests/settings_cases.json)")
     ap.add_argument("--title", default="maalc")
     ap.add_argument("--timeout", type=float, default=30)
+    ap.add_argument("--prepare-only", action="store_true", help="lay out the root, print {exe, root} and start nothing")
     args = ap.parse_args(argv)
 
     text = args.settings.read_text(encoding="utf-8") if args.settings else demo_settings()
@@ -108,6 +112,9 @@ def main(argv=None) -> int:
     except ForeignRoot as e:
         print(e, file=sys.stderr)
         return 1
+    if args.prepare_only:
+        print(json.dumps({"exe": str(exe), "root": str(args.root)}))
+        return 0
     proc = subprocess.Popen([str(exe)], cwd=args.root)
     hit = wait_for_window(proc, args.title, args.timeout)
     if not hit:

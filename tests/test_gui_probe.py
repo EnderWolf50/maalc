@@ -63,6 +63,21 @@ def test_prepare_root_refuses_an_existing_folder_it_did_not_make(tmp_path):
     assert (foreign / "precious.txt").read_text() == "keep"
 
 
+def test_prepare_only_lays_out_the_root_and_starts_nothing(tmp_path, monkeypatch, capsys):
+    exe = tmp_path / "built.exe"
+    exe.write_bytes(b"MZ")
+    root = tmp_path / "sandbox"
+
+    def popen(*a, **kw):
+        raise AssertionError("--prepare-only started a process")
+
+    monkeypatch.setattr(gp.subprocess, "Popen", popen)
+    assert gp.main(["--exe", str(exe), "--root", str(root), "--prepare-only"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"exe": str(root / gp.EXE_NAME), "root": str(root)}
+    assert (root / gp.EXE_NAME).read_bytes() == b"MZ"
+    assert json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["language"] == "zh_tw"
+
+
 def test_main_exits_1_and_deletes_nothing_for_a_root_without_the_marker(tmp_path, capsys):
     exe = tmp_path / "built.exe"
     exe.write_bytes(b"MZ")

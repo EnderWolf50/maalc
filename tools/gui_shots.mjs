@@ -22,6 +22,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
+import { Cdp } from "./cdp.mjs";
+
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The settings window as it opens: --width and --height default to it.
 const WINDOW = JSON.parse(readFileSync(join(REPO, "gui", "src-tauri", "tauri.conf.json"), "utf8")).app.windows[0];
@@ -166,39 +168,6 @@ function findBrowser() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** A Chrome DevTools Protocol connection with flat sessions. */
-class Cdp {
-  constructor(ws) {
-    this.ws = ws;
-    this.next = 0;
-    this.pending = new Map();
-    this.waiters = [];
-    ws.onmessage = (e) => {
-      const m = JSON.parse(e.data);
-      if (m.id !== undefined && this.pending.has(m.id)) {
-        const p = this.pending.get(m.id);
-        this.pending.delete(m.id);
-        if (m.error) p.reject(new Error(`${p.method}: ${m.error.message}`));
-        else p.resolve(m.result);
-      } else if (m.method) {
-        this.waiters = this.waiters.filter((w) => !(w.method === m.method && w.sessionId === m.sessionId && (w.resolve(m.params), true)));
-      }
-    };
-  }
-  send(method, params = {}, sessionId) {
-    const id = ++this.next;
-    this.ws.send(JSON.stringify({ id, method, params, sessionId }));
-    return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject, method }));
-  }
-  once(method, sessionId, ms = 15000) {
-    return new Promise((resolve, reject) => {
-      const w = { method, sessionId, resolve };
-      this.waiters.push(w);
-      setTimeout(() => reject(new Error(`timed out waiting for ${method}`)), ms);
-    });
-  }
-}
-
 /** The browser's DevTools WebSocket: from DevToolsActivePort for port 0 (Edge writes no such file for a fixed port), else /json/version. */
 async function browserUrl(profile) {
   if (opt.port !== "0") {
@@ -266,11 +235,7 @@ async function launch() {
   return { cdp: new Cdp(ws), proc, profile, ws };
 }
 
-async function evaluate(cdp, session, expression) {
-  const r = await cdp.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, session);
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
-  return r.result.value;
-}
+const evaluate = (cdp, session, expression) => cdp.evaluate(expression, session);
 
 /** A new page brought to the shot's state; the caller closes `targetId`. */
 async function open(cdp, scheme, shot, texts) {
