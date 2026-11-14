@@ -11,7 +11,7 @@ import css from "./index.css?raw";
 import { DeploymentTab } from "./Deployment";
 import { StarlightTab } from "./Starlight";
 import { ThemePackTab } from "./ThemePacks";
-import { cssRules, expectLines, pickInList, renderEditor, textOf } from "./testing";
+import { cssRules, cssValueOf, expectLines, filterEffect, pickInList, renderEditor, textOf } from "./testing";
 
 const zh = TEXT.zh_tw;
 const mine = (want: number[]): GiftList => ({
@@ -380,14 +380,22 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack: 無�
   expect(chip("EXTREME")).toBeInTheDocument();
 });
 
-test("the deployment order plan's grid shows each sinner's default identity card, the ones left out darkened (#718)", () => {
+test("the deployment order plan's grid shows each sinner's default identity card (#718), lit as the formation screen's (#750)", () => {
   const order = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Ishmael", "Rodion", "Outis", "Heathcliff", "Sinclair"];
   renderEditor(<DeploymentTab />, settings({ deployment_order_plans: [{ id: "p", name: "P", order }] }));
   const tile = (name: string) => within(document.querySelector<HTMLElement>(".sinners")!).getByRole("button", { name: new RegExp(name) });
+  const artLook = (name: string) => filterEffect(cssValueOf(css, tile(name).querySelector("img")!, "filter"));
   expect(tile("Gregor")).toHaveClass("out");
   expect(tile("Ryōshū")).not.toHaveClass("out");
   expect(tile("Ryōshū").querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/10401\.webp$/); // Ryōshū's LCB Sinner
   expect(tile("Gregor").querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/11201\.webp$/);
+  // the game's selected art at 0.42-0.48 of its light (blue 0.36-0.43), a card left out grey at full light
+  // (tests/screens/Formation.png, #744)
+  for (const s of ["Ryōshū", "Sinclair"]) {
+    expect(artLook(s).light).toBeGreaterThanOrEqual(0.4);
+    expect(artLook(s).light).toBeLessThanOrEqual(0.5);
+  }
+  expect(artLook("Gregor")).toEqual({ light: 1, colour: 0 });
 });
 
 describe("deleting a plan", () => {

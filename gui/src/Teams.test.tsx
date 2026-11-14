@@ -1,6 +1,6 @@
 // Component tests of the teams tab's gift list choice (#296, covering #305 as well): the list dropdown, the main keyword the
 // list decides, and the button that sends the user to the gift list tab with that list chosen.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
@@ -8,7 +8,7 @@ import { iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
-import { cssRules, expectLines, pickInList, renderEditor, sideList } from "./testing";
+import { cssRules, cssValueOf, expectLines, filterEffect, pickInList, renderEditor, sideList } from "./testing";
 import css from "./index.css?raw";
 import mainTsx from "./main.tsx?raw";
 import { TeamsTab } from "./Teams";
@@ -388,15 +388,52 @@ describe("the deployment order tiles (#718)", () => {
     }
   });
 
-  test("a sinner left out of the order shows its card darkened; deployed and backup ones at full light", () => {
+  const LEFT_OUT = ["Don Quixote", "Meursault", "Gregor"];
+  const artLook = (name: string, hover = false) => filterEffect(cssValueOf(css, tile(name).querySelector("img")!, "filter", hover));
+
+  // #750, as the formation screen draws them (tests/screens/Formation.png, measured in #744): a selected card's art at 0.42-0.48
+  // of its light in red and green, 0.36-0.43 in blue, a card left out grey at 0.99 of its light.
+  test("a sinner in the order shows its card darkened as the game's, one left out grey at full light", () => {
     renderEditor(<TeamsTab />, ordered());
-    for (const s of ["Don Quixote", "Meursault", "Gregor"]) expect(tile(s)).toHaveClass("out");
+    for (const s of LEFT_OUT) expect(tile(s)).toHaveClass("out");
     for (const s of order) expect(tile(s)).not.toHaveClass("out");
-    // at rest: the pointer over one lifts it a little, to say a click puts it back in
-    const dim = cssRules(css).filter((r) => r.selector.includes(".sinner.out") && /\bimg\b/.test(r.selector) && !r.selector.includes(":hover"))
-      .map((r) => r.body.match(/brightness\(([\d.]+)\)/)?.[1]);
-    expect(dim.length).toBeGreaterThan(0);
-    for (const b of dim) expect(Number(b)).toBeLessThan(0.6);
+    for (const s of order) {
+      expect(artLook(s).light).toBeGreaterThanOrEqual(0.4);
+      expect(artLook(s).light).toBeLessThanOrEqual(0.5);
+    }
+    for (const s of LEFT_OUT) expect(artLook(s)).toEqual({ light: 1, colour: 0 });
+  });
+
+  test("the pointer over a sinner left out gives it some colour back, at the same light, to say a click puts it in", () => {
+    renderEditor(<TeamsTab />, ordered());
+    for (const s of LEFT_OUT) {
+      expect(artLook(s, true).colour).toBeGreaterThan(artLook(s).colour);
+      expect(artLook(s, true).colour).toBeLessThan(1);
+      expect(artLook(s, true).light).toBe(1);
+    }
+  });
+
+  test("the pointer over a sinner lights its frame and nothing behind the card: no button fill round the frame's edge", () => {
+    renderEditor(<TeamsTab />, ordered());
+    for (const s of ["Ryōshū", "Gregor"]) expect(cssValueOf(css, tile(s), "background", true)).toBe("none");
+  });
+
+  test("a team on a plan follows the same rule, quieter than a grid one edits: every card has less light, the order's less colour", () => {
+    renderEditor(<TeamsTab />, ordered());
+    const editable = Object.fromEntries(SINNERS.map((s) => [s, artLook(s)]));
+    cleanup();
+    const onPlan = settings();
+    onPlan.deployment_order_plans = [{ id: "d1", name: "Bleed order", order }];
+    onPlan.teams[0].deployment_order = { plan: "d1" };
+    renderEditor(<TeamsTab />, onPlan);
+    for (const s of SINNERS) expect(tile(s)).toBeDisabled();
+    for (const s of SINNERS) expect(artLook(s).light).toBeLessThan(editable[s].light);
+    for (const s of order) expect(artLook(s).colour).toBeLessThan(editable[s].colour);
+    for (const s of LEFT_OUT) expect(artLook(s).colour).toBe(0);
+    // the same rule: the order's cards darker than the ones left out. The frame's own filter is read from its rule's text: a
+    // ::after is not an element cssValueOf can match.
+    for (const s of order) for (const out of LEFT_OUT) expect(artLook(s).light).toBeLessThan(artLook(out).light);
+    expect(rulesOf((x) => x === ".sinners.readonly .sinner::after")).toMatch(/filter:\s*saturate\(0?\.\d+\)/);
   });
 
   // #732: the tile is the game's formation card. Its frame is the game's 162 x 230 sprite (tools/sinner_cards.py FRAME_PARTS).
