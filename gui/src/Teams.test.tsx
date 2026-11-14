@@ -472,6 +472,19 @@ describe("the section index", () => {
     expect(gift).toHaveFocus();
   });
 
+  test("a section it jumps to stops with its heading below the index, on one row or two (#746)", () => {
+    // From the scrolling page's top the index reaches main's top padding (16 px, 14 in a narrow window) plus --sections-shown,
+    // which the page measures: 32.75 px on one row, 60.8 on two (English at 800 px wide, measured in the real window).
+    const margin = cssRules(css).filter((r) => r.selector === ".team [data-section]").map((r) => r.body).join("\n")
+      .match(/scroll-margin-top:\s*([^;]+)/)![1];
+    const stop = (shown: number) => [...margin.replace(/var\(--sections-shown[^)]*\)/g, `${shown}px`).matchAll(/([+-]\s*)?(\d+(?:\.\d+)?)px/g)]
+      .reduce((sum, m) => sum + (m[1]?.trim() === "-" ? -1 : 1) * Number(m[2]), 0);
+    for (const shown of [32.75, 60.8]) {
+      for (const padding of [16, 14]) expect(stop(shown) - (padding + shown)).toBeGreaterThanOrEqual(8);
+    }
+    expect(stop(60.8) - 60.8).toBeCloseTo(stop(32.75) - 32.75); // the same room under two rows as under one
+  });
+
   test("lists the team's sections in the order the page shows them", () => {
     renderEditor(<TeamsTab />, settings());
     const jump = screen.getByRole("navigation", { name: zh["team.sections"] });

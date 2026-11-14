@@ -13,7 +13,7 @@ import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
 import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
 import { sayProblem, validate, type Problem } from "./validate";
-import { LeavePrompt, WindowButtons, type Leave } from "./WindowControls";
+import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
   ["run", "tab.run", RunTab, ["run"]],
@@ -206,11 +206,11 @@ export default function App() {
 
   // The title bar alone, before the settings are read and when they do not read: the window has no system bar to fall back on.
   const bare = (
-    <header data-tauri-drag-region="deep">
+    <TitleBar>
       <h1>{t("title")}</h1>
       <span className="path" />
       <WindowButtons t={t} maximized={maximized} onError={(e) => setLoadError((why) => (why ? `${why}\n${String(e)}` : String(e)))} />
-    </header>
+    </TitleBar>
   );
   if (loadError) {
     return (<>
@@ -333,12 +333,10 @@ export default function App() {
   };
   return (
     <EditorContext.Provider value={ctx}>
-      {/* The title bar too: the system's is hidden (tauri.conf.json). Tauri drags the window from any of its parts that is not a
-          control (drag.js "deep"), and a double click there maximises it. */}
-      <header inert={!!asking} data-tauri-drag-region="deep">
+      <TitleBar inert={!!asking}>
         <h1>{t("title")}</h1>
         <span className="muted path" title={`${root}\\config\\settings.json`}>{root}\config\settings.json</span>
-        <label className="lang">{t("language")}
+        <label className="lang"><span>{t("language")}</span>
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
             <option value="en_us">English</option>
@@ -349,7 +347,7 @@ export default function App() {
         {canUndoRevert && <button type="button" className="quiet" onClick={undoRevert}>{t("undo")}</button>}
         <button type="button" className={"primary" + saveLook} onClick={save}>{t("save")}</button>
         <WindowButtons t={t} maximized={maximized} onError={(e) => setStatus(String(e))} />
-      </header>
+      </TitleBar>
       <nav role="tablist" onKeyDown={walkTabs} inert={!!asking}>
         {TABS.map(([id, label, , prefixes]) => (
           <Fragment key={id}>

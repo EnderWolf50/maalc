@@ -1,9 +1,46 @@
 // The window's own controls, which the system's hidden title bar would otherwise give (tauri.conf.json): its buttons at the
 // title bar's right end, and the prompt that asks before the window closes or the page reloads with unsaved changes.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import * as api from "./api";
 import type { Key } from "./i18n";
 import { useEditor } from "./ui";
+
+/** What the title bar gives up, in this order, while its parts ask more room than the window has (#746; English at 800 px wide
+ * with unsaved changes asks 906 px), each step on top of the ones before: the gaps tighten and the file path's place goes
+ * (the path has shrunk to nothing by then), the name plate and Save take less room inside, the language select's label
+ * leaves the eye (the select keeps it as its name), and the save state's text may wrap. Save, Discard and the window buttons
+ * keep their labels and their corner. index.css draws each step, `header[data-fit~="<step>"]`. */
+export const FIT_STEPS = ["spacing", "padding", "label", "wrap"] as const;
+
+/** The window's title bar: the system's is hidden (tauri.conf.json). Tauri drags the window from any of its parts that is not a
+ * control (drag.js "deep"), and a double click there maximises it. It takes the steps of FIT_STEPS until its parts fit, again
+ * each time what it holds or the window's width changes. */
+export function TitleBar({ inert, children }: { inert?: boolean; children: ReactNode }) {
+  const bar = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = bar.current!;
+    const fit = () => {
+      let n = 0;
+      el.dataset.fit = "";
+      while (n < FIT_STEPS.length && el.scrollWidth > el.clientWidth) el.dataset.fit = FIT_STEPS.slice(0, ++n).join(" ");
+    };
+    fit();
+    // what it holds: the save state's text, Discard and Undo coming and going, Save's look, the language
+    const held = new MutationObserver(fit);
+    held.observe(el, { subtree: true, childList: true, characterData: true, attributeFilter: ["class"] });
+    // the window's width: in the next frame, so the size a fit changes is not measured inside the observer's own callback
+    let frame = 0;
+    const width = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
+    width?.observe(el);
+    let live = true;
+    document.fonts?.ready.then(() => { if (live) fit(); }); // the name plate's face can load after the first fit
+    return () => { live = false; held.disconnect(); width?.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
+  return <header ref={bar} inert={inert} data-tauri-drag-region="deep">{children}</header>;
+}
 
 /** What the prompt guards: the window closes, or the page reloads (F5, Ctrl+R). */
 export type Leave = "close" | "reload";
