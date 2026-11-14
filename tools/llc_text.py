@@ -5,7 +5,7 @@ Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusC
 (cached under `.local/llc/`) and rewrites the `zh` of assets/resource/base/data/gift_search.json and gift_recipes.json
 (from `LLC_zh-CN/EGOgift_*.json`, by gift id) and gui/src/graces.json (names: `MirrorDungeonUI_5.json`
 `mirror_dungeon_5_buffs_title_<id>`; effects: the `DungeonStartBuffs_MD7.json` templates filled with the effect values of
-`.local/unpack/` static data mirrordungeon-start-buffs-08). It writes gui/src/gift_effects.json too: the effect text of each
+`.local/unpack/` static data mirrordungeon-start-buffs-08, each line as runs that say which text the game prints yellow). It writes gui/src/gift_effects.json too: the effect text of each
 gift of gift_search.json, English from the client's `EN_EGOgift_*.json` and Chinese from `LLC_zh-CN/EGOgift_*.json` (`desc`),
 a keyword tag named by the `Bufs*.json` and `BattleKeywords*.json` of each. Simplified to Traditional with OpenCC s2twp. Fails
 on a gift or grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
@@ -31,6 +31,8 @@ URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/d
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
 _S2TWP = opencc.OpenCC("s2twp")
 FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # where s2twp's Taiwan wording is wrong for the game text
+UP = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
+KEYWORD = "#627eff"  # the game's blue of a keyword in a grace's effect text; the GUI shows it plain
 
 
 def to_traditional(text):
@@ -44,8 +46,9 @@ FIXES_NOTE = ", ".join(f"{a}->{b}" for a, b in FIXES.items())
 NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), "
            "converted with OpenCC s2twp, then " + FIXES_NOTE + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 NOTE_GRACES = ("Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and "
-               "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". English "
-               "names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
+               "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". Each "
+               "effect line is a list of runs, `up` on the text the template colours the game's yellow (" + UP + "), what a + or ++ level "
+               "changed. English names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 
 
 def note_effects(client):
@@ -138,15 +141,48 @@ def needed(value, template):
     return value
 
 
-def effect_line(template, values, keyword_names):
+def effect_lines(template, values, keyword_names):
+    """One effect's text as the game prints it: its lines, each a list of runs {"text", "up"}, `up` where the template colours
+    the text UP. Colour tags nest, the inner one holding until its own closing tag (TextMeshPro's colour stack); a colour
+    other than UP and KEYWORD is an error, since it might be a new mark. Each run is converted to Traditional on its own,
+    and must come out as the line converted whole does."""
     ref = values.get("referenceData")
     args = [values.get("value"), values.get("value2")] if not ref else [None, keyword_names[ref["buffKeyword"]], ref["stack"], ref["turn"], ref.get("limit")]
-    text = re.sub(r"</?color[^>]*>", "", template)
-    return to_traditional(re.sub(r"\{(\d)\}", lambda m: str(needed(args[int(m[1])], template)), text))
+    lines, colours = [[]], []
+    for piece in re.split(r"(</?color[^>]*>)", template):
+        if piece == "</color>":
+            colours.pop()
+        elif piece.startswith("<color="):
+            colour = piece[len("<color="):-1].lower()
+            if colour not in (UP, KEYWORD):
+                raise ValueError(f"template has a colour that is neither the game's yellow nor its blue: {colour} in {template}")
+            colours.append(colour)
+        else:
+            text = re.sub(r"\{(\d)\}", lambda m: str(needed(args[int(m[1])], template)), piece)
+            up = bool(colours) and colours[-1] == UP
+            for k, part in enumerate(text.split("\n")):
+                if k:
+                    lines.append([])
+                if not part:
+                    continue
+                runs = lines[-1]
+                if runs and runs[-1]["up"] == up:
+                    runs[-1]["text"] += part
+                else:
+                    runs.append({"text": part, "up": up})
+    out = []
+    for runs in filter(None, lines):
+        converted = [{"text": to_traditional(r["text"]), "up": r["up"]} for r in runs]
+        whole = to_traditional("".join(r["text"] for r in runs))
+        if "".join(r["text"] for r in converted) != whole:
+            raise ValueError(f"converted run by run, the line reads otherwise than whole: {whole}")
+        out.append(converted)
+    return out
 
 
 def grace_texts(z, static):
-    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in the game's own wording."""
+    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in the game's own wording
+    and yellow marks (effect_lines)."""
     templates = {x["id"]: x["description"] for x in read(z, "DungeonStartBuffs_MD7.json")}
     keywords = keyword_names(z)
     titles = {x["id"]: x["content"] for x in read(z, "MirrorDungeonUI_5.json")}
@@ -156,9 +192,20 @@ def grace_texts(z, static):
         lines = []
         for e in b["effects"]:
             key = e.get("customLocalizeTextId", e["type"])
-            lines += effect_line(templates[key], e, keywords).splitlines()
+            lines += effect_lines(templates[key], e, keywords)
         out.setdefault(b["baseId"], {})[LEVELS[b["level"]]] = lines
     return names, out
+
+
+def dump_graces(data):
+    """graces.json's layout: JSON indented by 2, except that each effect line, a list of runs, stays on one line."""
+    def grace(g):
+        levels = ",\n".join(f"        {json.dumps(level)}: [\n" + ",\n".join("          " + json.dumps(runs, ensure_ascii=False) for runs in lines)
+                            + "\n        ]" for level, lines in g["effects"].items())
+        keys = [f"      {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in g.items() if k != "effects"]
+        return "    {\n" + ",\n".join(keys + ['      "effects": {\n' + levels + "\n      }"]) + "\n    }"
+    head = [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data.items() if k != "graces"]
+    return "{\n" + ",\n".join(head) + ',\n  "graces": [\n' + ",\n".join(map(grace, data["graces"])) + "\n  ]\n}\n"
 
 
 def credit(release):
@@ -206,7 +253,7 @@ def main():
     assert sorted(base_ids) == sorted(g["en"] for g in graces["graces"]), "graces.json and the client disagree on the grace names"
     for g in graces["graces"]:
         g["zh"], g["effects"] = titles[base_ids[g["en"]]], effects[base_ids[g["en"]]]
-    GRACES.write_text(json.dumps(retitled(graces, args.release, NOTE_GRACES), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    GRACES.write_text(dump_graces(retitled(graces, args.release, NOTE_GRACES)), encoding="utf-8")
     from game_data import unpack_client
     unpack = local_dir("unpack")
     ids = [g["id"] for g in json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]]
