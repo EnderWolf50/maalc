@@ -206,6 +206,10 @@ export function floorBadges(floors: PackFloors, sep: string): { mode: keyof Pack
   });
 }
 
+/** The whole numbers a pack's weight may take (the schema's pack_weight). */
+export const WEIGHT_MIN: number = schema.$defs.pack_weight.minimum;
+export const WEIGHT_MAX: number = schema.$defs.pack_weight.maximum;
+
 /** A pack's weight: its own, else the plan's unlisted weight (the agent's rule, spec 03 section 6). */
 export const weightOf = (plan: PackPlanValues, name: string) => plan.weights[name] ?? plan.unlisted;
 

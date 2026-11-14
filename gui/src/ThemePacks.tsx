@@ -6,7 +6,7 @@ import { GIFT_BY_ID } from "./giftCatalog";
 import { listsOfPlan, packWanted } from "./gifts";
 import { fill, localName } from "./i18n";
 import {
-  EVENT_MODES, MODE_KEYS, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, parseThemePacks, weightOf,
+  EVENT_MODES, MODE_KEYS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, parseThemePacks, weightOf,
   type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
@@ -51,19 +51,22 @@ const BADGES = {
 } as const;
 
 /** A pack's weight typed in place (#679, in place of prompt()): Enter keeps a whole number from -10 to 10, or says why not
- * beside the box; Esc, or leaving the box, keeps the weight as it was. */
+ * beside the box; Esc, or leaving the box, keeps the weight as it was. The weight it opens on is selected, so a number typed
+ * replaces it (#734). */
 function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | null) => void }) {
   const { t } = useEditor();
   const [text, setText] = useState(value === undefined ? "" : String(value));
   const [wrong, setWrong] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => { input.current?.select(); }, []);
   const keep = () => {
     const w = Number(text);
-    if (text.trim() !== "" && Number.isInteger(w) && w >= -10 && w <= 10) onDone(w);
+    if (text.trim() !== "" && Number.isInteger(w) && w >= WEIGHT_MIN && w <= WEIGHT_MAX) onDone(w);
     else setWrong(true);
   };
   return (
     <span className="weigh">
-      <input type="number" min={-10} max={10} step={1} autoFocus aria-label={t("packs.weightPrompt")} value={text}
+      <input ref={input} type="number" min={WEIGHT_MIN} max={WEIGHT_MAX} step={1} autoFocus aria-label={t("packs.weightPrompt")} value={text}
         onChange={(e) => { setText(e.target.value); setWrong(false); }} onBlur={() => onDone(null)}
         onKeyDown={(e) => {
           if (e.key === "Enter") { e.preventDefault(); keep(); }
@@ -162,10 +165,12 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     </div>
   );
   const gapOrLine = (g: number) => (g === line ? lineBar : <div className="gap" {...target(drag === LINE, lanes[g - 1])} />);
+  // A + lane's box opens on the next score past the lanes, one above the highest or one below the lowest (#734), in range.
+  const nextScore = (at: AddAt) => Math.min(WEIGHT_MAX, Math.max(WEIGHT_MIN, at === "top" ? lanes[0] + 1 : lanes[lanes.length - 1] - 1));
   const addLane = (at: AddAt) => onChange && (
     <div className="lane add" {...target(drag !== null && drag !== LINE, at)}>
       {typing?.lane === at
-        ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what)}</>
+        ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what, nextScore(at))}</>
         : <>＋ {t("packs.newLane")}</>}
     </div>
   );

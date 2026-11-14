@@ -112,17 +112,29 @@ describe("finding a pack by name", () => {
 });
 
 describe("a pack's weight, typed in place (no prompt dialog)", () => {
-  const plan = () => ({ id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" });
-  /** The theme pack tab on plan Mine; window.prompt only counts calls. */
-  async function open() {
+  const plan = (weights: Record<string, number> = { "The Outcast": -1 }) =>
+    ({ id: "p1", name: "Mine", weights, threshold: 0, unlisted: 0, event_packs: "weight" });
+  /** The theme pack tab on plan Mine (lanes 0 and -1 unless `p` says otherwise); window.prompt only counts calls. */
+  async function open(p = plan()) {
     const asked = vi.spyOn(window, "prompt").mockReturnValue(null);
     onTestFinished(() => asked.mockRestore());
-    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan()] }));
+    const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [p] }));
     await r.user.click(await screen.findByText("Mine"));
     return { ...r, asked, weights: () => r.settings().theme_pack_plans[0].weights };
   }
   const chipOf = async (name: string) => (await screen.findByText(name, { selector: ".nm" })).closest(".pk") as HTMLElement;
   const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
+  /** The + lanes, the one above the lanes and the one below, while neither has a box open. */
+  const addLanes = () => screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
+  /** Drag the pack `name` onto `lane`. */
+  const dropOn = async (lane: Element, name: string) => {
+    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
+    const chip = await chipOf(name);
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(lane, { dataTransfer });
+    fireEvent.drop(lane, { dataTransfer });
+    fireEvent.dragEnd(chip, { dataTransfer });
+  };
 
   test("clicking a pack opens a box on it with its weight; Enter keeps the new one", async () => {
     const r = await open();
@@ -157,36 +169,59 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
 
   test("a pack dropped on the + below the lanes asks for the new lane's weight in that lane", async () => {
     const r = await open();
-    const [, lane] = screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
-    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
-    const chip = await chipOf("The Forgotten");
-    fireEvent.dragStart(chip, { dataTransfer });
-    fireEvent.dragOver(lane, { dataTransfer });
-    fireEvent.drop(lane, { dataTransfer });
-    fireEvent.dragEnd(chip, { dataTransfer });
+    const [, lane] = addLanes();
+    await dropOn(lane, "The Forgotten");
     expect(lane).toContainElement(box());
-    await r.user.type(box(), "-2{Enter}");
-    expect(r.weights()["The Forgotten"]).toBe(-2);
+    await r.user.keyboard("-3{Enter}");
+    expect(r.weights()["The Forgotten"]).toBe(-3);
     expect(r.asked).not.toHaveBeenCalled();
   });
 
   test("a + above the lanes takes a pack too, so a score higher than every lane needs no drag past the list (#720)", async () => {
     const r = await open();
-    const [top, bottom] = screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
+    const [top, bottom] = addLanes();
     const scored = [...document.querySelectorAll(".lane:not(.add)")];
     expect(top.compareDocumentPosition(scored[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(bottom.compareDocumentPosition(scored[scored.length - 1]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
-    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
-    const chip = await chipOf("The Forgotten");
-    fireEvent.dragStart(chip, { dataTransfer });
-    fireEvent.dragOver(top, { dataTransfer });
-    fireEvent.drop(top, { dataTransfer });
-    fireEvent.dragEnd(chip, { dataTransfer });
+    await dropOn(top, "The Forgotten");
     expect(top).toContainElement(box());
     expect(bottom).not.toContainElement(box());
-    await r.user.type(box(), "4{Enter}");
+    await r.user.keyboard("4{Enter}");
     expect(r.weights()["The Forgotten"]).toBe(4);
     expect(document.querySelector(".lane:not(.add) .w")).toHaveTextContent("+4");
+  });
+
+  test("a + lane's box opens on the score past every lane, selected, so a number typed replaces it (#734)", async () => {
+    const r = await open(); // lanes 0 and -1
+    await dropOn(addLanes()[0], "The Forgotten");
+    expect(box()).toHaveFocus();
+    expect(box()).toHaveValue(1); // the highest, 0, + 1
+    await r.user.keyboard("4{Enter}"); // 14 if the 1 were not selected: out of range
+    expect(r.weights()["The Forgotten"]).toBe(4);
+    await dropOn(addLanes()[1], "Flat-broke Gamblers"); // lanes 4, 0 and -1 now
+    expect(box()).toHaveValue(-2); // the lowest, -1, - 1
+    await r.user.keyboard("-7{Enter}"); // -2-7 if the -2 were not selected
+    expect(r.weights()["Flat-broke Gamblers"]).toBe(-7);
+  });
+
+  test("Enter keeps the prefilled score; a plan with no score yet offers +1 above and -1 below its one lane, 0 (#734)", async () => {
+    const r = await open(plan({}));
+    await dropOn(addLanes()[0], "The Forgotten");
+    expect(box()).toHaveValue(1);
+    await r.user.keyboard("{Escape}");
+    await dropOn(addLanes()[1], "The Forgotten");
+    expect(box()).toHaveValue(-1);
+    await r.user.keyboard("{Enter}");
+    expect(r.weights()).toEqual({ "The Forgotten": -1 });
+  });
+
+  test("past the -10..10 range the prefill stops at its end, a score Enter keeps (#734)", async () => {
+    await open(plan({ "The Forgotten": 10, "The Outcast": -10 }));
+    await dropOn(addLanes()[0], "Flat-broke Gamblers");
+    expect(box()).toHaveValue(10);
+    fireEvent.keyDown(box(), { key: "Escape" });
+    await dropOn(addLanes()[1], "Flat-broke Gamblers");
+    expect(box()).toHaveValue(-10);
   });
 
   test("Enter on a focused pack opens the box too, and the unlisted packs' chip has one", async () => {

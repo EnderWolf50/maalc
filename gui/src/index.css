@@ -138,6 +138,15 @@ button.icon:hover:not(:disabled) { color: var(--accent-ink); background: none; b
 select, input:not([type="checkbox"]) {
   border: 1px solid var(--line-2); padding: 4px 8px; background: var(--field); min-width: 0; border-radius: 2px;
 }
+/* Every dropdown's chevron is drawn (#718, #734): two strokes in the text's colour, 16 px in from the right edge, the room
+ * 「＋ 加入罪人」 got first; the native one keeps its own inset of a few pixels whatever the padding. */
+select {
+  appearance: none; cursor: pointer; padding-right: 40px;
+  background-repeat: no-repeat; background-size: 5px 5px; /* 10 x 5, the native chevron's size */
+  background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
+    linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
+  background-position: right 20px center, right 15px center; /* measured: 16 px from the edge to the ink */
+}
 input[type="number"], input.decimal { width: 7em; font-variant-numeric: tabular-nums; }
 input[type="checkbox"] { width: 15px; height: 15px; margin: 0; flex: none; }
 input:disabled, select:disabled { opacity: 0.45; cursor: default; }
@@ -566,15 +575,8 @@ details.skill-panel > summary + * { margin-top: 0; }
 details.skill-panel > p { margin-bottom: 0; }
 /* not details.bad nor li.bad: `.bad input`, `.bad select` would outline every field of the panel or the row, not just the wrong row */
 details.skill-panel > summary.bad { color: var(--bad); }
-/* 「＋ 加入罪人」(#718): its chevron is drawn, two strokes in the text's colour, as far in from the right edge as the text is from
- * the left; the native one keeps its own inset of a few pixels whatever the padding. */
-.skill-add {
-  align-self: flex-start; appearance: none; cursor: pointer; padding: 4px 40px 4px 12px;
-  background-color: var(--field); background-repeat: no-repeat; background-size: 5px 5px; /* 10 x 5, the native chevron's size */
-  background-image: linear-gradient(45deg, transparent 36%, currentColor 44% 56%, transparent 64%),
-    linear-gradient(-45deg, transparent 36%, currentColor 44% 56%, transparent 64%);
-  background-position: right 20px center, right 15px center; /* measured: 16 px from each edge to the ink, like the text's */
-}
+/* 「＋ 加入罪人」: a select in the panel's column keeps its own width, as one in a line does */
+details.panel > select { align-self: flex-start; }
 ol.skill-sinners { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 ol.skill-sinners:empty { display: none; }
 ol.skill-sinners > li {
