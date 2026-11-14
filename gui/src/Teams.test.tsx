@@ -417,6 +417,51 @@ describe("the deployment order tiles (#718)", () => {
     }
   });
 
+  // #761: the formation screen draws a card in the order with its frame and ring at half their light. Along the card's edges,
+  // the ring's crest reads R 0.50-0.51 of the focused card's (Lamp, at full light) on all 10 cards in the order of
+  // tests/screens/Formation.png: the channel the sprite has full in both, so the light itself; the slot keeps a 0.5 grey for
+  // its graphics. Its number and its plate stay at full light, so they read first.
+  const frameLook = (name: string, hover = false) => filterEffect(cssValueOf(css, tile(name), "filter", hover, "::after"));
+  test("a card in the order has its frame and ring at half their light, as the game's, its number and plate at full", () => {
+    renderEditor(<TeamsTab />, ordered());
+    for (const s of order) {
+      expect(frameLook(s).light).toBeGreaterThanOrEqual(0.45);
+      expect(frameLook(s).light).toBeLessThanOrEqual(0.55);
+      expect(frameLook(s).colour).toBe(1);
+      for (const part of [".num", ".banner"]) {
+        const el = tile(s).querySelector(part)!;
+        expect(filterEffect(cssValueOf(css, el, "filter")).light).toBe(1);
+        expect(cssValueOf(css, el, "opacity")).toBeUndefined();
+      }
+    }
+    for (const s of LEFT_OUT) expect(frameLook(s)).toEqual({ light: 1, colour: 1 });
+  });
+
+  // The game's name dims with its frame too, but a name must read: it dims only as far as it keeps 4.5:1 over a white pixel
+  // of its art, darkened as its card's, under the shade's lightest 68 % (index.css, .sinner::before). The tile keeps the
+  // game's ink in both themes: the light theme sets none of these colours.
+  const hex = (name: string) => {
+    expect(css.match(new RegExp(`${name}:`, "g"))).toHaveLength(1);
+    return css.match(new RegExp(`${name}:\\s*#([0-9a-f]{6})`, "i"))![1].match(/../g)!.map((c) => parseInt(c, 16) / 255);
+  };
+  const luminance = (rgb: number[]) => rgb.map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+    .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const contrast = (a: number[], b: number[]) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  test("the name of a card in the order dims with its frame, as far as it keeps 4.5:1 over white art; one left out's stays", () => {
+    renderEditor(<TeamsTab />, ordered());
+    const nameLook = (s: string) => filterEffect(cssValueOf(css, tile(s).querySelector(".name")!, "filter"));
+    for (const s of LEFT_OUT) expect(nameLook(s)).toEqual({ light: 1, colour: 1 });
+    for (const s of order) {
+      expect(nameLook(s).light).toBeLessThan(1);
+      const ink = hex("--art-name").map((c) => c * nameLook(s).light);
+      const under = hex("--art-shade").map((c) => 0.68 * c + 0.32 * artLook(s).light);
+      expect(contrast(ink, under)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   test("the pointer over a sinner left out gives it some colour back, at the same light, to say a click puts it in", () => {
     renderEditor(<TeamsTab />, ordered());
     for (const s of LEFT_OUT) {
@@ -426,14 +471,18 @@ describe("the deployment order tiles (#718)", () => {
     }
   });
 
-  test("the pointer over a sinner lights its frame and nothing behind the card: no button fill round the frame's edge", () => {
+  test("the pointer over a sinner lights its frame, in the order or not, and nothing behind the card: no button fill round the frame's edge", () => {
     renderEditor(<TeamsTab />, ordered());
-    for (const s of ["Ryōshū", "Gregor"]) expect(cssValueOf(css, tile(s), "background", true)).toBe("none");
+    for (const s of ["Ryōshū", "Sinclair", "Gregor"]) {
+      expect(cssValueOf(css, tile(s), "background", true)).toBe("none");
+      expect(frameLook(s, true).light).toBeGreaterThanOrEqual(1.3 * frameLook(s).light);
+    }
   });
 
   test("a team on a plan follows the same rule, quieter than a grid one edits: every card has less light, the order's less colour", () => {
     renderEditor(<TeamsTab />, ordered());
     const editable = Object.fromEntries(SINNERS.map((s) => [s, artLook(s)]));
+    const editableFrame = Object.fromEntries(SINNERS.map((s) => [s, frameLook(s)]));
     cleanup();
     const onPlan = settings();
     onPlan.deployment_order_plans = [{ id: "d1", name: "Bleed order", order }];
@@ -443,10 +492,13 @@ describe("the deployment order tiles (#718)", () => {
     for (const s of SINNERS) expect(artLook(s).light).toBeLessThan(editable[s].light);
     for (const s of order) expect(artLook(s).colour).toBeLessThan(editable[s].colour);
     for (const s of LEFT_OUT) expect(artLook(s).colour).toBe(0);
-    // the same rule: the order's cards darker than the ones left out. The frame's own filter is read from its rule's text: a
-    // ::after is not an element cssValueOf can match.
+    // the same rule: the order's cards darker than the ones left out; every frame and its ring with less colour, none lighter
     for (const s of order) for (const out of LEFT_OUT) expect(artLook(s).light).toBeLessThan(artLook(out).light);
-    expect(rulesOf((x) => x === ".sinners.readonly .sinner::after")).toMatch(/filter:\s*saturate\(0?\.\d+\)/);
+    for (const s of SINNERS) {
+      expect(frameLook(s).colour).toBeLessThan(editableFrame[s].colour);
+      expect(frameLook(s).light).toBeLessThanOrEqual(editableFrame[s].light);
+    }
+    for (const s of order) for (const out of LEFT_OUT) expect(frameLook(s).light).toBeLessThan(frameLook(out).light);
   });
 
   // #732: the tile is the game's formation card. Its frame is the game's 162 x 230 sprite (tools/sinner_cards.py FRAME_PARTS).

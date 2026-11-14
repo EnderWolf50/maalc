@@ -380,11 +380,18 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack: 無�
   expect(chip("EXTREME")).toBeInTheDocument();
 });
 
-test("the deployment order plan's grid shows each sinner's default identity card (#718), lit as the formation screen's (#750)", () => {
+test("the deployment order plan's grid shows each sinner's default identity card (#718), lit as the formation screen's (#750, #761)", () => {
   const order = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Ishmael", "Rodion", "Outis", "Heathcliff", "Sinclair"];
   renderEditor(<DeploymentTab />, settings({ deployment_order_plans: [{ id: "p", name: "P", order }] }));
   const tile = (name: string) => within(document.querySelector<HTMLElement>(".sinners")!).getByRole("button", { name: new RegExp(name) });
   const artLook = (name: string) => filterEffect(cssValueOf(css, tile(name).querySelector("img")!, "filter"));
+  const frameLook = (name: string) => filterEffect(cssValueOf(css, tile(name), "filter", false, "::after"));
+  // the game's frame and ring of a card in the order at half their light, one left out's at full (#761)
+  for (const s of ["Ryōshū", "Sinclair"]) {
+    expect(frameLook(s).light).toBeGreaterThanOrEqual(0.45);
+    expect(frameLook(s).light).toBeLessThanOrEqual(0.55);
+  }
+  expect(frameLook("Gregor").light).toBe(1);
   expect(tile("Gregor")).toHaveClass("out");
   expect(tile("Ryōshū")).not.toHaveClass("out");
   expect(tile("Ryōshū").querySelector("img")?.getAttribute("src")).toMatch(/sinner_cards\/10401\.webp$/); // Ryōshū's LCB Sinner

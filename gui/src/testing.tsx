@@ -62,14 +62,17 @@ const selectorsOf = (list: string) => {
  * and match `el`, an !important one first, then the most specific, the later one on a tie. What it does not read: a rule
  * inside @media counts whether or not its query holds (`cssRules` drops the @media), there are no layers, and a shorthand and
  * its longhands count as different properties. With `hover`, a `:hover` in a selector matches as with the pointer over it;
- * without, it never does. */
-export function cssValueOf(text: string, el: Element, prop: string, hover = false) {
+ * without, it never does. With `pseudo` ("::after"), the value its pseudo-element gets: only the selectors that end in it count,
+ * matched without it; without, a selector with a pseudo-element never counts. */
+export function cssValueOf(text: string, el: Element, prop: string, hover = false, pseudo = "") {
   let best: { rank: number; value: string } | undefined;
   for (const { selector, body } of cssRules(text)) {
     const declared = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+)`))?.[1].trim();
     if (!declared) continue;
     const value = declared.replace(/\s*!important$/, "");
-    for (const one of selectorsOf(selector)) {
+    for (const whole of selectorsOf(selector)) {
+      if (pseudo ? !whole.endsWith(pseudo) : whole.includes("::")) continue;
+      const one = pseudo ? whole.slice(0, -pseudo.length) : whole;
       if (one.includes("::") || (!hover && one.includes(":hover")) || !el.matches(one.replace(/:hover/g, ""))) continue;
       const rank = specificity(one) + (value === declared ? 0 : 1e9);
       if (!best || rank >= best.rank) best = { rank, value };
