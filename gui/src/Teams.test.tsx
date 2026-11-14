@@ -10,6 +10,7 @@ import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
 import { cssRules, expectLines, pickInList, renderEditor, sideList } from "./testing";
 import css from "./index.css?raw";
+import mainTsx from "./main.tsx?raw";
 import { TeamsTab } from "./Teams";
 import { useEditor } from "./ui";
 
@@ -423,6 +424,15 @@ describe("the deployment order tiles (#718)", () => {
     const glow = cssRules(css).filter((r) => r.body.includes("sinner_card/glow.webp")).map((r) => r.selector).join(" ");
     expect(glow).toMatch(/\.sinner\.deployed::after/);
     expect(glow).toMatch(/\.sinner\.backup::after/);
+  });
+
+  test("the number is drawn as the formation screen's (#741): no dark outline, a soft rim, a weight the app bundles", () => {
+    const num = rulesOf((x) => x === ".sinner .num");
+    expect(num).not.toMatch(/text-stroke/);
+    expect(num).toMatch(/filter:[^;]*drop-shadow/);
+    const weight = num.match(/font:\s*(\d{3})\s/)?.[1];
+    expect(weight).toBeDefined();
+    expect(mainTsx).toContain(`@fontsource/barlow-condensed/latin-${weight}.css`);
   });
 
   test("the name sits at the foot as the game writes an identity's, in the sinner's own spelling", () => {
