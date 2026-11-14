@@ -443,8 +443,9 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   background: linear-gradient(to top, color-mix(in srgb, var(--art-shade) 88%, transparent) 0,
     color-mix(in srgb, var(--art-shade) 78%, transparent) 26%, transparent 48%);
 }
-/* the game's frame over it; in the order, the game's glow over the frame, as the slot prefab lays it: its ring alone, the wash
- * the sprite has over the whole card taken off (tools/sinner_cards.py ring_only, #756), as the formation screen shows none */
+/* the game's frame over it; in the order, the game's glow over the frame, where the slot prefab lays it. Only its ring: the
+ * sprite's wash over the whole card is taken off (tools/sinner_cards.py ring_only, #756), as the formation screen shows next
+ * to none of it (what hides it there is in the game's code, not read) */
 .sinner::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; transition: filter 0.12s ease-out;
   background: url("./sinner_card/frame.webp") 0 0 / 100% 100% no-repeat;

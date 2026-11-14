@@ -89,16 +89,18 @@ def plain_plate(plate: Image.Image, end: int = PLATE_END) -> Image.Image:
     return out
 
 
-def ring_only(glow: Image.Image, crest: int = CREST) -> Image.Image:
+def ring_only(glow: Image.Image) -> Image.Image:
     """The glow without its wash (#756). The sprite is an orange ring over a 20 % orange wash that covers the card inside it,
-    and the slot prefab draws it over the art; yet the formation screen (tests/screens/Formation.png) shows a selected card's
-    art with 3 % orange at most and no ring at full light, by a step of the game's code not read. So inside the ring's crest
-    (the pixels joined to the middle whose alpha is under `crest`) the wash's alpha w, the median there, comes out: a pixel
-    keeps (a - w) / (1 - w) of its light, the ring's own, and none under w. The crest and its soft outer edge stay. A crest
-    that does not close stops the tool."""
+    and the slot prefab draws it over the art and the frame, unmasked, in the UI's default material; yet the formation screen
+    (tests/screens/Formation.png, its 3 cards in the order fitted to their art) shows the wash reaching the art at 3 % orange
+    at most. Drawing it as the game does was tried first: what hides the wash is in the slot's own code (its
+    PersonalitySlotGraphics holds a grey and the glow among the graphics it tints), and that code is IL2CPP, not read. So
+    inside the ring's crest (the pixels joined to the middle whose alpha is under CREST) the wash's alpha w, the median
+    there, comes out: a pixel keeps (a - w) / (1 - w) of its light, the ring's own, and none under w. The crest and its soft
+    outer edge stay. A crest that does not close stops the tool."""
     im = glow.convert("RGBA")
     w, h = im.size
-    inside = Image.eval(im.getchannel("A"), lambda a: 255 if a < crest else 0)
+    inside = Image.eval(im.getchannel("A"), lambda a: 255 if a < CREST else 0)
     if inside.getpixel((w // 2, h // 2)) == 0:
         return im  # no ring round the middle: nothing to take out
     ImageDraw.floodfill(inside, (w // 2, h // 2), 128)

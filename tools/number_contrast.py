@@ -36,6 +36,7 @@ GRID = "[data-section=order] .sinners"
 INK_TOLERANCE = 30  # the sum over R, G, B of a pixel's distance from the ink that still counts as ink, not its soft edge
 MIN_INK = 10  # ink pixels a CSS px squared: fewer is no number
 PAD = 4  # CSS px round a number's box that the ring may reach
+KINDS = ("deployed", "backup")  # a number's card: in the first seven, or after them
 WHITE_ART = ".sinner img { object-position: -9999px 0 !important; background: #fff !important; }"
 # The app's CSP refuses an added <style>: the rule goes in a constructed sheet, kept on window to take it off after.
 SHEET = "window.__numberContrastWhite"
@@ -98,16 +99,18 @@ def css_rgb(text: str) -> tuple[int, int, int]:
 
 def summary(rows: list[dict], bar: float) -> tuple[list[str], list[dict]]:
     """The lowest median and 90th percentile per view and kind, and over all per kind; and the rows under `bar`."""
+
+    def lowest(some: list[dict], kind: str) -> str | None:
+        of_kind = [r for r in some if r["kind"] == kind]
+        if not of_kind:
+            return None
+        return f"{kind} n={len(of_kind)} median>={min(r['median'] for r in of_kind):.2f} p90>={min(r['p90'] for r in of_kind):.2f}"
+
     lines = []
-
-    def low(rs, kind):
-        k = [r for r in rs if r["kind"] == kind]
-        return f"{kind} n={len(k)} median>={min(r['median'] for r in k):.2f} p90>={min(r['p90'] for r in k):.2f}" if k else None
-
     for view in dict.fromkeys(r["view"] for r in rows):
-        rs = [r for r in rows if r["view"] == view]
-        lines.append(f"{view}: " + "; ".join(p for kind in ("deployed", "backup") if (p := low(rs, kind))))
-    lines += [f"all {p.replace(' ', ': ', 1)}" for kind in ("deployed", "backup") if (p := low(rows, kind))]
+        in_view = [r for r in rows if r["view"] == view]
+        lines.append(f"{view}: " + "; ".join(part for kind in KINDS if (part := lowest(in_view, kind))))
+    lines += [f"all {part.replace(' ', ': ', 1)}" for kind in KINDS if (part := lowest(rows, kind))]
     return lines, [r for r in rows if r["p90"] < bar]
 
 
@@ -182,11 +185,11 @@ def run(a: argparse.Namespace) -> int:
         devtools("eval", f"document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== {SHEET})", port=a.port)
         if not a.out:
             shutil.rmtree(out, ignore_errors=True)
-    lines, low = summary(rows, a.min)
+    lines, under = summary(rows, a.min)
     print("\n".join(lines))
-    for r in low:
+    for r in under:
         print(f"under {a.min}:1: {r['view']} {r['kind']} {r['text']} ({r['p90']:.2f}:1)")
-    return 1 if low else 0
+    return 1 if under else 0
 
 
 def parse(argv: list[str]) -> argparse.Namespace:
