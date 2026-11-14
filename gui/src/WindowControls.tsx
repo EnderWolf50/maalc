@@ -6,14 +6,14 @@ import type { Key } from "./i18n";
 import { useEditor } from "./ui";
 
 /** What the title bar gives up, in this order, while its parts ask more room than the window has (#746; English at 800 px wide
- * with unsaved changes asks 906 px), each step on top of the ones before: the spacing tightens and the file path's place goes
- * (the path has shrunk to nothing by then), the language select's label leaves the eye (the select keeps it as its name), and
- * the save state's text may wrap. Save, Discard and the window buttons keep their labels. index.css draws each step,
- * `header[data-fit~="<step>"]`. */
-export const GIVES_WAY = ["spacing", "label", "wrap"] as const;
+ * with unsaved changes asks 906 px), each step on top of the ones before: the gaps tighten and the file path's place goes
+ * (the path has shrunk to nothing by then), the name plate and Save take less room inside, the language select's label
+ * leaves the eye (the select keeps it as its name), and the save state's text may wrap. Save, Discard and the window buttons
+ * keep their labels and their corner. index.css draws each step, `header[data-fit~="<step>"]`. */
+export const FIT_STEPS = ["spacing", "padding", "label", "wrap"] as const;
 
 /** The window's title bar: the system's is hidden (tauri.conf.json). Tauri drags the window from any of its parts that is not a
- * control (drag.js "deep"), and a double click there maximises it. It takes the steps of GIVES_WAY until its parts fit, again
+ * control (drag.js "deep"), and a double click there maximises it. It takes the steps of FIT_STEPS until its parts fit, again
  * each time what it holds or the window's width changes. */
 export function TitleBar({ inert, children }: { inert?: boolean; children: ReactNode }) {
   const bar = useRef<HTMLElement>(null);
@@ -22,7 +22,7 @@ export function TitleBar({ inert, children }: { inert?: boolean; children: React
     const fit = () => {
       let n = 0;
       el.dataset.fit = "";
-      while (n < GIVES_WAY.length && el.scrollWidth > el.clientWidth) el.dataset.fit = GIVES_WAY.slice(0, ++n).join(" ");
+      while (n < FIT_STEPS.length && el.scrollWidth > el.clientWidth) el.dataset.fit = FIT_STEPS.slice(0, ++n).join(" ");
     };
     fit();
     // what it holds: the save state's text, Discard and Undo coming and going, Save's look, the language

@@ -9,7 +9,7 @@ import { TEXT } from "./i18n";
 import css from "./index.css?raw";
 import { newSettings, newTeam } from "./model";
 import { cssRules } from "./testing";
-import { GIVES_WAY } from "./WindowControls";
+import { FIT_STEPS } from "./WindowControls";
 
 const zh = TEXT.zh_tw;
 // The window as Tauri runs it: a close request goes to the page's listener first, and the window goes only when the page lets
@@ -117,15 +117,13 @@ describe("the title bar", () => {
 
 describe("a title bar with less room than its parts ask for (#746)", () => {
   const en = TEXT.en_us;
-  // jsdom lays nothing out, so the header's width is stubbed with what the real window measured (English at 800 px wide,
-  // unsaved changes, 2026-11-14): its parts ask 906 px as drawn, 838 with the spacing tightened and the file path gone,
-  // 776 with the language's label hidden too; Discard changes is 127 of that (119 px and its gap).
+  // jsdom lays nothing out, so the header's width is stubbed with what the real window measured (English, 2026-11-14): with
+  // unsaved changes its parts ask 906 px as drawn, 862 with the gaps tightened and the file path gone, 838 with the plates'
+  // inner room too, 776 with the language's label hidden; saved (no Discard changes) they ask 763 as drawn.
   let room = 800;
-  const asks = (bar: HTMLElement) => {
-    const steps = stepsOf(bar);
-    const discard = [...bar.querySelectorAll("button")].some((b) => b.textContent === en.revert) ? 0 : 127;
-    return (steps.includes("label") ? 776 : steps.includes("spacing") ? 838 : 906) - discard;
-  };
+  const UNSAVED = [906, 862, 838, 776, 776];
+  const asks = (bar: HTMLElement) =>
+    [...bar.querySelectorAll("button")].some((b) => b.textContent === en.revert) ? UNSAVED[stepsOf(bar).length] : 763;
   const stepsOf = (bar: HTMLElement) => (bar.dataset.fit ?? "").split(" ").filter(Boolean);
   const bar = () => document.querySelector("header")!;
   beforeEach(() => {
@@ -149,8 +147,12 @@ describe("a title bar with less room than its parts ask for (#746)", () => {
     return user;
   };
 
-  test("gives way only as far as it must, in order: spacing and the path, then the language's label, then the state wraps", async () => {
-    for (const [width, steps] of [[1000, []], [850, ["spacing"]], [800, ["spacing", "label"]], [760, ["spacing", "label", "wrap"]]] as const) {
+  test("gives way only as far as it must, in order: the gaps and the path, the plates' room, the language's label, the state's line", async () => {
+    const cases = [
+      [1000, []], [880, ["spacing"]], [850, ["spacing", "padding"]], [800, ["spacing", "padding", "label"]],
+      [760, ["spacing", "padding", "label", "wrap"]],
+    ] as const;
+    for (const [width, steps] of cases) {
       await edited(width);
       await waitFor(() => expect(stepsOf(bar())).toEqual(steps));
       cleanup();
@@ -159,20 +161,29 @@ describe("a title bar with less room than its parts ask for (#746)", () => {
 
   test("takes its steps back when its parts ask less again", async () => {
     const user = await edited(800);
-    await waitFor(() => expect(stepsOf(bar())).toEqual(["spacing", "label"]));
-    await user.click(button(en.revert)); // unsaved changes dropped: Discard changes goes, Undo takes less room
+    await waitFor(() => expect(stepsOf(bar())).toEqual(["spacing", "padding", "label"]));
+    await user.click(button(en.save)); // saved: Discard changes goes
     await waitFor(() => expect(stepsOf(bar())).toEqual([]));
   });
+
+  const drawn = (step: string) => cssRules(css).filter((r) => r.selector.includes(`header[data-fit~="${step}"]`));
 
   test("the language select keeps its name while its label is hidden, and every step is drawn by the stylesheet", async () => {
     await edited(800);
     await waitFor(() => expect(stepsOf(bar())).toContain("label"));
     expect(screen.getByRole("combobox", { name: en.language })).toBeInTheDocument();
-    const drawn = (step: string) => cssRules(css).filter((r) => r.selector.includes(`header[data-fit~="${step}"]`)).map((r) => r.body).join("\n");
-    for (const step of GIVES_WAY) expect(drawn(step)).not.toBe("");
+    for (const step of FIT_STEPS) expect(drawn(step)).not.toEqual([]);
     // hidden from the eye only: a label hidden by display or visibility gives the select no name
-    expect(drawn("label")).toMatch(/clip-path:\s*inset\(50%\)/);
-    expect(drawn("label")).not.toMatch(/display:\s*none|visibility:\s*hidden/);
+    const label = drawn("label").map((r) => r.body).join("\n");
+    expect(label).toMatch(/clip-path:\s*inset\(50%\)/);
+    expect(label).not.toMatch(/display:\s*none|visibility:\s*hidden/);
+  });
+
+  test("with the file path gone, the controls and the window buttons keep the top right corner", () => {
+    // the path (flex: 1) is what pushes them there; the step that takes it out gives its room to the name plate's end margin
+    const step = FIT_STEPS.find((s) => drawn(s).some((r) => r.selector.endsWith(".path") && /display:\s*none/.test(r.body)));
+    expect(step).toBeDefined();
+    expect(drawn(step!).filter((r) => r.selector.endsWith(" h1")).map((r) => r.body).join("\n")).toMatch(/margin-inline-end:\s*auto/);
   });
 });
 

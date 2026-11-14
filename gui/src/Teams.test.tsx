@@ -480,7 +480,7 @@ describe("the section index", () => {
     const stop = (shown: number) => [...margin.replace(/var\(--sections-shown[^)]*\)/g, `${shown}px`).matchAll(/([+-]\s*)?(\d+(?:\.\d+)?)px/g)]
       .reduce((sum, m) => sum + (m[1]?.trim() === "-" ? -1 : 1) * Number(m[2]), 0);
     for (const shown of [32.75, 60.8]) {
-      for (const padding of [16, 14]) expect(stop(shown) - (padding + shown)).toBeGreaterThanOrEqual(6);
+      for (const padding of [16, 14]) expect(stop(shown) - (padding + shown)).toBeGreaterThanOrEqual(8);
     }
     expect(stop(60.8) - 60.8).toBeCloseTo(stop(32.75) - 32.75); // the same room under two rows as under one
   });

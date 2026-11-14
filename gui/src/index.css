@@ -205,15 +205,17 @@ header button.primary:not(.armed):hover { border-color: var(--accent-line); }
 header button.primary.refused { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); padding: 5px 25px; }
 header button.primary.refused:hover { background: var(--bad-soft); border-color: var(--bad); }
 /* A window too narrow for the header's parts (#746): the file path shrinks to nothing first, by itself; then TitleBar
- * (WindowControls.tsx GIVES_WAY) takes these steps one at a time until the parts fit. The save state keeps to one line until
- * the last one. Measured at 800 px wide, English, unsaved changes: 906 px as drawn, 838 with the spacing, 776 with the label. */
+ * (WindowControls.tsx FIT_STEPS) takes these steps one at a time until the parts fit. The save state keeps to one line until
+ * the last one. With the path gone, the name plate's end margin takes the room the path took, so the controls and the window
+ * buttons stay in the top right corner. */
 header .status { flex-shrink: 0; }
 header[data-fit~="spacing"] { column-gap: 8px; }
 header[data-fit~="spacing"] .path { display: none; }
-header[data-fit~="spacing"] h1 { padding-inline: 10px; }
-header[data-fit~="spacing"] button.primary { padding-inline: 18px; } /* each look 8 px in from its own */
-header[data-fit~="spacing"] button.primary.armed { padding-inline: 16px; }
-header[data-fit~="spacing"] button.primary.refused { padding-inline: 17px; }
+header[data-fit~="spacing"] h1 { margin-inline-end: auto; }
+header[data-fit~="padding"] h1 { padding-inline: 10px; }
+header[data-fit~="padding"] button.primary { padding-inline: 18px; } /* each look 8 px in from its own */
+header[data-fit~="padding"] button.primary.armed { padding-inline: 16px; }
+header[data-fit~="padding"] button.primary.refused { padding-inline: 17px; }
 /* label: see .sr-only */
 header[data-fit~="wrap"] .status { flex-shrink: 1; }
 
@@ -286,8 +288,9 @@ p.muted { margin: 0; max-width: 56em; }
 /* The team page's section index (#718): one row above the editor, the sections left to right in the page's order, held flush
  * with the top of the scrolling page on the page's own ground, so what scrolls under it is hidden. It takes main's top padding
  * into its own (the same 16 px, 14 in a narrow window), so its row lines up with the team list's first line. A section it
- * jumps to stops below it (scroll-margin-top): main's top padding, how far the index reaches below it (--sections-shown, one
- * row or two, see .grace-side) and 8 px more, so the section's heading shows in full under either (#746). */
+ * jumps to stops below it (scroll-margin-top): how far the index reaches below main's top padding (--sections-shown, one row
+ * or two, see .grace-side) plus 24 px, the padding's 16 and 8 to spare (10 below 1000 px wide, where the padding is 14), so
+ * the section's heading shows in full under either (#746). */
 nav.sections {
   position: sticky; top: -16px; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
   margin: -16px 0 -4px; padding: 16px 0 8px; background: var(--bg); border-bottom: 1px solid var(--line);
