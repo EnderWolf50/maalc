@@ -125,6 +125,10 @@ describe("the window as it opens (#732)", () => {
     expect(main.height).toBeLessThanOrEqual(864);
   });
 
+  test("opens 860 tall, the round number under 864 the user chose (#741)", () => {
+    expect(main.height).toBe(860);
+  });
+
   test("the width it opens at holds 5 grace cards a row on the team page, by the stylesheet's own sizes", () => {
     // Across the team page: the team list (`.split aside`), then the editor, where the starlight cards take their minimum
     // (`.graces`). The rest across (main's padding, the scrollbar, the gap after the list, the fieldset's and the starlight
