@@ -109,8 +109,8 @@ body { margin: 0; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 h1 { font-size: 16px; margin: 0; }
 h3, h4 { margin: 0 0 6px; font-size: 13.5px; color: var(--fg-2); }
-/* There for a screen reader's list of headings, not for the eye. */
-.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* There for a screen reader's list of headings, not for the eye (and the header's language label when it gives way). */
+.sr-only, header[data-fit~="label"] .lang > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 * { scrollbar-color: var(--line-2) var(--bg); }
 
 /* Controls: standard ones, in the game's chamfered plates. */
@@ -204,6 +204,18 @@ header button.primary:not(.armed):hover { border-color: var(--accent-line); }
 /* Save refused: the stripe gives way to a crimson frame until the problems are fixed. */
 header button.primary.refused { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); padding: 5px 25px; }
 header button.primary.refused:hover { background: var(--bad-soft); border-color: var(--bad); }
+/* A window too narrow for the header's parts (#746): the file path shrinks to nothing first, by itself; then TitleBar
+ * (WindowControls.tsx GIVES_WAY) takes these steps one at a time until the parts fit. The save state keeps to one line until
+ * the last one. Measured at 800 px wide, English, unsaved changes: 906 px as drawn, 838 with the spacing, 776 with the label. */
+header .status { flex-shrink: 0; }
+header[data-fit~="spacing"] { column-gap: 8px; }
+header[data-fit~="spacing"] .path { display: none; }
+header[data-fit~="spacing"] h1 { padding-inline: 10px; }
+header[data-fit~="spacing"] button.primary { padding-inline: 18px; } /* each look 8 px in from its own */
+header[data-fit~="spacing"] button.primary.armed { padding-inline: 16px; }
+header[data-fit~="spacing"] button.primary.refused { padding-inline: 17px; }
+/* label: see .sr-only */
+header[data-fit~="wrap"] .status { flex-shrink: 1; }
 
 nav[role="tablist"] {
   flex: none; display: flex; gap: 2px; padding: 6px 16px 0; background: var(--panel); box-shadow: inset 0 -1px var(--line-2);
@@ -274,14 +286,15 @@ p.muted { margin: 0; max-width: 56em; }
 /* The team page's section index (#718): one row above the editor, the sections left to right in the page's order, held flush
  * with the top of the scrolling page on the page's own ground, so what scrolls under it is hidden. It takes main's top padding
  * into its own (the same 16 px, 14 in a narrow window), so its row lines up with the team list's first line. A section it
- * jumps to stops below it (scroll-margin-top). */
+ * jumps to stops below it (scroll-margin-top): main's top padding, how far the index reaches below it (--sections-shown, one
+ * row or two, see .grace-side) and 8 px more, so the section's heading shows in full under either (#746). */
 nav.sections {
   position: sticky; top: -16px; z-index: 5; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center;
   margin: -16px 0 -4px; padding: 16px 0 8px; background: var(--bg); border-bottom: 1px solid var(--line);
 }
 nav.sections small { margin-right: 4px; color: var(--muted); font-size: 12px; }
 nav.sections button { padding: 2px 9px; font-size: 12.5px; color: var(--fg-2); background: none; border-color: var(--line); }
-.team [data-section] { scroll-margin-top: 56px; }
+.team [data-section] { scroll-margin-top: calc(var(--sections-shown, 32.75px) + 24px); }
 .tag { font-style: normal; font-size: 11.5px; color: var(--accent-ink); margin-left: 8px; }
 
 .split { display: flex; gap: 20px; align-items: flex-start; }

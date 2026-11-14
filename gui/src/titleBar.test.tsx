@@ -1,5 +1,5 @@
 // The window's title bar (#664): the system's own bar is hidden, and the header drags the window and holds its buttons.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
@@ -9,6 +9,7 @@ import { TEXT } from "./i18n";
 import css from "./index.css?raw";
 import { newSettings, newTeam } from "./model";
 import { cssRules } from "./testing";
+import { GIVES_WAY } from "./WindowControls";
 
 const zh = TEXT.zh_tw;
 // The window as Tauri runs it: a close request goes to the page's listener first, and the window goes only when the page lets
@@ -111,6 +112,67 @@ describe("the title bar", () => {
     expect(win.closed).toBe(0);
     await user.click(button(zh.closeDiscard));
     await waitFor(() => expect(win.closed).toBe(1));
+  });
+});
+
+describe("a title bar with less room than its parts ask for (#746)", () => {
+  const en = TEXT.en_us;
+  // jsdom lays nothing out, so the header's width is stubbed with what the real window measured (English at 800 px wide,
+  // unsaved changes, 2026-11-14): its parts ask 906 px as drawn, 838 with the spacing tightened and the file path gone,
+  // 776 with the language's label hidden too; Discard changes is 127 of that (119 px and its gap).
+  let room = 800;
+  const asks = (bar: HTMLElement) => {
+    const steps = stepsOf(bar);
+    const discard = [...bar.querySelectorAll("button")].some((b) => b.textContent === en.revert) ? 0 : 127;
+    return (steps.includes("label") ? 776 : steps.includes("spacing") ? 838 : 906) - discard;
+  };
+  const stepsOf = (bar: HTMLElement) => (bar.dataset.fit ?? "").split(" ").filter(Boolean);
+  const bar = () => document.querySelector("header")!;
+  beforeEach(() => {
+    const s = newSettings();
+    s.language = "en_us";
+    s.teams = [newTeam(1, "Ta")];
+    win.text = JSON.stringify(s, null, 2) + "\n";
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+      return this.tagName === "HEADER" ? room : 0;
+    });
+    vi.spyOn(Element.prototype, "scrollWidth", "get").mockImplementation(function (this: Element) {
+      return this.tagName === "HEADER" ? Math.max(room, asks(this as HTMLElement)) : 0;
+    });
+    return () => vi.restoreAllMocks();
+  });
+  const edited = async (width: number) => {
+    room = width;
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(await screen.findByRole("textbox", { name: en.name }), "!");
+    return user;
+  };
+
+  test("gives way only as far as it must, in order: spacing and the path, then the language's label, then the state wraps", async () => {
+    for (const [width, steps] of [[1000, []], [850, ["spacing"]], [800, ["spacing", "label"]], [760, ["spacing", "label", "wrap"]]] as const) {
+      await edited(width);
+      await waitFor(() => expect(stepsOf(bar())).toEqual(steps));
+      cleanup();
+    }
+  });
+
+  test("takes its steps back when its parts ask less again", async () => {
+    const user = await edited(800);
+    await waitFor(() => expect(stepsOf(bar())).toEqual(["spacing", "label"]));
+    await user.click(button(en.revert)); // unsaved changes dropped: Discard changes goes, Undo takes less room
+    await waitFor(() => expect(stepsOf(bar())).toEqual([]));
+  });
+
+  test("the language select keeps its name while its label is hidden, and every step is drawn by the stylesheet", async () => {
+    await edited(800);
+    await waitFor(() => expect(stepsOf(bar())).toContain("label"));
+    expect(screen.getByRole("combobox", { name: en.language })).toBeInTheDocument();
+    const drawn = (step: string) => cssRules(css).filter((r) => r.selector.includes(`header[data-fit~="${step}"]`)).map((r) => r.body).join("\n");
+    for (const step of GIVES_WAY) expect(drawn(step)).not.toBe("");
+    // hidden from the eye only: a label hidden by display or visibility gives the select no name
+    expect(drawn("label")).toMatch(/clip-path:\s*inset\(50%\)/);
+    expect(drawn("label")).not.toMatch(/display:\s*none|visibility:\s*hidden/);
   });
 });
 
