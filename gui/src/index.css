@@ -603,13 +603,14 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-spin button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
 .skill-spin button:focus-visible { outline-offset: -2px; }
 .skill-spin .n { width: 22px; flex: none; padding: 5px 0; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
-.skill-pillcell { width: 11em; flex: none; }
+.skill-pillcell { width: 10.5em; flex: none; } /* the widest pill, 「S1→S2 ×4、S1→S3 ×3」, is 140 px */
 /* A status tag, not a button: square, no border of its own. */
 .skill-pill { display: inline-block; padding: 1px 8px; font-size: 12.5px; white-space: nowrap; border-radius: 3px; corner-shape: bevel; }
 .skill-pill.off { color: var(--muted); }
 .skill-pill.on { background: var(--accent-soft); color: var(--accent-ink); font: 700 14px/1.4 var(--font-display); letter-spacing: 0.02em; }
 .skill-pill.err { background: var(--bad-soft); color: var(--bad); white-space: normal; font-weight: 600; }
-.skill-first { width: 8.5em; flex: none; }
+/* 「先換 S1→S3」 (74 px) beside the drawn chevron's 40 px (#734); the pill cell gave up the 7 px, so DON QUIXOTE keeps its room */
+.skill-first { width: 9em; flex: none; }
 .skill-arrows { display: inline-flex; margin-left: auto; }
 
 /* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, a gift's icon with its
