@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { useState, type ReactElement } from "react";
 import { expect } from "vitest";
-import { newSettings, type Settings } from "./model";
+import { newSettings, type Settings, type TextRun } from "./model";
 import { EditorContext, makeCtx, type Picked } from "./ui";
 
 /** Render `ui` over `initial` settings; `settings()` is what the editor holds now, `opened()` the lists something asked the
@@ -31,6 +31,9 @@ export const sideList = () => within(document.querySelector("aside")!);
 
 /** Pick the team or plan named `name` in the side list, as the user clicks it. */
 export const pickInList = (user: UserEvent, name: string) => user.click(sideList().getByText(name));
+
+/** A grace effect line's text, its runs joined. */
+export const textOf = (runs: TextRun[]) => runs.map((r) => r.text).join("");
 
 /** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets (`import css from "./index.css?raw"`). */
 export function cssRules(text: string) {
