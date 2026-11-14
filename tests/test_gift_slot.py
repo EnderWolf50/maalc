@@ -16,9 +16,9 @@ def rect(w, h, x=0, y=0, anchor=(0.5, 0.5)):
 
 def prefab(**changes):
     """The slot's children as `prefab()` returns them: name -> (RectTransform typetree, DUISpriteSetter keys), as 1.118.1 has it."""
-    children = {"EgoGiftIconPrefab": (rect(350, 350), []), "img_basePanel": (rect(350, 350), ["Icon/EgoGift_bg1"]),
+    children = {"EgoGiftIconPrefab": (rect(350, 350), []), "img_basePanel": (rect(350, 350), ["MirrorDungeon/EgoGift/EgoGift_bg1"]),
                 "img_Icon": (rect(256, 256, 0, 8), []), "img_keywordIcon1": (rect(100, 100, -5, 5, (1, 0)), []),
-                "tmp_Tier": (rect(60, 60, 20, -20, (0, 1)), [])}
+                "tmp_Tier": (rect(100, 120, 10, -10, (0, 1)), [])}
     children.update(changes)
     return children
 

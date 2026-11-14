@@ -19,8 +19,6 @@ import json
 import struct
 from pathlib import Path
 
-from PIL import Image
-
 from local_dir import local_dir
 from unity_files import PLAYER_DATA, sprite_image, unity
 
@@ -72,8 +70,10 @@ def total_list(data: Path) -> dict[int, tuple[int, int]]:
 
 def check_sin_order(rows: list[dict]):
     """Stop unless EN_AttributeText's first rows are COLOURS, named as SINS are (the file abbreviates Gluttony to `Glut.`)."""
+    if len(rows) < len(SINS):
+        raise SystemExit(f"EN_AttributeText: {len(rows)} rows, expected at least {len(SINS)}: the sin order changed")
     for colour, sin, row in zip(COLOURS, SINS, rows):
-        if row["id"] != colour or not sin.startswith(row["name"].rstrip(".")):
+        if row["id"] != colour or not (name := row["name"].rstrip(".")) or not sin.startswith(name):
             raise SystemExit(f"EN_AttributeText: {row['id']} is {row['name']}, expected {colour} as {sin}: the sin order changed")
 
 
@@ -91,16 +91,18 @@ def main():
     check_sin_order(json.loads((unpack / ATTRIBUTES).read_text(encoding="utf-8-sig"))["dataList"])
     pointers = total_list(data)
     externals = [e.path for e in next(iter(load(data, SCENE).files.values())).externals]
-    OUT.mkdir(parents=True, exist_ok=True)
+    images = {}
     for key, (sin, colour) in enumerate(zip(SINS, COLOURS)):
         if key not in pointers:
             raise SystemExit(f"totalAttributeSpriteList has no entry for ATTRIBUTE_TYPE {key}")
         file_id, path_id = pointers[key]
         sprite = obj(load(data, SCENE if file_id == 0 else externals[file_id - 1]), path_id).read()
         check_colour(sprite.m_Name, colour)
-        image: Image.Image = sprite_image(sprite).convert("RGBA")
+        images[sin] = sprite_image(sprite).convert("RGBA")  # every sprite found before any file is written
+        print(f"{sin}: {sprite.m_Name} {images[sin].width}x{images[sin].height}")
+    OUT.mkdir(parents=True, exist_ok=True)
+    for sin, image in images.items():
         image.save(OUT / f"{sin}.png")
-        print(f"{sin}: {sprite.m_Name} {image.width}x{image.height}")
 
 
 if __name__ == "__main__":

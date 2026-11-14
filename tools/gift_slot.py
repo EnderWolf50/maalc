@@ -13,7 +13,8 @@ player data file PREFAB_FILE. Its children, by their RectTransforms:
   SpriteAtlas.m_RenderDataMap.
 - img_Icon is the gift's picture, img_keywordIcon1 its keyword's icon in the bottom-right corner and tmp_Tier its tier, a
   TextMeshPro text in the top-left corner.
-The tool stops when these sizes and places differ from SLOT, the layout lc-helper draws a gift in (its icons.SLOT). Written
+The tool stops when the sizes and places of the slot, img_Icon and img_keywordIcon1 differ from SLOT, the layout lc-helper
+draws a gift in (its icons.SLOT), or when the anchor of a child (tmp_Tier's too) moved. Written
 against client 1.118.1; rerun it after a client update (docs/spec/05-game-data.md section 8).
 """
 
@@ -24,7 +25,7 @@ from pathlib import Path
 from PIL import Image
 
 from local_dir import local_dir
-from unity_files import BUNDLES, INDEX, PLAYER_DATA, unity
+from unity_files import BUNDLES, INDEX, PLAYER_DATA, bundle_index, index_rows, unity
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "assets/resource/base/data/gift_slot"
@@ -115,8 +116,8 @@ def atlas_sprite(unpack: Path, key: str) -> Image.Image:
     """The sprite a DUISpriteSetter key "<atlas path>/<sprite>" names, cut from its atlas page."""
     atlas_path, name = key.rsplit("/", 1)
     container = ATLASES.format(theme=THEME, atlas=atlas_path)
-    bundle = next((line.split("\t")[0] for line in (unpack / INDEX).read_text("utf-8").splitlines()
-                   if line.endswith(f"\tSpriteAtlas\t{container}")), None)
+    bundle = next((key for key, kind, path in index_rows(bundle_index(unpack / BUNDLES, unpack / INDEX))
+                   if kind == "SpriteAtlas" and path == container), None)
     if bundle is None:
         raise SystemExit(f"no bundle holds {container} ({INDEX})")
     objects = {o.path_id: o for o in unity(unpack / BUNDLES / bundle / "__data").objects}

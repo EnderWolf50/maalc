@@ -58,3 +58,8 @@ def test_every_sin_has_its_icon_at_the_games_size():
 
 def test_the_icons_stay_small():
     assert sum(f.stat().st_size for f in OUT.glob("*.png")) < MAX_BYTES
+
+
+def test_a_localization_with_too_few_rows_stops_the_tool():
+    with pytest.raises(SystemExit, match="EN_AttributeText"):
+        si.check_sin_order([{"id": "CRIMSON", "name": "Wrath"}])
