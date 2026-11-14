@@ -1,5 +1,5 @@
 """The client's Unity files under `.local/unpack/` (docs/agents/local-dev.md "Game data"): loading one, the index of the
-UnityCache bundles' container entries, and the sprites the bundles hold.
+UnityCache bundles' container entries, the sprites the bundles hold, and the named sprites of the APK's player data.
 
 tools/game_data.py dumps the static data through it; the art tools (gift_recipes, gift_icons, grace_icons, sinner_cards,
 theme_pack_covers) find their sprites through it. The first read of a new client's bundles takes all ~12 GB: run those tools
@@ -78,6 +78,25 @@ def bundle_sprites(unpack: Path, pick: Callable[[str], K | None]) -> Iterator[tu
             if obj.type.name == "Sprite" and (k := pick(path)) is not None and k not in seen:
                 seen.add(k)
                 yield k, obj.read()
+
+
+def player_sprites(data: Path, parts: dict[str, dict[str, tuple[str, tuple[int, int]]]], reread: str) -> dict[str, "Image.Image"]:
+    """{part: its sprite over the whole rect} from the APK's player data (`data`, PLAYER_DATA under .local/unpack/). `parts`:
+    file -> {part: (sprite name, size)}, the sprites a prefab's Image components draw, read from the prefab. Each is found by
+    name in its file and checked by size: a part missing or of another size means the client renumbered its atlases, and the
+    tool stops, naming the sprite and what to read again (`reread`)."""
+    out = {}
+    for file, wanted in parts.items():
+        names = {sprite: key for key, (sprite, _) in wanted.items()}
+        if (data / file).exists():
+            for o in unity(data / file).objects:
+                if o.type.name == "Sprite" and (r := o.read()).m_Name in names:
+                    out[names[r.m_Name]] = sprite_image(r)
+        for key, (sprite, size) in wanted.items():
+            if key not in out or out[key].size != size:
+                got = out[key].size if key in out else "missing"
+                raise SystemExit(f"{sprite} in {file}: {got}, expected {size}: re-read {reread} (docs/spec/05-game-data.md section 8)")
+    return out
 
 
 def sprite_image(sprite) -> "Image.Image":

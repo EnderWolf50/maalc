@@ -95,6 +95,7 @@ jobs:
               - 'gui/src/grace_icons/**'
               - 'gui/src/graces.json'
               - 'gui/src/i18n.ts'
+              - 'gui/src/sinner_card/**'
 
   # The bot runs on Windows only, so the jobs that test it run there too (#636): a test that holds on Linux alone proves
   # nothing about the bot. The jobs that run no test (changes, shard-balance, review-lint, ci-ok) stay on Linux, which

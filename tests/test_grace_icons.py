@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 
 import grace_icons as gi
+import unity_files
 
 GUI = Path(__file__).resolve().parent.parent / "gui/src"
 CARD = GUI / "grace_card"
@@ -55,7 +56,7 @@ def test_a_card_sprite_of_another_size_stops_the_tool(monkeypatch, tmp_path):
 
     for f in gi.CARD_PARTS:
         (tmp_path / f).write_bytes(b"")
-    monkeypatch.setattr(gi, "unity", unity)
+    monkeypatch.setattr(unity_files, "unity", unity)
     with pytest.raises(SystemExit, match=r"MainUI_MirrorDungeon8_2_9 .*\(1, 1\), expected \(209, 69\).*prefabs"):
         gi.card_sprites(tmp_path)
 

@@ -20,7 +20,7 @@ from pathlib import Path
 from PIL import Image
 
 from local_dir import local_dir
-from unity_files import PLAYER_DATA, bundle_sprites, sprite_image, unity
+from unity_files import PLAYER_DATA, bundle_sprites, player_sprites
 
 REPO = Path(__file__).resolve().parent.parent
 GRACES = REPO / "gui/src/graces.json"
@@ -73,18 +73,7 @@ def sprites(unpack: Path, ids: list[str]) -> dict:
 
 def card_sprites(data: Path) -> dict[str, Image.Image]:
     """The card's sprites from the player data, each over its whole rect, found by name and checked by size."""
-    out = {}
-    for file, wanted in CARD_PARTS.items():
-        names = {sprite: key for key, (sprite, _) in wanted.items()}
-        if (data / file).exists():
-            for o in unity(data / file).objects:
-                if o.type.name == "Sprite" and (r := o.read()).m_Name in names:
-                    out[names[r.m_Name]] = sprite_image(r)
-        for key, (sprite, size) in wanted.items():
-            if key not in out or out[key].size != size:
-                got = out[key].size if key in out else "missing"
-                raise SystemExit(f"card part {sprite} in {file}: {got}, expected {size}: re-read the starlight prefabs (docs/spec/05-game-data.md section 8)")
-    return out
+    return player_sprites(data, CARD_PARTS, "the starlight prefabs")
 
 
 def tint(im: Image.Image, rgb: tuple[int, int, int]) -> Image.Image:

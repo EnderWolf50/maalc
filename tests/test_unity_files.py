@@ -1,5 +1,6 @@
 from types import SimpleNamespace as NS
 
+import pytest
 from PIL import Image
 
 import unity_files as uf
@@ -54,6 +55,30 @@ def test_each_wanted_sprite_comes_once_from_the_bundles_the_index_names(tmp_path
     pick = {"x/9001.png": 9001, "x/9002.png": 9002}.get
     assert list(uf.bundle_sprites(tmp_path, pick)) == [(9001, "9001"), (9002, "9002")]  # the first bundle in key order wins
     assert read == ["aa/v1", "bb/v1"]  # cc/v1 holds nothing wanted: not opened
+
+
+def player_file(names_sizes):
+    """unity() of a player-data file holding these sprites ({name: size})."""
+    def sprite(name, size):
+        r = NS(m_Name=name, image=Image.new("RGBA", size), m_Rect=NS(width=size[0], height=size[1]))
+        return NS(type=NS(name="Sprite"), read=lambda: r)
+    return NS(objects=[sprite(n, s) for n, s in names_sizes.items()] + [NS(type=NS(name="Texture2D"), read=None)])
+
+
+def test_player_data_sprites_are_found_by_name_in_their_file_and_checked_by_size(tmp_path, monkeypatch):
+    files = {"f1": {"Atlas_1_2": (162, 230), "Atlas_1_3": (10, 10)}, "f2": {"Plate_7": (138, 42)}}
+    for f in files:
+        (tmp_path / f).write_bytes(b"")
+    monkeypatch.setattr(uf, "unity", lambda path: player_file(files[path.name]))
+    parts = {"f1": {"frame": ("Atlas_1_2", (162, 230))}, "f2": {"plate": ("Plate_7", (138, 42))}}
+    assert {k: im.size for k, im in uf.player_sprites(tmp_path, parts, "the prefab").items()} == {"frame": (162, 230), "plate": (138, 42)}
+    # a renumbered atlas: the name now holds another sprite, or none; the tool says which, and what to read again
+    files["f2"] = {"Plate_7": (60, 27)}
+    with pytest.raises(SystemExit, match=r"Plate_7 in f2: \(60, 27\), expected \(138, 42\): re-read the prefab"):
+        uf.player_sprites(tmp_path, parts, "the prefab")
+    files["f2"] = {}
+    with pytest.raises(SystemExit, match=r"Plate_7 in f2: missing"):
+        uf.player_sprites(tmp_path, parts, "the prefab")
 
 
 def test_a_tight_packed_sprite_gets_its_transparent_margin_back():
