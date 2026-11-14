@@ -530,7 +530,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 }
 .grace .head + .enhance { margin-top: calc(225 * var(--u)); }
 .grace li.sub { list-style: none; opacity: 0.9; } /* the game's "· " detail of the line above */
-.grace mark { background: none; color: var(--season-up); font-weight: 700; } /* a value + or ++ changed, a line it added */
+.grace mark { background: none; color: var(--season-up); font-weight: 700; } /* what the game prints yellow at + and ++ (#733) */
 /* + and ++ at the face's foot, left of its eye, as in the game */
 .grace .enhance { display: flex; gap: calc(8 * var(--u)); margin: auto calc(48 * var(--u)) calc(40 * var(--u)) calc(26 * var(--u)); }
 /* + / ++ and the page's own buttons are the game's plate (9-sliced at 25 px); lit, the plate with the game's lighter Focused
