@@ -43,7 +43,7 @@
    * and the backup one #22fde3 (the formation screen), the name #fbc500 (the identity list). The deployed plate's word is
    * lighter than the game's (it reads 4.6:1 on the plate's brightest line, #bc4512), the backup's 4.8:1 on its (#0d687a). */
   --art-shade: #0b0806; --art-top: #2c2219; --art-dep: #ffb904; --art-bak: #22fde3; --art-name: #fbc500;
-  --dep-ink: #fff0cc; --dep-glow: #943408; --bak-ink: #81f1ff; --bak-glow: #0a6a5c;
+  --dep-ink: #fff0cc; --dep-rim: #943408; --bak-ink: #81f1ff; --bak-rim: #0a6a5c;
   /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
    * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the
    * game's light ink, the same in both themes, as the game's page is: each holds 5:1 and more over the face's lightest
@@ -446,16 +446,17 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
  * narrow digits in one flat ink (the game's top and foot are the same colour), 17 % of the card's height from 27.6 to 44.6 %
  * down, and a soft rim of a deeper shade of the same hue round them, no dark outline. Barlow Condensed 800 at 75 % of its width
  * takes the game's proportions (its "2" is 14 x 31 px on a 128 x 182 card); the line box starts 22.7 % down so the digits' ink
- * lands there. The rim is the game's own a pixel out (#9f441f, #18675a over its darkened art) and the drop shadows stack, so
- * it stays dense a few pixels out and fades after: over a white part of the art the ink keeps 3:1 on what is right behind it. */
+ * lands there. The rim's colour is the game's a pixel out (#9f441f, #18675a over its darkened art) taken a step darker
+ * (--dep-rim, --bak-rim), as this card is not darkened: over a white part of the art the ink keeps 3:1, large text's bar (28 px
+ * bold at the narrowest tile), on the ring 1-2 px outside it (3.13:1 at that ring's lightest tenth, at 1500, 1280 and 800 px
+ * wide). Each --ring shadow grows the rim by about a pixel (1.3 px at least, for the 82 px tile), so four keep it dense about
+ * 2 px out; the last one softens its edge. The shadows are drawn before the narrowing, so across they are 75 % as wide. */
 .sinner .num {
-  --rim: var(--dep-glow);
+  --rim: var(--dep-rim); --ring: drop-shadow(0 0 max(0.025em, 1.3px) var(--rim));
   left: 0; right: 0; top: 22.7%; text-align: center; font: 800 34.3cqw/1 var(--font-display); color: var(--art-dep);
-  transform: scaleX(0.75);
-  filter: drop-shadow(0 0 max(0.025em, 1.3px) var(--rim)) drop-shadow(0 0 max(0.025em, 1.3px) var(--rim))
-    drop-shadow(0 0 max(0.025em, 1.3px) var(--rim)) drop-shadow(0 0 max(0.025em, 1.3px) var(--rim)) drop-shadow(0 0 0.06em var(--rim));
+  transform: scaleX(0.75); filter: var(--ring) var(--ring) var(--ring) var(--ring) drop-shadow(0 0 0.06em var(--rim));
 }
-.sinner.backup .num { --rim: var(--bak-glow); color: var(--art-bak); }
+.sinner.backup .num { --rim: var(--bak-rim); color: var(--art-bak); }
 /* the game's plate across the card, its word taken off (tools/sinner_cards.py), stretched to the band as the formation screen
  * stretches it (its 138 x 42 drawn about 128 x 26 there): 上場 or 替補 in light ink, no glow, so it keeps 4.5:1 on the plate's
  * brightest line; capitals, as the game's SELECTED and BACKUP */

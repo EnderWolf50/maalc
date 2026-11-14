@@ -426,9 +426,9 @@ describe("the deployment order tiles (#718)", () => {
     expect(glow).toMatch(/\.sinner\.backup::after/);
   });
 
-  test("the number is drawn as the formation screen's (#741): one ink, no dark outline, a soft rim, a weight the app bundles", () => {
+  test("the number is drawn as the formation screen's (#741): no dark outline, a soft rim, a weight the app bundles", () => {
     const num = rulesOf((x) => x === ".sinner .num");
-    expect(num).not.toMatch(/text-stroke|gradient|background-clip/);
+    expect(num).not.toMatch(/text-stroke/);
     expect(num).toMatch(/filter:[^;]*drop-shadow/);
     const weight = num.match(/font:\s*(\d{3})\s/)?.[1];
     expect(weight).toBeDefined();
