@@ -164,6 +164,33 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     expect(within(await chipOf("Flat-broke Gamblers")).getByRole("spinbutton")).toHaveFocus();
   });
 
+  test("a press on another pack while a box is open drags nothing, and its release opens that pack", async () => {
+    // Keeping the first score moves packs between the press and the drag, which would start from whatever is now under the
+    // press: while a box is open a press is a click.
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    const chip = await chipOf("Flat-broke Gamblers");
+    await r.user.pointer({ keys: "[MouseLeft>]", target: chip });
+    await dropOn((await chipOf("The Outcast")).closest(".lane")!, "Flat-broke Gamblers");
+    expect(r.weights()).toEqual({ "The Outcast": -1, "The Forgotten": 3 });
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    await r.user.pointer({ keys: "[/MouseLeft]", target: chip });
+    expect(within(chip).getByRole("spinbutton")).toHaveFocus();
+    await r.user.keyboard("{Escape}");
+    await dropOn((await chipOf("The Outcast")).closest(".lane")!, "Flat-broke Gamblers"); // no box open: it drags
+    expect(r.weights()["Flat-broke Gamblers"]).toBe(-1);
+  });
+
+  test("a right press on another pack keeps the first score and opens nothing", async () => {
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    await r.user.pointer({ keys: "[MouseRight]", target: await chipOf("Flat-broke Gamblers") });
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
   test("leaving the box untouched, empty or with a score out of range closes it with the weight as it was and no warning", async () => {
     const r = await open();
     const search = screen.getByRole("searchbox", { name: zh["packs.search"] });

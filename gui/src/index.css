@@ -572,7 +572,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .team .grace-side { top: calc(var(--sections-shown, 32.75px) - 0.75px); }
 /* A card's button the keyboard's focus scrolls up to stops below the bar, not under it (WCAG 2.4.11), with about 9 px to
  * spare: the bar is at most 95 px tall (two rows, at 800 px wide), from the page's top on the starlight plan tab, and on the
- * team page from main's top padding (16 px) plus the index's --sections-shown. */
+ * team page from main's top padding (16 px, 14 below 1000 px wide) plus the index's --sections-shown. */
 .grace button { scroll-margin-top: 104px; }
 .team .grace button { scroll-margin-top: calc(var(--sections-shown, 32.75px) + 120px); }
 .grace-side button { padding: 5px 16px; }
@@ -738,7 +738,7 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   main { padding: 14px 14px 24px; }
   nav.sections { top: -14px; margin-top: -14px; padding-top: 14px; column-gap: 4px; }
   .grace-side { top: -14px; } /* main's top padding here; on the team page it still sits under the index */
-  nav.sections button { padding: 2px 7px; } /* the six still fit one row in the narrowest window (800 px) */
+  nav.sections button { padding: 2px 7px; } /* the six fit one row at 800 px in Chinese; English takes two (#740) */
   .split { gap: 14px; }
   .split aside { width: 190px; }
   .split aside ol.reorder { min-width: 0; } /* the rows narrow with the list, not past it */

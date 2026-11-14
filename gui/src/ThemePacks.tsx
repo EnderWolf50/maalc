@@ -101,16 +101,13 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   // The pack whose weight is being typed: on its chip, or in a + lane for a new weight, the one above the lanes or below (#720).
   const [typing, setTyping] = useState<{ what: string; lane: AddAt | null } | null>(null); // lane null: on the chip
   const ask = (what: string, lane: AddAt | null = null) => setTyping({ what, lane });
-  // The pack pressed while a box is open (#739): the box's blur keeps its score, which can move packs before the button comes
-  // up, and the click then lands on another pack or none, so the blur opens the pack pressed.
+  // A press in the lanes while a box is open (#739): the box's blur keeps its score, which moves packs before the button comes
+  // up. A drag would then start from whatever is under the press by now, so none starts; the click lands on the lanes, not on
+  // the pack pressed, so the lanes open it. "" is a press beside the packs; null, no box open at the press.
   const pressed = useRef<string | null>(null);
   const box = (what: string, current?: number) => (
-    <WeightBox key={what /* a fresh box per pack: nothing typed carries over */} value={current} onDone={(w) => {
-      if (w !== null) weigh(what, w);
-      const next = pressed.current;
-      pressed.current = null;
-      setTyping(next !== null && next !== what ? { what: next, lane: null } : null);
-    }} />
+    <WeightBox key={what /* a fresh box per pack: nothing typed carries over */} value={current}
+      onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
   );
   const typingOn = (what: string) => typing?.what === what && typing.lane === null;
   const dropOn = (w: number | AddAt) => (e: DragEvent) => {
@@ -123,14 +120,18 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     ? { onDragOver: (e: DragEvent) => e.preventDefault(), onDrop: dropOn(w) } : {});
   const dragged = (what: string) => (onChange && !typingOn(what) ? { // a box on a draggable chip would drag, not select its text
     draggable: true,
-    onDragStart: (e: DragEvent) => { setDrag(what); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what); },
+    onDragStart: (e: DragEvent) => {
+      if (pressed.current !== null) { e.preventDefault(); return; }
+      setDrag(what); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what);
+    },
     onDragEnd: () => setDrag(null),
   } : {});
   const clickable = (what: string) => (!onChange ? {} : typingOn(what) ? {
     // a press on the chip around its box would blur the box, which closes it, and the click would open it again, empty
     onMouseDown: (e: MouseEvent) => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); },
   } : {
-    role: "button", tabIndex: 0, onClick: () => ask(what), onMouseDown: () => { if (typing) pressed.current = what; },
+    role: "button", tabIndex: 0, onClick: () => { pressed.current = null; ask(what); },
+    onMouseDown: () => { if (pressed.current !== null) pressed.current = what; },
     onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what); } },
   });
   // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its
@@ -200,7 +201,9 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     <p className="muted floorkey">
       {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
     </p>
-    <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : drag ? " carrying" : "")}>
+    <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : drag ? " carrying" : "")}
+      onMouseDownCapture={(e) => { pressed.current = typing && e.button === 0 ? "" : null; }}
+      onClick={() => { const p = pressed.current; pressed.current = null; if (p) ask(p); }}>
       {addLane("top")}
       {line === 0 && lineBar}
       {lanes.map((w, i) => (
