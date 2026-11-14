@@ -7,7 +7,8 @@ Each card stacks the game's own layers (tools/theme_pack_card.py): the cover art
 frame, logo, warning and badge sprites and the Mikodacs and Pretendard fonts from the player data, the title from the English localization,
 the colours and flags from `uiConfigs`. Writes `<pack id>.webp` per pack of theme_packs.yaml plus `index.json`
 ({pack name: file}) and lists every pack without a cover.
-Run it as a `bench` ticket (tools/live/queue.py): it reads all 12 GB of bundles and the player data.
+Run it as a `bench` ticket (tools/live/queue.py): it reads the player data and the bundles that hold the art (the bundle index,
+tools/unity_files.py, names them; a new client's bundles are read whole, ~12 GB, to index them).
 """
 
 import argparse
@@ -20,14 +21,13 @@ from pathlib import Path
 import yaml
 from PIL import Image
 
-from game_data import UNITY_VERSION
 from local_dir import local_dir
 from theme_pack_card import card
+from unity_files import PLAYER_DATA, bundle_sprites, sprite_image, unity
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "theme_pack_covers"
-PLAYER_DATA = "apk-data/assets/bin/Data"
 THEME_FLOOR_DIR = "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-theme-floor"
 ATLAS_PARTS = {  # key -> (sprite name, size): MirrorDungeonThemeCardUI's layers, in sharedassets2
     "badge": ("MainUI_MirrorDungeon4_4_4", (46, 46)),
@@ -72,13 +72,6 @@ def player_files(data: Path) -> list[Path]:
     return sorted(p for p in data.iterdir() if p.suffix not in (".resS", ".resource") and not re.search(r"\.split(?!0$)\d+$", p.name))
 
 
-def unity(path: Path):
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION  # the files carry a stripped version
-    return UnityPy.load(str(path))
-
-
 def game_parts(data: Path) -> dict[str, Image.Image]:
     """The card's layer sprites from the player data, found by name and checked by size (a renumbered atlas fails here)."""
     out = {}
@@ -108,30 +101,14 @@ def font_files(data: Path, dest: Path) -> dict[str, Path]:
     return {key: need[name] for key, name in FONTS.items()}
 
 
-def sprite_image(sprite) -> Image.Image:
-    """The sprite over its whole rect. A tight-packed sprite (the boss pictures) keeps only its opaque part in the texture
-    and UnityPy's `image` is that part; the UI lays out the whole rect, so the part goes back where `textureRectOffset`
-    (from the rect's bottom left) puts it."""
-    im = sprite.image
-    w, h = round(sprite.m_Rect.width), round(sprite.m_Rect.height)
-    if im.size == (w, h):
-        return im
-    off = sprite.m_RD.textureRectOffset
-    full = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    full.paste(im.convert("RGBA"), (round(off.x), h - round(off.y) - im.height))
-    return full
+def named_sprites(unpack: Path, wanted: set[str]) -> dict[str, Image.Image]:
+    """Sprite name -> image over its whole rect, for the names the bundles hold: a sprite's name is its container path's file
+    name (`uiConfigs` names the cover and boss pictures so; unity_files.bundle_sprites says what that leaves out)."""
+    def name_of(path: str) -> str | None:
+        name = Path(path).stem
+        return name if name in wanted else None
 
-
-def bundle_sprites(cache: Path, wanted: set[str]) -> dict[str, Image.Image]:
-    """Sprite name -> image over its whole rect (a Sprite wins over its Texture2D)."""
-    out = {}
-    for p in sorted(cache.glob("*/*/__data")):  # UnityCache/<hash of the bundle name>/<content hash>/__data; 1556 bundles, ~2 minutes
-        for o in unity(p).objects:
-            if o.type.name in ("Sprite", "Texture2D"):
-                r = o.read()
-                if r.m_Name in wanted and (o.type.name == "Sprite" or r.m_Name not in out):
-                    out[r.m_Name] = sprite_image(r) if o.type.name == "Sprite" else r.image
-    return out
+    return {name: sprite_image(sprite) for name, sprite in bundle_sprites(unpack, name_of)}
 
 
 def contact_sheet(files: list[tuple[str, Path]], dest: Path):
@@ -165,7 +142,7 @@ def main():
     parts = game_parts(unpack / PLAYER_DATA)
     fonts = font_files(unpack / PLAYER_DATA, local_dir("unpack", "fonts"))
     wanted = {n for i in packs.values() for n in (ui.get(i, {}).get("packSpriteId"), ui.get(i, {}).get("bossSpriteId")) if n}
-    images = bundle_sprites(unpack / "raw/UnityCache", wanted | {BATON})
+    images = named_sprites(unpack, wanted | {BATON})
     if BATON not in images:
         raise SystemExit("sprite Baton (the Long Battle overlay) not found in the bundles")
     parts["baton"] = images[BATON]

@@ -6,7 +6,7 @@ of the static data whose `unitKeywordList` holds BASE_APPEARANCE (10101-11201 in
 EN_Characters whose English name the settings use. Its card is the identity list's art,
 `Sprite/Unit/Info/Normal/<id>_normal_info.png` (537 x 827) of the UnityCache bundles, written `--width` wide as WebP, with
 `index.json` ({sinner: file}, in the settings' sinner order). The deployment order tiles of the settings GUI show it.
-Run it as a `bench` ticket (tools/live/queue.py): the bundle index (tools/game_data.py bundle_index) reads all ~12 GB of
+Run it as a `bench` ticket (tools/live/queue.py): the bundle index (tools/unity_files.py bundle_index) reads all ~12 GB of
 bundles when it is new or the client changed; the quarterly rerun is docs/spec/05-game-data.md section 8.
 """
 
@@ -15,13 +15,12 @@ import ctypes
 import io
 import json
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 from PIL import Image
 
-from game_data import INDEX, UNITY_VERSION, bundle_index
 from local_dir import local_dir
+from unity_files import bundle_sprites
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "assets/resource/base/data/sinner_cards"
@@ -57,17 +56,6 @@ def sinner_identities(sinners: list[str], characters: list[dict], identities: di
     return {s: identities[by_name[s]] for s in sinners}
 
 
-def card_bundles(index_lines: list[str], ids: set[int]) -> dict[str, dict[str, int]]:
-    """Bundle key (hash/version) -> {card Sprite path: identity id} of the cards it holds, from the bundle index."""
-    paths = {CARD.format(i): i for i in ids}
-    out = defaultdict(dict)
-    for line in index_lines:
-        key, kind, path = (line.split("\t") + ["", ""])[:3]
-        if kind == "Sprite" and path in paths:
-            out[key][path] = paths[path]
-    return dict(out)
-
-
 def webp(image: Image.Image, width: int) -> bytes:
     im = image.convert("RGB")
     im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
@@ -82,23 +70,17 @@ def main():
     args = ap.parse_args()
     if sys.platform == "win32":  # below normal: a bench job beside a live run
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     unpack = local_dir("unpack")
     rows = [p for f in sorted((unpack / PERSONALITY).glob("personality-*.json")) for p in json.loads(f.read_text(encoding="utf-8-sig"))["list"]]
     characters = json.loads((unpack / CHARACTERS).read_text(encoding="utf-8-sig"))["dataList"]
     ids = sinner_identities(sinner_names(), characters, default_identities(rows))
-    cache = unpack / "raw/UnityCache"
-    bundles = card_bundles(bundle_index(cache, unpack / INDEX), set(ids.values()))
+    cards = {CARD.format(i): i for i in ids.values()}  # the card Sprite's container path -> identity id
 
     OUT.mkdir(exist_ok=True)
     written = set()
-    for key, cards in bundles.items():
-        for path, obj in UnityPy.load(str(cache / key / "__data")).container.items():
-            if obj.type.name == "Sprite" and path in cards:
-                (OUT / f"{cards[path]}.webp").write_bytes(webp(obj.read().image, args.width))
-                written.add(cards[path])
+    for identity, sprite in bundle_sprites(unpack, cards.get):
+        (OUT / f"{identity}.webp").write_bytes(webp(sprite.image, args.width))
+        written.add(identity)
     missing = {s: i for s, i in ids.items() if i not in written}
     if missing:
         raise SystemExit(f"no card sprite for {missing}")

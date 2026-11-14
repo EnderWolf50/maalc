@@ -14,7 +14,6 @@ by 0.21, transparency filled green, as the Gift Search icons. The first run inde
 import argparse
 import glob
 import json
-import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -22,8 +21,9 @@ import cv2
 import numpy as np
 
 from llc_text import NOTE_ZH, credit, gift_names, release_zip
-from game_data import INDEX, UNITY_VERSION, bundle_index, unpack_client
+from game_data import unpack_client
 from local_dir import local_dir
+from unity_files import bundle_sprites
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
@@ -158,25 +158,15 @@ def build(unpack, release):
             "pack_gifts": {str(p): sorted(pool) for p, pool in sorted(pools.items())}, "shop": shop}, table
 
 
-def sprite_index(cache, index_path):
-    """Bundle hash -> EgoGiftIcon sprite names, from the bundle index (tools/game_data.py bundle_index)."""
-    where = defaultdict(set)
-    for line in bundle_index(cache, index_path):
-        key, kind, p = (line.split("\t") + ["", ""])[:3]
-        name = p.rsplit("/", 1)[-1][:-4]
-        if kind == "Sprite" and "/egogifticon/" in p.lower() and name.isdigit():
-            where[key.split("/")[0]].add(int(name))
-    return where
+def icon_of(path):
+    """The iconId of an EgoGiftIcon sprite's container path (`.../EgoGiftIcon/<iconId>.png`), None for any other path."""
+    name = path.rsplit("/", 1)[-1][:-4]
+    return int(name) if "/egogifticon/" in path.lower() and name.isdigit() else None
 
 
 def extract_icons(unpack, ids_to_icon, write=None, out=ICONS):
     """Write out/<gift id>.png (the green-filled template, GiftRecipe/ unless told) for each {gift id: iconId}, or call
     `write(sprite image, gift id)`; returns the gift ids without a sprite."""
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
-    cache = unpack / "raw/UnityCache"
-    where = sprite_index(cache, unpack / INDEX)
     by_icon = defaultdict(list)
     for gid, icon in ids_to_icon.items():
         by_icon[icon].append(gid)
@@ -189,16 +179,10 @@ def extract_icons(unpack, ids_to_icon, write=None, out=ICONS):
         write = png
 
     done = set()
-    for h, names in where.items():
-        if not names & by_icon.keys() - done:
-            continue
-        path = next(os.path.join(r, "__data") for r, _, f in os.walk(cache / h) if "__data" in f)
-        for p, obj in UnityPy.load(path).container.items():
-            name = p.rsplit("/", 1)[-1][:-4]
-            if obj.type.name == "Sprite" and "/egogifticon/" in p.lower() and name.isdigit() and int(name) in by_icon and int(name) not in done:
-                for gid in by_icon[int(name)]:
-                    write(obj.read().image, gid)
-                done.add(int(name))
+    for icon, sprite in bundle_sprites(unpack, lambda p: i if (i := icon_of(p)) in by_icon else None):
+        for gid in by_icon[icon]:
+            write(sprite.image, gid)
+        done.add(icon)
     return sorted(g for icon, gs in by_icon.items() if icon not in done for g in gs)
 
 
