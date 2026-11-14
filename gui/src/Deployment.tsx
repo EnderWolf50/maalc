@@ -12,7 +12,8 @@ const cardOf = webpFolder(
 );
 
 /** The 12 sinners in the game's grid, each on its default identity's card; clicking adds one at the end of the order or
- * leaves it out (spec 04 section 6), and a sinner left out shows its card darkened. Read-only without onChange. */
+ * leaves it out (spec 04 section 6). As the formation screen does, a sinner in the order shows its card darkened and one left
+ * out grey (index.css). Read-only without onChange. */
 export function SinnerGrid({ order, onChange, path }: { order: Order; onChange?: (o: Order) => void; path: string }) {
   const { t, bad } = useEditor();
   return (<>

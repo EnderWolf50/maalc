@@ -43,7 +43,7 @@
    * and the backup one #22fde3 (the formation screen), the name #fbc500 (the identity list). The deployed plate's word is
    * lighter than the game's (it reads 4.6:1 on the plate's brightest line, #bc4512), the backup's 4.8:1 on its (#0d687a). */
   --art-shade: #0b0806; --art-top: #2c2219; --art-dep: #ffb904; --art-bak: #22fde3; --art-name: #fbc500;
-  --dep-ink: #fff0cc; --dep-rim: #943408; --bak-ink: #81f1ff; --bak-rim: #0a6a5c;
+  --dep-ink: #fff0cc; --dep-rim: #9f441f; --bak-ink: #81f1ff; --bak-rim: #18675a;
   /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
    * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the
    * game's light ink, the same in both themes, as the game's page is: each holds 5:1 and more over the face's lightest
@@ -422,8 +422,9 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
  * orange glow, its number over the card and the red deployed or teal backup plate across it; the name sits at the foot where
  * the game writes the identity's, in its yellow. The plate and the number sit where the formation screen shows them
  * (tests/screens/Formation.png, a card 128 x 182 at 1280 x 720): the plate the card's whole width, 14 % of its height, its
- * middle 55 % down; the number's middle 36 % down. A sinner left out is darkened, so the deployed and backup ones read first.
- * The tile's type scales with it (cqw), from the 162 px tile down to the narrowest window's 82. */
+ * middle 55 % down; the number's middle 36 % down. A sinner in the order has its art darkened and one left out is grey, as the
+ * formation screen draws them, so the number and the plate read first. The tile's type scales with it (cqw), from the 162 px
+ * tile down to the narrowest window's 82. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(0, 162px)); gap: 8px; }
 .sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
@@ -451,22 +452,31 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   background: url("./sinner_card/glow.webp") 0 0 / 100% 100% no-repeat, url("./sinner_card/frame.webp") 0 0 / 100% 100% no-repeat;
 }
 .sinner > span { position: absolute; z-index: 1; }
+.sinner:hover:not(:disabled) { background: none; } /* not a button's fill, which shows round the frame's edge */
 .sinner:hover:not(:disabled)::after { filter: brightness(1.3); }
 .sinner:disabled { opacity: 1; cursor: default; }
-/* A team on a plan: the plan's grid, quieter, so it does not read as one to click (the line above says where to change it). */
-.sinners.readonly .sinner img { filter: saturate(0.6) brightness(0.85); }
+/* The formation screen's light (#750; tests/screens/Formation.png, measured in #744): a sinner in the order has its art at 0.45
+ * of its light (the game's 0.42-0.48 a channel), so the number and the plate read first; one left out is grey at full light
+ * (the game's 0.99), and the pointer over it gives some colour back, as a click puts it in. Each is grayscale() then
+ * brightness(), so a click or the pointer fades from one to the other. */
+.sinners .sinner.deployed img, .sinners .sinner.backup img { filter: grayscale(0) brightness(0.45); }
+.sinners .sinner.out img { filter: grayscale(1) brightness(1); }
+.sinners .sinner.out:hover:not(:disabled) img { filter: grayscale(0.5) brightness(1); }
+/* A team on a plan: the plan's grid in the same light, quieter, so it does not read as one to click (the line above says where
+ * to change it): every card at 0.85 of its light (0.38 in the order, 0.85 left out), the order's art at 0.6 of its colour, the
+ * frame and its glow at half. */
+.sinners.readonly .sinner.deployed img, .sinners.readonly .sinner.backup img { filter: grayscale(0.4) brightness(0.38); }
+.sinners.readonly .sinner.out img { filter: grayscale(1) brightness(0.85); }
 .sinners.readonly .sinner::after { filter: saturate(0.5); }
-.sinners .sinner.out img { filter: saturate(0.35) brightness(0.4); }
-.sinners .sinner.out:hover:not(:disabled) img { filter: saturate(0.6) brightness(0.62); } /* a click puts it back in */
 /* Its place in the order, over the card above the plate, drawn as the formation screen draws it (#741, measured there): tall
  * narrow digits in one flat ink (the game's top and foot are the same colour), 17 % of the card's height from 27.6 to 44.6 %
  * down, and a soft rim of a deeper shade of the same hue round them, no dark outline. Barlow Condensed 800 at 75 % of its width
  * takes the game's proportions (its "2" is 14 x 31 px on a 128 x 182 card); the line box starts 22.7 % down so the digits' ink
- * lands there. The rim's colour is the game's a pixel out (#9f441f, #18675a over its darkened art) taken a step darker
- * (--dep-rim, --bak-rim), as this card is not darkened: over a white part of the art the ink keeps 3:1, large text's bar (28 px
- * bold at the narrowest tile), on the ring 1-2 px outside it (3.13:1 at that ring's lightest tenth, at 1500, 1280 and 800 px
- * wide). Each --ring shadow grows the rim by about a pixel (1.3 px at least, for the 82 px tile), so four keep it dense about
- * 2 px out; the last one softens its edge. The shadows are drawn before the narrowing, so across they are 75 % as wide. */
+ * lands there. The rim's colour is the game's a pixel out (--dep-rim, --bak-rim): over a white part of the art, darkened as the
+ * game's is, the ink keeps 3:1, large text's bar (28 px bold at the narrowest tile), on the ring 1-2 px outside it (3.54:1 at
+ * that ring's lightest tenth, at 1500, 1280 and 800 px wide, both schemes; #750). Each --ring shadow grows the rim by about a
+ * pixel (1.3 px at least, for the 82 px tile), so four keep it dense about 2 px out; the last one softens its edge. The shadows
+ * are drawn before the narrowing, so across they are 75 % as wide. */
 .sinner .num {
   --rim: var(--dep-rim); --ring: drop-shadow(0 0 max(0.025em, 1.3px) var(--rim));
   left: 0; right: 0; top: 22.7%; text-align: center; font: 800 34.3cqw/1 var(--font-display); color: var(--art-dep);

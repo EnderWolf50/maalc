@@ -40,6 +40,50 @@ export function cssRules(text: string) {
   return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
 }
 
+// A selector's specificity as one number (ids, then classes, attributes and pseudo-classes, then types), enough for the sheet's
+// own selectors; :not() counts its argument, as the cascade does.
+const specificity = (sel: string) => (sel.match(/#[\w-]+/g) ?? []).length * 10000
+  + (sel.match(/\.[\w-]+|\[[^\]]*\]|:(?!not\()[\w-]+/g) ?? []).length * 100 + (sel.match(/(?:^|[\s>+~(])[a-z][\w-]*/gi) ?? []).length;
+
+// A selector list's selectors: split at its commas outside () and [], so `a:is(.b, .c)` stays one.
+const selectorsOf = (list: string) => {
+  const out = [""];
+  let depth = 0;
+  for (const c of list) {
+    if (c === "," && depth === 0) { out.push(""); continue; }
+    depth += "([".includes(c) ? 1 : ")]".includes(c) ? -1 : 0;
+    out[out.length - 1] += c;
+  }
+  return out.map((x) => x.trim());
+};
+
+/** The value the stylesheet gives `el` for `prop` (`filter`, `background`), as the cascade picks it: of the rules that set it
+ * and match `el`, the most specific, the later one on a tie (no !important or layers here, and a shorthand and its longhands
+ * count as different properties). With `hover`, a `:hover` in a selector matches as with the pointer over it; without, it
+ * never does. */
+export function cssValueOf(text: string, el: Element, prop: string, hover = false) {
+  let best: { spec: number; value: string } | undefined;
+  for (const { selector, body } of cssRules(text)) {
+    const value = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+)`))?.[1].trim();
+    if (!value) continue;
+    for (const one of selectorsOf(selector)) {
+      if (one.includes("::") || (!hover && one.includes(":hover")) || !el.matches(one.replace(/:hover/g, ""))) continue;
+      const spec = specificity(one);
+      if (!best || spec >= best.spec) best = { spec, value };
+    }
+  }
+  return best?.value;
+}
+
+/** What a `filter` value does to an image: `light`, the share of its light left (its brightness() steps multiplied), and
+ * `colour`, the share of its colour left (its saturate() steps and 1 - grayscale() multiplied: both move toward the same grey,
+ * so they compose that way). Other steps are left out. */
+export function filterEffect(filter = "") {
+  const args = (fn: string) => [...filter.matchAll(new RegExp(`\\b${fn}\\(([\\d.]+)\\)`, "g"))].map((m) => Number(m[1]));
+  const product = (xs: number[]) => xs.reduce((a, b) => a * b, 1);
+  return { light: product(args("brightness")), colour: product(args("saturate")) * product(args("grayscale").map((g) => 1 - Math.min(g, 1))) };
+}
+
 /** Expect `text`, a help text of several lines ("\n"), to show each line on its own: every element that shows it holds the
  * lines with a <br> between each two (ui.tsx withBreaks). Fails when none does, as when the "\n" shows as a space. */
 export function expectLines(text: string) {
