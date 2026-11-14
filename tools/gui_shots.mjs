@@ -5,6 +5,7 @@
 //   node tools/gui_shots.mjs --out <dir> [--scheme light|dark|both] [--only run,teams] [--lang en_us]
 //                            [--settings FILE] [--url URL] [--width W --height H] [--scale 2] [--browser EXE]
 //   node tools/gui_shots.mjs --hold teams-full [--port 9222]   (keep that still's page open for a DevTools client)
+// A --hold stopped with a kill, not Ctrl-C, leaves its browser running until the next run of this tool stops it.
 //
 // The page is the real app: in a plain browser gui/src/api.ts reads and writes settings.json in localStorage, which this
 // seeds before each still with the `valid` case of tests/settings_cases.json (or --settings), so no file on disk is read
@@ -14,10 +15,10 @@
 // Writes <out>/<scheme>/<name>.png and prints one line per still. Needs Node 22 or later (global WebSocket), no packages.
 // A refactor's "looks the same": stills of the build before and of the build after, each shot twice, then
 // tools/gui_compare.py --before <dir> <dir> --after <dir> <dir>.
-import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -218,8 +219,41 @@ async function browserUrl(profile) {
   return `ws://127.0.0.1:${lines[0].trim()}${lines[1].trim()}`;
 }
 
+/** A run's browser profile in the temp folder, named by the run's pid so a later run can tell whether it is still running. */
+const PROFILE = "gui-shots-";
+const profileFor = (pid) => mkdtempSync(join(tmpdir(), `${PROFILE}${pid}-`));
+const pidOf = (name) => Number(new RegExp(`^${PROFILE}(\\d+)-`).exec(name)?.[1]);
+
+/** Stops the browsers using `profiles` (Windows), then deletes them. The msedge.exe this spawns hands over to the browser and
+ * exits, so neither its pid nor a kill of this process's tree reaches the browser, and a run stopped with a kill left it
+ * running with its profile (21 crash handlers and 408 profiles in the temp folder by 2026-11-14). */
+async function discard(profiles) {
+  if (process.platform === "win32" && profiles.length) {
+    // The browser quotes the path when it starts its other processes: match the path, not the flag.
+    const paths = profiles.map((p) => `'${p.replaceAll("'", "''")}'`).join(",");
+    const exe = basename(findBrowser()).replaceAll("'", "''");
+    spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command",
+      `$paths = @(${paths}); Get-CimInstance Win32_Process -Filter "Name='${exe}'" | Where-Object { $c = $_.CommandLine; $c -and ` +
+      "@($paths | Where-Object { $c.Contains($_) }).Count } | " +
+      "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"], { stdio: "ignore" });
+  }
+  for (const profile of profiles) {
+    for (let i = 0; i < 10; i++) {
+      try { rmSync(profile, { recursive: true, force: true }); break; } catch { await sleep(300); }
+    }
+  }
+}
+
+const running = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; } };
+
+/** Discards what runs that ended without cleaning up left: a --hold stopped with a kill is cleaned up by the next run. */
+async function sweep() {
+  await discard(readdirSync(tmpdir()).filter((name) => pidOf(name) && !running(pidOf(name))).map((name) => join(tmpdir(), name)));
+}
+
 async function launch() {
-  const profile = mkdtempSync(join(tmpdir(), "gui-shots-"));
+  await sweep();
+  const profile = profileFor(process.pid);
   // Drawn without the GPU, with grayscale text at whole-pixel glyph positions: between two runs of one build the GPU's raster
   // gave a gradient or a border a level or two apart and the page's text came out a pixel apart (2026-11-14), so a still
   // compared pixel by pixel (tools/gui_compare.py) differed with nothing changed. The text still does now and then: shoot twice.
@@ -326,9 +360,7 @@ async function main() {
     ws.close();
     for (let i = 0; i < 30 && proc.exitCode === null; i++) await sleep(100);
     if (proc.exitCode === null) proc.kill();
-    for (let i = 0; i < 10; i++) {
-      try { rmSync(profile, { recursive: true, force: true }); break; } catch { await sleep(300); }
-    }
+    await discard([profile]);
   }
   process.exit(failed ? 1 : 0);
 }
