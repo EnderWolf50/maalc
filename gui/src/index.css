@@ -456,9 +456,9 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .sinner:hover:not(:disabled)::after { filter: brightness(1.3); }
 .sinner:disabled { opacity: 1; cursor: default; }
 /* The formation screen's light (#750; tests/screens/Formation.png, measured in #744): a sinner in the order has its art at 0.45
- * of its light (the game's 0.42-0.48 a channel), so the number and the plate read first; one left out is grey at full light
- * (the game's 0.99), and the pointer over it gives some colour back, as a click puts it in. Each is grayscale() then
- * brightness(), so a click or the pointer fades from one to the other. */
+ * of its light (the game's 0.42-0.48 in red and green, 0.36-0.43 in blue), so the number and the plate read first; one left out
+ * is grey at full light (the game's 0.99), and the pointer over it gives some colour back, as a click puts it in. Each is
+ * grayscale() then brightness(), so a click or the pointer fades from one to the other. */
 .sinners .sinner.deployed img, .sinners .sinner.backup img { filter: grayscale(0) brightness(0.45); }
 .sinners .sinner.out img { filter: grayscale(1) brightness(1); }
 .sinners .sinner.out:hover:not(:disabled) img { filter: grayscale(0.5) brightness(1); }
@@ -474,9 +474,9 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
  * takes the game's proportions (its "2" is 14 x 31 px on a 128 x 182 card); the line box starts 22.7 % down so the digits' ink
  * lands there. The rim's colour is the game's a pixel out (--dep-rim, --bak-rim): over a white part of the art, darkened as the
  * game's is, the ink keeps 3:1, large text's bar (28 px bold at the narrowest tile), on the ring 1-2 px outside it (3.54:1 at
- * that ring's lightest tenth, at 1500, 1280 and 800 px wide, both schemes; #750). Each --ring shadow grows the rim by about a
- * pixel (1.3 px at least, for the 82 px tile), so four keep it dense about 2 px out; the last one softens its edge. The shadows
- * are drawn before the narrowing, so across they are 75 % as wide. */
+ * that ring's lightest tenth, at 1500, 1280 and 800 px wide, both schemes; #750's PR says how it was measured). Each --ring
+ * shadow grows the rim by about a pixel (1.3 px at least, for the 82 px tile), so four keep it dense about 2 px out; the last
+ * one softens its edge. The shadows are drawn before the narrowing, so across they are 75 % as wide. */
 .sinner .num {
   --rim: var(--dep-rim); --ring: drop-shadow(0 0 max(0.025em, 1.3px) var(--rim));
   left: 0; right: 0; top: 22.7%; text-align: center; font: 800 34.3cqw/1 var(--font-display); color: var(--art-dep);

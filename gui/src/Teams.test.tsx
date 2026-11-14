@@ -389,27 +389,27 @@ describe("the deployment order tiles (#718)", () => {
   });
 
   const LEFT_OUT = ["Don Quixote", "Meursault", "Gregor"];
-  const art = (name: string, hover = false) => filterEffect(cssValueOf(css, tile(name).querySelector("img")!, "filter", hover));
+  const artLook = (name: string, hover = false) => filterEffect(cssValueOf(css, tile(name).querySelector("img")!, "filter", hover));
 
   // #750, as the formation screen draws them (tests/screens/Formation.png, measured in #744): a selected card's art at 0.42-0.48
-  // of its light per channel, a card left out grey at 0.99 of its light.
+  // of its light in red and green, 0.36-0.43 in blue, a card left out grey at 0.99 of its light.
   test("a sinner in the order shows its card darkened as the game's, one left out grey at full light", () => {
     renderEditor(<TeamsTab />, ordered());
     for (const s of LEFT_OUT) expect(tile(s)).toHaveClass("out");
     for (const s of order) expect(tile(s)).not.toHaveClass("out");
     for (const s of order) {
-      expect(art(s).light).toBeGreaterThanOrEqual(0.4);
-      expect(art(s).light).toBeLessThanOrEqual(0.5);
+      expect(artLook(s).light).toBeGreaterThanOrEqual(0.4);
+      expect(artLook(s).light).toBeLessThanOrEqual(0.5);
     }
-    for (const s of LEFT_OUT) expect(art(s)).toEqual({ light: 1, colour: 0 });
+    for (const s of LEFT_OUT) expect(artLook(s)).toEqual({ light: 1, colour: 0 });
   });
 
   test("the pointer over a sinner left out gives it some colour back, at the same light, to say a click puts it in", () => {
     renderEditor(<TeamsTab />, ordered());
     for (const s of LEFT_OUT) {
-      expect(art(s, true).colour).toBeGreaterThan(art(s).colour);
-      expect(art(s, true).colour).toBeLessThan(1);
-      expect(art(s, true).light).toBe(1);
+      expect(artLook(s, true).colour).toBeGreaterThan(artLook(s).colour);
+      expect(artLook(s, true).colour).toBeLessThan(1);
+      expect(artLook(s, true).light).toBe(1);
     }
   });
 
@@ -420,18 +420,19 @@ describe("the deployment order tiles (#718)", () => {
 
   test("a team on a plan follows the same rule, quieter than a grid one edits: every card has less light, the order's less colour", () => {
     renderEditor(<TeamsTab />, ordered());
-    const editable = Object.fromEntries(SINNERS.map((s) => [s, art(s)]));
+    const editable = Object.fromEntries(SINNERS.map((s) => [s, artLook(s)]));
     cleanup();
     const onPlan = settings();
     onPlan.deployment_order_plans = [{ id: "d1", name: "Bleed order", order }];
     onPlan.teams[0].deployment_order = { plan: "d1" };
     renderEditor(<TeamsTab />, onPlan);
     for (const s of SINNERS) expect(tile(s)).toBeDisabled();
-    for (const s of SINNERS) expect(art(s).light).toBeLessThan(editable[s].light);
-    for (const s of order) expect(art(s).colour).toBeLessThan(editable[s].colour);
-    for (const s of LEFT_OUT) expect(art(s).colour).toBe(0);
-    // the same rule: the order's cards darker than the ones left out
-    for (const s of order) for (const out of LEFT_OUT) expect(art(s).light).toBeLessThan(art(out).light);
+    for (const s of SINNERS) expect(artLook(s).light).toBeLessThan(editable[s].light);
+    for (const s of order) expect(artLook(s).colour).toBeLessThan(editable[s].colour);
+    for (const s of LEFT_OUT) expect(artLook(s).colour).toBe(0);
+    // the same rule: the order's cards darker than the ones left out. The frame's own filter is read from its rule's text: a
+    // ::after is not an element cssValueOf can match.
+    for (const s of order) for (const out of LEFT_OUT) expect(artLook(s).light).toBeLessThan(artLook(out).light);
     expect(rulesOf((x) => x === ".sinners.readonly .sinner::after")).toMatch(/filter:\s*saturate\(0?\.\d+\)/);
   });
 

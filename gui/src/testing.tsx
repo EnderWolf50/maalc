@@ -41,7 +41,8 @@ export function cssRules(text: string) {
 }
 
 // A selector's specificity as one number (ids, then classes, attributes and pseudo-classes, then types), enough for the sheet's
-// own selectors; :not() counts its argument, as the cascade does.
+// own selectors; :not() counts its argument, as the cascade does, but :is() and :where() count every argument (the cascade
+// takes :is()'s most specific one and nothing of :where()), so a rule using them can win here where it would lose.
 const specificity = (sel: string) => (sel.match(/#[\w-]+/g) ?? []).length * 10000
   + (sel.match(/\.[\w-]+|\[[^\]]*\]|:(?!not\()[\w-]+/g) ?? []).length * 100 + (sel.match(/(?:^|[\s>+~(])[a-z][\w-]*/gi) ?? []).length;
 
@@ -58,18 +59,20 @@ const selectorsOf = (list: string) => {
 };
 
 /** The value the stylesheet gives `el` for `prop` (`filter`, `background`), as the cascade picks it: of the rules that set it
- * and match `el`, the most specific, the later one on a tie (no !important or layers here, and a shorthand and its longhands
- * count as different properties). With `hover`, a `:hover` in a selector matches as with the pointer over it; without, it
- * never does. */
+ * and match `el`, an !important one first, then the most specific, the later one on a tie. What it does not read: a rule
+ * inside @media counts whether or not its query holds (`cssRules` drops the @media), there are no layers, and a shorthand and
+ * its longhands count as different properties. With `hover`, a `:hover` in a selector matches as with the pointer over it;
+ * without, it never does. */
 export function cssValueOf(text: string, el: Element, prop: string, hover = false) {
-  let best: { spec: number; value: string } | undefined;
+  let best: { rank: number; value: string } | undefined;
   for (const { selector, body } of cssRules(text)) {
-    const value = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+)`))?.[1].trim();
-    if (!value) continue;
+    const declared = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+)`))?.[1].trim();
+    if (!declared) continue;
+    const value = declared.replace(/\s*!important$/, "");
     for (const one of selectorsOf(selector)) {
       if (one.includes("::") || (!hover && one.includes(":hover")) || !el.matches(one.replace(/:hover/g, ""))) continue;
-      const spec = specificity(one);
-      if (!best || spec >= best.spec) best = { spec, value };
+      const rank = specificity(one) + (value === declared ? 0 : 1e9);
+      if (!best || rank >= best.rank) best = { rank, value };
     }
   }
   return best?.value;
@@ -77,9 +80,10 @@ export function cssValueOf(text: string, el: Element, prop: string, hover = fals
 
 /** What a `filter` value does to an image: `light`, the share of its light left (its brightness() steps multiplied), and
  * `colour`, the share of its colour left (its saturate() steps and 1 - grayscale() multiplied: both move toward the same grey,
- * so they compose that way). Other steps are left out. */
+ * so they compose that way). An amount may be a number or a percentage; other steps are left out. */
 export function filterEffect(filter = "") {
-  const args = (fn: string) => [...filter.matchAll(new RegExp(`\\b${fn}\\(([\\d.]+)\\)`, "g"))].map((m) => Number(m[1]));
+  const args = (fn: string) => [...filter.matchAll(new RegExp(`\\b${fn}\\(([\\d.]+)(%?)\\)`, "g"))]
+    .map((m) => Number(m[1]) / (m[2] ? 100 : 1));
   const product = (xs: number[]) => xs.reduce((a, b) => a * b, 1);
   return { light: product(args("brightness")), colour: product(args("saturate")) * product(args("grayscale").map((g) => 1 - Math.min(g, 1))) };
 }
