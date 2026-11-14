@@ -407,13 +407,13 @@ describe("the deployment order tiles (#718)", () => {
   // #756: the glow is its ring alone (tools/sinner_cards.py ring_only), nothing over the art, so the art's filter alone sets its
   // light. The formation screen draws a white pixel of a selected card at R 0.47-0.50, G 0.46-0.49, B 0.44-0.46 (#754's fit),
   // relative luminance 0.179-0.200.
+  const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); // an sRGB channel 0-1, linear
   test("a white pixel of a card in the order comes out at the game's light", () => {
     renderEditor(<TeamsTab />, ordered());
-    const luminance = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
     for (const s of order) {
       expect(artLook(s).colour).toBe(1);
-      expect(luminance(artLook(s).light)).toBeGreaterThanOrEqual(0.179);
-      expect(luminance(artLook(s).light)).toBeLessThanOrEqual(0.2);
+      expect(linear(artLook(s).light)).toBeGreaterThanOrEqual(0.179);
+      expect(linear(artLook(s).light)).toBeLessThanOrEqual(0.2);
     }
   });
 
@@ -444,10 +444,9 @@ describe("the deployment order tiles (#718)", () => {
     expect(css.match(new RegExp(`${name}:`, "g"))).toHaveLength(1);
     return css.match(new RegExp(`${name}:\\s*#([0-9a-f]{6})`, "i"))![1].match(/../g)!.map((c) => parseInt(c, 16) / 255);
   };
-  const luminance = (rgb: number[]) => rgb.map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-    .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const relativeLuminance = (rgb: number[]) => rgb.map(linear).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
   const contrast = (a: number[], b: number[]) => {
-    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
     return (hi + 0.05) / (lo + 0.05);
   };
   test("the name of a card in the order dims with its frame, as far as it keeps 4.5:1 over white art; one left out's stays", () => {

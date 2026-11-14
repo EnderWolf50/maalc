@@ -73,7 +73,7 @@ export function cssValueOf(text: string, el: Element, prop: string, hover = fals
     for (const whole of selectorsOf(selector)) {
       if (pseudo ? !whole.endsWith(pseudo) : whole.includes("::")) continue;
       const one = pseudo ? whole.slice(0, -pseudo.length) : whole;
-      if (one.includes("::") || (!hover && one.includes(":hover")) || !el.matches(one.replace(/:hover/g, ""))) continue;
+      if ((!hover && one.includes(":hover")) || !el.matches(one.replace(/:hover/g, ""))) continue;
       const rank = specificity(one) + (value === declared ? 0 : 1e9);
       if (!best || rank >= best.rank) best = { rank, value };
     }
