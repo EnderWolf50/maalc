@@ -101,8 +101,16 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   // The pack whose weight is being typed: on its chip, or in a + lane for a new weight, the one above the lanes or below (#720).
   const [typing, setTyping] = useState<{ what: string; lane: AddAt | null } | null>(null); // lane null: on the chip
   const ask = (what: string, lane: AddAt | null = null) => setTyping({ what, lane });
+  // The pack pressed while a box is open (#739): the box's blur keeps its score, which can move packs before the button comes
+  // up, and the click then lands on another pack or none, so the blur opens the pack pressed.
+  const pressed = useRef<string | null>(null);
   const box = (what: string, current?: number) => (
-    <WeightBox key={what} value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
+    <WeightBox key={what /* a fresh box per pack: nothing typed carries over */} value={current} onDone={(w) => {
+      if (w !== null) weigh(what, w);
+      const next = pressed.current;
+      pressed.current = null;
+      setTyping(next !== null && next !== what ? { what: next, lane: null } : null);
+    }} />
   );
   const typingOn = (what: string) => typing?.what === what && typing.lane === null;
   const dropOn = (w: number | AddAt) => (e: DragEvent) => {
@@ -122,7 +130,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     // a press on the chip around its box would blur the box, which closes it, and the click would open it again, empty
     onMouseDown: (e: MouseEvent) => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); },
   } : {
-    role: "button", tabIndex: 0, onClick: () => ask(what),
+    role: "button", tabIndex: 0, onClick: () => ask(what), onMouseDown: () => { if (typing) pressed.current = what; },
     onKeyDown: (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ask(what); } },
   });
   // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its

@@ -25,6 +25,7 @@ const chipNamed = async (pack: string) => (await screen.findByText(pack, { selec
 // and a mark for it confuses). A team of the default plan wants The Outcast's first own gift; the default list's materials
 // of 9780 are LCB Regular Check-up's (what #421 marked).
 describe("no 含想要 on the theme pack plan screen", () => {
+  const PACKS = ["The Outcast", "LCB Regular Check-up"]; // a wanted own gift, and the default list's materials
   const wanting = () => {
     const team = { ...newTeam(1, "T1"), gift_list: "mine", theme_pack_plan: "default" };
     return settings({ gift_lists: [mine([recipes.pack_gifts["1002"][0]])], teams: [team] });
@@ -32,7 +33,7 @@ describe("no 含想要 on the theme pack plan screen", () => {
 
   test("no dot on a pack, no key line and no wanted gifts on hover", async () => {
     renderEditor(<ThemePackTab />, wanting());
-    for (const pack of ["The Outcast", "LCB Regular Check-up"]) {
+    for (const pack of PACKS) {
       const chip = await chipNamed(pack);
       expect(within(chip).queryByRole("img", { name: "含想要" })).toBeNull();
       expect(chip).not.toHaveAttribute("title"); // its name is on it: nothing to show on hover
@@ -43,7 +44,7 @@ describe("no 含想要 on the theme pack plan screen", () => {
   test("in picture mode a pack's hover is its name alone", async () => {
     const r = renderEditor(<ThemePackTab />, wanting());
     await r.user.click(await screen.findByRole("button", { name: zh["packs.images"] }));
-    for (const pack of ["The Outcast", "LCB Regular Check-up"]) {
+    for (const pack of PACKS) {
       expect(screen.getByRole("img", { name: pack }).closest(".pk")).toHaveAttribute("title", pack);
     }
   });
@@ -150,6 +151,17 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     expect(within(await chipOf("Flat-broke Gamblers")).getByRole("spinbutton")).toHaveFocus();
     await r.user.keyboard("{Escape}");
     expect(r.weights()).toEqual({ "The Outcast": -1, "The Forgotten": 3 });
+  });
+
+  test("the pack pressed opens though the chips moved before the button came up", async () => {
+    // Keeping the first score moves its pack to another lane, and the packs after it close up before a person's click ends:
+    // the press starts on Flat-broke Gamblers, and the button comes up over the pack now in its place.
+    const r = await open();
+    await r.user.click(await chipOf("The Forgotten"));
+    await r.user.keyboard("3");
+    await r.user.pointer([{ keys: "[MouseLeft>]", target: await chipOf("Flat-broke Gamblers") }, { keys: "[/MouseLeft]", target: await chipOf("The Unloving") }]);
+    expect(r.weights()["The Forgotten"]).toBe(3);
+    expect(within(await chipOf("Flat-broke Gamblers")).getByRole("spinbutton")).toHaveFocus();
   });
 
   test("leaving the box untouched, empty or with a score out of range closes it with the weight as it was and no warning", async () => {
