@@ -9,14 +9,16 @@ as a `bench` ticket (tools/live/queue.py).
 import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:  # Pillow is imported where an image is made: tools/game_data.py imports this module for the index alone
     from PIL import Image
 
-CACHE = "raw/UnityCache"  # the bundles under .local/unpack/: <hash of the bundle name>/<content hash>/__data
+BUNDLES = "raw/UnityCache"  # the bundles under .local/unpack/: <hash of the bundle name>/<content hash>/__data
+PLAYER_DATA = "apk-data/assets/bin/Data"  # the APK's player data under .local/unpack/
 INDEX = "out/sprite-index.tsv"  # every bundle's container entries (bundle_index)
 UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 and 1.118.1); the files carry a stripped version
+K = TypeVar("K")  # what a caller names a wanted sprite by
 
 
 def unity(path: Path):
@@ -53,16 +55,23 @@ def index_rows(lines: list[str]) -> list[tuple[str, str, str]]:
     return [tuple((line.split("\t") + ["", ""])[:3]) for line in lines]
 
 
-def sprite_bundles(lines: list[str], pick: Callable[[str], object]) -> list[str]:
+def sprite_bundles(lines: list[str], pick: Callable[[str], K | None]) -> list[str]:
     """The keys of the bundles, sorted, that hold a Sprite whose container path `pick` maps to a key (None: not wanted)."""
     return sorted({key for key, kind, path in index_rows(lines) if kind == "Sprite" and pick(path) is not None})
 
 
-def bundle_sprites(unpack: Path, pick: Callable[[str], object]) -> Iterator[tuple[object, object]]:
+def bundle_sprites(unpack: Path, pick: Callable[[str], K | None]) -> Iterator[tuple[K, object]]:
     """(key, Sprite) for each Sprite of the UnityCache bundles whose container path `pick` maps to a key (None: not wanted),
     each key once, the first bundle in key order winning. Only the bundles the index (bundle_index) names for one are read.
-    The Sprite is UnityPy's, read: `.image` is its texture's part, sprite_image the whole rect."""
-    cache = unpack / CACHE
+    A sprite is found by its container path, the name the bundle files it under: one the container does not list, or a
+    texture with no Sprite of its own, is not found. The Sprite is UnityPy's, read: `.image` is its texture's part,
+    sprite_image the whole rect.
+
+    Each tool chose its own way before (#729): the last bundle won in grace_icons, sinner_cards and theme_pack_covers, the
+    first one in gift_recipes; theme_pack_covers matched every object's name in every bundle, its Texture2D too. On client
+    1.118.1 no container path is in two bundles, every wanted sprite is a container's Sprite, and the tools write the same
+    bytes either way."""
+    cache = unpack / BUNDLES
     seen = set()
     for key in sprite_bundles(bundle_index(cache, unpack / INDEX), pick):
         for path, obj in unity(cache / key / "__data").container.items():

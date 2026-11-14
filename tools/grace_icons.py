@@ -20,8 +20,7 @@ from pathlib import Path
 from PIL import Image
 
 from local_dir import local_dir
-from theme_pack_covers import PLAYER_DATA
-from unity_files import bundle_sprites, sprite_image, unity
+from unity_files import PLAYER_DATA, bundle_sprites, sprite_image, unity
 
 REPO = Path(__file__).resolve().parent.parent
 GRACES = REPO / "gui/src/graces.json"

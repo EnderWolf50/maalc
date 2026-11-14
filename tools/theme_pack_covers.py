@@ -23,12 +23,11 @@ from PIL import Image
 
 from local_dir import local_dir
 from theme_pack_card import card
-from unity_files import bundle_sprites, sprite_image, unity
+from unity_files import PLAYER_DATA, bundle_sprites, sprite_image, unity
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
 OUT = DATA / "theme_pack_covers"
-PLAYER_DATA = "apk-data/assets/bin/Data"
 THEME_FLOOR_DIR = "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-theme-floor"
 ATLAS_PARTS = {  # key -> (sprite name, size): MirrorDungeonThemeCardUI's layers, in sharedassets2
     "badge": ("MainUI_MirrorDungeon4_4_4", (46, 46)),
@@ -103,9 +102,11 @@ def font_files(data: Path, dest: Path) -> dict[str, Path]:
 
 
 def named_sprites(unpack: Path, wanted: set[str]) -> dict[str, Image.Image]:
-    """Sprite name (its container path's file name) -> image over its whole rect, for the names the bundles hold."""
+    """Sprite name -> image over its whole rect, for the names the bundles hold: a sprite's name is its container path's file
+    name (`uiConfigs` names the cover and boss pictures so; unity_files.bundle_sprites says what that leaves out)."""
     def name_of(path: str) -> str | None:
-        return Path(path).stem if Path(path).stem in wanted else None
+        name = Path(path).stem
+        return name if name in wanted else None
 
     return {name: sprite_image(sprite) for name, sprite in bundle_sprites(unpack, name_of)}
 

@@ -1,5 +1,7 @@
 from types import SimpleNamespace as NS
 
+from PIL import Image
+
 import unity_files as uf
 
 CARD = "Assets/Resources_moved/Sprite/Unit/Info/Normal/{}_normal_info.png"
@@ -27,8 +29,8 @@ def fake_cache(tmp_path, monkeypatch, bundles):
     """A UnityCache whose index names `bundles` ({key: {path: (type, sprite)}}), and unity() that loads them: returns the keys read."""
     lines = []
     for key, entries in bundles.items():
-        (tmp_path / uf.CACHE / key).mkdir(parents=True)
-        (tmp_path / uf.CACHE / key / "__data").write_bytes(b"")
+        (tmp_path / uf.BUNDLES / key).mkdir(parents=True)
+        (tmp_path / uf.BUNDLES / key / "__data").write_bytes(b"")
         lines += [f"{key}\t{kind}\t{path}" for path, (kind, _) in entries.items()] + [f"{key}\t-\t-"]
     (tmp_path / uf.INDEX).parent.mkdir(parents=True)
     (tmp_path / uf.INDEX).write_text("".join(line + "\n" for line in lines), encoding="utf-8")
@@ -52,3 +54,15 @@ def test_each_wanted_sprite_comes_once_from_the_bundles_the_index_names(tmp_path
     pick = {"x/9001.png": 9001, "x/9002.png": 9002}.get
     assert list(uf.bundle_sprites(tmp_path, pick)) == [(9001, "9001"), (9002, "9002")]  # the first bundle in key order wins
     assert read == ["aa/v1", "bb/v1"]  # cc/v1 holds nothing wanted: not opened
+
+
+def test_a_tight_packed_sprite_gets_its_transparent_margin_back():
+    # the boss sprites are 391 x 432 rects whose textureRect drops the empty margin: UnityPy's image is the opaque part only.
+    # The card lays out the whole rect, so the art goes back to where textureRectOffset (from the bottom left) puts it
+    opaque = Image.new("RGBA", (4, 3), (255, 0, 0, 255))
+    sprite = NS(image=opaque, m_Rect=NS(width=10.0, height=8.0), m_RD=NS(textureRectOffset=NS(x=2.0, y=1.0)))
+    full = uf.sprite_image(sprite)
+    assert full.size == (10, 8)
+    assert full.getchannel("A").getbbox() == (2, 4, 6, 7)  # 1 px above the bottom edge, 2 px from the left
+    whole = NS(image=opaque, m_Rect=NS(width=4.0, height=3.0), m_RD=NS(textureRectOffset=NS(x=0.0, y=0.0)))
+    assert uf.sprite_image(whole) is opaque

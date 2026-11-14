@@ -34,7 +34,7 @@ import zipfile
 from pathlib import Path
 
 from local_dir import local_dir
-from unity_files import INDEX, bundle_index, index_rows, unity
+from unity_files import BUNDLES, INDEX, bundle_index, index_rows, unity
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
@@ -198,7 +198,7 @@ def dump_static(bundles: list[Path], out: Path) -> int:
 def cmd_status(args):
     unpack = local_dir("unpack")
     device, held, data = device_client(args.serial), unpack_client(unpack), data_client()
-    changed = changed_bundles(device_cache(args.serial), local_cache(unpack / "raw/UnityCache"))
+    changed = changed_bundles(device_cache(args.serial), local_cache(unpack / BUNDLES))
     print(f"emulator {device}, .local/unpack {held}, data files {data}; {len(changed)} bundles differ from .local/unpack")
     return 0 if device == data else 1
 
@@ -209,12 +209,12 @@ def cmd_pull(args):
     if version == unpack_client(unpack) and not args.force:
         print(f".local/unpack/ holds {version} already: nothing to pull (--force pulls the changed bundles all the same)")
         return 1
-    incoming, cache = unpack / "incoming" / version, unpack / "raw/UnityCache"
+    incoming, cache = unpack / "incoming" / version, unpack / BUNDLES
     device, local = device_cache(args.serial), local_cache(cache)
     changed, gone = changed_bundles(device, local), sorted(local.keys() - device.keys())
     print(f"client {version}: {len(changed)} changed bundles, {len(gone)} gone from the device -> {incoming}")
     for name in changed:
-        pull(args.serial, f"{CACHE}/{name}/{device[name]}", incoming / "raw/UnityCache" / name / device[name])
+        pull(args.serial, f"{CACHE}/{name}/{device[name]}", incoming / BUNDLES / name / device[name])
     for key, src in (("localize", f"{FILES}/Assets/Resources_moved/Localize"), ("catalog", f"{FILES}/com.unity.addressables"),
                      ("metadata", f"{FILES}/il2cpp/Metadata")):
         pull(args.serial, src, incoming / PIECES[key])
@@ -230,7 +230,7 @@ def cmd_pull(args):
     fetch(incoming / PIECES["player"], unzip)
     unchanged = [cache / key / "__data" for key in sorted(static_bundles(bundle_index(cache, unpack / INDEX)))
                  if key.split("/")[0] not in {*changed, *gone}]
-    pulled = sorted((incoming / "raw/UnityCache").glob("*/*/__data"))
+    pulled = sorted((incoming / BUNDLES).glob("*/*/__data"))
 
     def dump(part):
         print(f"static data: {dump_static(unchanged + pulled, part)} files from {len(unchanged)} unchanged and the "
@@ -245,7 +245,7 @@ def cmd_pull(args):
 def cmd_dump(args):
     """Dump the static data of `.local/unpack/`'s bundles again, into static/ (what pull does for a new client)."""
     unpack = local_dir("unpack")
-    cache, fresh = unpack / "raw/UnityCache", unpack / "static.new"
+    cache, fresh = unpack / BUNDLES, unpack / "static.new"
     keys = sorted(static_bundles(bundle_index(cache, unpack / INDEX)))
     if fresh.exists():
         shutil.rmtree(fresh)
@@ -264,9 +264,9 @@ def install_moves(unpack: Path, incoming: Path, prev: Path, info: dict) -> list[
         if (incoming / rel).exists():
             moves += [(unpack / rel, prev / rel), (incoming / rel, unpack / rel)]
     for name in info["bundles"]:
-        moves += [(unpack / "raw/UnityCache" / name, prev / "raw/UnityCache" / name),
-                  (incoming / "raw/UnityCache" / name, unpack / "raw/UnityCache" / name)]
-    moves += [(unpack / "raw/UnityCache" / name, prev / "raw/UnityCache" / name) for name in info.get("gone", [])]
+        moves += [(unpack / BUNDLES / name, prev / BUNDLES / name),
+                  (incoming / BUNDLES / name, unpack / BUNDLES / name)]
+    moves += [(unpack / BUNDLES / name, prev / BUNDLES / name) for name in info.get("gone", [])]
     return [(a, b) for a, b in moves if a.exists()]
 
 
