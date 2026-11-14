@@ -37,19 +37,13 @@
    * new season changes the --season-* tokens. */
   --season-plate: #4e61ba;
   --gold: #ffd34d; /* the starlight's gold: a pick's place, a lit + or ++ */
-  /* The game panels. Sinner frames: */
-  --card-line: #5a4630; /* a tile's frame when the sinner is left out */
-  --tone-dep: #f0a632; --on-tone: #1d1206;
-  /* deployed as the game draws it: a red plate with orange text. The game's orange #ffa20f as it is, its red #bd1600 darkened
-   * until the text reads 4.5:1 on it; one plate for both themes */
-  --dep-plate: #931001; --dep-ink: #ffa20f;
-  /* backup as the game draws it: a dark teal plate (the frame too) with light cyan text, a bright cyan number */
-  --bak-plate: #006e7e; --bak-ink: #81f1ff;
-  /* A sinner tile is the identity's card art (#718): it stays the game's in both themes, as Grace of the Star does, so what
-   * sits on it keeps the dark theme's ink: the name, the deployed and backup numbers, and the shade under them. Over a white
-   * pixel of the art the name keeps 4.5:1 on 67% shade and more (the foot is 78% and more up to 34% of the tile; two lines of
-   * a narrow tile's name reach 31%), the numbers on their 85% plates 6.6:1 and 10.6:1. */
-  --art-shade: #0b0806; --art-top: #2c2219; --art-ink: #edcda6; --art-dep: #f0a632; --art-bak: #22fde3;
+  /* A sinner tile is the game's formation card (#718, #732): the identity's art in the card's frame, the game's plates and its
+   * glow (gui/src/sinner_card/, tools/sinner_cards.py). It stays the game's in both themes, as Grace of the Star does, so
+   * what sits on it keeps the game's ink. The colours are sampled from the game's captures: the deployed number #ffb904
+   * and the backup one #22fde3 (the formation screen), the name #fbc500 (the identity list). The deployed plate's word is
+   * lighter than the game's (it reads 4.6:1 on the plate's brightest line, #bc4512), the backup's 4.8:1 on its (#0d687a). */
+  --art-shade: #0b0806; --art-top: #2c2219; --art-dep: #ffb904; --art-bak: #22fde3; --art-name: #fbc500;
+  --dep-ink: #fff0cc; --dep-glow: #ff6a00; --bak-ink: #81f1ff; --bak-glow: #00b7d0;
   /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
    * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the
    * game's light ink, the same in both themes, as the game's page is: each holds 5:1 and more over the face's lightest
@@ -105,8 +99,6 @@
     --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
     --fl-i: #6a40c4;
     --fl-x: #a50000; --fl-x-ink: #fff2f0; --fl-x-mark: #a50000;
-    --card-line: #b9a68c;
-    --tone-dep: #9a5c00; --on-tone: #ffffff;
   }
 }
 
@@ -409,49 +401,69 @@ table.overrides input:not([type="number"]):not(.decimal) { width: 100%; }
 details.hint > summary { cursor: pointer; color: var(--fg-2); font-size: 12.5px; font-weight: 600; width: max-content; }
 details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-width: 56em; }
 
-/* The sinner grid, drawn after the game's identity list: each tile is the sinner's default identity card (#718) in the
- * game's frame, a big deployment number on a shade plate, a banner for deployed or backup, the name on a shade at the foot.
- * A sinner left out of the order is darkened, so the deployed and backup ones read first. */
-.sinners { display: grid; grid-template-columns: repeat(6, minmax(88px, 1fr)); gap: 8px; max-width: 760px; }
+/* The sinner grid, drawn after the game's formation screen (#732): each tile is the sinner's default identity card (#718) in
+ * the formation card's frame, the frame's 162 x 230 and never wider. A sinner in the order wears the formation screen's
+ * orange glow, its number over the card and the red deployed or teal backup plate across it; the name sits at the foot where
+ * the game writes the identity's, in its yellow. The plate and the number sit where the formation screen shows them
+ * (tests/screens/Formation.png, a card 128 x 182 at 1280 x 720): the plate the card's whole width, 14 % of its height, its
+ * middle 55 % down; the number's middle 36 % down. A sinner left out is darkened, so the deployed and backup ones read first.
+ * The tile's type scales with it (cqw), from the 162 px tile down to the narrowest window's 82. */
+.sinners { display: grid; grid-template-columns: repeat(6, minmax(0, 162px)); gap: 8px; }
 .sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
-  --tone: var(--muted);
-  position: relative; aspect-ratio: 3 / 4; padding: 0; overflow: hidden; color: var(--art-ink);
-  border: 1px solid var(--card-line); border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: linear-gradient(165deg, var(--art-top), var(--art-shade) 75%); /* under the art; the whole tile when a card is missing */
+  container-type: inline-size; position: relative; aspect-ratio: 162 / 230; padding: 0; overflow: hidden;
+  border: none; border-radius: 0; background: none; color: var(--art-name);
 }
-/* the card from the top, where the face is; the foot is shaded for the name */
-.sinner img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; transition: filter 0.18s ease-out; }
-.sinner::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
+/* The art and the shade under the name in the frame's opening: the slot prefab's Mask, 143 x 212 in the middle of the 162 x 230
+ * card (9.5 px in at each side, 9 at the top and the foot); the frame's border covers the edge. The shade keeps the name 4.5:1 over a white pixel of the art (68 % and more under it). */
+.sinner img, .sinner::before { position: absolute; top: 3.9%; left: 5.9%; width: 88.2%; height: 92.2%; }
+.sinner img {
+  object-fit: cover; object-position: 50% 0; transition: filter 0.18s ease-out;
+  background: linear-gradient(165deg, var(--art-top), var(--art-shade) 75%); /* a card that is missing */
+}
+.sinner::before {
+  content: ""; pointer-events: none;
   background: linear-gradient(to top, color-mix(in srgb, var(--art-shade) 88%, transparent) 0,
-    color-mix(in srgb, var(--art-shade) 78%, transparent) 34%, transparent 56%);
+    color-mix(in srgb, var(--art-shade) 78%, transparent) 26%, transparent 48%);
 }
-.sinner > span { z-index: 1; }
-.sinner:hover:not(:disabled) { border-color: var(--accent-line); }
+/* the game's frame over it; in the order, the game's glow over the frame */
+.sinner::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; transition: filter 0.12s ease-out;
+  background: url("./sinner_card/frame.webp") 0 0 / 100% 100% no-repeat;
+}
+.sinner.deployed::after, .sinner.backup::after {
+  background: url("./sinner_card/glow.webp") 0 0 / 100% 100% no-repeat, url("./sinner_card/frame.webp") 0 0 / 100% 100% no-repeat;
+}
+.sinner > span { position: absolute; z-index: 1; }
+.sinner:hover:not(:disabled)::after { filter: brightness(1.3); }
 .sinner:disabled { opacity: 1; cursor: default; }
 /* A team on a plan: the plan's grid, quieter, so it does not read as one to click (the line above says where to change it). */
-.sinners.readonly .sinner { border-style: dashed; }
 .sinners.readonly .sinner img { filter: saturate(0.6) brightness(0.85); }
+.sinners.readonly .sinner::after { filter: saturate(0.5); }
 .sinners .sinner.out img { filter: saturate(0.35) brightness(0.4); }
 .sinners .sinner.out:hover:not(:disabled) img { filter: saturate(0.6) brightness(0.62); } /* a click puts it back in */
-.sinner.deployed { --tone: var(--tone-dep); border: 2px solid var(--tone); }
-.sinner.deployed .banner { background: var(--dep-plate); color: var(--dep-ink); }
-.sinner.backup { --tone: var(--bak-plate); border: 2px solid var(--tone); }
-.sinner.backup .num { color: var(--art-bak); }
-.sinner.backup .banner { color: var(--bak-ink); }
+/* Its place in the order, over the card above the plate, in the game's glowing numerals. A solid outline of the shade colour
+ * (drawn under the fill) hugs the glyphs, so they read over any part of the art: the ink keeps 4.5:1 on what is right behind
+ * it, over a white card too. */
 .sinner .num {
-  position: absolute; top: 0; left: 0; min-width: 1.25em; padding: 6px 8px 3px 9px; text-align: center;
-  font: 700 30px/1 var(--font-display); color: var(--art-dep);
-  background: color-mix(in srgb, var(--art-shade) 85%, transparent); border-radius: 0 0 8px 0; corner-shape: bevel;
+  left: 0; right: 0; bottom: 52.5%; text-align: center; font: 700 30cqw/1 var(--font-display); color: var(--art-dep);
+  -webkit-text-stroke: 0.14em var(--art-shade); paint-order: stroke fill; text-shadow: 0 0 0.25em var(--dep-glow);
 }
+.sinner.backup .num { color: var(--art-bak); text-shadow: 0 0 0.25em var(--bak-glow); }
+/* the game's plate across the card, its word taken off (tools/sinner_cards.py), stretched to the band as the formation screen
+ * stretches it (its 138 x 42 drawn about 128 x 26 there): 上場 or 替補 in light ink, no glow, so it keeps 4.5:1 on the plate's
+ * brightest line; capitals, as the game's SELECTED and BACKUP */
 .sinner .banner {
-  position: absolute; top: 4px; right: 0; padding: 1px 8px 1px 12px; background: var(--tone); color: var(--on-tone);
-  font-weight: 700; letter-spacing: 0.2em; font-size: 12.5px; clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
+  left: 3%; right: 3%; top: 48.5%; height: 15%; display: flex; align-items: center; justify-content: center;
+  font: 700 12cqw/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
+  background: 0 0 / 100% 100% no-repeat; text-shadow: 0 1px 2px var(--art-shade);
 }
+.sinner.deployed .banner { background-image: url("./sinner_card/plate-deployed.webp"); color: var(--dep-ink); }
+.sinner.backup .banner { background-image: url("./sinner_card/plate-backup.webp"); color: var(--bak-ink); }
+/* the name at the foot, right-aligned on the frame's shade, as the game writes an identity's */
 .sinner .name {
-  position: absolute; right: 8px; bottom: 6px; left: 6px; font: 700 15px/1.1 var(--font-display); letter-spacing: 0.02em;
-  text-transform: uppercase; color: var(--art-ink); text-align: right; text-shadow: 0 1px 2px var(--art-shade);
+  right: 10%; bottom: 7%; left: 10%; text-align: right; text-wrap: balance; font: 700 clamp(11px, 12cqw, 20px)/1.1 var(--font-display);
+  letter-spacing: 0.02em; color: var(--art-name); text-shadow: 0 1px 2px var(--art-shade);
 }
 
 /* Starlight, the game's "Grace of the Star" page drawn with its own textures (#719, #726): the card's face, the selected
@@ -725,10 +737,7 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   /* a skill replacement row: the name and its steps on one line, the state, the order and the arrows on the next */
   ol.skill-sinners > li { flex-wrap: wrap; row-gap: 4px; }
   .skill-pillcell { flex: 1 1 auto; width: auto; }
-  .sinners { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-  .sinner .num { font-size: 24px; padding: 5px 6px 2px 7px; }
-  .sinner .banner { font-size: 11.5px; letter-spacing: 0.1em; padding: 1px 6px 1px 10px; }
-  .sinner .name { font-size: 13px; }
+  .sinners { gap: 6px; }
   .groups { grid-template-columns: 1fr; }
 }
 

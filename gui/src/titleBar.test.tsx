@@ -6,7 +6,9 @@ import capability from "../src-tauri/capabilities/default.json";
 import conf from "../src-tauri/tauri.conf.json";
 import App from "./App";
 import { TEXT } from "./i18n";
+import css from "./index.css?raw";
 import { newSettings, newTeam } from "./model";
+import { cssRules } from "./testing";
 
 const zh = TEXT.zh_tw;
 // The window as Tauri runs it: a close request goes to the page's listener first, and the window goes only when the page lets
@@ -109,6 +111,35 @@ describe("the title bar", () => {
     expect(win.closed).toBe(0);
     await user.click(button(zh.closeDiscard));
     await waitFor(() => expect(win.closed).toBe(1));
+  });
+});
+
+describe("the window as it opens (#732)", () => {
+  const [main] = conf.app.windows as { width: number; height: number; center?: boolean; preventOverflow?: boolean }[];
+
+  test("is wide enough for a row of 6 sinners and a row of 5 starlight graces, and fits a 1920 x 1080 screen at 125 %", () => {
+    // Measured in the built page (headless Edge, 2026-11-14): the team page holds 5 grace cards a row, each at least 216 px
+    // so no title wraps (#726), from 1500 px wide; the 6 sinner tiles take a row at any width. 1536 x 864 is 1920 x 1080 at 125 %.
+    expect(main.width).toBeGreaterThanOrEqual(1500);
+    expect(main.width).toBeLessThanOrEqual(1536);
+    expect(main.height).toBeLessThanOrEqual(864);
+  });
+
+  test("the width it opens at holds 5 grace cards a row on the team page, by the stylesheet's own sizes", () => {
+    // Across the team page: the team list (`.split aside`), then the editor, where the starlight cards take their minimum
+    // (`.graces`). The rest across (main's padding, the scrollbar, the gap after the list, the fieldset's and the starlight
+    // page's padding and borders) is 132 px: measured in the built page, which holds 5 cards a row from 1500 px with the
+    // cards at 216 px and the list at 240.
+    const body = (sel: string) => cssRules(css).filter((r) => r.selector === sel).map((r) => r.body).join("\n");
+    const card = Number(body(".graces").match(/minmax\((\d+)px/)![1]);
+    const gap = Number(body(".graces").match(/gap:\s*(\d+)px/)![1]);
+    const list = Number(body(".split aside").match(/width:\s*(\d+)px/)![1]);
+    expect(main.width).toBeGreaterThanOrEqual(5 * card + 4 * gap + list + 132);
+  });
+
+  test("on a smaller screen it opens inside the screen's work area, centred", () => {
+    expect(main.preventOverflow).toBe(true);
+    expect(main.center).toBe(true);
   });
 });
 
