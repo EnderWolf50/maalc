@@ -69,9 +69,57 @@ def test_a_plate_keeps_its_ends_and_loses_its_word():
     assert out.getpixel((20, 1)) == (200, 0, 0, 255)
 
 
+def ringed(width=21, height=25, gap=False):
+    """A glow drawn as the game's IsPartipating sprite is: a soft outer edge (alpha 0.3), the ring's crest (1), its inner
+    slope (0.6), then the 20 % wash over the middle, with a fainter speck in it (0.1). `gap` breaks the crest on one side."""
+    im = Image.new("RGBA", (width, height))
+    alpha = {0: 77, 1: 255, 2: 153}
+    for y in range(height):
+        for x in range(width):
+            d = min(x, y, width - 1 - x, height - 1 - y)  # how far in from the edge
+            im.putpixel((x, y), (255, 132, 0, alpha.get(d, 51)))
+    im.putpixel((width // 2, height // 2), (255, 132, 0, 26))
+    if gap:
+        im.putpixel((1, height // 2), (255, 132, 0, 51))
+    return im
+
+
+def test_the_glow_keeps_its_ring_and_loses_its_wash():
+    """The game's sprite lays a 20 % orange wash over the whole card inside its ring; the formation screen shows the art
+    without it (#756), so the tool takes the wash out of the alpha inside the ring's crest: what is left of a pixel there is
+    the ring's own light, (a - 0.2) / 0.8, and nothing under 0.2. The crest and the soft edge outside it stay as they are."""
+    out = sc.ring_only(ringed())
+    w, h = out.size
+    assert out.size == (21, 25)
+    assert out.getpixel((0, h // 2)) == (255, 132, 0, 77)  # outside the crest
+    assert out.getpixel((1, h // 2)) == (255, 132, 0, 255)  # the crest
+    assert out.getpixel((2, h // 2)) == (255, 132, 0, 128)  # the inner slope: (0.6 - 0.2) / 0.8 of its light
+    assert out.getpixel((w // 2, 5)) == (255, 132, 0, 0)  # the wash
+    assert out.getpixel((w // 2, h // 2)) == (255, 132, 0, 0)  # a speck fainter than the wash
+
+
+def test_a_glow_whose_ring_is_open_stops_the_tool():
+    with pytest.raises(SystemExit, match="ring"):
+        sc.ring_only(ringed(gap=True))
+
+
 def test_frame_parts_are_the_files_the_gui_reads_at_their_sizes():
     white = {k: Image.new("RGBA", size, (255, 255, 255, 255)) for parts in sc.FRAME_PARTS.values() for k, (_, size) in parts.items()}
     assert {k: v.size for k, v in sc.frame_parts(white).items()} == PART_SIZES
+
+
+def test_the_glow_part_is_its_ring():
+    parts = sc.frame_parts({"glow": ringed()})
+    assert parts["glow"].getpixel((10, 5))[3] == 0 and parts["glow"].getpixel((1, 12))[3] == 255
+
+
+def test_the_committed_glow_has_no_wash():
+    """gui/src/sinner_card/glow.webp is the ring alone (#756): nothing over the art's middle, the ring's crest opaque."""
+    glow = Image.open(FRAME / "glow.webp").convert("RGBA")
+    w, h = glow.size
+    middle = glow.crop((w // 4, h // 4, w * 3 // 4, h * 3 // 4))
+    assert max(middle.getchannel("A").getdata()) <= 3
+    assert max(glow.getpixel((x, h // 2))[3] for x in range(12)) >= 250
 
 
 def test_the_committed_frame_parts_are_the_tools_and_stay_small():

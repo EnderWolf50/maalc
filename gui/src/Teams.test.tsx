@@ -404,6 +404,19 @@ describe("the deployment order tiles (#718)", () => {
     for (const s of LEFT_OUT) expect(artLook(s)).toEqual({ light: 1, colour: 0 });
   });
 
+  // #756: the glow is its ring alone (tools/sinner_cards.py ring_only), nothing over the art, so the art's filter alone sets its
+  // light. The formation screen draws a white pixel of a selected card at R 0.47-0.50, G 0.46-0.49, B 0.44-0.46 (#754's fit),
+  // relative luminance 0.179-0.200.
+  test("a white pixel of a card in the order comes out at the game's light", () => {
+    renderEditor(<TeamsTab />, ordered());
+    const luminance = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    for (const s of order) {
+      expect(artLook(s).colour).toBe(1);
+      expect(luminance(artLook(s).light)).toBeGreaterThanOrEqual(0.179);
+      expect(luminance(artLook(s).light)).toBeLessThanOrEqual(0.2);
+    }
+  });
+
   test("the pointer over a sinner left out gives it some colour back, at the same light, to say a click puts it in", () => {
     renderEditor(<TeamsTab />, ordered());
     for (const s of LEFT_OUT) {
