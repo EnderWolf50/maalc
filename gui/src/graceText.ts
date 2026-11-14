@@ -1,9 +1,9 @@
 // A grace card's effect text at a level, as the game prints it (#719, #733): at + and ++ the text the game prints yellow is
 // marked. graces.json says which runs those are, from the game's own text markup (tools/llc_text.py).
-import { LEVELS, type Grace, type Run } from "./model";
+import { LEVELS, type Grace, type TextRun } from "./model";
 
 /** One effect line, and `sub` for a line that details the one above it (the game's "· " lines). */
-export interface EffectLine { runs: Run[]; sub: boolean }
+export interface EffectLine { runs: TextRun[]; sub: boolean }
 
 /** Grace g's effect lines at a level (the base lines when unselected). */
 export function effectLines(g: Grace, level: string): EffectLine[] {

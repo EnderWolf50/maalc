@@ -6,13 +6,13 @@ import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT, fill } from "./i18n";
 import {
-  GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Run, type Settings,
+  GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
 } from "./model";
 import css from "./index.css?raw";
 import { DeploymentTab } from "./Deployment";
 import { StarlightTab } from "./Starlight";
 import { ThemePackTab } from "./ThemePacks";
-import { cssRules, expectLines, pickInList, renderEditor } from "./testing";
+import { cssRules, expectLines, pickInList, renderEditor, textOf } from "./testing";
 import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
@@ -20,8 +20,6 @@ const mine = (want: number[]): GiftList => ({
   id: "mine", name: "Mine", order: [...GIFT_KEYWORDS], want, keep: [], gorder: defaultGorder(), fusion_condition: "any",
 });
 const settings = (patch: Partial<Settings> = {}): Settings => ({ ...newSettings(), language: "zh_tw", ...patch });
-/** A grace effect line's text, its runs joined. */
-const textOf = (runs: Run[]) => runs.map((r) => r.text).join("");
 
 const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: ".nm" })).closest(".pk") as HTMLElement;
 /** The 含想要 mark on a pack's chip, by the name a screen reader reads, or null; the chips load with the data file. */

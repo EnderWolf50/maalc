@@ -19,9 +19,9 @@ export const VERSION: number = P.version.const;
  * effect text from LLC (graces.json carries its source and license). */
 export const GRACES: Grace[] = graces.graces;
 /** A piece of a grace's effect line; `up` where the game prints it yellow, what a + or ++ level changed (#733). */
-export interface Run { text: string; up: boolean }
+export interface TextRun { text: string; up: boolean }
 /** Each level's effect lines, a line as its runs. */
-export interface Grace { en: string; zh: string; effects: { base: Run[][]; plus?: Run[][]; plus2?: Run[][] } }
+export interface Grace { en: string; zh: string; effects: { base: TextRun[][]; plus?: TextRun[][]; plus2?: TextRun[][] } }
 
 /** Enum values of a run or team field, in schema order. */
 export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k] as { enum: string[] }).enum;

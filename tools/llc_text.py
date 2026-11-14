@@ -31,8 +31,8 @@ URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/d
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
 _S2TWP = opencc.OpenCC("s2twp")
 FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # where s2twp's Taiwan wording is wrong for the game text
-UP = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
-KEYWORD = "#627eff"  # the game's blue of a keyword in a grace's effect text; the GUI shows it plain
+YELLOW = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
+BLUE = "#627eff"  # the game's blue of a keyword in a grace's effect text; the GUI shows it plain
 
 
 def to_traditional(text):
@@ -47,7 +47,7 @@ NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgi
            "converted with OpenCC s2twp, then " + FIXES_NOTE + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 NOTE_GRACES = ("Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and "
                "DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". Each "
-               "effect line is a list of runs, `up` on the text the template colours the game's yellow (" + UP + "), what a + or ++ level "
+               "effect line is a list of runs, `up` on the text the template colours the game's yellow (" + YELLOW + "), what a + or ++ level "
                "changed. English names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 
 
@@ -143,8 +143,8 @@ def needed(value, template):
 
 def effect_lines(template, values, keyword_names):
     """One effect's text as the game prints it: its lines, each a list of runs {"text", "up"}, `up` where the template colours
-    the text UP. Colour tags nest, the inner one holding until its own closing tag (TextMeshPro's colour stack); a colour
-    other than UP and KEYWORD is an error, since it might be a new mark. Each run is converted to Traditional on its own,
+    the text YELLOW. Colour tags nest, the inner one holding until its own closing tag (TextMeshPro's colour stack); a colour
+    other than YELLOW and BLUE is an error, since it might be a new mark. Each run is converted to Traditional on its own,
     and must come out as the line converted whole does."""
     ref = values.get("referenceData")
     args = [values.get("value"), values.get("value2")] if not ref else [None, keyword_names[ref["buffKeyword"]], ref["stack"], ref["turn"], ref.get("limit")]
@@ -154,12 +154,12 @@ def effect_lines(template, values, keyword_names):
             colours.pop()
         elif piece.startswith("<color="):
             colour = piece[len("<color="):-1].lower()
-            if colour not in (UP, KEYWORD):
+            if colour not in (YELLOW, BLUE):
                 raise ValueError(f"template has a colour that is neither the game's yellow nor its blue: {colour} in {template}")
             colours.append(colour)
         else:
             text = re.sub(r"\{(\d)\}", lambda m: str(needed(args[int(m[1])], template)), piece)
-            up = bool(colours) and colours[-1] == UP
+            up = bool(colours) and colours[-1] == YELLOW
             for k, part in enumerate(text.split("\n")):
                 if k:
                     lines.append([])
