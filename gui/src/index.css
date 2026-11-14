@@ -394,18 +394,19 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 
 /* The sinner grid, drawn after the game's formation screen (#732): each tile is the sinner's default identity card (#718) in
  * the formation card's frame, the frame's 162 x 230 and never wider. A sinner in the order wears the formation screen's
- * orange glow, its number over the card and the red deployed or teal backup plate across it, as the game lays them out (the
- * slot prefab: the plate's middle 56 % down the card, the number above it); the name sits at the foot where the game writes
- * the identity's, in its yellow. A sinner left out is darkened, so the deployed and backup ones read first. The tile's
- * type scales with it (cqw), from the 162 px tile down to the narrowest window's 82. */
+ * orange glow, its number over the card and the red deployed or teal backup plate across it; the name sits at the foot where
+ * the game writes the identity's, in its yellow. The plate and the number sit where the formation screen shows them
+ * (tests/screens/Formation.png, a card 128 x 182 at 1280 x 720): the plate the card's whole width, 14 % of its height, its
+ * middle 55 % down; the number's middle 36 % down. A sinner left out is darkened, so the deployed and backup ones read first.
+ * The tile's type scales with it (cqw), from the 162 px tile down to the narrowest window's 82. */
 .sinners { display: grid; grid-template-columns: repeat(6, minmax(0, 162px)); gap: 8px; }
 .sinners.bad { outline: 1px solid var(--bad); outline-offset: 4px; }
 .sinner {
   container-type: inline-size; position: relative; aspect-ratio: 162 / 230; padding: 0; overflow: hidden;
   border: none; border-radius: 0; background: none; color: var(--art-name);
 }
-/* The art and the shade under the name in the frame's opening: the game's mask, 143 x 212 of the card; the frame's border
- * covers the edge. The shade keeps the name 4.5:1 over a white pixel of the art (68 % and more under it). */
+/* The art and the shade under the name in the frame's opening: the slot prefab's Mask, 143 x 212 in the middle of the 162 x 230
+ * card (9.5 px in at each side, 9 at the top and the foot); the frame's border covers the edge. The shade keeps the name 4.5:1 over a white pixel of the art (68 % and more under it). */
 .sinner img, .sinner::before { position: absolute; top: 3.9%; left: 5.9%; width: 88.2%; height: 92.2%; }
 .sinner img {
   object-fit: cover; object-position: 50% 0; transition: filter 0.18s ease-out;
@@ -440,8 +441,9 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   -webkit-text-stroke: 0.14em var(--art-shade); paint-order: stroke fill; text-shadow: 0 0 0.25em var(--dep-glow);
 }
 .sinner.backup .num { color: var(--art-bak); text-shadow: 0 0 0.25em var(--bak-glow); }
-/* the game's plate across the card, its word taken off (tools/sinner_cards.py): 上場 or 替補 in light ink, no glow, so it
- * keeps 4.5:1 on the plate's brightest line */
+/* the game's plate across the card, its word taken off (tools/sinner_cards.py), stretched to the band as the formation screen
+ * stretches it (its 138 x 42 drawn about 128 x 26 there): 上場 or 替補 in light ink, no glow, so it keeps 4.5:1 on the plate's
+ * brightest line; capitals, as the game's SELECTED and BACKUP */
 .sinner .banner {
   left: 3%; right: 3%; top: 48.5%; height: 15%; display: flex; align-items: center; justify-content: center;
   font: 700 12cqw/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;

@@ -14,7 +14,7 @@ FRAME = REPO / "gui/src/sinner_card"
 WIDTH, HEIGHT = 240, 370
 MAX_BYTES = 600_000  # the 12 cards together (#718)
 # What the tool writes for the formation card's frame (#732): name -> size, each the game's sprite at its own size
-FRAME_PARTS = {"frame": (162, 230), "glow": (161, 230), "plate-deployed": (138, 42), "plate-backup": (130, 33)}
+PART_SIZES = {"frame": (162, 230), "glow": (161, 230), "plate-deployed": (138, 42), "plate-backup": (130, 33)}
 FRAME_MAX_BYTES = 60_000
 
 
@@ -71,10 +71,10 @@ def test_a_plate_keeps_its_ends_and_loses_its_word():
 
 def test_frame_parts_are_the_files_the_gui_reads_at_their_sizes():
     white = {k: Image.new("RGBA", size, (255, 255, 255, 255)) for parts in sc.FRAME_PARTS.values() for k, (_, size) in parts.items()}
-    assert {k: v.size for k, v in sc.frame_parts(white).items()} == FRAME_PARTS
+    assert {k: v.size for k, v in sc.frame_parts(white).items()} == PART_SIZES
 
 
 def test_the_committed_frame_parts_are_the_tools_and_stay_small():
     files = {f.stem: f for f in FRAME.glob("*.webp")}
-    assert {k: Image.open(f).size for k, f in files.items()} == FRAME_PARTS
+    assert {k: Image.open(f).size for k, f in files.items()} == PART_SIZES
     assert sum(f.stat().st_size for f in files.values()) < FRAME_MAX_BYTES

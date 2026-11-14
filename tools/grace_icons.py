@@ -20,7 +20,7 @@ from pathlib import Path
 from PIL import Image
 
 from local_dir import local_dir
-from unity_files import PLAYER_DATA, bundle_sprites, player_sprites
+from unity_files import PLAYER_DATA, bundle_sprites, player_sprites, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
 GRACES = REPO / "gui/src/graces.json"
@@ -109,16 +109,6 @@ def icon(sprite: Image.Image) -> Image.Image:
     return im
 
 
-def write(images: dict[str, Image.Image], out: Path) -> int:
-    """Each image as `<name>.webp` in out, alpha kept; files of other names removed. The bytes written."""
-    out.mkdir(exist_ok=True)
-    for name, im in images.items():
-        im.save(out / f"{name}.webp", "WEBP", quality=QUALITY, method=6)
-    for stale in set(out.glob("*.webp")) - {out / f"{n}.webp" for n in images}:
-        stale.unlink()
-    return sum((out / f"{n}.webp").stat().st_size for n in images)
-
-
 def main():
     unpack = local_dir("unpack")
     ids = grace_ids(unpack)
@@ -128,8 +118,8 @@ def main():
         raise SystemExit(f"no {SPRITE}<id> sprite for {missing}")
     parts = card_parts(card_sprites(unpack / PLAYER_DATA))  # every sprite found before any file is written
     icons = {str(n): icon(found[i]) for n, i in enumerate(ids, 1)}
-    print(f"{len(icons)} icons -> {OUT} ({write(icons, OUT)} bytes)")
-    print(f"{len(parts)} card parts -> {CARD_OUT} ({write(parts, CARD_OUT)} bytes)")
+    print(f"{len(icons)} icons -> {OUT} ({write_webps(icons, OUT, QUALITY)} bytes)")
+    print(f"{len(parts)} card parts -> {CARD_OUT} ({write_webps(parts, CARD_OUT, QUALITY)} bytes)")
 
 
 if __name__ == "__main__":

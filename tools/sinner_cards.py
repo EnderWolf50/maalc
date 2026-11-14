@@ -23,7 +23,7 @@ from pathlib import Path
 from PIL import Image
 
 from local_dir import local_dir
-from unity_files import PLAYER_DATA, bundle_sprites, player_sprites
+from unity_files import PLAYER_DATA, bundle_sprites, player_sprites, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "assets/resource/base/data/sinner_cards"
@@ -87,21 +87,8 @@ def plain_plate(plate: Image.Image, end: int = PLATE_END) -> Image.Image:
 
 
 def frame_parts(found: dict[str, Image.Image]) -> dict[str, Image.Image]:
-    """The files the GUI uses, from the sprites: the frame and the glow as they are, the plates without their word."""
-    parts = {k: v.convert("RGBA") for k, v in found.items()}
-    for k in ("plate-deployed", "plate-backup"):
-        parts[k] = plain_plate(found[k])
-    return parts
-
-
-def write_parts(images: dict[str, Image.Image], out: Path) -> int:
-    """Each image as `<name>.webp` in out, alpha kept; files of other names removed. The bytes written."""
-    out.mkdir(exist_ok=True)
-    for name, im in images.items():
-        im.save(out / f"{name}.webp", "WEBP", quality=QUALITY, method=6)
-    for stale in set(out.glob("*.webp")) - {out / f"{n}.webp" for n in images}:
-        stale.unlink()
-    return sum((out / f"{n}.webp").stat().st_size for n in images)
+    """The files the GUI uses, from the sprites: the frame and the glow as they are, each plate (`plate-*`) without its word."""
+    return {k: plain_plate(v) if k.startswith("plate-") else v.convert("RGBA") for k, v in found.items()}
 
 
 def webp(image: Image.Image, width: int) -> bytes:
@@ -123,7 +110,7 @@ def main():
     characters = json.loads((unpack / CHARACTERS).read_text(encoding="utf-8-sig"))["dataList"]
     ids = sinner_identities(sinner_names(), characters, default_identities(rows))
     cards = {CARD.format(i): i for i in ids.values()}  # the card Sprite's container path -> identity id
-    frame = frame_parts(player_sprites(unpack / PLAYER_DATA, FRAME_PARTS, "the formation slot prefab and its frame tables"))
+    parts = frame_parts(player_sprites(unpack / PLAYER_DATA, FRAME_PARTS, "the formation slot prefab and its frame tables"))
 
     OUT.mkdir(exist_ok=True)
     written = set()
@@ -139,7 +126,7 @@ def main():
         stale.unlink()
     sizes = {f: (OUT / f).stat().st_size for f in index.values()}
     print(f"{len(index)} cards -> {OUT} ({sum(sizes.values())} bytes; largest {max(sizes.values())})")
-    print(f"{len(frame)} frame parts -> {FRAME_OUT} ({write_parts(frame, FRAME_OUT)} bytes)")
+    print(f"{len(parts)} frame parts -> {FRAME_OUT} ({write_webps(parts, FRAME_OUT, QUALITY)} bytes)")
 
 
 if __name__ == "__main__":
