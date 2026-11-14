@@ -1,5 +1,5 @@
 {
-  "note": "Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. Each effect line is a list of runs, `up` on the text the template colours the game's yellow (#f8c200), what a + or ++ level changed. English names: the game's starlight page. Licensed CC BY-NC-SA 4.0 (see NOTICE.md).",
+  "note": "Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. English names and effect text: the game client 1.118.1's EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the template colours the game's yellow (#f8c200), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.",
   "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
   "zh_release": "2026110501",
   "license": "CC BY-NC-SA 4.0",
@@ -9,220 +9,420 @@
       "en": "Star of the Beginning",
       "zh": "起始之星",
       "effects": {
-        "base": [
-          [{"text": "初始經費 +150", "up": false}],
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "商店裡展出的飾品數量 +1", "up": false}],
-          [{"text": "可免費進行商店普通刷新1次", "up": false}]
-        ],
-        "plus": [
-          [{"text": "初始經費 ", "up": false}, {"text": "+250", "up": true}],
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "商店裡展出的飾品數量 +1", "up": false}],
-          [{"text": "可免費進行商店普通刷新1次", "up": false}]
-        ],
-        "plus2": [
-          [{"text": "初始經費 ", "up": false}, {"text": "+250", "up": true}],
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "商店裡展出的飾品數量 +1", "up": false}],
-          [{"text": "可免費進行商店普通刷新 ", "up": false}, {"text": "2次", "up": true}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Starting Cost +150", "up": false}],
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Shop E.G.O Gift Choice +1", "up": false}],
+            [{"text": "1 Free normal Refresh(es) for Shops", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Starting Cost ", "up": false}, {"text": "+250", "up": true}],
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Shop E.G.O Gift Choice +1", "up": false}],
+            [{"text": "1 Free normal Refresh(es) for Shops", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "Starting Cost ", "up": false}, {"text": "+250", "up": true}],
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Shop E.G.O Gift Choice +1", "up": false}],
+            [{"text": "2", "up": true}, {"text": " Free normal Refresh(es) for Shops", "up": false}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "初始經費 +150", "up": false}],
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "商店裡展出的飾品數量 +1", "up": false}],
+            [{"text": "可免費進行商店普通刷新1次", "up": false}]
+          ],
+          "plus": [
+            [{"text": "初始經費 ", "up": false}, {"text": "+250", "up": true}],
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "商店裡展出的飾品數量 +1", "up": false}],
+            [{"text": "可免費進行商店普通刷新1次", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "初始經費 ", "up": false}, {"text": "+250", "up": true}],
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "商店裡展出的飾品數量 +1", "up": false}],
+            [{"text": "可免費進行商店普通刷新 ", "up": false}, {"text": "2次", "up": true}]
+          ]
+        }
       }
     },
     {
       "en": "Cumulating Starcloud",
       "zh": "層積星雲",
       "effects": {
-        "base": [
-          [{"text": "進入下個階層時，增加當前經費的10%(最多100)", "up": false}],
-          [{"text": "售賣飾品所得經費增加50%(每個商店1次)", "up": false}]
-        ],
-        "plus": [
-          [{"text": "進入下個階層時，增加當前經費的", "up": false}, {"text": "20%", "up": true}, {"text": "(最多", "up": false}, {"text": "125", "up": true}, {"text": ")", "up": false}],
-          [{"text": "售賣飾品所得經費增加", "up": false}, {"text": "75%", "up": true}, {"text": "(每個商店1次)", "up": false}]
-        ],
-        "plus2": [
-          [{"text": "進入下個階層時，增加當前經費的", "up": false}, {"text": "30%", "up": true}, {"text": "(最多", "up": false}, {"text": "150", "up": true}, {"text": ")", "up": false}],
-          [{"text": "售賣飾品所得經費增加", "up": false}, {"text": "100%", "up": true}, {"text": "(每個商店1次)", "up": false}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "When moving to the next floor, increase current Cost balance by 10% (max 100)", "up": false}],
+            [{"text": "Increase E.G.O Gift sale price by 50% (once per Shop)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "When moving to the next floor, increase current Cost balance by ", "up": false}, {"text": "20%", "up": true}, {"text": " (max ", "up": false}, {"text": "125", "up": true}, {"text": ")", "up": false}],
+            [{"text": "Increase E.G.O Gift sale price by ", "up": false}, {"text": "75%", "up": true}, {"text": " (once per Shop)", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "When moving to the next floor, increase current Cost balance by ", "up": false}, {"text": "30%", "up": true}, {"text": " (max ", "up": false}, {"text": "150", "up": true}, {"text": ")", "up": false}],
+            [{"text": "Increase E.G.O Gift sale price by ", "up": false}, {"text": "100%", "up": true}, {"text": " (once per Shop)", "up": false}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "進入下個階層時，增加當前經費的10%(最多100)", "up": false}],
+            [{"text": "售賣飾品所得經費增加50%(每個商店1次)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "進入下個階層時，增加當前經費的", "up": false}, {"text": "20%", "up": true}, {"text": "(最多", "up": false}, {"text": "125", "up": true}, {"text": ")", "up": false}],
+            [{"text": "售賣飾品所得經費增加", "up": false}, {"text": "75%", "up": true}, {"text": "(每個商店1次)", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "進入下個階層時，增加當前經費的", "up": false}, {"text": "30%", "up": true}, {"text": "(最多", "up": false}, {"text": "150", "up": true}, {"text": ")", "up": false}],
+            [{"text": "售賣飾品所得經費增加", "up": false}, {"text": "100%", "up": true}, {"text": "(每個商店1次)", "up": false}]
+          ]
+        }
       }
     },
     {
       "en": "Interstellar Travel",
       "zh": "星際旅行",
       "effects": {
-        "base": [
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "主題卡包刷新次數 +2", "up": false}],
-          [{"text": "選擇未記錄的主題卡包時，所有人格等級 +3(最多9級)", "up": false}]
-        ],
-        "plus": [
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "主題卡包刷新次數 ", "up": false}, {"text": "+3", "up": true}],
-          [{"text": "選擇未記錄的主題卡包時，所有人格等級 +3(最多9級)", "up": false}],
-          [{"text": "如果解鎖了45個及以上主題卡包圖鑑中的主題卡包，獲得1層拼點威力提升", "up": true}]
-        ],
-        "plus2": [
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "主題卡包刷新次數 ", "up": false}, {"text": "+4", "up": true}],
-          [{"text": "選擇未記錄的主題卡包時，所有人格等級 +3(最多9級)", "up": false}],
-          [{"text": "如果解鎖了45個及以上主題卡包圖鑑中的主題卡包，獲得2層拼點威力提升", "up": true}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Theme Pack Refresh  Chance +2", "up": false}],
+            [{"text": "When choosing a new Theme Pack for the first time, all Identities gain +3 Level(s) (max 9)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Theme Pack Refresh  Chance ", "up": false}, {"text": "+3", "up": true}],
+            [{"text": "When choosing a new Theme Pack for the first time, all Identities gain +3 Level(s) (max 9)", "up": false}],
+            [{"text": "If 45+ Theme Packs are unlocked in the Theme Pack Compendium, gain 1 Clash Power Up", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Theme Pack Refresh  Chance ", "up": false}, {"text": "+4", "up": true}],
+            [{"text": "When choosing a new Theme Pack for the first time, all Identities gain +3 Level(s) (max 9)", "up": false}],
+            [{"text": "If 45+ Theme Packs are unlocked in the Theme Pack Compendium, gain 2 Clash Power Up", "up": true}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "主題卡包刷新次數 +2", "up": false}],
+            [{"text": "選擇未記錄的主題卡包時，所有人格等級 +3(最多9級)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "主題卡包刷新次數 ", "up": false}, {"text": "+3", "up": true}],
+            [{"text": "選擇未記錄的主題卡包時，所有人格等級 +3(最多9級)", "up": false}],
+            [{"text": "如果解鎖了45個及以上主題卡包圖鑑中的主題卡包，獲得1層拼點威力提升", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "主題卡包刷新次數 ", "up": false}, {"text": "+4", "up": true}],
+            [{"text": "選擇未記錄的主題卡包時，所有人格等級 +3(最多9級)", "up": false}],
+            [{"text": "如果解鎖了45個及以上主題卡包圖鑑中的主題卡包，獲得2層拼點威力提升", "up": true}]
+          ]
+        }
       }
     },
     {
       "en": "Star-shower",
       "zh": "傾落的流星雨",
       "effects": {
-        "base": [
-          [{"text": "初始經費 +400", "up": false}],
-          [{"text": "初始飾品可選擇數 +1", "up": false}]
-        ],
-        "plus": [
-          [{"text": "初始經費 ", "up": false}, {"text": "+500", "up": true}],
-          [{"text": "初始飾品可選擇數 +1", "up": false}],
-          [{"text": "選擇遭遇戰獎勵卡中的星芒選項時，經費 +75", "up": true}]
-        ],
-        "plus2": [
-          [{"text": "初始經費 ", "up": false}, {"text": "+700", "up": true}],
-          [{"text": "初始飾品可選擇數 +1", "up": false}],
-          [{"text": "選擇遭遇戰獎勵卡中的星芒選項時，經費 +150", "up": true}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Starting Cost +400", "up": false}],
+            [{"text": "Starting E.G.O Gift Choice +1", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Starting Cost ", "up": false}, {"text": "+500", "up": true}],
+            [{"text": "Starting E.G.O Gift Choice +1", "up": false}],
+            [{"text": "When Choosing Starlight from Encounter Reward Cards, Cost +75", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "Starting Cost ", "up": false}, {"text": "+700", "up": true}],
+            [{"text": "Starting E.G.O Gift Choice +1", "up": false}],
+            [{"text": "When Choosing Starlight from Encounter Reward Cards, Cost +150", "up": true}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "初始經費 +400", "up": false}],
+            [{"text": "初始飾品可選擇數 +1", "up": false}]
+          ],
+          "plus": [
+            [{"text": "初始經費 ", "up": false}, {"text": "+500", "up": true}],
+            [{"text": "初始飾品可選擇數 +1", "up": false}],
+            [{"text": "選擇遭遇戰獎勵卡中的星芒選項時，經費 +75", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "初始經費 ", "up": false}, {"text": "+700", "up": true}],
+            [{"text": "初始飾品可選擇數 +1", "up": false}],
+            [{"text": "選擇遭遇戰獎勵卡中的星芒選項時，經費 +150", "up": true}]
+          ]
+        }
       }
     },
     {
       "en": "Binary Star-shop",
       "zh": "雙星商店",
       "effects": {
-        "base": [
-          [{"text": "商店裡展出的飾品數量 +1", "up": false}],
-          [{"text": "戰鬥勝利時獲得的經費 +20%", "up": false}],
-          [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}]
-        ],
-        "plus": [
-          [{"text": "商店裡展出的飾品數量 +1", "up": false}],
-          [{"text": "戰鬥勝利時獲得的經費 ", "up": false}, {"text": "+30%", "up": true}],
-          [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}],
-          [{"text": "進入商店時，獲得等同於當前持有的飾品等級之和的經費(最多75)", "up": true}]
-        ],
-        "plus2": [
-          [{"text": "商店裡展出的飾品數量 +1", "up": false}],
-          [{"text": "戰鬥勝利時獲得的經費 ", "up": false}, {"text": "+40%", "up": true}],
-          [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}],
-          [{"text": "進入商店時，獲得等同於當前持有的飾品等級之和的經費(最多150)", "up": true}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Shop E.G.O Gift Choice +1", "up": false}],
+            [{"text": "Encounter Reward Cost +20%", "up": false}],
+            [{"text": "Greater chance for high Tier E.G.O Gifts to appear in Shops", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Shop E.G.O Gift Choice +1", "up": false}],
+            [{"text": "Encounter Reward Cost ", "up": false}, {"text": "+30%", "up": true}],
+            [{"text": "Greater chance for high Tier E.G.O Gifts to appear in Shops", "up": false}],
+            [{"text": "Upon entering a Shop, add up all the Tier numbers of currently owned E.G.O Gifts and gain it as Cost (max 75)", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "Shop E.G.O Gift Choice +1", "up": false}],
+            [{"text": "Encounter Reward Cost ", "up": false}, {"text": "+40%", "up": true}],
+            [{"text": "Greater chance for high Tier E.G.O Gifts to appear in Shops", "up": false}],
+            [{"text": "Upon entering a Shop, add up all the Tier numbers of currently owned E.G.O Gifts and gain it as Cost (max 150)", "up": true}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "商店裡展出的飾品數量 +1", "up": false}],
+            [{"text": "戰鬥勝利時獲得的經費 +20%", "up": false}],
+            [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}]
+          ],
+          "plus": [
+            [{"text": "商店裡展出的飾品數量 +1", "up": false}],
+            [{"text": "戰鬥勝利時獲得的經費 ", "up": false}, {"text": "+30%", "up": true}],
+            [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}],
+            [{"text": "進入商店時，獲得等同於當前持有的飾品等級之和的經費(最多75)", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "商店裡展出的飾品數量 +1", "up": false}],
+            [{"text": "戰鬥勝利時獲得的經費 ", "up": false}, {"text": "+40%", "up": true}],
+            [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}],
+            [{"text": "進入商店時，獲得等同於當前持有的飾品等級之和的經費(最多150)", "up": true}]
+          ]
+        }
       }
     },
     {
       "en": "Moon Star-shop",
       "zh": "衛星商店",
       "effects": {
-        "base": [
-          [{"text": "可免費進行商店關鍵詞刷新 1次", "up": false}],
-          [{"text": "進入第1層時，隨機獲得1件1級飾品", "up": false}]
-        ],
-        "plus": [
-          [{"text": "可免費進行商店關鍵詞刷新 1次", "up": false}],
-          [{"text": "進入第1層時，隨機獲得", "up": false}, {"text": "2件", "up": true}, {"text": "1級飾品", "up": false}],
-          [{"text": "特殊商店出現機率 +10%", "up": true}]
-        ],
-        "plus2": [
-          [{"text": "可免費進行商店關鍵詞刷新", "up": false}, {"text": "2次", "up": true}],
-          [{"text": "進入第1層時，隨機獲得", "up": false}, {"text": "3件", "up": true}, {"text": "1級飾品", "up": false}],
-          [{"text": "特殊商店出現機率 +25%", "up": true}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "1 Free Keyword Refresh(es) for Shops", "up": false}],
+            [{"text": "Upon entering Floor 1, gain 1 random Tier 1 E.G.O Gift(s)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "1 Free Keyword Refresh(es) for Shops", "up": false}],
+            [{"text": "Upon entering Floor 1, gain ", "up": false}, {"text": "2", "up": true}, {"text": " random Tier 1 E.G.O Gift(s)", "up": false}],
+            [{"text": "+10% chance for Super Shop to appear", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "2", "up": true}, {"text": " Free Keyword Refresh(es) for Shops", "up": false}],
+            [{"text": "Upon entering Floor 1, gain ", "up": false}, {"text": "3", "up": true}, {"text": " random Tier 1 E.G.O Gift(s)", "up": false}],
+            [{"text": "+25% chance for Super Shop to appear", "up": true}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "可免費進行商店關鍵詞刷新 1次", "up": false}],
+            [{"text": "進入第1層時，隨機獲得1件1級飾品", "up": false}]
+          ],
+          "plus": [
+            [{"text": "可免費進行商店關鍵詞刷新 1次", "up": false}],
+            [{"text": "進入第1層時，隨機獲得", "up": false}, {"text": "2件", "up": true}, {"text": "1級飾品", "up": false}],
+            [{"text": "特殊商店出現機率 +10%", "up": true}]
+          ],
+          "plus2": [
+            [{"text": "可免費進行商店關鍵詞刷新", "up": false}, {"text": "2次", "up": true}],
+            [{"text": "進入第1層時，隨機獲得", "up": false}, {"text": "3件", "up": true}, {"text": "1級飾品", "up": false}],
+            [{"text": "特殊商店出現機率 +25%", "up": true}]
+          ]
+        }
       }
     },
     {
       "en": "Favor of the Nebulae",
       "zh": "星雲的寵愛",
       "effects": {
-        "base": [
-          [{"text": "進入第1層時，人格等級 +3", "up": false}],
-          [{"text": "通過階層時，人格等級 +1(最多+5)", "up": false}]
-        ],
-        "plus": [
-          [{"text": "進入第1層時，人格等級 +3", "up": false}],
-          [{"text": "通過階層時，人格等級 +1(最多+", "up": false}, {"text": "9", "up": true}, {"text": ")", "up": false}]
-        ],
-        "plus2": [
-          [{"text": "進入第1層時，人格等級 +3", "up": false}],
-          [{"text": "進入第6層時，人格等級 +3", "up": true}],
-          [{"text": "通過階層時，人格等級 +1(最多+", "up": false}, {"text": "9", "up": true}, {"text": ")", "up": false}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Upon entering Floor 1, all Identities gain 3 Level(s)", "up": false}],
+            [{"text": "Upon Floor clear, all Identities gain 1 Level(s) (max 5)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Upon entering Floor 1, all Identities gain 3 Level(s)", "up": false}],
+            [{"text": "Upon Floor clear, all Identities gain 1 Level(s) (max ", "up": false}, {"text": "9", "up": true}, {"text": ")", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "Upon entering Floor 1, all Identities gain 3 Level(s)", "up": false}],
+            [{"text": "Upon entering Floor 6, all Identities gain 3 Level(s)", "up": true}],
+            [{"text": "Upon Floor clear, all Identities gain 1 Level(s) (max ", "up": false}, {"text": "9", "up": true}, {"text": ")", "up": false}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "進入第1層時，人格等級 +3", "up": false}],
+            [{"text": "通過階層時，人格等級 +1(最多+5)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "進入第1層時，人格等級 +3", "up": false}],
+            [{"text": "通過階層時，人格等級 +1(最多+", "up": false}, {"text": "9", "up": true}, {"text": ")", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "進入第1層時，人格等級 +3", "up": false}],
+            [{"text": "進入第6層時，人格等級 +3", "up": true}],
+            [{"text": "通過階層時，人格等級 +1(最多+", "up": false}, {"text": "9", "up": true}, {"text": ")", "up": false}]
+          ]
+        }
       }
     },
     {
       "en": "Starlight Guidance",
       "zh": "星芒的引導",
       "effects": {
-        "base": [
-          [{"text": "最大速度值 +2", "up": false}],
-          [{"text": "獲得1層 拼點威力提升", "up": false}],
-          [{"text": "獲得1層 傷害強化", "up": false}],
-          [{"text": "獲得1層 守護", "up": false}]
-        ],
-        "plus": [
-          [{"text": "最大速度值 ", "up": false}, {"text": "+3", "up": true}],
-          [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 拼點威力提升", "up": false}],
-          [{"text": "獲得1層 傷害強化", "up": false}],
-          [{"text": "獲得1層 守護", "up": false}]
-        ],
-        "plus2": [
-          [{"text": "最大速度值 ", "up": false}, {"text": "+3", "up": true}],
-          [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 拼點威力提升", "up": false}],
-          [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 傷害強化", "up": false}],
-          [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 守護", "up": false}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Max Speed +2", "up": false}],
+            [{"text": "Gain 1 Clash Power Up", "up": false}],
+            [{"text": "Gain 1 Damage Up", "up": false}],
+            [{"text": "Gain 1 Protection", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Max Speed ", "up": false}, {"text": "+3", "up": true}],
+            [{"text": "Gain ", "up": false}, {"text": "2", "up": true}, {"text": " Clash Power Up", "up": false}],
+            [{"text": "Gain 1 Damage Up", "up": false}],
+            [{"text": "Gain 1 Protection", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "Max Speed ", "up": false}, {"text": "+3", "up": true}],
+            [{"text": "Gain ", "up": false}, {"text": "2", "up": true}, {"text": " Clash Power Up", "up": false}],
+            [{"text": "Gain ", "up": false}, {"text": "2", "up": true}, {"text": " Damage Up", "up": false}],
+            [{"text": "Gain ", "up": false}, {"text": "2", "up": true}, {"text": " Protection", "up": false}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "最大速度值 +2", "up": false}],
+            [{"text": "獲得1層 拼點威力提升", "up": false}],
+            [{"text": "獲得1層 傷害強化", "up": false}],
+            [{"text": "獲得1層 守護", "up": false}]
+          ],
+          "plus": [
+            [{"text": "最大速度值 ", "up": false}, {"text": "+3", "up": true}],
+            [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 拼點威力提升", "up": false}],
+            [{"text": "獲得1層 傷害強化", "up": false}],
+            [{"text": "獲得1層 守護", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "最大速度值 ", "up": false}, {"text": "+3", "up": true}],
+            [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 拼點威力提升", "up": false}],
+            [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 傷害強化", "up": false}],
+            [{"text": "獲得", "up": false}, {"text": "2", "up": true}, {"text": "層 守護", "up": false}]
+          ]
+        }
       }
     },
     {
       "en": "Chance Comet",
       "zh": "偶然的彗星",
       "effects": {
-        "base": [
-          [{"text": "進入商店時，隨機獲得1件3級及以下的合成·售賣專用飾品", "up": false}],
-          [{"text": "進入第3層時，隨機獲得1件3級飾品", "up": false}],
-          [{"text": "合成時，隨機獲得比合成產物(3級及以上)低2級的飾品(每個商店最多1次)", "up": false}]
-        ],
-        "plus": [
-          [{"text": "進入商店時，獲得1件合成·售賣專用飾品", "up": false}],
-          [{"text": "· 第5層及以下：1~3級", "up": true}],
-          [{"text": "· 第6層及以上：2~3級", "up": true}],
-          [{"text": "進入第3層", "up": false}, {"text": "與第5層", "up": true}, {"text": "時，隨機獲得1件", "up": false}, {"text": "所選關鍵詞", "up": true}, {"text": "的3級飾品", "up": false}],
-          [{"text": "合成時，隨機獲得比合成產物(3級及以上)低2級的飾品(每個商店最多1次)", "up": false}]
-        ],
-        "plus2": [
-          [{"text": "進入商店時，獲得1件合成·售賣專用飾品", "up": false}],
-          [{"text": "· 第5層及以下：2~3級", "up": true}],
-          [{"text": "· 第6層及以上：3~4級", "up": true}],
-          [{"text": "進入第3層、", "up": false}, {"text": "第5層與第7層", "up": true}, {"text": "時，隨機獲得1件", "up": false}, {"text": "所選關鍵詞", "up": true}, {"text": "的", "up": false}, {"text": "4級", "up": true}, {"text": "飾品", "up": false}],
-          [{"text": "合成時，隨機獲得比合成產物(3級及以上)低", "up": false}, {"text": "1級", "up": true}, {"text": "的飾品(每個商店最多1次)", "up": false}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Upon entering a Shop, gain 1 random Tier 3 or less For Fuse or Sale only E.G.O Gift(s)", "up": false}],
+            [{"text": "Upon entering Floor 3, gain 1 random Tier 3 E.G.O Gift(s)", "up": false}],
+            [{"text": "When Fusing, gain a random additional E.G.O Gift 2 Tiers below the Fusion result(must be Tier 3 or higher) (once per Shop)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Upon entering a Shop, gain 1 'For Fuse or Sale only E.G.O Gift'", "up": false}],
+            [{"text": "· Floor 5 or lower : Tier 1~3", "up": true}],
+            [{"text": "· Floor 6 or higher : Tier 2~3", "up": true}],
+            [{"text": "Upon entering Floor 3", "up": false}, {"text": "/Floor 5", "up": true}, {"text": ", gain 1 Tier 3 E.G.O Gift from the ", "up": false}, {"text": "selected Keyword category", "up": true}],
+            [{"text": "When Fusing, gain a random additional E.G.O Gift 2 Tiers below the Fusion result(must be Tier 3 or higher) (once per Shop)", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "Upon entering a Shop, gain 1 'For Fuse or Sale only E.G.O Gift'", "up": false}],
+            [{"text": "· Floor 5 or lower : Tier 2~3", "up": true}],
+            [{"text": "· Floor 6 or higher : Tier 3~4", "up": true}],
+            [{"text": "Upon entering Floor 3", "up": false}, {"text": "/Floor 5/Floor 7", "up": true}, {"text": ", gain 1 random ", "up": false}, {"text": "Tier 4", "up": true}, {"text": " E.G.O Gift(s) from the ", "up": false}, {"text": "selected Keyword category", "up": true}],
+            [{"text": "When Fusing, gain a random additional E.G.O Gift ", "up": false}, {"text": "1 Tier", "up": true}, {"text": " below the Fusion result(must be Tier 3 or higher) (once per Shop)", "up": false}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "進入商店時，隨機獲得1件3級及以下的合成·售賣專用飾品", "up": false}],
+            [{"text": "進入第3層時，隨機獲得1件3級飾品", "up": false}],
+            [{"text": "合成時，隨機獲得比合成產物(3級及以上)低2級的飾品(每個商店最多1次)", "up": false}]
+          ],
+          "plus": [
+            [{"text": "進入商店時，獲得1件合成·售賣專用飾品", "up": false}],
+            [{"text": "· 第5層及以下：1~3級", "up": true}],
+            [{"text": "· 第6層及以上：2~3級", "up": true}],
+            [{"text": "進入第3層", "up": false}, {"text": "與第5層", "up": true}, {"text": "時，隨機獲得1件", "up": false}, {"text": "所選關鍵詞", "up": true}, {"text": "的3級飾品", "up": false}],
+            [{"text": "合成時，隨機獲得比合成產物(3級及以上)低2級的飾品(每個商店最多1次)", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "進入商店時，獲得1件合成·售賣專用飾品", "up": false}],
+            [{"text": "· 第5層及以下：2~3級", "up": true}],
+            [{"text": "· 第6層及以上：3~4級", "up": true}],
+            [{"text": "進入第3層、", "up": false}, {"text": "第5層與第7層", "up": true}, {"text": "時，隨機獲得1件", "up": false}, {"text": "所選關鍵詞", "up": true}, {"text": "的", "up": false}, {"text": "4級", "up": true}, {"text": "飾品", "up": false}],
+            [{"text": "合成時，隨機獲得比合成產物(3級及以上)低", "up": false}, {"text": "1級", "up": true}, {"text": "的飾品(每個商店最多1次)", "up": false}]
+          ]
+        }
       }
     },
     {
       "en": "Perfected Possibility",
       "zh": "全面的可能性",
       "effects": {
-        "base": [
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "初始飾品可選擇數 +1", "up": false}],
-          [{"text": "進入鏡像迷宮時，選擇獲得1件所選關鍵詞對應的隨機3級飾品(若無該等級的飾品，則會出現更低等級的飾品)", "up": false}],
-          [{"text": "進入鏡像迷宮時，獲得1個黯淡的殘影", "up": false}]
-        ],
-        "plus": [
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "初始飾品可選擇數 +1", "up": false}],
-          [{"text": "進入鏡像迷宮時，", "up": false}, {"text": "選擇獲得2件", "up": true}, {"text": "所選關鍵詞對應的隨機3級飾品(若無該等級的飾品，則會出現更低等級的飾品)", "up": false}],
-          [{"text": "進入鏡像迷宮時，獲得黯淡的殘影、", "up": false}, {"text": "微茫的殘影", "up": true}, {"text": "各1個", "up": false}]
-        ],
-        "plus2": [
-          [{"text": "主題卡包出現數量 +1", "up": false}],
-          [{"text": "初始飾品可選擇數 +1", "up": false}],
-          [{"text": "進入鏡像迷宮時，", "up": false}, {"text": "選擇獲得3件", "up": true}, {"text": "所選關鍵詞對應的隨機3級飾品(若無該等級的飾品，則會出現更低等級的飾品)", "up": false}],
-          [{"text": "進入鏡像迷宮時，獲得黯淡的殘影、", "up": false}, {"text": "微茫的殘影、閃耀的殘影", "up": true}, {"text": "各1個", "up": false}]
-        ]
+        "en": {
+          "base": [
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Starting E.G.O Gift Choice +1", "up": false}],
+            [{"text": "Upon entry, gain 1 Tier 3 E.G.O Gift(s) of your choice for the selected Keyword (if no remaining Gifts meet the conditions, a lower Tier one will appear instead)", "up": false}],
+            [{"text": "Upon entry, gain 1 Dark Vestige", "up": false}]
+          ],
+          "plus": [
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Starting E.G.O Gift Choice +1", "up": false}],
+            [{"text": "Upon entry, gain ", "up": false}, {"text": "2 Tier 3", "up": true}, {"text": " E.G.O Gift(s) ", "up": false}, {"text": "of your choice", "up": true}, {"text": " for the selected Keyword (if no remaining Gifts meet the conditions, a lower Tier one will appear instead)", "up": false}],
+            [{"text": "Upon entry, gain 1 Dark Vestige and 1 ", "up": false}, {"text": "Faint Vestige", "up": true}, {"text": " each", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "Theme Pack Selection +1", "up": false}],
+            [{"text": "Starting E.G.O Gift Choice +1", "up": false}],
+            [{"text": "Upon entry, gain ", "up": false}, {"text": "3 Tier 3", "up": true}, {"text": " E.G.O Gift(s) ", "up": false}, {"text": "of your choice", "up": true}, {"text": " for the selected Keyword (if no remaining Gifts meet the conditions, a lower Tier one will appear instead)", "up": false}],
+            [{"text": "Upon entry, gain 1 Dark Vestige,1 ", "up": false}, {"text": "Faint Vestige, and 1 Twinkling Vestige", "up": true}, {"text": " each", "up": false}]
+          ]
+        },
+        "zh": {
+          "base": [
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "初始飾品可選擇數 +1", "up": false}],
+            [{"text": "進入鏡像迷宮時，選擇獲得1件所選關鍵詞對應的隨機3級飾品(若無該等級的飾品，則會出現更低等級的飾品)", "up": false}],
+            [{"text": "進入鏡像迷宮時，獲得1個黯淡的殘影", "up": false}]
+          ],
+          "plus": [
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "初始飾品可選擇數 +1", "up": false}],
+            [{"text": "進入鏡像迷宮時，", "up": false}, {"text": "選擇獲得2件", "up": true}, {"text": "所選關鍵詞對應的隨機3級飾品(若無該等級的飾品，則會出現更低等級的飾品)", "up": false}],
+            [{"text": "進入鏡像迷宮時，獲得黯淡的殘影、", "up": false}, {"text": "微茫的殘影", "up": true}, {"text": "各1個", "up": false}]
+          ],
+          "plus2": [
+            [{"text": "主題卡包出現數量 +1", "up": false}],
+            [{"text": "初始飾品可選擇數 +1", "up": false}],
+            [{"text": "進入鏡像迷宮時，", "up": false}, {"text": "選擇獲得3件", "up": true}, {"text": "所選關鍵詞對應的隨機3級飾品(若無該等級的飾品，則會出現更低等級的飾品)", "up": false}],
+            [{"text": "進入鏡像迷宮時，獲得黯淡的殘影、", "up": false}, {"text": "微茫的殘影、閃耀的殘影", "up": true}, {"text": "各1個", "up": false}]
+          ]
+        }
       }
     }
   ]

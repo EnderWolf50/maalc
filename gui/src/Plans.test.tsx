@@ -461,7 +461,7 @@ test("a grace card is a group named by its grace: a pick button says whether it 
   expect(card).not.toHaveAttribute("role", "button");
   const pick = within(card).getByRole("button", { name: GRACES[0].zh });
   expect(pick).toHaveAttribute("aria-pressed");
-  expect(pick).toHaveAccessibleDescription(new RegExp(textOf(GRACES[0].effects.base[0]).replace(/[+()]/g, "\\$&")));
+  expect(pick).toHaveAccessibleDescription(new RegExp(textOf(GRACES[0].effects.zh.base[0]).replace(/[+()]/g, "\\$&")));
   const [, plus, plus2] = within(card).getAllByRole("button");
   expect(plus).toHaveAccessibleName(`${GRACES[0].zh} +`);
   expect(plus2).toHaveAccessibleName(`${GRACES[0].zh} ++`);
@@ -502,7 +502,7 @@ describe("a grace card at each level", () => {
     // the pick button's name is the title it shows, so a voice command can say it (WCAG 2.5.3)
     expect(within(card(1)).getByRole("button", { name: "起始之星+" })).toHaveAttribute("aria-pressed", "true");
     expect(price(1)).toHaveTextContent(/^★ 20$/);
-    expect([...card(1).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[0].effects.plus!.map(textOf));
+    expect([...card(1).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[0].effects.zh.plus!.map(textOf));
     expect(marked(1)).toEqual(["+250"]);
   });
 
@@ -547,7 +547,7 @@ describe("a grace card at each level", () => {
     for (const n of [1, 2]) {
       expect(within(card(n)).getByText(GRACES[n - 1].zh)).toBeInTheDocument();
       expect(price(n)).toHaveTextContent(/^★ 10$/);
-      expect([...card(n).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[n - 1].effects.base.map(textOf));
+      expect([...card(n).querySelectorAll("li")].map((li) => li.textContent)).toEqual(GRACES[n - 1].effects.zh.base.map(textOf));
       expect(card(n).querySelector("mark")).toBeNull();
     }
     expect(within(card(1)).getByRole("button", { name: GRACES[0].zh })).toHaveAttribute("aria-pressed", "false");
@@ -600,13 +600,14 @@ describe("a grace card at each level", () => {
 
   // The longest title, "傾落的流星雨++" (6 characters and "++", about 7.2 em), sits right of the icon's bracket, in 55 % of the
   // card's width (the face's band from 145 to 356 of 380 px): at 6.8 % of the width per em it takes 49 %, on one line. Below
-  // 191 px the font stops at 13 px, so no column is narrower than 216 px (#726; 144 px before, and two lines).
+  // 191 px the font stops at 13 px, so no column is narrower than 216 px (#726; 144 px before, and two lines). A title wider
+  // than its band takes --fit instead (#751): Starlight.test.tsx tests the size, the real window the fit.
   test("a card is wide enough for its longest title on one line", () => {
     const cols = cssRules(css).filter((r) => r.selector === ".graces").map((r) => r.body.match(/minmax\((\d+)px/)?.[1]);
     expect(cols.length).toBeGreaterThan(0);
     for (const px of cols) expect(Number(px)).toBeGreaterThanOrEqual(216);
     const title = cssRules(css).find((r) => r.selector === ".grace .title")?.body ?? "";
-    expect(title).toMatch(/font-size:\s*clamp\(13px,\s*6\.8cqw/);
+    expect(title).toMatch(/font-size:\s*var\(--fit,\s*clamp\(13px,\s*6\.8cqw/);
   });
 
   test("every card shows its grace's icon from the game, as decoration the screen reader skips", () => {

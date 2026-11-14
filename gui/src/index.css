@@ -549,13 +549,17 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 /* The game's icon in the face's bracket, the title right of it in the title band. The title grows with the card: at 6.8 % of
- * its width per em, "傾落的流星雨++" (7.2 em) takes 49 % of a band 55 % wide, on one line from 191 px up. */
+ * its width per em, "傾落的流星雨++" (7.2 em) takes 49 % of a band 55 % wide, on one line from 191 px up. A title wider than
+ * its band, as the long English ones are, shrinks to fit it on one line as the game's do: Starlight.tsx measures it and sets
+ * --fit, down to 12 px (TITLE_FLOOR), below which it would wrap (#751). English titles take the display face, narrow as the
+ * game's: "Cumulating Starcloud++" is 8.6 em in it, 11.6 in Segoe UI. */
 .grace .head {
   display: flex; align-items: center; min-height: calc(72 * var(--u)); margin: calc(55 * var(--u)) calc(30 * var(--u)) 0;
 }
 .grace .icon { flex: none; width: calc(115 * var(--u)); height: calc(64 * var(--u)); object-fit: contain; filter: drop-shadow(0 1px 1px #000); }
 .grace .name { text-align: right; text-wrap: balance; text-shadow: var(--season-shadow); }
-.grace .title { font-size: clamp(13px, 6.8cqw, 19px); font-weight: 700; line-height: 1.15; }
+.grace .title { font-size: var(--fit, clamp(13px, 6.8cqw, 19px)); font-weight: 700; line-height: 1.15; }
+.grace .title:lang(en) { font-family: var(--font-display); letter-spacing: 0.01em; }
 /* the pick button is the card's name: no plate of its own; its focus rings the whole card */
 .grace button.name { flex: 1; min-width: 0; padding: 0; border: none; border-radius: 0; background: none; color: inherit; cursor: inherit; }
 .grace button.name:hover:not(:disabled) { background: none; }
@@ -566,13 +570,12 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   margin: calc(4 * var(--u)) calc(30 * var(--u)) 0; text-align: right; text-wrap: balance; font: 600 12px/1.2 var(--font-display);
   letter-spacing: 0.02em; color: var(--season-ink-2); text-shadow: var(--season-shadow);
 }
-/* At least the face's own shape (380 x 438): the effects, or the + / ++ row when no effects show (en_us), hold the card that
- * tall; a longer text makes it taller. */
+/* At least the face's own shape (380 x 438): the effects hold the card that tall; a longer text makes it taller, and the
+ * cards of a row as tall as the tallest. */
 .grace ul {
   flex: 1; min-height: calc(190 * var(--u)); margin: calc(10 * var(--u)) calc(28 * var(--u)) calc(10 * var(--u)) calc(30 * var(--u));
   padding-left: 15px; font-size: 13px; line-height: 1.5; text-shadow: var(--season-shadow);
 }
-.grace .head + .enhance { margin-top: calc(225 * var(--u)); }
 .grace li.sub { list-style: none; opacity: 0.9; } /* the game's "· " detail of the line above */
 .grace mark { background: none; color: var(--season-up); font-weight: 700; } /* what the game prints yellow at + and ++ (#733) */
 /* + and ++ at the face's foot, left of its eye, as in the game */
