@@ -55,10 +55,11 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
   A target is a point "x,y" (CSS px), a CSS selector (its first match) or "js:<expression>" for an element. An element
   is scrolled into view only when its centre is outside the page; the output names what is under the point ("hit") and
   whether that is something over the target ("covered").
-  Session options of every page command: --scheme light|dark and --viewport WxH (the page laid out at that size, drawn
-  at the window's top left) for the command's session; --keep S|forever holds the session, and what it emulates, that
-  long after the steps; --then <expression> is evaluated once the page has drawn twice and 250 ms passed after the
-  steps (a drag in the air is still in the air), and printed.`;
+  Session options of every page command: --scheme light|dark, --viewport WxH (the page laid out at that size, drawn
+  at the window's top left) and --scale N (N device px a CSS px; the window's own without it) for the command's
+  session; --keep S|forever holds the session, and what it emulates, that long after the steps; --then <expression> is
+  evaluated once the page has drawn twice and 250 ms passed after the steps (a drag in the air is still in the air),
+  and printed.`;
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_EXE = join(REPO, "gui", "src-tauri", "target", "release", "maalc-gui.exe");
@@ -79,7 +80,7 @@ const usage = (message) => { throw new UsageError(message); };
 
 const str = { type: "string" };
 const flag = { type: "boolean" };
-const SESSION = { port: str, scheme: str, viewport: str, keep: str, then: str };
+const SESSION = { port: str, scheme: str, viewport: str, scale: str, keep: str, then: str };
 const COMMANDS = {
   open: { options: { root: str, exe: str, settings: str, port: str, timeout: str } },
   close: { options: { root: str } },
@@ -120,7 +121,7 @@ const element = (text, name) => {
   return t;
 };
 
-/** The command line as {command, args, options, port, scheme, viewport, keepMs (null: until stopped), then}; throws a
+/** The command line as {command, args, options, port, scheme, viewport, scale, keepMs (null: until stopped), then}; throws a
  * UsageError that says what is wrong. */
 export function parseCommand(argv) {
   const [command, ...rest] = argv;
@@ -150,6 +151,7 @@ export function parseCommand(argv) {
     if (!m) usage("--viewport takes WIDTHxHEIGHT, as 800x480");
     out.viewport = { width: Number(m[1]), height: Number(m[2]) };
   } else out.viewport = null;
+  out.scale = options.scale === undefined ? null : number(options.scale, "--scale", { min: 0.1 });
   out.then = options.then ?? null;
 
   const targets = (min, max, what) => {
@@ -737,8 +739,11 @@ async function pageCommand(c) {
   for (const sig of ["SIGINT", "SIGBREAK", "SIGHUP"]) process.on(sig, async () => { await finish(); process.exit(130); });
   try {
     if (c.scheme) await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: c.scheme }] });
-    if (c.viewport) await cdp.send("Emulation.setDeviceMetricsOverride", { ...c.viewport, deviceScaleFactor: 0, mobile: false });
-    if (c.scheme || c.viewport) await frames(cdp);
+    if (c.viewport || c.scale) {
+      await cdp.send("Emulation.setDeviceMetricsOverride",
+        { width: c.viewport?.width ?? 0, height: c.viewport?.height ?? 0, deviceScaleFactor: c.scale ?? 0, mobile: false });
+    }
+    if (c.scheme || c.viewport || c.scale) await frames(cdp);
     const out = await STEPS[c.command](cdp, c, undo);
     if (out?.raw !== undefined) console.log(out.raw);
     else if (out !== undefined) print(out);

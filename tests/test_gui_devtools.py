@@ -57,6 +57,7 @@ def test_an_unknown_command_exits_2_and_names_it():
     (["press", "1,2", "--port", "x"], "--port"),
     (["press", "1,2", "--port", "9333", "--keep", "soon"], "--keep"),
     (["press", "1,2", "--port", "9333", "--viewport", "800"], "--viewport"),
+    (["still", "x.png", "--port", "9333", "--scale", "0.5x"], "--scale"),
     (["press", "1,2", "--port", "9333", "--colour", "red"], "--colour"),  # an option no command takes
     (["still", "x.png", "--element", "10,20", "--port", "9333"], "element"),
     (["still", "x.png", "--mask", "10,20", "--port", "9333"], "element"),
@@ -80,6 +81,12 @@ def test_parse_reads_a_page_command_with_its_session_options():
     assert got["viewport"] == {"width": 800, "height": 480}
     assert got["scheme"] == "light"
     assert got["keepMs"] == 2500
+
+
+def test_scale_sets_the_pages_device_pixels_a_css_px_and_none_keeps_the_windows():
+    """A still at 2 device px a CSS px reads the same on a display at 100 % or 150 % (tools/number_contrast.py, #756)."""
+    assert call("parseCommand", ["still", "x.png", "--port", "1", "--scale", "2"])["scale"] == 2
+    assert call("parseCommand", ["still", "x.png", "--port", "1"])["scale"] is None
 
 
 def test_scheme_and_hover_keep_their_state_until_stopped_and_the_rest_end_at_once():
