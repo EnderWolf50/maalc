@@ -2,9 +2,6 @@
 // above the user's own.
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { loadThemePacks } from "./api";
-import { GIFT_BY_ID } from "./giftCatalog";
-import { listsOfPlan, packWanted } from "./gifts";
-import { fill, localName } from "./i18n";
 import {
   EVENT_MODES, MODE_KEYS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, parseThemePacks, weightOf,
   type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
@@ -23,11 +20,11 @@ export function ThemePackTab() {
     <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={newPackPlan}
       lead={{ id: "default", label: t("defaultPlanLocked"), body: <>
         <p className="muted">{t("defaultPlanNote")}</p>{note}
-        <PackPlanEditor data={data} plan={data.default_plan} planId="default" path="" />
+        <PackPlanEditor data={data} plan={data.default_plan} path="" />
       </> }}
       editor={(p, change, path) => <>
         {note}
-        <PackPlanEditor data={data} plan={p} planId={p.id} path={path} onChange={(v) => change({ ...p, ...v })} />
+        <PackPlanEditor data={data} plan={p} path={path} onChange={(v) => change({ ...p, ...v })} />
       </>} />
   );
 }
@@ -51,26 +48,30 @@ const BADGES = {
 } as const;
 
 /** A pack's weight typed in place (#679, in place of prompt()): Enter keeps a whole number from -10 to 10, or says why not
- * beside the box; Esc, or leaving the box, keeps the weight as it was. The weight it opens on is selected, so a number typed
- * replaces it (#734). */
+ * beside the box; leaving the box keeps a number typed into it as Enter does, and leaves the weight as it was when nothing
+ * was typed or what was typed is no such number (#739); Esc leaves it as it was. The weight it opens on is selected, so a
+ * number typed replaces it (#734). */
 function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | null) => void }) {
   const { t } = useEditor();
   const [text, setText] = useState(value === undefined ? "" : String(value));
+  const [typed, setTyped] = useState(false);
   const [wrong, setWrong] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const closed = useRef(false); // by Enter or Esc: a blur as the box goes keeps nothing more
   useEffect(() => { input.current?.select(); }, []);
-  const keep = () => {
+  const score = () => {
     const w = Number(text);
-    if (text.trim() !== "" && Number.isInteger(w) && w >= WEIGHT_MIN && w <= WEIGHT_MAX) onDone(w);
-    else setWrong(true);
+    return text.trim() !== "" && Number.isInteger(w) && w >= WEIGHT_MIN && w <= WEIGHT_MAX ? w : null;
   };
+  const close = (w: number | null) => { closed.current = true; onDone(w); };
   return (
     <span className="weigh">
       <input ref={input} type="number" min={WEIGHT_MIN} max={WEIGHT_MAX} step={1} autoFocus aria-label={t("packs.weightPrompt")} value={text}
-        onChange={(e) => { setText(e.target.value); setWrong(false); }} onBlur={() => onDone(null)}
+        onChange={(e) => { setText(e.target.value); setTyped(true); setWrong(false); }}
+        onBlur={() => { if (!closed.current) close(typed ? score() : null); }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") { e.preventDefault(); keep(); }
-          if (e.key === "Escape") onDone(null);
+          if (e.key === "Enter") { e.preventDefault(); const w = score(); if (w === null) setWrong(true); else close(w); }
+          if (e.key === "Escape") close(null);
         }} />
       {wrong && <small>{t("packs.weightRange")}</small>}
     </span>
@@ -79,11 +80,10 @@ function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | nul
 
 /** Design A of #240: one lane per weight in use (0 always), highest first, and the threshold line between lanes.
  * Drag a pack to another lane, or onto + for a new weight; click one to type its weight. Read-only without onChange. */
-function PackPlanEditor({ data, plan, planId, path, onChange }: {
-  data: ThemePacks; plan: PackPlanValues; planId: string; path: string; onChange?: (p: PackPlanValues) => void;
+function PackPlanEditor({ data, plan, path, onChange }: {
+  data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
-  const { s, t, tv, bad, zh } = useEditor();
-  const lists = listsOfPlan(planId, s.teams, s.gift_lists);
+  const { t, tv, bad } = useEditor();
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
@@ -102,7 +102,7 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const [typing, setTyping] = useState<{ what: string; lane: AddAt | null } | null>(null); // lane null: on the chip
   const ask = (what: string, lane: AddAt | null = null) => setTyping({ what, lane });
   const box = (what: string, current?: number) => (
-    <WeightBox value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
+    <WeightBox key={what} value={current} onDone={(w) => { if (w !== null) weigh(what, w); setTyping(null); }} />
   );
   const typingOn = (what: string) => typing?.what === what && typing.lane === null;
   const dropOn = (w: number | AddAt) => (e: DragEvent) => {
@@ -131,15 +131,9 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
   const chip = (name: string) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
-    const wanted = packWanted(lists, data.pack_ids[name]).map((id) => GIFT_BY_ID.get(id)).filter((g) => g !== undefined)
-      .map((g) => localName(g, zh));
-    const isWanted = wanted.length > 0;
-    const wantedTip = fill(t("packs.wantedTip"), { names: wanted.join(t("gl.sep")) });
-    // The whole chip shows the wanted gifts on hover, the dot being too small a target (#720).
-    const tip = [cover ? name : "", isWanted ? wantedTip : ""].filter(Boolean).join("\n") || undefined;
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
-        {...dragged(name)} {...clickable(name)} title={tip}>
+        {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
         {!cover && <span className="nm">{name}</span>}
         {floors
@@ -148,7 +142,6 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
             return <small key={f.mode} className={"fl" + BADGES[f.mode][1]} role="img" title={label} aria-label={label}>{f.text}</small>;
           })
           : <small><em>{t("packNotInData")}</em></small>}
-        {isWanted && <i className="wd" role="img" aria-label={t("packs.wanted")} title={wantedTip} />}
         {typingOn(name) && box(name, weightOf(plan, name))}
       </span>
     );
@@ -199,7 +192,6 @@ function PackPlanEditor({ data, plan, planId, path, onChange }: {
     <p className="muted floorkey">
       {Object.values(BADGES).map(([key, cls]) => <small key={key} className={"fl" + cls}>{t(key)}</small>)}{t("packs.floorsKey")}
     </p>
-    <p className="muted floorkey"><i className="wd" aria-hidden />{t("packs.wantedKey")}</p>
     <div className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : drag ? " carrying" : "")}>
       {addLane("top")}
       {line === 0 && lineBar}
