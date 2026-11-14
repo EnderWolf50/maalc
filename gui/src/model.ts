@@ -15,13 +15,15 @@ const TEAM = P.teams.items.properties;
 export const SINNERS: string[] = schema.$defs.order.default;
 export const LEVELS: string[] = schema.$defs.levels.items.enum;
 export const VERSION: number = P.version.const;
-/** Spec 04 section 7: the graces numbered 1-10, English names as the game shows them, Chinese name and
- * effect text from LLC (graces.json carries its source and license). */
+/** Spec 04 section 7: the graces numbered 1-10, English names and effect text as the game client has them, Chinese name and
+ * effect text from LLC (graces.json carries its sources and license). */
 export const GRACES: Grace[] = graces.graces;
 /** A piece of a grace's effect line; `up` where the game prints it yellow, what a + or ++ level changed (#733). */
 export interface TextRun { text: string; up: boolean }
 /** Each level's effect lines, a line as its runs. */
-export interface Grace { en: string; zh: string; effects: { base: TextRun[][]; plus?: TextRun[][]; plus2?: TextRun[][] } }
+export interface GraceEffects { base: TextRun[][]; plus?: TextRun[][]; plus2?: TextRun[][] }
+/** A grace's names and its effects in each language (#751). */
+export interface Grace { en: string; zh: string; effects: { en: GraceEffects; zh: GraceEffects } }
 
 /** Enum values of a run or team field, in schema order. */
 export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k] as { enum: string[] }).enum;

@@ -15,18 +15,56 @@ def gifts(data):
     return data["gifts"] + data.get("materials", [])
 
 
-def test_every_gift_and_grace_has_a_chinese_name_and_the_graces_their_effects():
+def test_every_gift_and_grace_has_a_chinese_name_and_the_graces_their_effects_in_english_and_chinese():
     for key in ("gift_search", "gift_recipes"):
         assert all(g["zh"] for g in gifts(DATA[key])), key
     graces = DATA["graces"]["graces"]
     assert len(graces) == 10
     for g in graces:
-        assert g["zh"] and set(g["effects"]) == {"base", "plus", "plus2"}, g["en"]
-        for level, lines in g["effects"].items():
-            assert lines, (g["en"], level)
-            for runs in lines:  # a line is runs of text, each yellow or not, the next one the other
-                assert runs and all(r["text"] and isinstance(r["up"], bool) for r in runs), (g["en"], level)
-                assert all(a["up"] != b["up"] for a, b in zip(runs, runs[1:])), (g["en"], level)
+        assert g["zh"] and set(g["effects"]) == {"en", "zh"}, g["en"]
+        for lang, levels in g["effects"].items():
+            assert set(levels) == {"base", "plus", "plus2"}, (g["en"], lang)
+            for level, lines in levels.items():
+                assert lines, (g["en"], lang, level)
+                for runs in lines:  # a line is runs of text, each yellow or not, the next one the other
+                    assert runs and all(r["text"] and isinstance(r["up"], bool) for r in runs), (g["en"], lang, level)
+                    assert all(a["up"] != b["up"] for a, b in zip(runs, runs[1:])), (g["en"], lang, level)
+        # the same effects in both languages: a line for a line, and yellow where the other is
+        en, zh = g["effects"]["en"], g["effects"]["zh"]
+        for level in en:
+            assert len(en[level]) == len(zh[level]), (g["en"], level)
+            assert [any(r["up"] for r in runs) for runs in en[level]] == [any(r["up"] for r in runs) for runs in zh[level]], (g["en"], level)
+
+
+def english(name, level):
+    """Grace `name`'s English effect lines at a level, each as its runs' (text, yellow) pairs."""
+    g = next(g for g in DATA["graces"]["graces"] if g["en"] == name)
+    return [[(r["text"], r["up"]) for r in runs] for runs in g["effects"]["en"][level]]
+
+
+def test_the_english_effects_read_as_the_game_s_english_starlight_page():
+    # tests/screens/StarlightPage.png: the game's English page, every card at base, its keywords in the season's colour
+    def text(name):
+        return ["".join(t for t, _ in runs) for runs in english(name, "base")]
+    assert text("Star of the Beginning") == ["Starting Cost +150", "Theme Pack Selection +1", "Shop E.G.O Gift Choice +1",
+                                             "1 Free normal Refresh(es) for Shops"]
+    assert text("Moon Star-shop") == ["1 Free Keyword Refresh(es) for Shops", "Upon entering Floor 1, gain 1 random Tier 1 E.G.O Gift(s)"]
+    assert text("Favor of the Nebulae") == ["Upon entering Floor 1, all Identities gain 3 Level(s)",
+                                            "Upon Floor clear, all Identities gain 1 Level(s) (max 5)"]
+    assert text("Starlight Guidance") == ["Max Speed +2", "Gain 1 Clash Power Up", "Gain 1 Damage Up", "Gain 1 Protection"]
+    for g in DATA["graces"]["graces"]:  # the base text has no yellow, as the game's
+        assert not any(up for runs in english(g["en"], "base") for _, up in runs), g["en"]
+
+
+def test_the_english_effects_mark_up_what_the_client_s_english_text_colours_yellow():
+    # the client's EN_DungeonStartBuffs_MD7.json marks the + / ++ changes with the same <color=#f8c200> as LLC's Chinese
+    assert english("Star of the Beginning", "plus2")[0] == [("Starting Cost ", False), ("+250", True)]
+    assert english("Star of the Beginning", "plus2")[3] == [("2", True), (" Free normal Refresh(es) for Shops", False)]
+    assert english("Chance Comet", "plus2")[1:3] == [[("· Floor 5 or lower : Tier 2~3", True)], [("· Floor 6 or higher : Tier 3~4", True)]]
+    assert english("Chance Comet", "plus2")[3] == [
+        ("Upon entering Floor 3", False), ("/Floor 5/Floor 7", True), (", gain 1 random ", False), ("Tier 4", True),
+        (" E.G.O Gift(s) from the ", False), ("selected Keyword category", True)]
+    assert english("Perfected Possibility", "plus")[3] == [("Upon entry, gain 1 Dark Vestige and 1 ", False), ("Faint Vestige", True), (" each", False)]
 
 
 def test_every_gift_search_gift_has_its_effect_in_english_and_chinese_as_plain_text():
@@ -127,9 +165,14 @@ def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_th
     import llc_text
     from local_dir import local_dir
     zip_path = local_dir("llc") / f"{DATA['graces']['zh_release']}.zip"
-    static = local_dir("unpack") / "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-start-buffs/mirrordungeon-start-buffs-08.json"
-    if not (zip_path.is_file() and static.is_file()):
+    static_path = local_dir("unpack") / "static/Assets/Resources_moved/StaticData/static-data/mirrordungeon-start-buffs/mirrordungeon-start-buffs-08.json"
+    if not (zip_path.is_file() and static_path.is_file()):
         pytest.skip("release zip or unpacked client data missing")
-    titles, effects = llc_text.grace_texts(zipfile.ZipFile(zip_path), json.loads(static.read_text(encoding="utf-8-sig")))
-    got = {g["zh"]: g["effects"] for g in DATA["graces"]["graces"]}
+    static = json.loads(static_path.read_text(encoding="utf-8-sig"))
+    titles, effects = llc_text.grace_texts(zipfile.ZipFile(zip_path), static)
+    got = {g["zh"]: g["effects"]["zh"] for g in DATA["graces"]["graces"]}
     assert got == {titles[i]: effects[i] for i in titles}
+    if not (local_dir("unpack") / "raw/Localize/en").is_dir():
+        pytest.skip("the client's English text missing")
+    names, english = llc_text.english_grace_texts(local_dir("unpack"), static)
+    assert {g["en"]: g["effects"]["en"] for g in DATA["graces"]["graces"]} == {names[i]: english[i] for i in names}

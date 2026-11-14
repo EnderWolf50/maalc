@@ -1,6 +1,6 @@
 // Starlight (spec 04 section 7): the game's Grace of the Star page, which the plans tab and a team's own values both edit, and
 // a plan's picks on one line for a team that uses it.
-import { Fragment, useId } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef } from "react";
 import {
   GRACES, LEVELS, allEnhanced, allSelected, buyOrder, clickCard, clickEnhance, defaultStarlight, enhanceAll, gracePrice, selectAll,
   starlightCost,
@@ -21,10 +21,12 @@ export function StarlightEditor({ value, onChange, path }: {
   const order = buyOrder(value);
   const set = (fn: (v: StarlightValues) => StarlightValues) => onChange?.(fn(value));
   const id = useId(); // the cards' rank, price and effects describe their pick buttons
+  const graces = useFitTitles(value.levels, zh);
   return (
     <>{onChange && <p className="muted">{t("starlight.hint")}</p>}
-    <div className={"starlight" + (onChange ? "" : " readonly")} data-path={path}>
-      <div className={"graces" + (bad(`${path}/levels`) || bad(`${path}/priority`) ? " bad" : "")}>
+    {/* the page's language, so the stylesheet sets an English title in the display face */}
+    <div className={"starlight" + (onChange ? "" : " readonly")} data-path={path} lang={zh ? "zh-Hant" : "en"}>
+      <div ref={graces} className={"graces" + (bad(`${path}/levels`) || bad(`${path}/priority`) ? " bad" : "")}>
         {GRACES.map((g, i) => {
           const n = i + 1;
           const level = value.levels[i];
@@ -40,20 +42,18 @@ export function StarlightEditor({ value, onChange, path }: {
               <div className="head">
                 <img className="icon" src={graceIconUrl(n)} alt="" />
                 <button type="button" className="name" disabled={!onChange} aria-pressed={rank > 0}
-                  aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, zh && `${id}-fx-${n}`].filter(Boolean).join(" ")}>
+                  aria-describedby={[rank > 0 && `${id}-rank-${n}`, `${id}-price-${n}`, `${id}-fx-${n}`].filter(Boolean).join(" ")}>
                   <span className="title">{localName(g, zh)}{plusOf(level)}</span>
                 </button>
               </div>
               {zh && g.zh && <small className="en">{g.en}</small>}
-              {zh && (
-                <ul id={`${id}-fx-${n}`}>
-                  {effectLines(g, level).map((line, j) => (
-                    <li key={j} className={line.sub ? "sub" : undefined}>
-                      {line.runs.map((r, k) => (r.up ? <mark key={k}>{r.text}</mark> : <Fragment key={k}>{r.text}</Fragment>))}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <ul id={`${id}-fx-${n}`}>
+                {effectLines(g, level, zh).map((line, j) => (
+                  <li key={j} className={line.sub ? "sub" : undefined}>
+                    {line.runs.map((r, k) => (r.up ? <mark key={k}>{r.text}</mark> : <Fragment key={k}>{r.text}</Fragment>))}
+                  </li>
+                ))}
+              </ul>
               <span className="enhance">
                 {([1, 2] as const).map((plus) => (
                   <button type="button" key={plus} disabled={!onChange} aria-pressed={level === LEVELS[plus + 1]}
@@ -86,6 +86,52 @@ export function StarlightEditor({ value, onChange, path }: {
       </div>
     </div></>
   );
+}
+
+/** The smallest size, in px, a card's title shrinks to before it wraps: the card's smallest type, its English subtitle
+ * (index.css `.grace small.en`). No
+ * title gets there at the widths the cards take (#751): the longest, "Cumulating Starcloud++", takes 13 px on the narrowest (216 px). */
+export const TITLE_FLOOR = 12;
+
+/** The size, in px, that fits a title `width` px wide at the stylesheet's size `size` into its `band` px, a pixel to spare
+ * (a size rounded the other way would wrap it), rounded down to a tenth and not below TITLE_FLOOR; null when it fits as it is. */
+export function fittedSize(size: number, width: number, band: number): number | null {
+  if (width <= band) return null;
+  return Math.max(TITLE_FLOOR, Math.floor((size * (band - 1)) / width * 10) / 10);
+}
+
+/** Each card's title on one line, as the game's (#751): a title wider than its band gets the size that fits it (--fit, which
+ * the stylesheet takes over its own), measured on one line. Again when a title changes (a level, the language), the cards'
+ * width changes, or the display face loads after the first fit. The ref goes on the cards' grid. */
+function useFitTitles(levels: string[], zh: boolean) {
+  const grid = useRef<HTMLDivElement>(null);
+  const fit = () => {
+    for (const title of grid.current?.querySelectorAll<HTMLElement>(".grace .title") ?? []) {
+      title.style.removeProperty("--fit");
+      title.style.whiteSpace = "nowrap";
+      const width = title.getBoundingClientRect().width;
+      title.style.whiteSpace = "";
+      const size = fittedSize(parseFloat(getComputedStyle(title).fontSize), width, title.parentElement!.clientWidth);
+      if (size !== null) title.style.setProperty("--fit", `${size}px`);
+    }
+  };
+  useLayoutEffect(fit, [levels, zh]);
+  useEffect(() => {
+    const el = grid.current;
+    if (!el || typeof ResizeObserver === "undefined") return; // jsdom has none, and no layout to fit
+    // the grid's width: in the next frame, so the size a fit changes is not measured inside the observer's own callback
+    let frame = 0, width = 0, live = true;
+    const watch = new ResizeObserver(([e]) => {
+      if (e.contentRect.width === width) return; // a fit made a card taller or shorter, not narrower
+      width = e.contentRect.width;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    });
+    watch.observe(el);
+    document.fonts?.ready.then(() => { if (live) fit(); });
+    return () => { live = false; watch.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
+  return grid;
 }
 
 /** The game's icon of grace n (1-10): ./grace_icons/<n>.webp (tools/grace_icons.py). */
