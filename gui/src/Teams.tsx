@@ -284,13 +284,12 @@ function refName(g: GiftRef, zh: boolean) {
 
 /** The E.G.O Gift Search page's gifts, keyword tabs and tiers like the game's page; a click adds or removes one. A gift is its
  * icon with its name under it, as the game's page draws it; hovering or focusing it opens its card (both names, its effect, #721).
- * mark: what a picked gift shows (its place in the list), null when it is not picked. The tabs open on `start` for each team
- * picked (`team`, its id). */
-function GiftGrid({ team, gifts, start, full, mark, onToggle }: {
-  team: string; gifts: GiftRef[]; start: string; full: boolean; mark: (g: SearchGift) => string | null; onToggle: (g: GiftRef) => void;
+ * mark: what a picked gift shows (its place in the list), null when it is not picked. */
+function GiftGrid({ gifts, start, full, mark, onToggle }: {
+  gifts: GiftRef[]; start: string; full: boolean; mark: (g: SearchGift) => string | null; onToggle: (g: GiftRef) => void;
 }) {
   const { t, zh } = useEditor();
-  const [tab, setTab] = useScopedState(team, SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
+  const [tab, setTab] = useState(SEARCH_TABS.includes(start) ? start : SEARCH_TABS[0]);
   const { open, tip } = useGiftTip();
   const shown = open !== null;
   useEffect(() => { // Esc closes the card, as on the gift list tab
@@ -401,7 +400,9 @@ function GiftSearchPanel({ i }: { i: number }) {
         </label>
         <small className="caution">{t("gift.note")}</small>
       </Mark>
-      <GiftGrid team={team.id} gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
+      {/* keyed by the team: a team picked mounts the grid anew, its tabs on that team's main keyword and no card open; it
+          holds nothing to keep across teams (ui.tsx useScopedState) */}
+      <GiftGrid key={team.id} gifts={search.gifts} start={main ?? SEARCH_TABS[0]} full={full} mark={(g) => (rank(g) ? String(rank(g)) : null)}
         onToggle={(g) => set({ gifts: toggleGift(search.gifts, g) })} />
       <div className={"rewards" + (bad(`${path}/gifts`) ? " bad" : "")} data-path={`${path}/gifts`}>
         <h3>{t("gift.order")} ({search.gifts.length}/{MAX_GIFTS})</h3>

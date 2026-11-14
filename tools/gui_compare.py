@@ -42,6 +42,12 @@ def compare(before: Path, after: Path) -> tuple[str, np.ndarray | None]:
     return f"{n} px differ, box ({xs.min()}, {ys.min()})-({xs.max()}, {ys.max()})", mask
 
 
+def same(before: Path, after: Path) -> bool:
+    """Whether two stills have the same size and the same pixels."""
+    mask = compare(before, after)[1]
+    return mask is not None and not mask.any()
+
+
 def diff_image(after: Path, mask: np.ndarray) -> Image.Image:
     """The after still at a third of its brightness, the differing pixels magenta."""
     im = np.asarray(Image.open(after).convert("RGB")) // 3
@@ -60,7 +66,7 @@ def run(before: list[Path], after: list[Path], diff: Path | None = None, out=sys
             print(f"{name}: only {'before' if olds else 'after'}", file=out)
             bad += 1
             continue
-        if any(compare(o, n)[0] == "same" for o in olds for n in news):
+        if any(same(o, n) for o in olds for n in news):
             print(f"{name}: same", file=out)
             continue
         what, mask = compare(olds[0], news[0])

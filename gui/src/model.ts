@@ -117,12 +117,15 @@ export const VESTIGES = recipes.vestiges;
 /** Spec 04 section 9: the gifts the search page offers, in page order; ids, tiers and English names from the game's
  * static data, Chinese names from LLC (data/gift_search.json carries its sources and license). */
 export const SEARCH_GIFTS: SearchGift[] = gifts.gifts;
-export interface SearchGift { id: number; keyword: string; tier: number; en: string; zh: string }
+/** A gift as a data file lists it: its id, keyword, tier and names. */
+export interface DataGift { id: number; keyword: string; tier: number; en: string; zh: string }
+/** A gift the E.G.O Gift Search page offers. */
+export type SearchGift = DataGift;
 /** Every gift the data files list, by where they list it: the search page's (data/gift_search.json), then data/gift_recipes.json's
  * fusion gifts, the recipe materials the search page lacks, the game's other gifts (extra_gifts: a shop, a keyword fusion or an
  * event gives one, #332) and the vestiges (spec 05). A list names them by their keyword; the gift list tab shows them all
  * (giftCatalog.ts CATALOG). */
-export const GIFT_SOURCES: Record<"search" | "fusion" | "material" | "other" | "vestige", SearchGift[]> = {
+export const GIFT_SOURCES: Record<"search" | "fusion" | "material" | "other" | "vestige", DataGift[]> = {
   search: SEARCH_GIFTS, fusion: recipes.gifts, material: recipes.materials, other: recipes.extra_gifts, vestige: VESTIGES,
 };
 /** The gifts a shop may sell (#626, data/gift_recipes.json `shop.sells`; agent/settings.py shop_gifts): the search page's in

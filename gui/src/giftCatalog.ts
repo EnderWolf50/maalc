@@ -4,7 +4,7 @@ import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import effects from "./gift_effects.json";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { GIFT_SOURCES, SHOP_GIFTS, parseThemePacks } from "./model";
+import { GIFT_SOURCES, SHOP_GIFTS, parseThemePacks, type DataGift } from "./model";
 import { webpFolder } from "./webpFolder";
 
 /** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
@@ -12,21 +12,22 @@ import { webpFolder } from "./webpFolder";
  * and no recipe uses it, a keyword fusion or an event gives one; vestige: sold or fused only. Only a buyable or fusion gift
  * can be "want". */
 export type Kind = "buyable" | "fusion" | "material" | "other" | "vestige";
-export interface CatalogGift { id: number; keyword: string; tier: number; en: string; zh: string; kind: Kind }
+export interface CatalogGift extends DataGift { kind: Kind }
 
 const SOLD = new Set(SHOP_GIFTS.map((g) => g.id));
 const USED = new Set(FUSIONS.flatMap(materialsOf));
 const kindOf = (g: { id: number }, unsold: Kind): Kind => (SOLD.has(g.id) ? "buyable" : USED.has(g.id) ? "material" : unsold);
 
-const plain = ({ id, keyword, tier, en, zh }: Omit<CatalogGift, "kind">) => ({ id, keyword, tier, en, zh });
+/** A data file's gift as the catalog holds it: its own fields (a fusion gift's recipes left out) and its kind. */
+const entry = ({ id, keyword, tier, en, zh }: DataGift, kind: Kind): CatalogGift => ({ id, keyword, tier, en, zh, kind });
 /** The data files' order (GIFT_SOURCES): the Gift Search page's gifts in page order, then fusion gifts, materials, other gifts and
  * vestiges. */
 export const CATALOG: CatalogGift[] = [
-  ...GIFT_SOURCES.search.map((g): CatalogGift => ({ ...g, kind: kindOf(g, "other") })),
-  ...GIFT_SOURCES.fusion.map((g): CatalogGift => ({ ...plain(g), kind: "fusion" })),
-  ...GIFT_SOURCES.material.map((g): CatalogGift => ({ ...plain(g), kind: kindOf(g, "material") })),
-  ...GIFT_SOURCES.other.map((g): CatalogGift => ({ ...plain(g), kind: kindOf(g, "other") })),
-  ...GIFT_SOURCES.vestige.map((g): CatalogGift => ({ ...g, kind: "vestige" })),
+  ...GIFT_SOURCES.search.map((g) => entry(g, kindOf(g, "other"))),
+  ...GIFT_SOURCES.fusion.map((g) => entry(g, "fusion")),
+  ...GIFT_SOURCES.material.map((g) => entry(g, kindOf(g, "material"))),
+  ...GIFT_SOURCES.other.map((g) => entry(g, kindOf(g, "other"))),
+  ...GIFT_SOURCES.vestige.map((g) => entry(g, "vestige")),
 ];
 export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));
 

@@ -10,7 +10,7 @@ export interface Ctx {
   t: (k: Key) => string;
   /** Translate an enum value, "difficulty" + "hard" -> 困難. */
   tv: (field: string, v: string) => string;
-  /** The GUI shows Chinese: a game name (i18n localName) is the data's Chinese one, the English one shown beside it. */
+  /** The GUI shows Chinese: a game name is the data's Chinese one where it has one (i18n localName). */
   zh: boolean;
   /** A failed check points at this path or something under it. */
   bad: (path: string) => boolean;
@@ -47,7 +47,8 @@ export function usePick(list: keyof Picked, items: { id: string }[], leadId?: st
 
 /** useState for one team of the team page (or another item a page shows one at a time): it goes back to `initial` when
  * `scope`, the team's id, changes, so a question asked or an Undo offered for one team shows neither on the next team picked
- * nor on the first one again (#664). Reset in the render, not by a remount (`key`): the panels the user left open stay open. */
+ * nor on the first one again (#664). Reset in the render, not by a remount (`key`): the panels the user left open stay open. A
+ * part with no such state to keep, the Gift Search grid, is keyed by the team instead, which resets all its state at once. */
 export function useScopedState<T>(scope: string, initial: T): [T, (value: T) => void] {
   const [held, setHeld] = useState({ scope, value: initial });
   if (held.scope !== scope) setHeld({ scope, value: initial });
