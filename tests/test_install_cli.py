@@ -9,6 +9,7 @@ import pytest
 from install import mirror_maafw, mirror_repo
 
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
+EXE = "./python/python.exe"
 
 
 def snapshot(root: Path):
@@ -26,14 +27,14 @@ def test_assembling_again_drops_what_the_repo_deleted_and_keeps_config(tmp_path)
                  "assets/resource/base/pipeline/Deleted.json"):
         (repo / name).parent.mkdir(parents=True, exist_ok=True)
         (repo / name).write_text(name, encoding="utf-8")
-    mirror_repo(repo, root)
+    mirror_repo(repo, root, EXE)
     (root / "config").mkdir()
     (root / "config/settings.json").write_text("{}", encoding="utf-8")
 
     for name in ("agent/state.py", "agent/old/__init__.py", "assets/resource/base/pipeline/Deleted.json"):
         (repo / name).unlink()
     (repo / "agent/old").rmdir()
-    mirror_repo(repo, root)
+    mirror_repo(repo, root, EXE)
 
     assert files(root) == {"agent/main.py", "interface.json", "locales/zh_tw.json",
                            "resource/base/pipeline/Kept.json", "config/settings.json"}
@@ -66,17 +67,19 @@ def test_a_file_already_the_same_is_not_written_again(tmp_path):
                  repo / "assets/interface.json", repo / "assets/resource/base/pipeline/Node.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(path.name.encode())
-    mirror_repo(repo, root)
+    (repo / "assets/interface.json").write_bytes(b'{\r\n    "child_exec": "python",\r\n}\r\n')
+    mirror_repo(repo, root, EXE)
     mirror_maafw(wheel, root, b"fixed")
     for path in root.rglob("*"):
         os.utime(path, (OLD, OLD))
 
-    mirror_repo(repo, root)
+    mirror_repo(repo, root, EXE)
     mirror_maafw(wheel, root, b"fixed")
 
     written = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() and p.stat().st_mtime != OLD}
     assert written == set()
     assert (root / "maafw/MaaFramework.dll").read_bytes() == b"fixed"
+    assert (root / "interface.json").read_bytes() == b'{\r\n    "child_exec": "./python/python.exe",\r\n}\r\n'
 
 
 def test_a_file_that_differs_is_written_even_with_the_same_size_and_mtime(tmp_path):

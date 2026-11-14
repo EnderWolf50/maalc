@@ -84,7 +84,7 @@ def fixed_framework_dll() -> bytes:
 
 
 @contextmanager
-def changing(path: Path):
+def exit_if_held(path: Path):
     """A file another process holds cannot be written or deleted: MXU and the bot load maafw/'s DLLs, the settings
     window runs maalc-gui.exe. Stop with one line that names it, not a traceback (#757). Windows says so as
     WinError 32 (shutil.copy2, unlink) or as errno 13 (open, unlink of a loaded DLL): PermissionError both."""
@@ -95,28 +95,28 @@ def changing(path: Path):
                  " close it and run install.py again")
 
 
-# A file that already holds what it would get is not written (size, then bytes: copy2 keeps the source's mtime),
-# so a rebuild that changes none of the DLLs MXU or the bot holds goes through (#757).
 def copy_file(src: Path, dst: Path) -> None:
-    if dst.is_file() and filecmp.cmp(src, dst, shallow=False):
-        return
-    with changing(dst):
-        shutil.copy2(src, dst)
+    """copy2, unless dst holds src's bytes already (size, then bytes: copy2 keeps the source's mtime). A rebuild
+    that changes none of the DLLs MXU or the bot holds then goes through (#757)."""
+    with exit_if_held(dst):
+        if not (dst.is_file() and filecmp.cmp(src, dst, shallow=False)):
+            shutil.copy2(src, dst)
 
 
 def write_file(dst: Path, data: bytes) -> None:
-    if dst.is_file() and dst.stat().st_size == len(data) and dst.read_bytes() == data:
-        return
-    with changing(dst):
-        dst.write_bytes(data)
+    """copy_file for bytes in memory."""
+    with exit_if_held(dst):
+        if not (dst.is_file() and dst.stat().st_size == len(data) and dst.read_bytes() == data):
+            dst.write_bytes(data)
 
 
-def mirror(src: Path, dst: Path, own: frozenset[str] = frozenset()) -> None:
-    """Make dst hold what src holds, but for the files named in `own` (relative paths), which the caller writes."""
+def mirror(src: Path, dst: Path, caller_writes: str | None = None) -> None:
+    """Make dst hold what src holds, but for `caller_writes` (a path relative to dst), which is neither copied nor
+    deleted: the caller writes it."""
     dst.mkdir(parents=True, exist_ok=True)
     for path in sorted(src.rglob("*")):  # a folder before what it holds
         name = path.relative_to(src)
-        if "__pycache__" in name.parts or name.as_posix() in own:
+        if "__pycache__" in name.parts or name.as_posix() == caller_writes:
             continue
         if path.is_dir():
             (dst / name).mkdir(exist_ok=True)
@@ -124,22 +124,26 @@ def mirror(src: Path, dst: Path, own: frozenset[str] = frozenset()) -> None:
             copy_file(path, dst / name)
     for path in sorted(dst.rglob("*"), reverse=True):  # a folder after what it holds, so it is empty by then
         name = path.relative_to(dst)
-        if (src / name).exists() or name.as_posix() in own:
+        if (src / name).exists() or name.as_posix() == caller_writes:
             continue
-        with changing(path):
+        with exit_if_held(path):
             if path.is_dir():
                 path.rmdir()
             else:
                 path.unlink()
 
 
-def mirror_repo(repo: Path, root: Path) -> None:
+def mirror_repo(repo: Path, root: Path, child_exec: str) -> None:
     """Copy agent/ and what assets/ holds (interface.json, resource/, locales/) into root. A file the repo deleted
-    leaves those folders too; the rest of root (config/, state/, logs/, maafw/) is left alone."""
+    leaves those folders too; the rest of root (config/, state/, logs/, maafw/) is left alone. interface.json gets
+    child_exec in place of the bare python."""
     root.mkdir(parents=True, exist_ok=True)
     for src in (*(repo / "assets").iterdir(), repo / "agent"):
         if src.is_dir():
             mirror(src, root / src.name)
+        elif src.name == "interface.json":
+            pinned = f'"child_exec": "{child_exec}"'.encode()
+            write_file(root / src.name, src.read_bytes().replace(b'"child_exec": "python"', pinned))
         else:
             copy_file(src, root / src.name)
 
@@ -150,7 +154,7 @@ def mirror_maafw(wheel_bin: Path, root: Path, fixed_dll: bytes | None) -> None:
         mirror(wheel_bin, maafw)
         return
     # The wheel's MaaFramework.dll is not copied in first: the fixed one MXU holds would have to change twice.
-    mirror(wheel_bin, maafw, own=frozenset({"MaaFramework.dll"}))
+    mirror(wheel_bin, maafw, caller_writes="MaaFramework.dll")
     write_file(maafw / "MaaFramework.dll", fixed_dll)
 
 
@@ -195,12 +199,7 @@ if __name__ == "__main__":
         # Fetched before anything is copied: a failed download or hash leaves install/ as it was,
         # never with the wheel's unpatched DLL.
         fixed_dll = fixed_framework_dll()
-    mirror_repo(repo, install)
-    interface = install / "interface.json"
-    text = interface.read_text(encoding="utf-8")
-    exe = "./python/python.exe" if release else Path(sys.executable).as_posix()
-    interface.write_text(text.replace('"child_exec": "python"', f'"child_exec": "{exe}"'),
-                         encoding="utf-8")
+    mirror_repo(repo, install, "./python/python.exe" if release else Path(sys.executable).as_posix())
     mirror_maafw(wheel_bin, install, fixed_dll)
     for name in ("LICENSE", "NOTICE.md"):
         copy_file(repo / name, install / name)
