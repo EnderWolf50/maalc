@@ -36,18 +36,6 @@ def test_sinners_are_found_by_their_english_name():
         sc.sinner_identities(["Faust"], characters, {1: 10101})
 
 
-def test_the_card_is_found_in_the_bundle_index():
-    lines = [
-        "24b6/8b71\tTexture2D\tAssets/Resources_moved/Sprite/Unit/Info/Normal/10101_normal_info.png",
-        "24b6/8b71\tSprite\tAssets/Resources_moved/Sprite/Unit/Info/Normal/10101_normal_info.png",
-        "66e4/e37b\tSprite\tAssets/Resources_moved/Sprite/UnitCgThumbnail/Default/10101_normal.png",  # the CG thumbnail: not the card
-        "24b6/8b71\tSprite\tAssets/Resources_moved/Sprite/Unit/Info/Normal/10201_normal_info.png",
-        "aaaa/bbbb\t-\t-",
-    ]
-    card = "Assets/Resources_moved/Sprite/Unit/Info/Normal/{}_normal_info.png"
-    assert sc.card_bundles(lines, {10101, 10201}) == {"24b6/8b71": {card.format(10101): 10101, card.format(10201): 10201}}
-
-
 def test_every_sinner_of_the_settings_has_a_card():
     index = json.loads((CARDS / "index.json").read_text(encoding="utf-8"))
     assert list(index) == ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion",

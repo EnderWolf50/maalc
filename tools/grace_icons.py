@@ -6,7 +6,7 @@ Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data").
 - `gui/src/grace_icons/<n>.webp` for grace n (1-10) of gui/src/graces.json: the game's `StartBuffIcon_<id>` sprite (a white
   glyph on transparency, the top left of each card on the starlight page), `<id>` the grace's start-buff id, found by its English
   name in the English localization (`mirror_dungeon_5_buffs_title_<id>`). Fitted into 96 px, alpha kept, WebP. It reads the bundle
-  index `.local/unpack/out/sprite-index.tsv` (tools/game_data.py bundle_index); when a new client's bundles are not in it yet, the
+  index `.local/unpack/out/sprite-index.tsv` (tools/unity_files.py bundle_index); when a new client's bundles are not in it yet, the
   first run reads them all (~12 GB): run it as a `bench` ticket then (tools/live/queue.py, docs/spec/05-game-data.md section 8).
 - `gui/src/grace_card/<part>.webp`: the sprites the starlight page's prefabs draw, from the APK's player data (CARD_PARTS):
   the card face unselected and selected, the hover frame, the + / ++ button plate unlit and lit, the + glyph unlit and lit, the
@@ -19,9 +19,9 @@ from pathlib import Path
 
 from PIL import Image
 
-from game_data import INDEX, bundle_index
 from local_dir import local_dir
-from theme_pack_covers import PLAYER_DATA, sprite_image, unity
+from theme_pack_covers import PLAYER_DATA
+from unity_files import bundle_sprites, sprite_image, unity
 
 REPO = Path(__file__).resolve().parent.parent
 GRACES = REPO / "gui/src/graces.json"
@@ -68,16 +68,8 @@ def grace_ids(unpack: Path) -> list[str]:
 
 def sprites(unpack: Path, ids: list[str]) -> dict:
     """{start-buff id: its StartBuffIcon sprite image} for the ids the bundles hold."""
-    cache = unpack / "raw/UnityCache"
-    want = {SPRITE + i for i in ids}
-    rows = [(line.split("\t") + ["", ""])[:3] for line in bundle_index(cache, unpack / INDEX)]
-    bundles = {key for key, kind, p in rows if kind == "Sprite" and Path(p).stem in want}
-    found = {}
-    for key in sorted(bundles):
-        for p, obj in unity(cache / key / "__data").container.items():
-            if obj.type.name == "Sprite" and Path(p).stem in want:
-                found[Path(p).stem[len(SPRITE):]] = obj.read().image
-    return found
+    want = {SPRITE + i: i for i in ids}
+    return {i: sprite.image for i, sprite in bundle_sprites(unpack, lambda p: want.get(Path(p).stem))}
 
 
 def card_sprites(data: Path) -> dict[str, Image.Image]:

@@ -153,3 +153,12 @@ def test_regenerating_the_recipe_data_gives_the_committed_file_when_it_is_unpack
     import gift_recipes  # noqa: PLC0415
     built, _ = gift_recipes.build(unpack, release)
     assert json.loads(json.dumps(built, ensure_ascii=False)) == DATA  # run `tools/gift_recipes.py --no-icons` when this fails
+
+
+def test_an_icon_is_the_ego_gift_icon_sprite_of_its_icon_id():
+    import pytest
+    pytest.importorskip("cv2", reason="cv2 is in the unpack group: `uv sync --group unpack` to run this check")
+    import gift_recipes  # noqa: PLC0415
+    assert gift_recipes.icon_of("Assets/Resources_moved/Sprite/EgoGiftIcon/1001.png") == 1001
+    assert gift_recipes.icon_of("Assets/Resources_moved/Sprite/EgoGiftIcon/1001_frame.png") is None  # not an icon id
+    assert gift_recipes.icon_of("Assets/Resources_moved/Sprite/UI/1001.png") is None  # not an EgoGiftIcon

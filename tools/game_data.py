@@ -34,6 +34,7 @@ import zipfile
 from pathlib import Path
 
 from local_dir import local_dir
+from unity_files import INDEX, bundle_index, index_rows, unity
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
@@ -42,8 +43,6 @@ FILES = f"/sdcard/Android/data/{PACKAGE}/files"
 CACHE = f"{FILES}/UnityCache/Shared"
 SERIAL = "127.0.0.1:16384"  # MuMu instance 0
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
-INDEX = "out/sprite-index.tsv"  # every bundle's container entries (bundle_index)
-UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 and 1.118.1); the bundles carry a stripped version
 LLC_LATEST = "https://api.github.com/repos/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/latest"
 # Pulled piece -> its place under .local/unpack/ (the UnityCache bundles go one by one).
 PIECES = {"localize": "raw/Localize", "catalog": "raw/addressables", "metadata": "raw/Metadata", "apk": "raw/apk",
@@ -171,45 +170,18 @@ def data_client() -> str:
     return json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))["client"]
 
 
-def bundle_index(cache: Path, index_path: Path) -> list[str]:
-    """Every container entry of the bundles under `cache`, one `hash/version<TAB>type<TAB>path` line each, kept in
-    `index_path` (out/sprite-index.tsv). A bundle folder the file lacks (the first run reads all ~12 GB; a new client's
-    version folders) is read and added, the lines of a folder that is gone are dropped; `hash/version - -` marks a bundle
-    as read, entries or not."""
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
-    bundles = {f"{p.parent.parent.name}/{p.parent.name}": p for p in Path(cache).glob("*/*/__data")}
-    lines = index_path.read_text(encoding="utf-8").splitlines() if index_path.is_file() else []
-    kept = [line for line in lines if line.split("\t")[0] in bundles]  # an index of bare `hash` lines (before #625) goes whole
-    new = sorted(bundles.keys() - {line.split("\t")[0] for line in kept})
-    if new or len(kept) != len(lines):
-        for key in new:
-            try:
-                kept += [f"{key}\t{obj.type.name}\t{p}" for p, obj in UnityPy.load(str(bundles[key])).container.items()]
-            except Exception as e:  # a bundle UnityPy cannot read holds none of the files the generators want, as far as we know
-                print("skip", key, e, file=sys.stderr)
-            kept.append(f"{key}\t-\t-")
-        index_path.parent.mkdir(parents=True, exist_ok=True)
-        index_path.write_text("".join(line + "\n" for line in kept), encoding="utf-8")
-    return kept
-
-
 def static_bundles(index: list[str]) -> set[str]:
     """The `hash/version` keys of the bundles that hold a StaticData TextAsset: the static data is spread over several
     (1.117.0: three, 2185 + 14 + 1 files), and a new client may change only some of them."""
-    return {key for key, kind, path in (line.split("\t") for line in index) if kind == "TextAsset" and "staticdata" in path.lower()}
+    return {key for key, kind, path in index_rows(index) if kind == "TextAsset" and "staticdata" in path.lower()}
 
 
 def dump_static(bundles: list[Path], out: Path) -> int:
     """The TextAssets under StaticData of these bundles -> out/Assets/Resources_moved/StaticData/..."""
-    import UnityPy
-
-    UnityPy.config.FALLBACK_UNITY_VERSION = UNITY_VERSION
     hits = 0
     for path in bundles:
         try:
-            entries = UnityPy.load(str(path)).container.items()
+            entries = unity(path).container.items()
         except Exception as e:  # as in bundle_index: a bundle UnityPy cannot read holds no static data we know of
             print("skip", path, e, file=sys.stderr)
             continue
