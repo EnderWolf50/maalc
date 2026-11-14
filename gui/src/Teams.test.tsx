@@ -397,6 +397,39 @@ describe("the deployment order tiles (#718)", () => {
     expect(dim.length).toBeGreaterThan(0);
     for (const b of dim) expect(Number(b)).toBeLessThan(0.6);
   });
+
+  // #732: the tile is the game's formation card. Its frame is the game's 162 x 230 sprite (tools/sinner_cards.py FRAME_PARTS).
+  const rulesOf = (pick: (selector: string) => boolean) => cssRules(css).filter((r) => pick(r.selector)).map((r) => r.body).join("\n");
+
+  test("each tile is the formation card: the game's frame round the art, in the frame's shape, at most the frame's size", () => {
+    renderEditor(<TeamsTab />, ordered());
+    for (const s of SINNERS) expect(tile(s)).toHaveClass("sinner");
+    expect(rulesOf((x) => x === ".sinner")).toMatch(/aspect-ratio:\s*162\s*\/\s*230/);
+    expect(rulesOf((x) => x === ".sinners")).toMatch(/grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*162px\)\)/);
+    expect(rulesOf((x) => /^\.sinner::after$/.test(x))).toMatch(/sinner_card\/frame\.webp/);
+  });
+
+  test("a sinner in the order has its number and the game's plate, 上場 red and 替補 teal, under the game's glow; one left out has none", () => {
+    renderEditor(<TeamsTab />, ordered());
+    expect(tile("Ryōshū")).toHaveClass("deployed");
+    expect(tile("Ryōshū").querySelector(".num")).toHaveTextContent("1");
+    expect(tile("Ryōshū").querySelector(".banner")).toHaveTextContent(zh["order.deployed"]);
+    expect(tile("Sinclair")).toHaveClass("backup");
+    expect(tile("Sinclair").querySelector(".num")).toHaveTextContent("9");
+    expect(tile("Sinclair").querySelector(".banner")).toHaveTextContent(zh["order.backup"]);
+    for (const s of ["Don Quixote", "Meursault", "Gregor"]) expect(tile(s).querySelector(".num, .banner")).toBeNull();
+    expect(rulesOf((x) => x.includes(".sinner.deployed .banner"))).toMatch(/sinner_card\/plate-deployed\.webp/);
+    expect(rulesOf((x) => x.includes(".sinner.backup .banner"))).toMatch(/sinner_card\/plate-backup\.webp/);
+    const glow = cssRules(css).filter((r) => r.body.includes("sinner_card/glow.webp")).map((r) => r.selector).join(" ");
+    expect(glow).toMatch(/\.sinner\.deployed::after/);
+    expect(glow).toMatch(/\.sinner\.backup::after/);
+  });
+
+  test("the name sits at the foot as the game writes an identity's, in the sinner's own spelling", () => {
+    renderEditor(<TeamsTab />, ordered());
+    expect(tile("Ryōshū").querySelector(".name")).toHaveTextContent(/^Ryōshū$/);
+    expect(rulesOf((x) => x === ".sinner .name")).not.toMatch(/text-transform:\s*uppercase/);
+  });
 });
 
 describe("the section index", () => {

@@ -14,7 +14,7 @@ What `cua-driver` needs to operate the Tauri settings app (`gui/`) on Windows. E
 ## Seeing the window
 
 - `get_window_state` with `include_accessibility_tree:false` returns a screenshot of that one window plus its bounds; `--screenshot-out-file <png>` on `cua-driver call` saves it. It never captures the screen. `get_desktop_state` captures the whole display: not for a GUI check. [run; cua docs `describe get_window_state`]
-- Sizes differ by setup: the window is 1100x760 in `tauri.conf.json`; in the [run], `list_windows` reported 1654x1187 and the screenshot was 1455x1044. Action coordinates are pixels of the latest screenshot, not window or screen pixels. A retro report names 1620x1500 for another setup: read the sizes again each run. [run; retro]
+- Sizes differ by setup: the window is 1500x760 in `tauri.conf.json` (1100x760 before #732); in the [run], `list_windows` reported 1654x1187 and the screenshot was 1455x1044. Action coordinates are pixels of the latest screenshot, not window or screen pixels. A retro report names 1620x1500 for another setup: read the sizes again each run. [run; retro]
 - Each `cua-driver call` is a session of its own. A `drag` or `click` needs a `get_window_state` of the same window in the same session first, else it fails with `screenshot_context_missing` / `window_never_read`. Pass the same `"session":"<name>"` to every call (read, then act, then read), or put the steps in one `run_script`. [run]
 - The page is a WebView2: the first tree read showed only the title bar (5 elements), a later one 138 elements with a `Document` node. Act by pixel off the screenshot and judge by the next screenshot. [run]
 

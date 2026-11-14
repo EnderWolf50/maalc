@@ -3,7 +3,7 @@
 //
 //   pnpm --dir gui exec vite build; pnpm --dir gui exec vite preview --port 1420   (another shell: the built app)
 //   node tools/gui_shots.mjs --out <dir> [--scheme light|dark|both] [--only run,teams] [--lang en_us]
-//                            [--settings FILE] [--url URL] [--width 1100 --height 760 --scale 2] [--browser EXE]
+//                            [--settings FILE] [--url URL] [--width W --height H] [--scale 2] [--browser EXE]
 //   node tools/gui_shots.mjs --hold teams-full [--port 9222]   (keep that still's page open for a DevTools client)
 //
 // The page is the real app: in a plain browser gui/src/api.ts reads and writes settings.json in localStorage, which this
@@ -22,6 +22,8 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// The settings window as it opens: --width and --height default to it.
+const WINDOW = JSON.parse(readFileSync(join(REPO, "gui", "src-tauri", "tauri.conf.json"), "utf8")).app.windows[0];
 
 const { values: opt } = parseArgs({
   options: {
@@ -31,8 +33,8 @@ const { values: opt } = parseArgs({
     scheme: { type: "string", default: "light" },
     only: { type: "string" },
     lang: { type: "string" },
-    width: { type: "string", default: "1100" },
-    height: { type: "string", default: "760" },
+    width: { type: "string", default: String(WINDOW.width) },
+    height: { type: "string", default: String(WINDOW.height) },
     scale: { type: "string", default: "2" },
     browser: { type: "string" },
     hold: { type: "string" },

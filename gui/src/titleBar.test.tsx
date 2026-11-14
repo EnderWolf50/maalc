@@ -112,6 +112,23 @@ describe("the title bar", () => {
   });
 });
 
+describe("the window as it opens (#732)", () => {
+  const [main] = conf.app.windows as { width: number; height: number; center?: boolean; preventOverflow?: boolean }[];
+
+  test("is wide enough for a row of 6 sinners and a row of 5 starlight graces, and fits a 1920 x 1080 screen at 125 %", () => {
+    // Measured in the built page (headless Edge, 2026-11-14): the team page holds 5 grace cards a row, each at least 216 px
+    // so no title wraps (#726), from 1500 px wide; the 6 sinner tiles take a row at any width. 1536 x 864 is 1920 x 1080 at 125 %.
+    expect(main.width).toBeGreaterThanOrEqual(1500);
+    expect(main.width).toBeLessThanOrEqual(1536);
+    expect(main.height).toBeLessThanOrEqual(864);
+  });
+
+  test("on a smaller screen it opens inside the screen's work area, centred", () => {
+    expect(main.preventOverflow).toBe(true);
+    expect(main.center).toBe(true);
+  });
+});
+
 describe("a settings file that does not read", () => {
   beforeEach(() => { win.text = "{ not json"; });
 
