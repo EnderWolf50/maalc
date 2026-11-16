@@ -508,7 +508,7 @@ describe("the deployment order tiles (#718)", () => {
     for (const s of SINNERS) expect(tile(s)).toHaveClass("sinner");
     expect(rulesOf((x) => x === ".sinner")).toMatch(/aspect-ratio:\s*162\s*\/\s*230/);
     expect(rulesOf((x) => x === ".sinners")).toMatch(/grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*162px\)\)/);
-    expect(rulesOf((x) => /^\.sinner::after$/.test(x))).toMatch(/sinner_card\/frame\.webp/);
+    expect(rulesOf((x) => /^\.sinner::after$/.test(x))).toMatch(/--sprite-sinner-frame-frame/);
   });
 
   test("a sinner in the order has its number and the game's plate, 上場 red and 替補 teal, under the game's glow; one left out has none", () => {
@@ -520,9 +520,9 @@ describe("the deployment order tiles (#718)", () => {
     expect(tile("Sinclair").querySelector(".num")).toHaveTextContent("9");
     expect(tile("Sinclair").querySelector(".banner")).toHaveTextContent(zh["order.backup"]);
     for (const s of ["Don Quixote", "Meursault", "Gregor"]) expect(tile(s).querySelector(".num, .banner")).toBeNull();
-    expect(rulesOf((x) => x.includes(".sinner.deployed .banner"))).toMatch(/sinner_card\/plate-deployed\.webp/);
-    expect(rulesOf((x) => x.includes(".sinner.backup .banner"))).toMatch(/sinner_card\/plate-backup\.webp/);
-    const glow = cssRules(css).filter((r) => r.body.includes("sinner_card/glow.webp")).map((r) => r.selector).join(" ");
+    expect(rulesOf((x) => x.includes(".sinner.deployed .banner"))).toMatch(/--sprite-sinner-frame-plate-deployed/);
+    expect(rulesOf((x) => x.includes(".sinner.backup .banner"))).toMatch(/--sprite-sinner-frame-plate-backup/);
+    const glow = cssRules(css).filter((r) => r.body.includes("--sprite-sinner-frame-glow")).map((r) => r.selector).join(" ");
     expect(glow).toMatch(/\.sinner\.deployed::after/);
     expect(glow).toMatch(/\.sinner\.backup::after/);
   });

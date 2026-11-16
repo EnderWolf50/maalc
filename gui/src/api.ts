@@ -1,16 +1,58 @@
 // File access through the Rust side (src-tauri/src/lib.rs). In a plain browser (`pnpm dev`,
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import bundledThemePacks from "../../assets/resource/base/data/theme_packs.yaml?raw";
-import { parseThemePacks, type ThemePacks } from "./model";
 
 const tauri = isTauri();
 
-let themePacks: Promise<ThemePacks> | undefined;
-/** Read once from <root>; the browser falls back to the repo's copy. */
-export const loadThemePacks = (): Promise<ThemePacks> =>
-  (themePacks ??= (tauri ? invoke<string>("load_theme_packs") : Promise.resolve(bundledThemePacks)).then(parseThemePacks));
+/** The game data the window shows, read at run time from <root>/resource/base/data (lib.rs load_game_data), so what the
+ * Agent downloads shows without a new build. `texts`: each file's text by its path under data/; `folders`: the file names
+ * in each image folder; `url`: where the page loads an image from, a path under data/. */
+export interface GameFiles {
+  texts: Record<string, string>;
+  folders: Record<string, string[]>;
+  url: (path: string) => string;
+}
+
+/** Every text file the window reads (paths under data/). */
+export const GAME_TEXTS = [
+  "gift_effects.json", "gift_lists.yaml", "gift_recipes.json", "gift_search.json", "graces.json", "shop.yaml", "theme_packs.yaml",
+  "sinner_cards/index.json", "theme_pack_covers/index.json",
+];
+/** Every image folder the window lists (under data/). */
+export const GAME_FOLDERS = ["gift_icons", "keyword_icons", "grace_icons", "sinner_cards", "theme_pack_covers"];
+
+const DATA = "../../assets/resource/base/data/";
+const under = (key: string) => key.slice(key.indexOf("/data/") + "/data/".length);
+
+/** A plain browser (`pnpm dev`, the tests): the repo's own data folder. Only the dev server and the tests get here: in a
+ * build `import.meta.env.DEV` is false, so none of these files reaches the bundle. */
+async function browserFiles(): Promise<GameFiles> {
+  if (!import.meta.env.DEV) throw new Error("the game data can be read only by the app (no Tauri here)");
+  const raw = import.meta.glob(["../../assets/resource/base/data/*.{json,yaml}", "../../assets/resource/base/data/*/index.json"], { query: "?raw", import: "default" });
+  const images = import.meta.glob("../../assets/resource/base/data/*/*.webp", { query: "?url", import: "default" });
+  const texts: Record<string, string> = {};
+  for (const name of GAME_TEXTS) {
+    const read = raw[DATA + name];
+    if (!read) throw new Error(`${name}: not in the repo's data folder`);
+    texts[name] = (await read()) as string;
+  }
+  const folders: Record<string, string[]> = Object.fromEntries(GAME_FOLDERS.map((f) => [f, []]));
+  const urls = new Map<string, string>();
+  await Promise.all(Object.entries(images).map(async ([key, load]) => {
+    const path = under(key), folder = path.slice(0, path.indexOf("/"));
+    urls.set(path, (await load()) as string);
+    folders[folder]?.push(path.slice(folder.length + 1));
+  }));
+  return { texts, folders, url: (path) => urls.get(path) ?? "" };
+}
+
+let gameFiles: Promise<GameFiles> | undefined;
+/** Read once. Rejects with the reason (a missing folder or file) when the data cannot be read. */
+export const loadGameFiles = (): Promise<GameFiles> => (gameFiles ??= tauri
+  ? invoke<{ dir: string; texts: Record<string, string>; folders: Record<string, string[]> }>("load_game_data", { texts: GAME_TEXTS, folders: GAME_FOLDERS })
+      .then(({ dir, texts, folders }) => ({ texts, folders, url: (path: string) => convertFileSrc(`${dir}/${path}`) }))
+  : browserFiles());
 
 export const rootDir = (): Promise<string> => (tauri ? invoke("root_dir") : Promise.resolve("(browser)"));
 

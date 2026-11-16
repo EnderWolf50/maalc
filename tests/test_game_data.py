@@ -118,3 +118,12 @@ def test_the_text_files_credit_the_llc_release_the_gift_names_carry():
     for name in ("event_text.json", "gift_text.json", "trial_text.json"):
         data = committed(name)
         assert data["zh_release"] == release and data["license"] == "CC BY-NC-SA 4.0", name
+
+
+def test_regen_leaves_the_client_the_data_came_from_in_data_for_the_resource_package(tmp_path):
+    # #766: CI has no .local/unpack, so the package manifest reads the client from the committed data.
+    (tmp_path / "unpack").mkdir()
+    (tmp_path / "unpack" / "client.json").write_text(json.dumps({"client": "1.119.0", "installed": "2026-11-20"}), encoding="utf-8")
+    (tmp_path / "data").mkdir()
+    gd.write_data_client(tmp_path / "unpack", tmp_path / "data")
+    assert json.loads((tmp_path / "data" / "client.json").read_text(encoding="utf-8")) == {"client": "1.119.0"}

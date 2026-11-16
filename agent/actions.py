@@ -23,6 +23,7 @@ from maa.define import Rect
 import gift_cells
 import hub_text
 import recovery
+import resource_package
 import run_start
 import settlement
 from gifts import main_keyword, resolve_list, want_kind
@@ -522,6 +523,7 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
+        log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
         return True

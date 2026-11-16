@@ -1,40 +1,32 @@
 // Theme pack plans (spec 04 section 8): lanes of weights with the refresh threshold between them, and the locked default plan
 // above the user's own.
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
-import { loadThemePacks } from "./api";
 import {
-  EVENT_MODES, MODE_KEYS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, parseThemePacks, weightOf,
+  EVENT_MODES, MODE_KEYS, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, weightOf,
   type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
 import { Field, Select, useEditor, useSlashFocus, withBreaks } from "./ui";
-import { webpFolder } from "./webpFolder";
+import { webpFolder } from "./gameData";
 
 export function ThemePackTab() {
   const { t } = useEditor();
-  const [data, setData] = useState<ThemePacks>(() => parseThemePacks(""));
-  const [error, setError] = useState("");
-  useEffect(() => { loadThemePacks().then(setData, (e) => setError(String(e))); }, []);
-  const note = error && <p className="bad">{t("themePacksError")}: {error}</p>;
+  const data = THEME_PACKS;
   return (
     <PlanTab<ThemePackPlan> planKey="theme_pack_plans" tab="tab.themepacks" make={newPackPlan}
       lead={{ id: "default", label: t("defaultPlanLocked"), body: <>
-        <p className="muted">{t("defaultPlanNote")}</p>{note}
+        <p className="muted">{t("defaultPlanNote")}</p>
         <PackPlanEditor data={data} plan={data.default_plan} path="" />
       </> }}
       editor={(p, change, path) => <>
-        {note}
         <PackPlanEditor data={data} plan={p} path={path} onChange={(v) => change({ ...p, ...v })} />
       </>} />
   );
 }
 
-// #241's cards (theme_pack_covers/index.json: pack name -> file); a pack without one, or a build before they exist, shows
-// its name on a blank card. The title is printed on the card, so the name is the tooltip.
-const coverOf = webpFolder(
-  import.meta.glob<string>("../../assets/resource/base/data/theme_pack_covers/*.webp", { eager: true, query: "?url", import: "default" }),
-  import.meta.glob<Record<string, string>>("../../assets/resource/base/data/theme_pack_covers/index.json", { eager: true, import: "default" }),
-);
+// #241's cards (theme_pack_covers/index.json: pack name -> file); a pack without one shows its name on a
+// blank card. The title is printed on the card, so the name is the tooltip.
+const coverOf = webpFolder("theme_pack_covers", "theme_pack_covers/index.json");
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL
 const LINE = "\u0000line";

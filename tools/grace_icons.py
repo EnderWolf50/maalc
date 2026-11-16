@@ -3,12 +3,12 @@
 Usage: uv run --group unpack python tools/grace_icons.py
 Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data").
 
-- `gui/src/grace_icons/<n>.webp` for grace n (1-10) of gui/src/graces.json: the game's `StartBuffIcon_<id>` sprite (a white
+- `data/grace_icons/<n>.webp` for grace n (1-10) of data/graces.json: the game's `StartBuffIcon_<id>` sprite (a white
   glyph on transparency, the top left of each card on the starlight page), `<id>` the grace's start-buff id, found by its English
   name in the English localization (`mirror_dungeon_5_buffs_title_<id>`). Fitted into 96 px, alpha kept, WebP. It reads the bundle
   index `.local/unpack/out/sprite-index.tsv` (tools/unity_files.py bundle_index); when a new client's bundles are not in it yet, the
   first run reads them all (~12 GB): run it as a `bench` ticket then (tools/live/queue.py, docs/spec/05-game-data.md section 8).
-- `gui/src/grace_card/<part>.webp`: the sprites the starlight page's prefabs draw, from the APK's player data (CARD_PARTS):
+- `data/grace_card/<part>.webp`: the sprites the starlight page's prefabs draw, from the APK's player data (CARD_PARTS):
   the card face unselected and selected, the hover frame, the + / ++ button plate unlit and lit, the + glyph unlit and lit, the
   starlight price icon, the Enhance All panel and the page's background. Each is found by name in its file and checked by size, as
   tools/theme_pack_covers.py does for the theme pack card: a renamed or resized sprite stops the tool, and the prefabs are read again.
@@ -23,9 +23,10 @@ from local_dir import local_dir
 from unity_files import PLAYER_DATA, bundle_sprites, player_sprites, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
-GRACES = REPO / "gui/src/graces.json"
-OUT = REPO / "gui/src/grace_icons"
-CARD_OUT = REPO / "gui/src/grace_card"
+DATA = REPO / "assets/resource/base/data"
+GRACES = DATA / "graces.json"
+OUT = DATA / "grace_icons"
+CARD_OUT = DATA / "grace_card"
 TITLE = "mirror_dungeon_5_buffs_title_"
 SPRITE = "StartBuffIcon_"
 SIZE = 96

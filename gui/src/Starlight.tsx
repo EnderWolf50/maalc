@@ -10,7 +10,7 @@ import { effectLines } from "./graceText";
 import { localName } from "./i18n";
 import { PlanTab } from "./Plans";
 import { Input, Mark, useEditor } from "./ui";
-import { webpFolder } from "./webpFolder";
+import { webpFolder } from "./gameData";
 
 /** The game's "Grace of the Star" page: click a card to select it at base, + / ++ to enhance it
  * (spec 04 section 7). The number on a selected card is its place in the buying order. Read-only without onChange. */
@@ -134,9 +134,9 @@ function useFitTitles(levels: string[], zh: boolean) {
   return grid;
 }
 
-/** The game's icon of grace n (1-10): ./grace_icons/<n>.webp (tools/grace_icons.py). */
-const graceIconUrl = webpFolder(import.meta.glob<string>("./grace_icons/*.webp", { eager: true, query: "?url", import: "default" }));
-/** A "★" the stylesheet covers with the game's starlight icon (gui/src/grace_card/star.webp): a screen reader and a copy keep it. */
+/** The game's icon of grace n (1-10): data/grace_icons/<n>.webp (tools/grace_icons.py). */
+const graceIconUrl = webpFolder("grace_icons");
+/** A "★" the stylesheet covers with the game's starlight icon (assets/resource/base/data/grace_card/star.webp): a screen reader and a copy keep it. */
 const Star = () => <span className="star">★</span>;
 /** The game's + glyph n times, for a + or ++ button; the button's aria-label names it. */
 const Glyphs = ({ n }: { n: number }) => <>{Array.from({ length: n }, (_, k) => <span key={k} className="glyph" />)}</>;

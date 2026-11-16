@@ -10,7 +10,7 @@ Usage: uv run --group unpack python tools/game_data.py <command> [--serial 127.0
   dump     dumps `.local/unpack/`'s static data again from its bundles, into static/.
   install  moves the pulled files into place; what they replace, and the bundles gone from the device, go to
            `.local/unpack/prev/<old version>/`, and `.local/unpack/client.json` names the version.
-  regen    runs every generator (GENERATORS) against `.local/unpack/`; `--release` names the Localize Limbus Company
+  regen    writes data/client.json (the client `.local/unpack/` holds), then runs every generator (GENERATORS) against `.local/unpack/`; `--release` names the Localize Limbus Company
            release (default: the newest).
   diff     the per-file summary of what regen changed against git HEAD (`--ref`), and of the static data against prev/.
   update   pull and install (unless `.local/unpack/` holds the emulator's version already), then regen and diff.
@@ -56,8 +56,7 @@ GENERATORS = [("tools/theme_pack_floors.py", False), ("tools/trial_table.py", Fa
               ("tools/theme_pack_signatures.py", False), ("tools/sinner_cards.py", False),
               ("tools/sin_icons.py", False), ("tools/gift_slot.py", False)]
 # What regen writes, for diff.
-OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe",
-           "gui/src/graces.json", "gui/src/gift_effects.json", "gui/src/grace_icons", "gui/src/grace_card", "gui/src/sinner_card"]
+OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe"]
 
 
 def parse_cache_listing(text: str) -> dict[str, str]:
@@ -302,8 +301,14 @@ def latest_release() -> str:
         return json.load(r)["tag_name"]
 
 
+def write_data_client(unpack: Path, data: Path = DATA) -> None:
+    """data/client.json: the client `unpack` holds. The resource package's manifest names it, and CI has no `.local/` (#766)."""
+    (data / "client.json").write_text(json.dumps({"client": unpack_client(unpack)}) + "\n", encoding="utf-8")
+
+
 def cmd_regen(args):
     release = args.release or latest_release()
+    write_data_client(local_dir("unpack"))
     for script, takes_release in GENERATORS:
         command = [script, *(["--release", release] if takes_release else [])]
         print("==", " ".join(command), flush=True)
