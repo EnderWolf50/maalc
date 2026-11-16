@@ -1,13 +1,13 @@
-"""The update of the resource package at TaskStart (#771, ADR 0012, spec #759): the installed `data/` takes the files
-maalc-resource published since, so a new event table or gift table reaches the next task without a new zip.
+"""The update of the resource package at TaskStart (#771, ADR 0012, spec #759): the installed `data/`, `image/` and `pipeline/`
+take the files maalc-resource published since, so a new event table, template or pipeline reaches the task that found it.
 
-`update(base, log)` is the one entry; it never raises, and a failure leaves the files as they were, with one log line
+`update(base, log, tasker)` is the one entry; it never raises, and a failure leaves the files as they were, with one log line
 saying why. The steps, one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan
 what changes for each part of the package (`plan_part`), download it into a staging folder and verify it (`stage`), swap it
-in all or nothing and write the new manifest last (`swap`), then clear what the old files left in memory (`refresh`).
+in all or nothing and write the new manifest last (`swap`), then reload the bundle and clear what the old files left in memory (`refresh`).
 
-`APPLIED` names the parts this build applies; #772 adds `image/` and `pipeline/` there and its reload to `refresh`. Stdlib
-only: the release's bundled Python runs it.
+`APPLIED` names the parts this build applies, each group by the version that covers it. An update of `image/` or `pipeline/`
+also reloads the bundle in the running task, and puts the previous files back when that fails (#772). Stdlib only: the release's bundled Python runs it.
 """
 
 import hashlib
@@ -34,9 +34,9 @@ STAGING = ".update"  # beside resource/base: the same volume, so a swap is a ren
 SHA256 = re.compile(r"[0-9a-f]{64}")
 PREFIX = "resource update: "
 
-# (part, the manifest field that versions it, the version this program knows). A part whose remote version differs is
-# skipped and keeps its files.
-APPLIED = (("data", "format", rp.FORMAT),)
+# (the parts one version covers, the manifest field that versions them, the version this program knows). The parts whose
+# remote version differs are skipped and keep their files.
+APPLIED = ((("data",), "format", rp.FORMAT), (("image", "pipeline"), "template", rp.TEMPLATE))
 
 # module.function of every functools cache that holds something read from data/; the test that scans agent/ fails on a
 # cache neither listed here nor named there as not on data/.
@@ -172,11 +172,12 @@ def plan_part(part, base, local, remote):
 def plan_update(base, local, remote, log):
     """One Plan for each part of the package this build applies and the remote's version of it allows."""
     plans = []
-    for part, name, known in APPLIED:
+    for parts, name, known in APPLIED:
         if remote[name] != known:
-            log(f"{PREFIX}{part}/: {name} {remote[name]} is not the one this program knows ({known}): skipped, kept its files")
+            skipped = " and ".join(part + "/" for part in parts)
+            log(f"{PREFIX}{skipped}: {name} {remote[name]} is not the one this program knows ({known}): skipped, kept its files")
             continue
-        plans.append(plan_part(part, base, local, remote))
+        plans.extend(plan_part(part, base, local, remote) for part in parts)
     return plans
 
 
@@ -189,10 +190,9 @@ def merged_manifest(local, remote, plans):
     # a remote that lists none leaves the install's own
     sources = ([x for x in remote["sources"] if isinstance(x, str)] or local["sources"]) if local["sources"] else []
     manifest = {**remote, "sources": sources, "files": dict(sorted(files.items()))}
-    for part, name, _ in APPLIED:
-        if part + "/" not in applied:
+    for parts, name, _ in APPLIED:
+        if parts[0] + "/" not in applied:
             manifest[name] = local[name]
-    manifest["template"] = local["template"]  # #772 applies image/ and pipeline/, and with them this
     return manifest
 
 
@@ -236,18 +236,27 @@ def swap(base, plans, manifest, staging):
         undo.append((base / rp.MANIFEST, copy))
         os.replace(temp, base / rp.MANIFEST)
     except Exception:
-        for target, old in reversed(undo):
-            try:  # one file that cannot go back must not keep the others from it
-                if old is None:
-                    target.unlink(missing_ok=True)
-                else:
-                    os.replace(old, target)
-            except OSError:
-                pass
+        rollback(undo)
         raise
     for plan in plans:
         for path in plan.removed:
             prune_empty(base, (base / path).parent, plan.part)
+    return undo
+
+
+def rollback(undo):
+    """Put back every file `swap` changed, newest first: the manifest, which `swap` writes last, goes back first. The paths that would not go back."""
+    failed = []
+    for target, old in reversed(undo):
+        try:  # one file that cannot go back must not keep the others from it
+            if old is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)  # a folder the swap pruned
+                os.replace(old, target)
+        except OSError:
+            failed.append(f"{target.parent.name}/{target.name}")
+    return failed
 
 
 def remove_file(target, old, undo):
@@ -293,26 +302,67 @@ def clear_data_caches():
             getattr(sys.modules[module], function)()
 
 
-def refresh(plans):
-    """After a swap: the data caches when data/ changed. #772 adds the reload of image/ and pipeline/ here."""
+class ClearRefused(UpdateError):
+    """resource.clear() said no: the resource still holds what it held."""
+
+
+def needs_reload(plans):
+    """The bundle holds image/ and pipeline/; data/ is read from disk by the agent."""
+    return any(p for p in plans if p.part != "data")  # a plan with no change is falsy
+
+
+def reload_bundle(tasker, base):
+    """Drop what the resource holds and load `base` again, waiting for the load. MaaFramework has no guard against doing
+    this inside a running task: the task goes on with the new pipeline and templates (the test in test_task_chain.py)."""
+    resource = tasker.resource
+    if not resource.clear():
+        raise ClearRefused("resource.clear() failed (a load is still running)")
+    if not resource.post_bundle(base).wait().succeeded:
+        raise UpdateError("resource.post_bundle() did not load the bundle")
+
+
+def refresh(plans, tasker, base, undo, log):
+    """After a swap, make the agent run on the new files: reload the bundle when image/ or pipeline/ changed, and clear the
+    data caches when data/ did. A reload that fails puts the previous files back (every part: the version is one), loads
+    them again and says so. True when the new files stand."""
+    stands = True
+    if needs_reload(plans):
+        try:
+            reload_bundle(tasker, base)
+        except Exception as e:
+            stands = False
+            failed = rollback(undo)
+            log(f"{PREFIX}the reload of the {plans[0].version} bundle failed ({type(e).__name__}: {e}): the previous files are back"
+                + (f", except {', '.join(failed)}" if failed else ""))
+            if isinstance(e, ClearRefused):  # the resource was not touched: the previous bundle is still loaded
+                log(f"{PREFIX}the previous bundle is still loaded")
+            else:
+                try:
+                    reload_bundle(tasker, base)
+                except Exception as e:
+                    log(f"{PREFIX}the previous bundle could not be reloaded either ({type(e).__name__}: {e})")
     if any(p for p in plans if p.part == "data"):
-        clear_data_caches()
+        try:
+            clear_data_caches()
+        except Exception as e:  # the files are whichever stand now: say so, not "kept"
+            log(f"{PREFIX}what the agent had read of the old files could not all be cleared: {type(e).__name__}: {e}")
+    return stands
 
 
 # -- the update -------------------------------------------------------------------------------------------------------
 
 
-def update(base, log):
-    """Take the newer data/ files maalc-resource published, if any. Never raises."""
+def update(base, log, tasker):
+    """Take the newer files of the package maalc-resource published, if any. Never raises."""
     try:
-        run_update(Path(base), log)
+        run_update(Path(base), log, tasker)
     except UpdateError as e:
         log(f"{PREFIX}kept the current files: {e}")
     except Exception as e:  # a task starts without an update
         log(f"{PREFIX}kept the current files: {type(e).__name__}: {e}")
 
 
-def run_update(base, log):
+def run_update(base, log, tasker):
     try:
         local = rp.read_manifest(base)
     except rp.ManifestError as e:
@@ -343,21 +393,20 @@ def run_update(base, log):
     if not plans:
         return
     if not any(plans):
-        if remote["version"] != local["version"]:
+        if remote["version"] != local["version"] and len(plans) == sum(len(parts) for parts, _, _ in APPLIED):  # none skipped
             write_manifest_only(base, merged_manifest(local, remote, plans), staging)
         log(f"{PREFIX}up to date: {remote['version']} changes no file")
         return
     try:
         stage(source, plans, staging / remote["version"], DOWNLOAD_SECONDS)
-        swap(base, plans, merged_manifest(local, remote, plans), staging / remote["version"])
+        undo = swap(base, plans, merged_manifest(local, remote, plans), staging / remote["version"])
+        stands = refresh(plans, tasker, base, undo, log)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
-    changed, removed = sum(len(p.changed) for p in plans), sum(len(p.removed) for p in plans)
-    log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed")
-    try:
-        refresh(plans)
-    except Exception as e:  # the files are the new ones now: say so, not "kept"
-        log(f"{PREFIX}swapped, but what the agent had read of the old files could not all be cleared: {type(e).__name__}: {e}")
+    if stands:
+        changed, removed = sum(len(p.changed) for p in plans), sum(len(p.removed) for p in plans)
+        reloaded = ", bundle reloaded" if needs_reload(plans) else ""
+        log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed{reloaded}")
 
 
 def write_manifest_only(base, manifest, staging):

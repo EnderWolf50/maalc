@@ -41,6 +41,7 @@ def child(work=None):
     """Run MirrorDungeon until TaskDone; print its status and nodes. With `work` (a folder update_scene made): the install
     in it is the bundle and the data folder, and two tasks run on it, each starting with an update from its fake remote."""
     from maa.controller import CustomController
+    from maa.custom_action import CustomAction
     from maa.custom_recognition import CustomRecognition
     from maa.resource import Resource
     from maa.tasker import Tasker
@@ -73,12 +74,12 @@ def child(work=None):
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"error": None, "starts": 0, "seen": []}
+    out = {"error": None, "starts": 0, "seen": [], "nodes": [], "probe": 0}
 
     def seen():
         """What the agent holds of data/ at this moment."""
         return {"events": [e["id"] for e in event_actions.event_table() if e["id"] in (990001, 990002)],
-                "gift": actions.GIFT_NAMES.get(UPDATE_GIFT), "tier": shop_actions.GIFT_TIERS.get(UPDATE_GIFT),
+                "gift": actions.GIFT_NAMES.get(UPDATE_GIFT), "tier": shop_actions.GIFT_TIERS.get(UPDATE_GIFT), "probe": out["probe"],
                 "log": [line[9:] for line in actions.LOG if "resource" in line]}
 
     class HubText(CustomRecognition):
@@ -99,7 +100,15 @@ def child(work=None):
             out["starts"] += 1
             return super().run(context, argv)
 
+    class ReloadProbe(CustomAction):
+        """A node only the fake maalc-resource's pipeline has: reached only when the task runs on the reloaded pipeline."""
+
+        def run(self, context, argv):
+            out["probe"] += 1
+            return True
+
     resource.register_custom_action("TaskStart", TaskStart())
+    resource.register_custom_action("ReloadProbe", ReloadProbe())
     resource.register_custom_recognition("StuckFlag", actions.StuckFlag())
     resource.register_custom_recognition("DoneFlag", actions.DoneFlag())
     resource.register_custom_recognition("HubText", HubText())
@@ -113,7 +122,9 @@ def child(work=None):
         for n in (1, 2):
             if n == 2:  # the next publish, between two tasks of the same agent
                 shutil.copyfile(work / "next.json", work / "remote" / "main" / "manifest.json")
-            out["succeeded"] = tasker.post_task("MirrorDungeon").wait().get().status.succeeded
+            detail = tasker.post_task("MirrorDungeon").wait().get()
+            out["succeeded"] = detail.status.succeeded
+            out["nodes"].append([node.name for node in detail.nodes])
         print(json.dumps(out))
         return
     actions.TASK["done"] = "left by the last task"
@@ -398,7 +409,16 @@ def test_a_page_gone_mid_action_names_the_hub_of_the_task_under_way():
     actions.TASK.pop("entry")
 
 
-def update_scene(work):
+def probe_pipeline(base):
+    """pipeline/mirror_dungeon.json with one node more between the entry and the hub, which the install's pipeline lacks."""
+    text = (base / "pipeline" / "mirror_dungeon.json").read_text(encoding="utf-8")
+    entry, node = '"next": [\n            "MirrorHub"\n        ]', '    "TaskDone": {'
+    assert text.count(entry) == 1 and text.count(node) == 1
+    probe = '    "ReloadProbe": {"action": "Custom", "custom_action": "ReloadProbe", "next": ["MirrorHub"]},\n'
+    return text.replace(entry, entry.replace("MirrorHub", "ReloadProbe")).replace(node, probe + node).encode()
+
+
+def update_scene(work, pipeline=None):
     """An install of the repo's data/, image/ and pipeline/ under `work`, and a fake maalc-resource beside it that publishes
     2026.11.16 (an event and a gift more) and, in next.json, 2026.11.17 (the gift renamed, another event): the folder layout
     of the real one, as the install's manifest lists it as its source."""
@@ -408,7 +428,8 @@ def update_scene(work):
     installed = brp.write_manifest(base, "2026.11.01", [str(remote)])
     manifests = []
     for version, event, gift in (("2026.11.16", 990001, "Gift One"), ("2026.11.17", 990002, "Gift Two")):
-        files = {}  # the files this publish changes: the rest of the package is the installed one, unchanged
+        files = {"pipeline/mirror_dungeon.json": pipeline or probe_pipeline(base), "image/probe.png": b"a template the install lacks"}
+        # the files this publish changes: the rest of the package is the installed one, unchanged
         events = json.loads((base / "data" / "event_table.json").read_text(encoding="utf-8"))
         events["events"].append({"id": event, "key": "update", "options": []})
         files["data/event_table.json"] = json.dumps(events).encode()
@@ -442,6 +463,36 @@ def test_new_data_is_the_data_of_the_task_that_found_it_and_of_the_next_task_of_
     assert any("2026.11.01 -> 2026.11.16" in line for line in first["log"])
     assert any("version 2026.11.16" in line for line in first["log"]) and any("version 2026.11.17" in line for line in second["log"])
     assert out["succeeded"] is True
+
+
+def test_a_bundle_that_does_not_load_puts_the_old_files_back_and_the_task_runs_on_them(tmp_path):
+    # #772: the pipeline the fake remote published is not JSON, so the reload fails: the install is the old one again, the
+    # old bundle is loaded again, and the task, which cannot tell, ends a success without the node the new pipeline has.
+    base, _ = update_scene(tmp_path, pipeline=b"{ not a pipeline")
+    before = (base / "pipeline" / "mirror_dungeon.json").read_bytes()
+    run = subprocess.run([sys.executable, __file__, "update", str(tmp_path)], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    assert run.returncode == 0, run.stderr[-2000:]
+    out = json.loads(run.stdout.strip().splitlines()[-1])
+    assert out["error"] is None, out["error"]
+    assert out["succeeded"] is True and all("ReloadProbe" not in nodes and nodes[-1] == "TaskDone" for nodes in out["nodes"])
+    assert (base / "pipeline" / "mirror_dungeon.json").read_bytes() == before and not (base / "image" / "probe.png").exists()
+    assert [s["events"] for s in out["seen"]] == [[], []]  # data/ went back with it
+    assert any("reload" in line and "previous files are back" in line for line in out["seen"][0]["log"])
+
+
+def test_the_pipeline_a_task_found_is_the_pipeline_it_runs(tmp_path):
+    # #772: TaskStart swaps image/ and pipeline/ and reloads the bundle, so the node the fake remote's pipeline added is
+    # reached by the very task that found it; the custom actions and recognitions registered before the reload still answer.
+    base, _ = update_scene(tmp_path)
+    run = subprocess.run([sys.executable, __file__, "update", str(tmp_path)], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    assert run.returncode == 0, run.stderr[-2000:]
+    out = json.loads(run.stdout.strip().splitlines()[-1])
+    assert out["error"] is None, out["error"]
+    first, second = out["nodes"]
+    assert first[:3] == ["MirrorDungeon", "ReloadProbe", "MirrorHub"] and first[-1] == "TaskDone"
+    assert second[:3] == ["MirrorDungeon", "ReloadProbe", "MirrorHub"]
+    assert [s["probe"] for s in out["seen"]] == [1, 2]
+    assert (base / "image" / "probe.png").read_bytes() == b"a template the install lacks"
 
 
 def update_install(monkeypatch, tmp_path, remote_files, **fields):
