@@ -29,7 +29,8 @@ function applyEdits(data: unknown, edits: Edit[]) {
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
 
-  for (const c of cases.cases as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
+  // task_start too: the agent checks those at a task's start (tests/test_task_options.py), the GUI here, when it saves
+  for (const c of [...cases.cases, ...cases.task_start] as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
     test(c.name, () => {
       const problems = validate(applyEdits(cases.valid, c.edits));
       if (c.cross) {

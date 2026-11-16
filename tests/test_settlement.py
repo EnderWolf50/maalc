@@ -224,7 +224,7 @@ def test_a_new_runs_first_floor_forgets_the_floors_of_the_last_run(monkeypatch):
     # #382: a run that began on an expired session's dialog has no PlanRun to clear RUN; floor 1 does it.
     import actions
     import run_start_actions
-    patch_all(monkeypatch, "current_run", lambda context: {"difficulty": None, "team": {"hard_from_floor": None}, "settings": {"run": {}}})
+    patch_all(monkeypatch, "current_run", lambda context: {"difficulty": None, "team": {"hard_from_floor": None}, "settings": {}})
     patch_all(monkeypatch, "screen", lambda context: None)
     patch_all(monkeypatch, "text", lambda *a, **k: "SELECT FLOOR 1 THEME PACK")
     patch_all(monkeypatch, "restart_floor_clock", lambda: None)
@@ -248,8 +248,8 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, tog
     patch_all(monkeypatch, "address", lambda context: "emulator")
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
     team = {"id": "a", "name": "A", "enabled": True}
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": amount, "target_floor": target}, "teams": [team]},
-                       team=team, planned=True, floors_hard=floors_hard or {})
+    actions.RUN.update(settings={"teams": [team]}, team=team, planned=True, floors_hard=floors_hard or {})
+    monkeypatch.setitem(actions.TASK, "options", {"weekly_bonus_use": use, "weekly_bonus_amount": amount, "target_floor": target})
     taps, switches, on_at_claim = [], list(toggles_on or [False] * 3), []
 
     def tap(context, x, y, wait=1.0):
@@ -348,8 +348,8 @@ def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=Non
     patch_all(monkeypatch, "address", lambda context: "emulator")
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
     team = {"id": "a", "name": "A", "enabled": True}
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": use, "weekly_bonus_amount": "one", "target_floor": 5}, "teams": [team]},
-                       team=team, planned=True, floors_hard={f: True for f in range(1, 6)})
+    actions.RUN.update(settings={"teams": [team]}, team=team, planned=True, floors_hard={f: True for f in range(1, 6)})
+    monkeypatch.setitem(actions.TASK, "options", {"weekly_bonus_use": use, "weekly_bonus_amount": "one", "target_floor": 5})
     game = test_actions.TimedGame(monkeypatch, context, {
         tuple(settle_actions.REWARD_TITLE_ROI): "Exploration Reward", tuple(settle_actions.WEEKLY_LEFT): "3/3",
         **{toggle_roi(i): "OFF" for i in range(3)}, **(reads or {})}, answers)
@@ -561,8 +561,8 @@ def child():
         out["asked"] = {}
         for name, floors in SEEN.items():
             actions.RUN.clear()
-            actions.RUN.update(settings={"run": {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all", "target_floor": 5}, "teams": [team]},
-                               team=team, floors_hard=floors)  # no "planned": the run began on the expired session's dialog
+            actions.RUN.update(settings={"teams": [team]}, team=team, floors_hard=floors)  # no "planned": the run began on the expired session's dialog
+            actions.TASK["options"] = {"weekly_bonus_use": "hard", "weekly_bonus_amount": "all", "target_floor": 5}
             asked.clear()
             try:
                 settle_actions.Settle().run(context, SimpleNamespace(node_name="Settle"))

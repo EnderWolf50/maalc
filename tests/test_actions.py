@@ -52,6 +52,9 @@ def context(clock, monkeypatch, tmp_path):
     ctx.tasker.stopping = False
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
+    # as at launch, put back after the test: no options read (a test that needs them sets them, #777), and no task left
+    # under way for the next test's TaskStart to pick up (test_task_chain's entry_page starts one)
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.STUCK["flag"] = None
     monkeypatch.setitem(actions.STUCK, "halted", None)  # no account-level stop this launch; a test's own is undone after
     yield ctx

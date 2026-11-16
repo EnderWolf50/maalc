@@ -136,7 +136,7 @@ def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_lau
 def interrupted_run(context, how):
     """MirrorDungeon starts a run, then ends as how says; the next task's TaskStart runs. RUN afterwards."""
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
-    actions.RUN.update(settings={"run": {"webhook_url": ""}}, team={"id": "t1", "name": "A"}, planned=True, floor=3)
+    actions.RUN.update(settings={}, team={"id": "t1", "name": "A"}, planned=True, floor=3)
     actions.TASK["runs"] = 1
     how()
     return actions.TaskStart().run(context, SimpleNamespace(node_name=next_task)) and dict(actions.RUN)
@@ -169,13 +169,14 @@ def test_an_interrupted_run_does_not_reach_another_task(context, monkeypatch):
 
 
 def entry_page(context, edit=lambda run, teams: None):
-    """settings.json under the agent's ROOT (settings_cases' valid file, edited); the entry page reads no weekly bonus;
-    GoHome ends on the main window."""
+    """settings.json under the agent's ROOT (settings_cases' valid file, edited), MirrorDungeon started on it (its
+    options read); the entry page reads no weekly bonus; GoHome ends on the main window."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     edit(data["run"], data["teams"])
     data["run"]["webhook_url"] = "http://hook.invalid/"
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     actions.RUN.clear()
     actions.TASK["modules"] = 20  # what OpenDrive read on this trip (#369)
     context.tasker.get_node_detail.return_value = SimpleNamespace(name="HomeReached")
@@ -231,8 +232,7 @@ def test_plan_run_starts_when_the_modules_did_not_read(context):
 def test_plan_run_backs_out_to_read_the_modules_when_the_trip_skipped_drive(context):
     # #369: the last run's Claim took 5, so an old value is none: the back key, twice at most, then the run starts.
     entry_page(context)
-    actions.TASK.clear()
-    actions.TASK.update(runs=0, done=None)
+    actions.TASK.pop("modules")
     for n in (1, 2):
         assert run_start_actions.PlanRun().run(context, None) is True
         context.tasker.controller.post_click_key.assert_called_with(actions.BACK_KEY)
@@ -247,10 +247,10 @@ def test_plan_run_backs_out_to_read_the_modules_when_the_trip_skipped_drive(cont
     ("AcceptUpdate", {"auto_download": False}),
     ("AcceptTerms", {"auto_accept_terms": False}),
 ])
-def test_an_account_level_stop_ends_the_whole_task_list(context, action, run):
+def test_an_account_level_stop_ends_the_whole_task_list(context, monkeypatch, action, run):
     # #364: every task after this one would meet the same screen: after the stop procedure, post_stop empties the
     # client's queue.
-    actions.RUN["settings"] = {"run": {"webhook_url": "", **run}}
+    monkeypatch.setitem(actions.TASK, "options", {"webhook_url": "", **run})
     argv = SimpleNamespace(node_name="MaintenanceNotice", custom_action_param='"maintenance"', box=[0, 0, 10, 10])
     assert getattr(actions, action)().run(context, argv) is False
     context.tasker.post_stop.assert_called_once()
@@ -260,7 +260,7 @@ def test_an_account_level_stop_ends_the_whole_task_list(context, action, run):
 def test_an_update_that_keeps_coming_back_ends_the_whole_task_list(context, monkeypatch):
     # D1 (#362): the game asks for an update past its restarts with auto_download on: every later task would meet it.
     monkeypatch.setitem(actions.STUCK, "updates", actions.UPDATE_RESTARTS)
-    actions.RUN["settings"] = {"run": {"webhook_url": "", "auto_download": True}}
+    monkeypatch.setitem(actions.TASK, "options", {"webhook_url": "", "auto_download": True})
     argv = SimpleNamespace(node_name="UpdateDialog", custom_action_param=None, box=[0, 0, 10, 10])
     assert actions.AcceptUpdate().run(context, argv) is False
     context.tasker.post_stop.assert_called_once()
@@ -272,7 +272,7 @@ def test_every_task_after_an_account_level_stop_fails_at_its_entry_without_a_tap
     # remembers the stop for this launch, and each later entry fails before anything (no evidence, no webhook).
     urlopen = MagicMock()
     monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
-    actions.RUN["settings"] = {"run": {"webhook_url": "http://hook.invalid/"}}
+    monkeypatch.setitem(actions.TASK, "options", {"webhook_url": "http://hook.invalid/"})
     argv = SimpleNamespace(node_name="MaintenanceNotice", custom_action_param='"maintenance"', box=[0, 0, 10, 10])
     assert actions.Halt().run(context, argv) is False and urlopen.call_count == 1
     evidence = list((actions.ROOT / "logs" / "evidence").iterdir())
@@ -286,7 +286,6 @@ def test_every_task_after_an_account_level_stop_fails_at_its_entry_without_a_tap
 
 
 def test_the_account_level_stop_is_remembered_for_the_whole_launch(context):
-    actions.RUN["settings"] = {"run": {"webhook_url": ""}}
     actions.stop(context, "recovery used up")
     assert actions.STUCK["halted"] is None  # one task's stop: the next task runs
     actions.stop(context, "maintenance", whole_list=True)
@@ -294,7 +293,6 @@ def test_the_account_level_stop_is_remembered_for_the_whole_launch(context):
 
 
 def test_a_stop_of_one_task_leaves_the_list_running(context):
-    actions.RUN["settings"] = {"run": {"webhook_url": ""}}
     assert actions.stop(context, "recovery used up") is False
     context.tasker.post_stop.assert_not_called()
 

@@ -26,7 +26,7 @@ def game(monkeypatch, tmp_path):
     patch_all(monkeypatch, "ROOT", tmp_path)
     actions.RUN.clear()
     actions.DISMISSED_AT.clear()
-    actions.RUN["settings"] = {"run": {"keep_dismissed_screens": True}}
+    monkeypatch.setitem(actions.TASK, "options", {"keep_dismissed_screens": True})  # the task's, as its start read them
     state.folder = tmp_path / "logs" / "dismissed"
     yield state
     actions.RUN.clear()
@@ -65,7 +65,7 @@ def test_a_popup_pressed_is_logged_with_its_text_and_button(game, monkeypatch, c
 
 
 def test_off_dismisses_without_a_shot(game):
-    actions.RUN["settings"]["run"]["keep_dismissed_screens"] = False
+    actions.TASK["options"]["keep_dismissed_screens"] = False
     actions.DismissShot().run(game.ctx, arg("PopupButton"))
     assert game.taps == [(120, 210)] and not game.folder.exists()
 

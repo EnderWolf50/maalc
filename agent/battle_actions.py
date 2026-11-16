@@ -10,8 +10,8 @@ from maa.custom_action import CustomAction
 import battle
 import recovery
 import run_start
-from actions import (RUN, TO_BATTLE, current_run, drag, end_battle, hands_back, log, page_guard, saturation, screen,
-                     seen, still, stop, stuck, tap, tap_settled, tap_shown, tap_then, text, until)
+from actions import (RUN, TO_BATTLE, current_run, drag, end_battle, hands_back, log, options, page_guard, saturation,
+                     screen, seen, still, stop, stuck, tap, tap_settled, tap_shown, tap_then, text, until)
 from ocrtext import fraction, has
 
 
@@ -97,7 +97,7 @@ class Formation(CustomAction):
         if len(order) < need:  # need 0: no check; only the deployment order's sinners count (#616)
             # Like used-up wipe retries (#137): stop, or back out to the map, where RouteMap forfeits.
             reason = f"{len(order)} sinners of the deployment order alive, team {run['team']['name']!r} needs {need}"
-            if run["settings"]["run"]["after_retries"] == "stop":
+            if options()["after_retries"] == "stop":
                 return stop(context, reason)
             log(f"{reason}: forfeit the run")
             RUN["forfeit"] = reason
@@ -498,10 +498,11 @@ class Wipe(CustomAction):
 
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        settings = current_run(context)["settings"]["run"]
+        current_run(context)  # the run plan, made up after a restart
+        opts = options()
         used = RUN.get("wipes", 0)
-        choice = battle.after_wipe(used, settings["wipe_retries"], settings["after_retries"])
-        log(f"wipe: {used} of {settings['wipe_retries']} retries used: {choice}")
+        choice = battle.after_wipe(used, opts["wipe_retries"], opts["after_retries"])
+        log(f"wipe: {used} of {opts['wipe_retries']} retries used: {choice}")
         if choice == "stop":
             return stop(context, "retries used up")
         for _ in range(3):

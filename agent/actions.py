@@ -25,6 +25,7 @@ import hub_text
 import recovery
 import run_start
 import settlement
+import task_options
 from gifts import main_keyword, resolve_list, want_kind
 from ocrtext import normalize
 from settings import SettingsError, data_dir, gift_tables, load_settings
@@ -44,7 +45,7 @@ RUN = {}
 # run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
 # "forfeits" (the forfeit reasons of the runs given up since the last claim: too many in a row stop the task, #560),
 # "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps), "l3"
-# (restart_game's restarts that went through, #520).
+# (restart_game's restarts that went through, #520). "options": the task's options as its start read them (options()).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -401,11 +402,24 @@ def run_team(settings, team):
     return {**team, "list": gift_list, "keyword": main_keyword(gift_list)}
 
 
+def options():
+    """This task's options (task_options), as its start read them (TaskStart, #777): SettingsError when it read none,
+    the settings not loading then."""
+    if "options" not in TASK:
+        raise SettingsError(["the task's options were not read at its start: the settings did not load then"])
+    return TASK["options"]
+
+
+def option(key, default):
+    """This task's option key, as its start read it; default when it read none or not that one."""
+    return TASK.get("options", {}).get(key, default)
+
+
 def current_run(context):
-    """The run plan; made up from settings and the team queue when the agent restarted mid-run."""
+    """The run plan; made up from settings, the task's options and the team queue when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
         settings = load_settings(ROOT, need_team=True)
-        run = settings["run"]
+        run = options()
         # The weekly bonuses left when the run began are not known: the difficulty is known when both answers agree.
         began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
         difficulty = began.pop() if len(began) == 1 else None
@@ -444,7 +458,7 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
-    target = run.get("settings", {}).get("run", {}).get("target_floor", 5)
+    target = option("target_floor", 5)
     return {
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
@@ -484,9 +498,7 @@ def stop(context, reason, line=None, whole_list=False):
         log(f"evidence: {folder}")
     except OSError as e:
         log(f"evidence not saved: {e}")
-    settings = settings_now()
-    url = settings and settings["run"]["webhook_url"]
-    if url:
+    if url := option("webhook_url", None):
         body = json.dumps({**(line or {}), "reason": reason, "evidence": str(folder)}, ensure_ascii=False).encode()
         try:
             urllib.request.urlopen(urllib.request.Request(url, body, {"Content-Type": "application/json"}), timeout=10).close()
@@ -507,7 +519,10 @@ class TaskStart(CustomAction):
     once the last task ended (done, stop); one the client interrupted stays for the same task, which picks it up (#362 D3).
     The failed game restarts in a row and the update restarts (STUCK restarts, updates) still count per bot launch. After
     an account-level stop this launch the task fails here, before any tap, evidence or webhook (#362 D8): it would meet
-    the same screen."""
+    the same screen.
+
+    Then, before any tap, it reads the task's options (TASK["options"], #777): what options() gives every reader. A
+    subclass's own start goes on from begin()."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if STUCK["halted"]:
@@ -524,6 +539,29 @@ class TaskStart(CustomAction):
         log(f"task {argv.node_name} started")
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
+        try:
+            settings = load_settings(ROOT)
+        except SettingsError as e:
+            return self.unread(context, e)
+        TASK["options"] = self.options(argv, settings)
+        return self.begin(context, argv, settings)
+
+    def unread(self, context, error):
+        """The settings did not load, so the task has no options; it goes on, as before it read them: MirrorDungeon's
+        PlanRun fails it when it loads the settings itself, and the other tasks take the defaults (allowed, no
+        webhook)."""
+        return True
+
+    def options(self, argv, settings):
+        """The task's options from settings: MirrorDungeon's, else the ones every task has."""
+        return task_options.mirror(settings) if argv.node_name == "MirrorDungeon" else task_options.global_options(settings)
+
+    def begin(self, context, argv, settings):
+        """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
+        play (task_options.target_floor_errors), in the words PlanRun gave it when the settings' load checked it."""
+        if argv.node_name == "MirrorDungeon" and (errors := task_options.target_floor_errors(TASK["options"], settings["teams"])):
+            log(f"stop: {SettingsError(errors)}")
+            return False
         return True
 
 
@@ -831,20 +869,10 @@ def restart_floor_clock():
         RUN["deadline"] = time.time() + RUN["floor_limit"]
 
 
-def settings_now():
-    """This run's settings, else the file's; None when it cannot be read."""
-    if "settings" in RUN:
-        return RUN["settings"]
-    try:
-        return load_settings(ROOT)
-    except SettingsError:
-        return None
-
-
 def allowed(key):
-    """run.<key> of the settings (auto_accept_terms, auto_download); on, the default, when they cannot be read."""
-    settings = settings_now()
-    return True if settings is None else settings["run"][key]
+    """The task's option key (auto_accept_terms, auto_download, keep_dismissed_screens); on, the default, when the task
+    read no options."""
+    return option(key, True)
 
 
 DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)

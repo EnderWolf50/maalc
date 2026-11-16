@@ -130,7 +130,7 @@ STAY = (
     "TaskStart", "PASS_NODES", "StuckFlag", "HubText", "GameAway", "LuxCountMode", "StopTask", "go_home",
     "restart_game", "StuckWaiting", "HomeFrozen", "hub_knows", "StaysUnknown", "HomeLost", "DailyRecover", "GoHomeRun",
     "DoneFlag", "node_results", "ocr_texts", "Recover", "nothing_recognised", "keep_unknown", "foreground",
-    "forget_game_state", "run_continued", "restart_floor_clock", "settings_now", "allowed", "DISMISSED_AT",
+    "forget_game_state", "run_continued", "restart_floor_clock", "allowed", "DISMISSED_AT",
     "DISMISSED_GAP", "GAPPED", "popup_button", "DismissShot", "ConfirmDownload", "UPDATE_RESTARTS", "AcceptUpdate",
     "AGREE_BOXES", "AGREE_SIZE", "AGREE_CONFIRM", "agree_ticked", "AcceptTerms", "Halt", "SETTLE_WITHIN", "TapUntil",
     "finish", "run_packs", "columns", "FEATURE_MATCH", "FEATURE_PAD", "FEATURE_ALIGN", "BACK_KEY", "seen", "saturation",
