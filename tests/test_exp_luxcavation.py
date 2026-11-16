@@ -73,8 +73,8 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
 # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2. A
 # battle the list does not reach ends in a win. CONSECUTIVE: the scenarios that fight their wins as Consecutive Battles
 # (#375), off for the rest. DAILY: the scenarios in daily mode (#431), the rest fight count in count mode. The client
-# sends them as the task's options (#781), count only in count mode, as it sends a nested input only under its case;
-# the team is the settings file's (luxcavation.<key>.team).
+# sends them as the task's options (#781), count only in count mode, as it sends a nested input only under its case,
+# and the team too (#780).
 WIN, LOSE = ["win"], ["lose"]
 SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "lose_retry": ("locked", "b", 1, 1, LOSE + WIN),
              "x12": ("drive", "b", 12, 0, WIN), "done_today": ("drive", "b", 2, 0, WIN), "no_pass": ("drive", "b", 1, 0, WIN)}
@@ -379,14 +379,14 @@ def test_a_defeat_counts_nothing_and_the_same_stage_is_played_again_within_the_r
 def test_daily_mode_runs_on_the_options_the_client_sends_with_no_count():
     # #781: the client sends ExpCount only under ExpMode's count case; daily mode reads the day instead
     o = run_child(__file__)["drive"]
-    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=daily, retries=0, consecutive=false"]
+    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=daily, retries=0, consecutive=false, team=b"]
     assert o["succeeded"] and o["done"] == "EXP Luxcavation: 1 won"
 
 
 def test_count_mode_fights_the_count_the_client_sends():
     # #781: ExpMode count, ExpCount 12: twelve won, the settings file's luxcavation.exp (daily mode, count 1) not read
     o = run_child(__file__)["x12"]
-    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, retries=0, consecutive=true"]
+    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, retries=0, consecutive=true, team=b"]
     assert o["succeeded"] and o["fights"] == [10, 2] and o["done"] == "EXP Luxcavation: 12 won"
 
 

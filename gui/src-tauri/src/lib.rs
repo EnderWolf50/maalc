@@ -28,11 +28,11 @@ fn team_options_path() -> Result<PathBuf, String> {
 }
 
 /// A file's text, or None when it does not exist yet.
-fn read_if_there(path: &Path) -> Result<Option<String>, String> {
+fn read_if_there(path: &Path) -> std::io::Result<Option<String>> {
     match fs::read_to_string(path) {
         Ok(text) => Ok(Some(text)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(e),
     }
 }
 
@@ -64,13 +64,13 @@ fn root_dir() -> Result<String, String> {
 /// The settings file text, or None when it does not exist yet.
 #[tauri::command]
 fn load_settings() -> Result<Option<String>, String> {
-    read_if_there(&settings_path()?)
+    read_if_there(&settings_path()?).map_err(|e| e.to_string())
 }
 
 /// The team options file text, or None when it does not exist yet.
 #[tauri::command]
 fn load_team_options() -> Result<Option<String>, String> {
-    read_if_there(&team_options_path()?)
+    read_if_there(&team_options_path()?).map_err(|e| e.to_string())
 }
 
 /// Write the team options file as save_settings writes its file: a temp file, then a rename. The GUI is its one writer.
@@ -103,12 +103,7 @@ const CHANGED: &str = "settings.json changed on disk";
 fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
     let path = settings_path()?;
     replace(&path, &text, || {
-        let current = match fs::read_to_string(&path) {
-            Ok(current) => Some(current),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e),
-        };
-        if current != expected {
+        if read_if_there(&path)? != expected {
             return Err(std::io::Error::other(CHANGED));
         }
         Ok(())

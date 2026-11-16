@@ -7,10 +7,10 @@ import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam } from "./model";
 
 const zh = TEXT.zh_tw;
-// teams: the team options file's text (null: none), teamWrites each text written to it, teamFail the error its write
+// teamOptions: the team options file's text (null: none), teamWrites each text written to it, teamFail the error its write
 // meets (#780)
 const file = vi.hoisted(() => ({
-  text: "", saved: [] as string[], fail: "", teams: null as string | null, teamWrites: [] as string[], teamFail: "",
+  text: "", saved: [] as string[], fail: "", teamOptions: null as string | null, teamWrites: [] as string[], teamFail: "",
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -20,11 +20,11 @@ vi.mock("./api", async (original) => ({
     file.saved.push(text);
     return Promise.resolve();
   },
-  loadTeamOptions: () => Promise.resolve(file.teams),
+  loadTeamOptions: () => Promise.resolve(file.teamOptions),
   saveTeamOptions: (text: string) => {
     if (file.teamFail) return Promise.reject(new Error(file.teamFail));
     file.teamWrites.push(text);
-    file.teams = text;
+    file.teamOptions = text;
     return Promise.resolve();
   },
   rootDir: () => Promise.resolve("root"),
@@ -42,13 +42,13 @@ beforeEach(() => {
   file.text = JSON.stringify(newSettings(), null, 2) + "\n";
   file.saved = [];
   file.fail = "";
-  file.teams = null;
+  file.teamOptions = null;
   file.teamWrites = [];
   file.teamFail = "";
 });
 
 /** The team ids of the team options file's ExpTeam cases, in order (teamOptions.ts). */
-const teamCases = () => (JSON.parse(file.teams!).option.ExpTeam.cases as { name: string }[]).map((c) => c.name);
+const teamCases = () => (JSON.parse(file.teamOptions!).option.ExpTeam.cases as { name: string }[]).map((c) => c.name);
 
 test("the arrow keys move along the main tabs and open the one they reach; Home and End go to the ends", async () => {
   const user = userEvent.setup();
@@ -144,7 +144,7 @@ describe("the team options file (#780)", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(2));
     expect(file.teamWrites).toHaveLength(3);
-    expect(JSON.parse(file.teams!).option.ExpTeam.cases[2].label).toBe("Tb（TEAMS #5）");
+    expect(JSON.parse(file.teamOptions!).option.ExpTeam.cases[2].label).toBe("Tb（TEAMS #5）");
     await user.click(screen.getByRole("checkbox", { name: new RegExp(zh["team.enabled"]) }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(3));

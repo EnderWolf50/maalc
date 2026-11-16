@@ -211,7 +211,7 @@ def moved(key: str, value: str) -> str | None:
             return f"the settings' {section} section is no longer read: set its options with bot.py run --option"
         if key == "run.runs" and value == "null":  # no run cap
             return "bot.py run --option MirrorRunsLimit=No"
-        case = {"true": "Yes", "false": "No", "null": "none"}.get(value, value)
+        case = {"true": "Yes", "false": "No", **({"null": "none"} if name == "team" else {})}.get(value, value)
         pairs = [*client_override.shown_by(client_override.load_interface(INTERFACE), option), (option, case)]
         return "bot.py run " + " ".join(f"--option {o}={c}" for o, c in pairs)
     return None
@@ -244,11 +244,11 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
             node[last] = value
     (install / "config").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "config/maa_option.json", install / "config/maa_option.json")
-    teams = install / "config/team_options.json"  # the GUI's, which interface.json imports (#780)
+    team_options = install / "config/team_options.json"  # the GUI's, which interface.json imports (#780)
     if (source / "config/team_options.json").is_file():
-        shutil.copy2(source / "config/team_options.json", teams)
+        shutil.copy2(source / "config/team_options.json", team_options)
     else:
-        teams.unlink(missing_ok=True)  # an earlier prep's would offer teams the source's settings may lack
+        team_options.unlink(missing_ok=True)  # an earlier prep's would offer teams the source's settings may lack
     if (source / "state").is_dir():
         shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
     (install / "config/settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")

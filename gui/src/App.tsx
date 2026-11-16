@@ -35,18 +35,15 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
 const sayStatus = (lang: Settings["language"], status: string) =>
   Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
-/** Write the team options file when these settings change what it says (#780, teamOptions.ts): true when it was written. */
-async function writeTeamOptions(s: Settings) {
-  const text = teamOptionsText(await api.loadTeamOptions(), s);
-  if (text === null) return false;
-  await api.saveTeamOptions(text);
-  return true;
-}
-/** The status after the team options file was brought up to date for s: `done` (a TEXT key) when it was written, "" when
- * nothing changed, `failed` filled in with the error, in s's language, when the write failed. */
+/** Write the team options file when these settings change what it says (#780, teamOptions.ts), and the status after it:
+ * `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in with the error, in s's language,
+ * when the write failed. */
 async function teamOptionsNote(s: Settings, done: Key, failed: Key) {
   try {
-    return (await writeTeamOptions(s)) ? done : "";
+    const text = teamOptionsText(await api.loadTeamOptions(), s);
+    if (text === null) return "";
+    await api.saveTeamOptions(text);
+    return done;
   } catch (e) {
     return fill(TEXT[s.language][failed], { error: String(e) });
   }
@@ -152,8 +149,8 @@ export default function App() {
         }
         // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
         // checks refuse, whose teams may not read as teams
-        const teams = ok ? await teamOptionsNote(data, "teamOptions.updated", "teamOptions.failed") : "";
-        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teams].filter(Boolean);
+        const teamNote = ok ? await teamOptionsNote(data, "teamOptions.updated", "teamOptions.failed") : "";
+        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teamNote].filter(Boolean);
         // one note stays as it is, a key the header says anew in the language picked next
         setStatus(notes.length === 1 ? notes[0] : notes.map((n) => sayStatus(data.language, n)).join(" "));
       } catch (e) {

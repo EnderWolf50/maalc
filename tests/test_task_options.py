@@ -17,7 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from client_options import GLOBAL_DEFAULTS, TEAM_OPTIONS, override, send
+from client_options import GLOBAL_DEFAULTS, TEAM_OPTIONS, TEAM_PICK, override, send
 from daily_child import bind, game_class, load, result, run_child, run_task, screen
 from test_settings import VALID, apply_edits
 
@@ -274,7 +274,7 @@ def test_a_luxcavation_task_plays_the_team_its_option_picked(context, monkeypatc
     context.tasker.controller.post_click.assert_not_called()
 
 
-@pytest.mark.parametrize("task, option", [("ExpLuxcavation", "ExpTeam"), ("ThreadLuxcavation", "ThreadTeam")])
+@pytest.mark.parametrize("task, option", TEAM_PICK.items())
 def test_a_client_that_found_no_team_options_file_sends_no_team_and_the_task_stops(context, monkeypatch, task, option):
     # #780: the placeholder's dropdown is empty (no team in the settings GUI yet, or the client not reopened since): the
     # stop procedure before any tap, the line saying how to fill the list.

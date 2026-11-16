@@ -94,6 +94,7 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     # #780: a Luxcavation task's team is its dropdown, a case per team id; null is 「未選擇」
     ("luxcavation.exp.team=t3", "bot.py run --option ExpTeam=t3"),
     ("luxcavation.thread.team=null", "bot.py run --option ThreadTeam=none"),
+    ("run.webhook_url=null", "bot.py run --option WebhookUrl=null"),  # none is a team's 「未選擇」 alone
 ])
 def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
     # #779, #780, #781: the agent no longer reads these keys of the settings file; a value set there would not happen
@@ -109,7 +110,7 @@ def test_every_key_prep_refuses_names_an_option_of_the_interface():
     options = client_override.load_interface(REPO / "assets/interface.json")["option"]
     schema = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))
     keys = [*(f"run.{k}" for k in schema["properties"]["run"]["properties"]),
-            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in schema["$defs"]["luxcavation"]["properties"] if k != "team"),
+            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in schema["$defs"]["luxcavation"]["properties"]),
             *(f"charge_enkephalin.{k}" for k in schema["properties"]["charge_enkephalin"]["properties"])]
     for key in keys:
         where = bot.moved(key, "1")
