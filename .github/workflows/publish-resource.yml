@@ -31,7 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # main's tip, not the commit that started the run: a re-run of an older push must not publish an older package.
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -44,7 +47,8 @@ jobs:
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/maalc_resource
           chmod 600 ~/.ssh/maalc_resource
-          ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts
+          # GitHub's published ed25519 host key (docs.github.com, "GitHub's SSH key fingerprints"), not a scan at run time.
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" >> ~/.ssh/known_hosts
       - name: Publish
         env:
           GIT_SSH_COMMAND: ssh -i $HOME/.ssh/maalc_resource -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes

@@ -7,8 +7,9 @@ Builds the package of assets/resource/base with tools/build_resource_package.py 
 published one, pushes it as one commit on `main` plus a tag named after its version. `main` holds exactly one package:
 data/, image/, pipeline/ and manifest.json from the build, and LICENSE and NOTICE.md from this repository; nothing else
 survives. The version is the publish date, YYYY.MM.DD (UTC), and YYYY.MM.DD.2, .3 for later publishes of the same day,
-numbered from the tags already in the remote. The package equals the latest published one when its manifest's `files`
-are the same, so a change outside the package publishes nothing. `.github/workflows/publish-resource.yml` runs this.
+numbered from the tags already in the remote. The package equals the latest published one when its manifest (version
+aside: files, client, format, template, sources) and its LICENSE and NOTICE.md are the same, so a change outside the
+package publishes nothing. `.github/workflows/publish-resource.yml` runs this.
 """
 
 import argparse
@@ -49,21 +50,28 @@ def next_version(tags: list[str], day: str) -> str:
     latest = latest_tag(tags)
     if latest and rp.version_key(latest)[:3] > rp.version_key(day):
         raise SystemExit(f"tag {latest} is dated after {day}: refusing to publish an older version")
-    used = [parse_tag(tag) for tag in tags if parse_tag(tag) and parse_tag(tag)[:3] == rp.version_key(day)]
+    keys = [key for key in map(parse_tag, tags) if key]
+    used = [key for key in keys if key[:3] == rp.version_key(day)]
     if not used:
         return day
     return f"{day}.{max(key[3] if len(key) == 4 else 1 for key in used) + 1}"
 
 
-def should_publish(latest_files: dict | None, new_files: dict) -> bool:
-    """False when the manifest `files` of the latest published package are exactly `new_files`."""
-    return latest_files != new_files
+def should_publish(latest: dict | None, new: dict) -> bool:
+    """False when `new` equals `latest`, the same description of the latest published package (None: nothing yet)."""
+    return latest != new
 
 
-def git(*args, cwd: Path | None = None, env: dict | None = None) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8")
+def describe(manifest: dict, extras: dict[str, str]) -> dict:
+    """What makes two packages the same: the manifest without its version, and the ids of LICENSE and NOTICE.md."""
+    return {**{k: v for k, v in manifest.items() if k != "version"}, "extras": extras}
+
+
+def git(*args, cwd: Path | None = None) -> str:
+    done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8")
     if done.returncode:
-        raise SystemExit(f"git {' '.join(args[:2])} failed: {done.stderr.strip()}")
+        command = next(arg for arg in args if not arg.startswith("-") and "=" not in arg)
+        raise SystemExit(f"git {command} failed: {done.stderr.strip()}")
     return done.stdout.strip()
 
 
@@ -82,11 +90,16 @@ def publish(base: Path, work: Path, remote: str, day: str, sources: list[str], c
     work = Path(work)
     if work.exists():
         rmtree(work)
-    git("clone", "--quiet", remote, str(work))
+    git("clone", "--quiet", "--filter=blob:none", remote, str(work))  # the history holds every package: no old blobs
     tags = git("tag", "--list", cwd=work).split()
     latest = latest_tag(tags)
-    latest_files = json.loads(git("show", f"{latest}:{rp.MANIFEST}", cwd=work))["files"] if latest else None
-    if not should_publish(latest_files, bp.build_manifest(base, day, sources, client)["files"]):
+    before = None
+    if latest:
+        before = describe(json.loads(git("show", f"{latest}:{rp.MANIFEST}", cwd=work)),
+                          {name: git("rev-parse", f"{latest}:{name}", cwd=work) for name in EXTRA})
+    after = describe(bp.build_manifest(base, day, sources, client),
+                     {name: git("hash-object", str(Path(repo) / name)) for name in EXTRA})
+    if not should_publish(before, after):
         return None
     version = next_version(tags, day)
     for entry in work.iterdir():
@@ -118,6 +131,3 @@ if __name__ == "__main__":
     args = parse_args()
     version = publish(args.base, args.work, args.remote, args.version_date, args.sources or rp.SOURCES, args.client)
     print(f"published {version}" if version else "nothing to publish: the package equals the latest published one")
-    if version and os.environ.get("GITHUB_OUTPUT"):
-        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
-            f.write(f"version={version}\n")

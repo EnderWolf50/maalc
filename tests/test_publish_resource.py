@@ -172,3 +172,31 @@ def test_a_rerun_in_a_used_work_folder_still_works(setup):
     publish(setup)
     make_base(setup[2], **{"data/a.json": b"[]"})
     assert publish(setup, day="2026.11.17") == "2026.11.17"
+
+
+def test_a_changed_license_or_notice_publishes_a_new_version(setup):
+    remote, repo, *_ = setup
+    publish(setup)
+    (repo / "NOTICE.md").write_text("notice, corrected", encoding="utf-8")
+    assert publish(setup) == "2026.11.16.2"
+    assert git("-C", str(remote), "show", "main:NOTICE.md") == "notice, corrected"
+
+
+def test_a_changed_source_list_or_format_publishes_though_no_file_changed(setup):
+    publish(setup)
+    remote, repo, base, work = setup
+    assert pub.publish(base, work, str(remote), DAY, sources=["https://example.test/other"], repo=repo) == "2026.11.16.2"
+
+
+def test_the_workflow_runs_on_every_path_the_package_is_built_from():
+    import yaml
+
+    from install import repo as root
+
+    flow = yaml.safe_load((root / ".github/workflows/publish-resource.yml").read_text(encoding="utf-8"))
+    paths = flow[True]["push"]["paths"]  # PyYAML reads the key `on` as True
+    for part in rp.PARTS:
+        assert f"assets/resource/base/{part}/**" in paths
+    for name in pub.EXTRA:
+        assert name in paths
+    assert flow["concurrency"]["cancel-in-progress"] is False and "workflow_dispatch" in flow[True]
