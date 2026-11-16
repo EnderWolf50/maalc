@@ -431,13 +431,14 @@ REFRESH = (1083, 47)
 PACK_LIT, PACK_GREY = (bgr(SCREENS / f"{name}.png") for name in ("ThemePack", "ThemePackRefreshGrey"))
 
 
-def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_after=None, grey_after=None):
+def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_after=None, grey_after=None, shot=None):
     """PickThemePack on a fake floor page of two cards weighing -5 and read as packs the data file lacks (a new pair
     after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines); covers collects the
     cover reader each page's ranking is handed (#274). The button reads `0/3` after spent_after refreshes, unread if None
-    (#319); the screen is PACK_GREY after grey_after refreshes, PACK_LIT before or if None (#482)."""
-    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
-        lambda: (PACK_GREY if grey_after is not None and len(taps) >= grey_after else PACK_LIT).copy()
+    (#319); the screen is PACK_GREY after grey_after refreshes, PACK_LIT before or if None (#482). shot, a function of
+    no arguments, takes every screenshot instead."""
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot or \
+        (lambda: (PACK_GREY if grey_after is not None and len(taps) >= grey_after else PACK_LIT).copy())
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
@@ -484,8 +485,53 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
     pack_page(context, monkeypatch, 2, "once", "weight")
     reads = [i for i, o in enumerate(order) if o == "read"]
     assert len(reads) == 2  # the page and the refreshed page
-    assert all(order[i - 1] == ("still", tuple(run_start_actions.PACK_CARDS), 2, run_start_actions.CARDS_SETTLE) for i in reads)
+    assert all(order[i - 1] == ("still", tuple(run_start_actions.PACK_CARDS), 3, run_start_actions.CARDS_SETTLE) for i in reads)
     assert run_start_actions.CARDS_SETTLE >= 3  # the swing's ~2.8 s fits
+
+
+# #774: the deal's last swings on the 2026-11-10 recording (floor 3, 09:39:45), screenshot by screenshot 0.215 s apart
+# (the live cadence) up to the cards' last move: how many of the card band's 234 blocks of 40x40 moved by more than 8
+# levels against the screenshot before; 7 or fewer (under 3%) is alike. The 5 and the 7 came 0.40 s before that move,
+# the 8 is the last swing, the 1 the cards coming to rest.
+LAST_SWAY = [52, 70, 21, 40, 30, 5, 7, 8, 1]
+
+
+def swaying(counts):
+    """A screenshot as a function of the clock: the k-th 0.2 s from the first one shows the card band (PACK_CARDS) with
+    counts[k - 1] of its blocks moved by 20 levels against step k - 1, at rest after the last count; k is at [0, 0, 0],
+    outside the band."""
+    x, y, w, _ = run_start_actions.PACK_CARDS
+    frames = [np.full((720, 1280, 3), 100, np.uint8)]
+    for n in counts:
+        frame = frames[-1].copy()
+        for row, col in (divmod(j, w // 40) for j in range(n)):
+            block = frame[y + 40 * row:y + 40 * row + 40, x + 40 * col:x + 40 * col + 40]
+            block[:] = 220 - block  # 100 <-> 120
+        frames.append(frame)
+    start = []
+
+    def shot():
+        now = actions.time.monotonic()
+        if not start:
+            start.append(now)
+        k = round((now - start[0]) / 0.2)
+        frame = frames[min(k, len(frames) - 1)].copy()
+        frame[0, 0, 0] = k
+        return frame
+    return shot
+
+
+def test_the_theme_pack_is_not_read_in_the_deals_last_swing(context, monkeypatch):
+    # #774: two alike pairs in a row took the recorded swing for still and read the cards 0.40 s before they stopped.
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = swaying(LAST_SWAY)
+    early = actions.still(context, roi=run_start_actions.PACK_CARDS, runs=2)
+    assert early[0, 0, 0] < len(LAST_SWAY)  # the recording's trap: mid-swing
+    read = []
+    real = run_start_actions.pack_titles
+    patch_all(monkeypatch, "pack_titles", lambda context, image: read.append(int(image[0, 0, 0])) or real(context, image))
+    pack_page(context, monkeypatch, 3, "none", "weight", shot=swaying(LAST_SWAY))
+    assert len(read) == 1
+    assert len(LAST_SWAY) <= read[0] < len(LAST_SWAY) + 3  # once the cards rest, within three screenshots
 
 
 def test_cards_still_moving_after_the_wait_are_read_anyway_and_logged(context, monkeypatch):
