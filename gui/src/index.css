@@ -393,8 +393,16 @@ ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--mute
 .qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
   border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
 .qtag.off { color: var(--muted); border-style: dashed; }
+/* The team queue block (#804): above the team list and the editor, the queue and beside it what it does. Its gap to them
+ * holds the section index's pull into main's top padding (16 px, 14 at 1000 px wide and less), so the index covers none of it. */
+.teams-page { display: flex; flex-direction: column; gap: 18px; }
+fieldset.queue { align-items: stretch; }
+.queue-body { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: flex-start; }
+.queue-body ol.reorder { flex: 0 1 480px; }
+.queue-body > p.muted { flex: 1 1 260px; font-size: 12.5px; }
+.qtag.next { color: var(--accent-ink); border-color: var(--accent-line); background: var(--sel); }
 /* a team's slot, as the game's TEAMS number plate shows it */
-.team-list ol.reorder .item small {
+.team-list ol.reorder .item small, .queue ol.reorder .item small {
   margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
 }
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }

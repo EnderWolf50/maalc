@@ -1,4 +1,5 @@
-// Teams (spec 04 section 9): the team list, in the order the user arranges it; the team queue is team_queue (#803).
+// Teams (spec 04 section 9): the team queue's block (team_queue, #803, #804) above the team list, in the order the user
+// arranges it, and the editor of the team picked.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
 import { iconUrl } from "./giftCatalog";
@@ -7,7 +8,7 @@ import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill, localName } from "./i18n";
 import {
-  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, addTeam, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, addTeam, defaultStarlight, freeName, newId, newTeam, nextRunPlaces, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid } from "./Deployment";
@@ -18,7 +19,7 @@ import {
 } from "./ui";
 
 export function TeamsTab() {
-  const { s, update, t, tv, bad } = useEditor();
+  const { s, update, t, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const [undoNote, removeAt] = useUndo();
   // A team deleted leaves the queue too (#803). useUndo runs this edit for the delete and again for its Undo, which puts the
@@ -37,29 +38,75 @@ export function TeamsTab() {
     }), setSel);
   };
   return (
-    <div className="split">
-      <aside className="team-list">
-        {s.teams.length ? (
-          <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
-            badAt={(j) => bad(`teams/${j}`)}
-            onChange={(teams) => update((d) => { d.teams = teams; })}
-            render={(x) => (
-              <span className={x.enabled ? "" : "muted"}>{x.name || "—"} <small>TEAMS #{x.game_team}</small>
-                {!x.enabled && <em className="qtag off">{t("team.disabled")}</em>}
-                {x.usage !== "any" && <em className="qtag">{tv("usage", x.usage)}</em>}
-              </span>
-            )} />
-        ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
-        {undoNote}
-        <button type="button" onClick={() => {
-          const n = s.teams.length + 1;
-          const team = newTeam(n, `${t("teamName")} ${n}`);
-          update((d) => { addTeam(d, team); });
-          setSel(team.id);
-        }}>+ {t("add")}</button>
-      </aside>
-      <section>{s.teams[i] && <><SectionIndex /><TeamEditor i={i} onRemove={remove} /></>}</section>
+    <div className="teams-page">
+      <QueueBlock />
+      <div className="split">
+        <aside className="team-list">
+          {s.teams.length ? (
+            <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
+              badAt={(j) => bad(`teams/${j}`)}
+              onChange={(teams) => update((d) => { d.teams = teams; })}
+              render={(x) => <span className={x.enabled ? "" : "muted"}><TeamTags team={x} /></span>} />
+          ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
+          {undoNote}
+          <button type="button" onClick={() => {
+            const n = s.teams.length + 1;
+            const team = newTeam(n, `${t("teamName")} ${n}`);
+            update((d) => { addTeam(d, team); });
+            setSel(team.id);
+          }}>+ {t("add")}</button>
+        </aside>
+        <section>{s.teams[i] && <><SectionIndex /><TeamEditor i={i} onRemove={remove} /></>}</section>
+      </div>
     </div>
+  );
+}
+
+/** The team queue (#804, ADR 0014): team_queue in its order, each team with its place, name, slot and usage, a team that is
+ * off dimmed in its place. Its drag and ↑↓ change team_queue only; the Agent's moves show once the editor reads them. */
+function QueueBlock() {
+  const { s, update, t, bad } = useEditor();
+  const byId = new Map(s.teams.map((x) => [x.id, x]));
+  // an id twice (a hand edit, which the check names) still gets a row of its own: `repeat` counts its rows before this one
+  const seen = new Map<string, number>();
+  const rows = s.team_queue.map((id) => { const repeat = seen.get(id) ?? 0; seen.set(id, repeat + 1); return { id, repeat }; });
+  // one mark when both difficulties play the same team, one of each when they differ, none for a difficulty no team plays
+  const next = nextRunPlaces(s);
+  const markAt = (j: number) => (next.hard === j && next.normal === j ? "queue.next"
+    : next.hard === j ? "queue.next_hard" : next.normal === j ? "queue.next_normal" : null);
+  return (
+    <fieldset className="queue" data-path="team_queue">
+      <legend>{t("queue.title")}</legend>
+      <div className="queue-body">
+        {rows.length > 0 && (
+          <ReorderList items={rows} keyOf={(x) => (x.repeat ? `${x.id}#${x.repeat}` : x.id)} badAt={(j) => bad(`team_queue/${j}`)}
+            onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
+            render={(x, j) => {
+              const team = byId.get(x.id), mark = markAt(j);
+              return (
+                <span className={team?.enabled ? "" : "muted"} data-path={`team_queue/${j}`} tabIndex={-1}>
+                  {j + 1}. {team ? <TeamTags team={team} everyUsage /> : `? ${x.id}`}
+                  {mark && <em className="qtag next">{t(mark)}</em>}
+                </span>
+              );
+            }} />
+        )}
+        <p className="muted">{withBreaks(t("queue.note"))}</p>
+      </div>
+    </fieldset>
+  );
+}
+
+/** A team as a row of the team list and of the queue shows it: its name, its slot as the game's TEAMS plate, a tag when it is
+ * off, and its usage: the queue tags every team's (`everyUsage`, as #804 asks), the list only one kept to a difficulty. */
+function TeamTags({ team, everyUsage = false }: { team: Team; everyUsage?: boolean }) {
+  const { t, tv } = useEditor();
+  return (
+    <>
+      {team.name || "—"} <small>TEAMS #{team.game_team}</small>
+      {!team.enabled && <em className="qtag off">{t("team.disabled")}</em>}
+      {(everyUsage || team.usage !== "any") && <em className="qtag">{tv("usage", team.usage)}</em>}
+    </>
   );
 }
 
