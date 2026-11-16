@@ -133,6 +133,20 @@ def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_lau
     assert actions.STUCK["restarts"].attempt("MailOpen") and actions.STUCK["updates"] == 1
 
 
+def test_each_task_logs_the_resource_package_in_use(context, monkeypatch, tmp_path):
+    # #766: version, client, format and template of the package; a checkout has no manifest and the task starts anyway.
+    (tmp_path / "data").mkdir()
+    monkeypatch.setattr(actions, "data_dir", lambda: tmp_path / "data")
+    logged = []
+    monkeypatch.setattr(actions, "log", logged.append)
+    actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
+    assert "resource package: none (no manifest.json)" in logged
+    (tmp_path / "manifest.json").write_text(json.dumps(
+        {"version": "2026.11.16", "client": "1.118.1", "format": 1, "template": 1, "sources": [], "files": {}}), encoding="utf-8")
+    actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
+    assert "resource package: version 2026.11.16, client 1.118.1, format 1, template 1" in logged
+
+
 def interrupted_run(context, how):
     """MirrorDungeon starts a run, then ends as how says; the next task's TaskStart runs. RUN afterwards."""
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))

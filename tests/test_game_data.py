@@ -1,5 +1,7 @@
 """tools/game_data.py (#625): which bundles a new client changed, the client version, and the per-file data diff."""
 
+import json
+
 import pytest
 
 import game_data as gd
@@ -64,3 +66,12 @@ def test_a_data_file_diff_names_the_ids_added_removed_and_changed_per_list():
         "default_list.want": {"added": [9302], "removed": []},
     }
     assert gd.id_changes(old, old) == {}
+
+
+def test_regen_leaves_the_client_the_data_came_from_in_data_for_the_resource_package(tmp_path):
+    # #766: CI has no .local/unpack, so the package manifest reads the client from the committed data.
+    (tmp_path / "unpack").mkdir()
+    (tmp_path / "unpack" / "client.json").write_text(json.dumps({"client": "1.119.0", "installed": "2026-11-20"}), encoding="utf-8")
+    (tmp_path / "data").mkdir()
+    gd.write_data_client(tmp_path / "unpack", tmp_path / "data")
+    assert json.loads((tmp_path / "data" / "client.json").read_text(encoding="utf-8")) == {"client": "1.119.0"}
