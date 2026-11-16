@@ -30,6 +30,15 @@ fn team_options_path() -> Result<PathBuf, String> {
     Ok(root()?.join("config").join("team_options.json"))
 }
 
+/// A settings file of an older version beside the settings file, as it read (#782): config/settings.v<version>.json.
+fn old_settings_path(version: u32) -> Result<PathBuf, String> {
+    Ok(root()?.join("config").join(old_settings_name(version)))
+}
+
+fn old_settings_name(version: u32) -> String {
+    format!("settings.v{version}.json")
+}
+
 /// A file's text, or None when it does not exist yet.
 fn read_if_there(path: &Path) -> std::io::Result<Option<String>> {
     match fs::read_to_string(path) {
@@ -80,6 +89,14 @@ fn load_team_options() -> Result<Option<String>, String> {
 #[tauri::command]
 fn save_team_options(text: String) -> Result<(), String> {
     replace(&team_options_path()?, &text, || Ok(()))
+}
+
+/// Keep a settings file of an older version as it was, before the GUI writes its migration back (api.ts saveOldSettings):
+/// a temp file, then a rename; one already there is written over. The error names the file.
+#[tauri::command]
+fn save_old_settings(version: u32, text: String) -> Result<(), String> {
+    let path = old_settings_path(version)?;
+    replace(&path, &text, || Ok(())).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// <root>/resource/base/data: resource/ sits under <root> in a release and under assets/ in the repo, the same lookup as
@@ -196,6 +213,7 @@ pub fn run() {
             save_settings,
             load_team_options,
             save_team_options,
+            save_old_settings,
             append_runs_log
         ])
         .run(tauri::generate_context!())
@@ -233,6 +251,11 @@ mod tests {
         assert_eq!(data.folders["gift_icons"], names(&["1.webp", "2.webp"]));
         assert!(data.folders["grace_icons"].is_empty());
         assert_eq!(data.dir, dir.display().to_string());
+    }
+
+    #[test]
+    fn an_old_settings_file_is_named_by_its_version() {
+        assert_eq!(old_settings_name(20), "settings.v20.json");
     }
 
     #[test]

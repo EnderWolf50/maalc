@@ -5,12 +5,13 @@ import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, type Settings } from "./model";
+import { movedOptions, sayMoved, teamPicks, type Moved } from "./movedOptions";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { StarlightTab } from "./Starlight";
-import { teamOptionsText } from "./teamOptions";
+import { NO_PICKS, teamOptionsText, type TeamPicks } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
-import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
+import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, withBreaks, type Picked } from "./ui";
 import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
@@ -28,24 +29,30 @@ type TabId = (typeof TABS)[number][0];
 
 /** The tabs in groups (the team and its gift list; the plans; the overrides): the tabs that start a group after the first.
  * How each task runs is the client's (MXU, MFAAvalonia): the Mirror Dungeon task's options and the global ones (#779), the
- * daily tasks' (#781) and the Luxcavation teams (#780), so there is no Run options or Daily tab. */
+ * daily tasks' (#781) and the Luxcavation teams (#780), so there is no Run options or Daily tab; the settings file has
+ * none of their values since version 21 (#782). */
 const GROUP_STARTS = new Set<TabId>(["deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
 const sayStatus = (lang: Settings["language"], status: string) =>
   Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
-/** Write the team options file when these settings change what it says (#780, teamOptions.ts), and the status after it:
- * `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in with the error, in s's language,
- * when the write failed. */
-async function teamOptionsNote(s: Settings, done: Key, failed: Key) {
+/** What a write of the team options file says: the status, and whether the write failed. */
+type TeamNote = { note: string; failed: boolean };
+/** An older file's values the client holds now, off its defaults (#782), and the version it had. */
+type MovedList = { from: number; values: Moved[] };
+
+/** Write the team options file when these settings change what it says (#780, teamOptions.ts), a new one starting on
+ * picks, and the status after it: `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in
+ * with the error, in s's language, when the write failed (then `failed` is true). */
+async function teamOptionsNote(s: Settings, picks: TeamPicks, done: Key, failed: Key): Promise<TeamNote> {
   try {
-    const text = teamOptionsText(await api.loadTeamOptions(), s);
-    if (text === null) return "";
+    const text = teamOptionsText(await api.loadTeamOptions(), s, picks);
+    if (text === null) return { note: "", failed: false };
     await api.saveTeamOptions(text);
-    return done;
+    return { note: done as string, failed: false };
   } catch (e) {
-    return fill(TEXT[s.language][failed], { error: String(e) });
+    return { note: fill(TEXT[s.language][failed], { error: String(e) }), failed: true };
   }
 }
 /** The element id of the problem at this place in the problems block. */
@@ -93,6 +100,19 @@ export default function App() {
   const [revertedFrom, setRevertedFrom] = useState<Settings | null>(null);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
+  // The teams a version 20 file picked for EXP and Thread Luxcavation: what a first team options file starts on, at the
+  // start or at a save, should the start not write one (#782).
+  const picks = useRef<TeamPicks>(NO_PICKS);
+  // An older file read and kept aside, not yet written back (#782): its version and the values the client holds now
+  // that are off the client's defaults, which show once it is written back, until dismissed.
+  const pending = useRef<MovedList | null>(null);
+  const [moved, setMoved] = useState<MovedList | null>(null);
+  /** The file is written: an older one's migration is done, and its list shows. */
+  const wroteBack = () => {
+    if (!pending.current) return;
+    setMoved(pending.current);
+    pending.current = null;
+  };
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
 
@@ -134,23 +154,32 @@ export default function App() {
       if (text === null) return setS(newSettings());
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
-        const { data, migrated, unknown } = parseSettings(text);
+        const { data, unknown, old } = parseSettings(text);
         const migratedText = toText(data);
+        // An older file is kept aside before anything writes over it, a save of a file the checks refuse too (#782). When
+        // it cannot be, the load fails with why, and nothing is written.
+        if (old) {
+          await api.saveOldSettings(old.version, text);
+          picks.current = teamPicks(old.data);
+          pending.current = { from: old.version, values: movedOptions(old.data) };
+        }
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
         const ok = !validate(data).length;
-        if (migrated && ok) {
+        // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
+        // checks refuse, whose teams may not read as teams. Before the write-back: a first one from the old file's teams
+        const team = ok ? await teamOptionsNote(data, picks.current, "teamOptions.updated", "teamOptions.failed") : null;
+        // a team options file not written leaves the old file as it is, so the next start makes it from the old teams
+        if (pending.current && team && !team.failed) {
           try {
             await api.saveSettings(migratedText, text);
             disk.current = migratedText;
+            wroteBack();
           } catch (e) {
-            if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
+            if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file, and a save writes it back
           }
         }
-        // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
-        // checks refuse, whose teams may not read as teams
-        const teamNote = ok ? await teamOptionsNote(data, "teamOptions.updated", "teamOptions.failed") : "";
-        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teamNote].filter(Boolean);
+        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", team?.note ?? ""].filter(Boolean);
         // one note stays as it is, a key the header says anew in the language picked next
         setStatus(notes.length === 1 ? notes[0] : notes.map((n) => sayStatus(data.language, n)).join(" "));
       } catch (e) {
@@ -267,6 +296,7 @@ export default function App() {
     setTyped(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
     setFailed(false);
     setRefused(false);
+    let teamFirst: TeamNote | null = null; // the team options file written before an older file's write-back
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
@@ -276,6 +306,17 @@ export default function App() {
           return false;
         }
         const written = toText(current);
+        // The write-back of an older file writes the team options file first, from its teams (#782). One that cannot be
+        // written stops the save, as at the start: the old file stays for the next try, with its teams.
+        if (pending.current) {
+          const team = await teamOptionsNote(current, picks.current, "savedTeams", "teamOptions.failed");
+          if (team.failed) {
+            setFailed(true);
+            setStatus(team.note);
+            return false;
+          }
+          if (team.note || !teamFirst) teamFirst = team; // a retry finds it written: the first write's note stays
+        }
         try {
           await api.saveSettings(written, disk.current);
         } catch (e) {
@@ -288,8 +329,9 @@ export default function App() {
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
+        wroteBack();
         // the team options file follows the teams saved; a change is said once, as the client reads it only at its start
-        setStatus((await teamOptionsNote(current, "savedTeams", "savedTeamsFailed")) || "saved");
+        setStatus((teamFirst ?? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed")).note || "saved");
         return true;
       }
     } catch (e) {
@@ -392,6 +434,17 @@ export default function App() {
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
           <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
+          {/* a version 20 file's values to set again in the client, once (#782) */}
+          {moved && moved.values.length > 0 && (
+            <section className="moved" aria-labelledby="moved-title">
+              <h3 id="moved-title">{t("moved.title")}</h3>
+              <p>{withBreaks(fill(t("moved.note"), { version: moved.from }))}</p>
+              <ul>{sayMoved(moved.values, s.teams, lang).map((row) => (
+                <li key={`${row.task} ${row.option}`}>{fill(t("moved.row"), { ...row })}</li>
+              ))}</ul>
+              <button type="button" onClick={() => setMoved(null)}>{t("moved.dismiss")}</button>
+            </section>
+          )}
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
           {shown.length > 0 && (
             <div className="problems" role="alert">

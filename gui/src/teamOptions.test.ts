@@ -51,16 +51,13 @@ test("a new order of the team queue leaves the cases where they are: nothing to 
   expect(teamOptionsText(first, settings([B, C, A], "zh_tw"))).toBeNull();
 });
 
-test("a first file's default_case is the team the settings file picks for that task; a later file keeps its own", () => {
+test("a first file's default_case is the team the version 20 file picked for that task; a later file keeps its own", () => {
   const s = settings([A, B]);
-  s.luxcavation.exp.team = "b";
-  const first = teamOptionsText(null, s)!;
+  const first = teamOptionsText(null, s, { ExpTeam: "b", ThreadTeam: null })!;
   expect([option(first).default_case, option(first, "ThreadTeam").default_case]).toEqual(["b", NONE]);
-  s.luxcavation.exp.team = "a";
-  s.luxcavation.thread.team = "b";
-  expect(teamOptionsText(first, s)).toBeNull();
-  s.luxcavation.exp.team = "gone"; // a pick the teams lack: 「未選擇」
-  expect(option(teamOptionsText(null, s)!).default_case).toBe(NONE);
+  expect(teamOptionsText(first, s, { ExpTeam: "a", ThreadTeam: "b" })).toBeNull();
+  expect(option(teamOptionsText(null, s, { ExpTeam: "gone", ThreadTeam: null })!).default_case).toBe(NONE); // not a team
+  expect(option(teamOptionsText(null, s)!).default_case).toBe(NONE); // a version 21 file has no pick
 });
 
 test("nothing changed, or neither a file nor a team: nothing to write", () => {

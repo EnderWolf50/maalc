@@ -106,12 +106,14 @@ def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path,
 
 
 def test_every_key_prep_refuses_names_an_option_of_the_interface():
-    # the option names come from the agent's schema titles: each is an option assets/interface.json has
+    # the option names come from the agent's schema titles: each is an option assets/interface.json has. The keys are
+    # every one of the three sections settings version 21 dropped (#782), as a v0.1.0 file had them (settings_cases v20).
     options = client_override.load_interface(REPO / "assets/interface.json")["option"]
-    schema = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))
-    keys = [*(f"run.{k}" for k in schema["properties"]["run"]["properties"]),
-            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in schema["$defs"]["luxcavation"]["properties"]),
-            *(f"charge_enkephalin.{k}" for k in schema["properties"]["charge_enkephalin"]["properties"])]
+    v20 = json.loads((REPO / "tests/settings_cases.json").read_text(encoding="utf-8"))["v20"]
+    keys = [*(f"run.{k}" for k in v20["run"]),
+            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in v20["luxcavation"][task]),
+            *(f"charge_enkephalin.{k}" for k in v20["charge_enkephalin"])]
+    assert len(keys) == 25
     for key in keys:
         where = bot.moved(key, "1")
         named = [w.split("=")[0] for w in where.split("--option ")[1:]]

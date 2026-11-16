@@ -1,6 +1,5 @@
 // Runs tests/settings_cases.json, which tests/test_settings.py runs against agent/settings.py too.
 import { describe, expect, test } from "vitest";
-import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import {
   MIGRATIONS, OLDEST_VERSION, SKILL_SWAPS, VERSION, cleanGiftList, newSettings, newTeam, parseSettings, parseThemePacks, schema,
@@ -8,23 +7,8 @@ import {
 } from "./model";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT } from "./i18n";
+import { applyEdits, cases, v20File, type Edit } from "./settingsCases";
 import { pyRepr, sayProblem, validate } from "./validate";
-
-type Edit = { set: string; value: unknown } | { delete: string };
-
-function applyEdits(data: unknown, edits: Edit[]) {
-  const out = structuredClone(data) as Record<string, unknown>;
-  for (const edit of edits) {
-    const parts = ("set" in edit ? edit.set : edit.delete).split("/");
-    const last = parts.pop()!;
-    let node = out as Record<string, unknown>;
-    for (const key of parts) node = node[key] as Record<string, unknown>;
-    if (!("set" in edit)) delete node[last];
-    else if (last === "-") (node as unknown as unknown[]).push(edit.value);
-    else node[last] = edit.value;
-  }
-  return out;
-}
 
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
@@ -107,7 +91,23 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
 });
 
 test("parseSettings refuses a newer version", () => {
-  expect(() => parseSettings('{"version": 21}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 22}')).toThrow("newer");
+});
+
+describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the valid file, its moved sections gone (#782)", () => {
+  const valid = parseSettings(JSON.stringify(cases.valid)).data; // its gift list cleaned, as any file's on load
+  for (const c of cases.migrate_v20 as { name: string; edits: Edit[] }[]) {
+    test(c.name, () => {
+      const old = v20File(c.edits);
+      const { data, old: read } = parseSettings(JSON.stringify(old));
+      expect([data, read]).toEqual([valid, { version: 20, data: old }]);
+      expect(validate(data)).toEqual([]);
+    });
+  }
+
+  test("a version 21 file needs no migration and has no old file", () => {
+    expect(parseSettings(JSON.stringify(cases.valid)).old).toBeNull();
+  });
 });
 
 test.each(cases.too_old)("parseSettings refuses version $version as too old, in the agent's words (tests/settings_cases.json too_old)", ({ version, error }) => {
@@ -209,8 +209,8 @@ test("loading drops gift ids no data file has, fills gorder and counts them", ()
   const file = structuredClone(cases.valid) as unknown as { gift_lists: { want: number[]; keep: number[]; gorder: Record<string, number[]> }[] };
   file.gift_lists[0].want = [9053, 424242];
   file.gift_lists[0].keep = [9071, 5];
-  const { data, migrated, unknown } = parseSettings(JSON.stringify(file));
-  expect(migrated).toBe(false);
+  const { data, old, unknown } = parseSettings(JSON.stringify(file));
+  expect(old).toBeNull();
   expect(unknown).toBe(2);
   expect([data.gift_lists[0].want, data.gift_lists[0].keep]).toEqual([[9053], [9071]]);
   expect(Object.keys(data.gift_lists[0].gorder)).toHaveLength(11); // a keyword the file lacks gets the default order

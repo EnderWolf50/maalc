@@ -1,16 +1,19 @@
 // The editor's shell (App.tsx): the main tabs from the keyboard, and the save state in the header when a save is refused.
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import libRs from "../src-tauri/src/lib.rs?raw";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
-import { newSettings, newTeam } from "./model";
+import { MOVED, newSettings, newTeam } from "./model";
+import { v20File, type Edit } from "./settingsCases";
 
 const zh = TEXT.zh_tw;
 // teamOptions: the team options file's text (null: none), teamWrites each text written to it, teamFail the error its write
-// meets (#780)
+// meets (#780); old each [version, text] kept aside, oldFail the error that meets (#782); writes the files written, in turn
 const file = vi.hoisted(() => ({
   text: "", saved: [] as string[], fail: "", teamOptions: null as string | null, teamWrites: [] as string[], teamFail: "",
+  old: [] as [number, string][], oldFail: "", writes: [] as string[],
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -18,6 +21,7 @@ vi.mock("./api", async (original) => ({
   saveSettings: (text: string) => {
     if (file.fail) return Promise.reject(new Error(file.fail));
     file.saved.push(text);
+    file.writes.push("settings");
     return Promise.resolve();
   },
   loadTeamOptions: () => Promise.resolve(file.teamOptions),
@@ -25,6 +29,13 @@ vi.mock("./api", async (original) => ({
     if (file.teamFail) return Promise.reject(new Error(file.teamFail));
     file.teamWrites.push(text);
     file.teamOptions = text;
+    file.writes.push("team options");
+    return Promise.resolve();
+  },
+  saveOldSettings: (version: number, text: string) => {
+    if (file.oldFail) return Promise.reject(new Error(file.oldFail));
+    file.old.push([version, text]);
+    file.writes.push("old");
     return Promise.resolve();
   },
   rootDir: () => Promise.resolve("root"),
@@ -45,6 +56,9 @@ beforeEach(() => {
   file.teamOptions = null;
   file.teamWrites = [];
   file.teamFail = "";
+  file.old = [];
+  file.oldFail = "";
+  file.writes = [];
 });
 
 /** The team ids of the team options file's ExpTeam cases, in order (teamOptions.ts). */
@@ -88,24 +102,6 @@ test("the Run options and Daily tabs are gone: what they set is the client's tas
   expect(tabs).not.toContain("執行選項");
   expect(tabs).not.toContain("日常");
   expect(tabs).toHaveLength(7);
-});
-
-test("a save writes the file's run section back as it was, though no tab shows it (#779)", async () => {
-  // #782 drops it from the file; until then nothing reads it but nothing loses it either. A target floor of 15 with a
-  // team that never plays HARD saves: that rule is the agent's, at the Mirror Dungeon task's start.
-  const s = newSettings();
-  s.teams = [newTeam(1, "Ta")];
-  s.run = { ...s.run, difficulty: "normal", target_floor: 15, runs: null, wipe_retries: 7, webhook_url: "http://hook.invalid/",
-    auto_download: false, keep_dismissed_screens: false };
-  file.text = JSON.stringify(s, null, 2) + "\n";
-  const user = userEvent.setup();
-  render(<App />);
-  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
-  await user.click(screen.getByRole("button", { name: zh.save }));
-  await waitFor(() => expect(file.saved).toHaveLength(1));
-  const saved = JSON.parse(file.saved[0]);
-  expect(saved.teams[0].name).toBe("Ta!");
-  expect(saved.run).toEqual(s.run);
 });
 
 describe("the team options file (#780)", () => {
@@ -177,22 +173,121 @@ describe("the team options file (#780)", () => {
   });
 });
 
-test("a save writes the file's daily options back as they were, though no tab shows them (#780, #781)", async () => {
-  // #782 drops them from the file; until then nothing reads them, nothing loses them. A team id the teams lack saves too:
-  // the team is the client's dropdown now, and the agent stops that task at its start
-  const s = newSettings();
-  s.teams = [newTeam(1, "Ta")];
-  s.luxcavation.exp = { ...s.luxcavation.exp, mode: "count", count: 7, team: "gone", retries: 4, consecutive: false };
-  s.luxcavation.thread = { ...s.luxcavation.thread, count: 9, team: s.teams[0].id, retries: 2 };
-  s.charge_enkephalin.count = 5;
-  file.text = JSON.stringify(s, null, 2) + "\n";
-  const user = userEvent.setup();
-  render(<App />);
-  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
-  await user.click(screen.getByRole("button", { name: zh.save }));
-  await waitFor(() => expect(file.saved).toHaveLength(1));
-  const saved = JSON.parse(file.saved[0]);
-  expect([saved.luxcavation, saved.charge_enkephalin]).toEqual([s.luxcavation, s.charge_enkephalin]);
+describe("a version 20 file (#782)", () => {
+  /** settings_cases' valid file at version 20 with the three sections it had, these edits made, as the file. */
+  const v20 = (edits: Edit[] = []) => (file.text = JSON.stringify(v20File(edits), null, 2) + "\n");
+  const list = () => screen.queryByRole("region", { name: zh["moved.title"] });
+  const defaults = () => {
+    const option = JSON.parse(file.teamOptions!).option;
+    return [option.ExpTeam.default_case, option.ThreadTeam.default_case];
+  };
+
+  test("is written back as version 21, without the three sections", async () => {
+    v20();
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    const saved = JSON.parse(file.saved[0]);
+    expect(saved.version).toBe(21);
+    expect(MOVED.filter((k) => k in saved)).toEqual([]);
+  });
+
+  test("is kept beside it as it was, before anything is written", async () => {
+    const text = v20();
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.old).toEqual([[20, text]]);
+    expect(file.writes).toEqual(["old", "team options", "settings"]);
+  });
+
+  test("gives a first team options file the teams it picked, before the write-back", async () => {
+    v20([{ set: "luxcavation/exp/team", value: "b" }]);
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(defaults()).toEqual(["b", "none"]);
+  });
+
+  test("lists once the values off the client's default, by the client's names, the webhook only as set", async () => {
+    v20([{ set: "run/target_floor", value: 15 }, { set: "run/runs", value: null },
+      { set: "run/webhook_url", value: "http://hook.invalid/secret" }, { set: "charge_enkephalin/count", value: 3 },
+      { set: "luxcavation/thread/team", value: "a" }]);
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(list()).not.toBeNull());
+    expect(within(list()!).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "全域選項 › 失敗通知 webhook：有設定", "鏡牢 › 目標層數：15 層（極限）", "鏡牢 › 限制局數：關",
+      "紐本 › 隊伍：Team a（TEAMS #1）", "狂氣換腦啡肽 › 今天換到第幾次（目標 Daily Count）：3",
+    ]);
+    expect(list()).toHaveTextContent("config\\settings.v20.json");
+    expect(document.body).not.toHaveTextContent("hook.invalid");
+    await user.click(within(list()!).getByRole("button", { name: zh["moved.dismiss"] }));
+    expect(list()).toBeNull();
+  });
+
+  test("every moved value at the client's default: nothing to list", async () => {
+    v20();
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(list()).toBeNull();
+  });
+
+  test("a file the checks refuse is kept aside and waits for a save, which writes the team options file first", async () => {
+    v20([{ set: "teams/1/game_team", value: 1 }, { set: "luxcavation/exp/team", value: "b" },
+      { set: "run/target_floor", value: 10 }]); // two enabled teams on TEAMS #1
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    expect([file.writes, list()]).toEqual([["old"], null]); // not written back: nothing listed yet
+    await user.click(within(document.querySelector("aside")!).getByText("Team b"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "2" } });
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.writes).toEqual(["old", "team options", "settings"]);
+    expect(defaults()).toEqual(["b", "none"]);
+    expect(within(list()!).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "鏡牢 › 目標層數：10 層（無限）", "經驗本 › 隊伍：Team b（TEAMS #2）",
+    ]);
+  });
+
+  test("a save of it that cannot write the team options file writes nothing, as the start; the next save does", async () => {
+    v20([{ set: "teams/1/game_team", value: 1 }, { set: "luxcavation/exp/team", value: "b" }]);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("alert");
+    await user.click(within(document.querySelector("aside")!).getByText("Team b"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "2" } });
+    file.teamFail = "disk full";
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "failed"));
+    expect(document.querySelector(".status")).toHaveTextContent("disk full");
+    expect([file.writes, file.saved]).toEqual([["old"], []]);
+    file.teamFail = "";
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.writes).toEqual(["old", "team options", "settings"]);
+    expect(defaults()).toEqual(["b", "none"]);
+  });
+
+  test("a team options file that cannot be written leaves the old file as it is, for the next start", async () => {
+    v20([{ set: "luxcavation/exp/team", value: "b" }]);
+    file.teamFail = "disk full";
+    render(<App />);
+    await waitFor(() => expect(document.querySelector(".status")).toHaveTextContent("disk full"));
+    expect([file.writes, file.saved, list()]).toEqual([["old"], [], null]);
+  });
+
+  test("when it cannot be kept aside the window says why and writes nothing", async () => {
+    v20();
+    file.oldFail = "access denied";
+    render(<App />);
+    expect(await screen.findByText(zh.loadError)).toBeInTheDocument();
+    expect(screen.getByText(/access denied/)).toBeInTheDocument();
+    expect(file.writes).toEqual([]);
+  });
+
+  test("the file it is kept as is the one the window names (src-tauri lib.rs old_settings_name)", () => {
+    expect(libRs).toContain('format!("settings.v{version}.json")');
+    for (const lang of ["zh_tw", "en_us"] as const) expect(TEXT[lang]["moved.note"]).toContain("config\\settings.v{version}.json");
+  });
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

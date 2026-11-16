@@ -19,7 +19,7 @@ import pytest
 
 from client_options import GLOBAL_DEFAULTS, TEAM_OPTIONS, TEAM_PICK, override, send
 from daily_child import bind, game_class, load, result, run_child, run_task, screen
-from test_settings import VALID, apply_edits
+from test_settings import V20_NOTE, VALID, apply_edits, v20
 
 CASES = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
 LUX_KEYS = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}
@@ -120,18 +120,31 @@ def test_mirror_dungeon_reads_every_option_the_client_sent_and_logs_them(context
     context.tasker.controller.post_click.assert_not_called()
 
 
-def test_the_settings_files_run_section_is_not_read(context, monkeypatch):
-    # #779: the client's options are the only source; the file's run (every key off the client's default here) is left
-    # as it is, for the GUI to write back (#782 drops it).
-    data = copy.deepcopy(VALID)
-    data["run"].update(difficulty="normal", target_floor=10, runs=None, wipe_retries=9, webhook_url="http://file.invalid/",
-                       auto_download=False)
-    data["teams"][1]["hard_from_floor"] = 1
-    write(data)
-    ok, _, _ = start(context, monkeypatch, "MirrorDungeon")
+def test_a_version_20_files_run_section_is_not_read_and_each_start_says_so(context, monkeypatch):
+    # #779: the client's options are the only source; #782: a file the GUI has not written back as version 21 still has
+    # run (every key off the client's default here), which the migration drops, and the start logs where it went.
+    write(apply_edits(v20([{"set": "run/difficulty", "value": "normal"}, {"set": "run/target_floor", "value": 10},
+                           {"set": "run/runs", "value": None}, {"set": "run/wipe_retries", "value": 9},
+                           {"set": "run/webhook_url", "value": "http://file.invalid/"},
+                           {"set": "run/auto_download", "value": False}]), HARD_FROM_1))
+    ok, _, said = start(context, monkeypatch, "MirrorDungeon")
     opts = actions.TASK["options"]
     assert ok is True and (opts["difficulty"], opts["target_floor"], opts["runs"], opts["wipe_retries"]) == ("auto", 5, 1, 2)
     assert (opts["webhook_url"], actions.allowed("auto_download")) == ("", True)
+    assert said.count(V20_NOTE) == 1
+    assert start(context, monkeypatch, "MirrorDungeon")[2].count(V20_NOTE) == 1  # the next start says it again
+
+
+def test_a_version_20_file_says_so_also_when_the_client_sent_an_option_wrong(context, monkeypatch):
+    # The line is what explains an option the client has at its default: it comes before the options are read.
+    write(v20())
+    ok, _, said = start(context, monkeypatch, "MirrorDungeon", drop=("wipe_retries",))
+    assert ok is False and V20_NOTE in said
+
+
+def test_a_version_21_file_says_nothing_of_it(context, monkeypatch):
+    write(VALID)
+    assert not [line for line in start(context, monkeypatch, "ClaimMail")[2] if "settings version" in line]
 
 
 def test_runs_limit_off_is_no_limit(context, monkeypatch):
@@ -158,12 +171,12 @@ def test_a_daily_task_reads_its_own_options_the_client_sent(context, monkeypatch
     assert options_line(said) == f"options: {GLOBAL_DEFAULTS}, {line}"
 
 
-def test_the_settings_files_daily_sections_are_not_read(context, monkeypatch):
-    # #781, #780: the client's options are the only source; the file's luxcavation and charge_enkephalin, every key off
-    # the client's default here (team a, the client's b), are left as they are for the GUI to write back (#782 drops them).
+def test_a_version_20_files_daily_sections_are_not_read(context, monkeypatch):
+    # #781, #780: the client's options are the only source; a version 20 file's luxcavation and charge_enkephalin, every
+    # key off the client's default here (team a, the client's b), go in the migration (#782).
     edits = [{"set": f"luxcavation/{key}/{k}", "value": v} for key in ("exp", "thread")
              for k, v in (("mode", "count"), ("count", 7), ("retries", 5), ("consecutive", False), ("team", "a"))]
-    write(apply_edits(CASES["valid"], [*edits, {"set": "charge_enkephalin/count", "value": 9}]))
+    write(v20([*edits, {"set": "charge_enkephalin/count", "value": 9}]))
     assert start(context, monkeypatch, "ExpLuxcavation", "ExpTeam=b")[0] is True
     assert {k: actions.TASK["options"][k] for k in ("mode", "retries", "consecutive", "team")} == {
         "mode": "daily", "retries": 0, "consecutive": True, "team": "b"}
@@ -271,8 +284,8 @@ def test_a_rule_a_task_does_not_play_by_leaves_it_alone(context, monkeypatch):
                                                 ("ThreadLuxcavation", "ThreadTeam", "Thread Luxcavation")])
 def test_a_luxcavation_task_plays_the_team_its_option_picked(context, monkeypatch, task, option, name):
     # #780: the team is the client's dropdown, its case the team's id: team b's TEAMS #2 and guard turns, not team a's;
-    # the settings file's luxcavation team (a) is not read.
-    write(apply_edits(CASES["valid"], [{"set": f"luxcavation/{LUX_KEYS[task]}/team", "value": "a"}]))
+    # a version 20 file's luxcavation team (a) is not read.
+    write(v20([{"set": f"luxcavation/{LUX_KEYS[task]}/team", "value": "a"}]))
     ok, stops, said = start(context, monkeypatch, task, f"{option}=b")
     assert ok is True and stops == []
     assert actions.TASK["options"]["team"] == "b" and options_line(said).endswith(", team=b")

@@ -16,9 +16,18 @@ SCHEMA = json.loads((Path(__file__).parent / "settings.schema.json").read_text(e
 CURRENT_VERSION = SCHEMA["properties"]["version"]["const"]
 # v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653)
 OLDEST_VERSION = 20
+# Version 21's: the sections whose 25 values the client's task and global options hold since #779, #780 and #781 (#782).
+MOVED = ("run", "luxcavation", "charge_enkephalin")
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
 # gui/src/model.ts.
-MIGRATIONS = {}
+MIGRATIONS = {20: lambda data: {k: v for k, v in data.items() if k not in MOVED}}
+# NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is still at version n, until the GUI writes it
+# back: what its migration took away and where it went.
+NOTES = {
+    20: "settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task "
+        "and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists the values "
+        "to set in the client",
+}
 
 
 ROOT = Path(__file__).resolve().parent.parent  # resource/ sits under it in a release, under assets/ in the repo
@@ -151,10 +160,11 @@ def write_settings(root, data, expected):
     return True
 
 
-def load_settings(root, need_team=False):
+def load_settings(root, need_team=False, notes=None):
     """Return the checked settings dict, or raise SettingsError listing every problem.
 
     need_team: MirrorDungeon's own check, an enabled team (#364); the dailies run without one.
+    notes: a list that gets the NOTES line of each version the file was migrated from, also when it then fails a check.
     """
     path = settings_path(root)
     try:
@@ -164,7 +174,7 @@ def load_settings(root, need_team=False):
     except (OSError, ValueError) as e:
         raise SettingsError([f"{path} is not readable JSON: {e}"]) from None
 
-    data = migrate(data)
+    data = migrate(data, notes)
     errors = [
         f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}"
         for e in sorted(Draft202012Validator(SCHEMA).iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))
@@ -180,7 +190,8 @@ def load_settings(root, need_team=False):
     return data
 
 
-def migrate(data):
+def migrate(data, notes=None):
+    """data at CURRENT_VERSION; notes (a list) gets the NOTES line of each version it went through."""
     version = data.get("version") if isinstance(data, dict) else None
     if not isinstance(version, int) or isinstance(version, bool):
         raise SettingsError([f"version must be an integer, got {version!r}"])
@@ -191,6 +202,8 @@ def migrate(data):
             raise SettingsError([f"settings version {version} is too old: maalc reads version {OLDEST_VERSION} and later; "
                                  "start a new settings file in the settings GUI"])
         data = MIGRATIONS[version](data)
+        if notes is not None and version in NOTES:
+            notes.append(NOTES[version])
         version += 1
         data["version"] = version
     return data
