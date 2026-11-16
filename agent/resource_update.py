@@ -129,9 +129,13 @@ def valid_path(path):
 
 def check_files(manifest):
     """The manifest's `files` when every path and entry is one the program can use, else an UpdateError."""
+    folded = set()
     for path, entry in manifest["files"].items():
-        if not valid_path(path):
+        if not valid_path(path) or any(s.endswith((".", " ")) for s in path.split("/")):
             raise UpdateError(f"manifest.json: {path} is not a path of the package")
+        if path.casefold() in folded:  # one file on Windows
+            raise UpdateError(f"manifest.json: {path} differs from another path only by case")
+        folded.add(path.casefold())
         if (not isinstance(entry, dict) or not isinstance(entry.get("size"), int) or isinstance(entry["size"], bool)
                 or entry["size"] < 0 or not isinstance(entry.get("sha256"), str) or not SHA256.fullmatch(entry["sha256"])):
             raise UpdateError(f"manifest.json: the entry of {path} has no size and sha256")
@@ -157,7 +161,7 @@ def plan_part(part, base, local, remote):
     prefix = part + "/"
     remote_files = {p: e for p, e in remote["files"].items() if p.startswith(prefix)}
     local_files = {p: e for p, e in local["files"].items() if p.startswith(prefix)}
-    plan = Plan(part)
+    plan = Plan(part, remote["version"])
     for path, entry in remote_files.items():
         if local_files.get(path, {}).get("sha256") != entry["sha256"] or not (base / path).is_file():
             plan.changed[path] = entry
@@ -210,15 +214,17 @@ def stage(source, plans, staging, seconds):
 def swap(base, plans, manifest, staging):
     """Put the staged files in place, delete the removed ones, write the manifest last. A failure puts every file back.
 
-    A crash that runs nothing after it (power, kill) leaves the old manifest, so the next run plans the same change and
-    finishes it: a file moved out and not yet replaced is missing, one replaced differs from the old manifest's sha256."""
-    undo = []  # (target, where its old file went or None), newest last
+    A changed file is replaced in one step, never moved out first, so it is never missing, and the removals come after all
+    replacements. A crash that runs nothing after it (power, kill) leaves the old manifest, so the next run plans the same
+    change and finishes it: a file replaced differs from the old manifest's sha256, one removed is gone from the remote's."""
+    undo = []  # (target, a copy of its old file or None), newest last
     try:
         for plan in plans:
             for path in plan.changed:
-                move_in(base / path, staging / "new" / path, staging / "old" / path, undo)
+                replace_file(base / path, staging / "new" / path, staging / "old" / path, undo)
+        for plan in plans:
             for path in plan.removed:
-                move_out(base / path, staging / "old" / path, undo)
+                remove_file(base / path, staging / "old" / path, undo)
         # the manifest is replaced in one step, never moved out: a crash between the two would leave none
         temp, copy = staging / rp.MANIFEST, staging / "old" / rp.MANIFEST
         temp.write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
@@ -228,26 +234,32 @@ def swap(base, plans, manifest, staging):
         os.replace(temp, base / rp.MANIFEST)
     except Exception:
         for target, old in reversed(undo):
-            if old is None:
-                target.unlink(missing_ok=True)
-            else:
-                os.replace(old, target)
+            try:  # one file that cannot go back must not keep the others from it
+                if old is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    os.replace(old, target)
+            except OSError:
+                pass
         raise
     for plan in plans:
         for path in plan.removed:
             prune_empty(base, (base / path).parent, plan.part)
 
 
-def move_out(target, old, undo):
+def remove_file(target, old, undo):
     if target.exists():
         old.parent.mkdir(parents=True, exist_ok=True)
         os.replace(target, old)
         undo.append((target, old))
 
 
-def move_in(target, staged, old, undo):
-    move_out(target, old, undo)
-    if not undo or undo[-1][0] != target:
+def replace_file(target, staged, old, undo):
+    if target.exists():
+        old.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(target, old)
+        undo.append((target, old))
+    else:
         undo.append((target, None))
     target.parent.mkdir(parents=True, exist_ok=True)
     os.replace(staged, target)
@@ -332,16 +344,17 @@ def run_update(base, log):
             write_manifest_only(base, merged_manifest(local, remote, plans), staging)
         log(f"{PREFIX}up to date: {remote['version']} changes no file")
         return
-    for plan in plans:
-        plan.version = remote["version"]
     try:
         stage(source, plans, staging / remote["version"], DOWNLOAD_SECONDS)
         swap(base, plans, merged_manifest(local, remote, plans), staging / remote["version"])
     finally:
         shutil.rmtree(staging, ignore_errors=True)
-    refresh(plans)
     changed, removed = sum(len(p.changed) for p in plans), sum(len(p.removed) for p in plans)
     log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed")
+    try:
+        refresh(plans)
+    except Exception as e:  # the files are the new ones now: say so, not "kept"
+        log(f"{PREFIX}swapped, but what the agent had read of the old files could not all be cleared: {type(e).__name__}: {e}")
 
 
 def write_manifest_only(base, manifest, staging):

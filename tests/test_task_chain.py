@@ -444,8 +444,8 @@ def test_new_data_is_the_data_of_the_task_that_found_it_and_of_the_next_task_of_
     assert out["succeeded"] is True
 
 
-def update_install(context, monkeypatch, tmp_path, remote_files, **fields):
-    """An install of two data files and a fake remote publishing remote_files; TaskStart logs into the list returned."""
+def update_install(monkeypatch, tmp_path, remote_files, **fields):
+    """An install of one data file and a fake remote publishing remote_files; TaskStart logs into the list returned."""
     base, remote = tmp_path / "resource" / "base", tmp_path / "remote"
     install(base, {"data/a.json": b"old"}, "2026.11.01", [str(remote)])
     publish(remote, remote_files, "2026.11.16", **fields)
@@ -456,8 +456,8 @@ def update_install(context, monkeypatch, tmp_path, remote_files, **fields):
 
 
 def test_a_task_starts_on_the_files_it_had_when_the_update_fails(context, monkeypatch, tmp_path):
-    # #771: no connection, a wrong sha256, a cut download, a format the program does not know: the task runs, the files stay
-    base, remote, logged = update_install(context, monkeypatch, tmp_path, {"data/a.json": b"new"})
+    # #771: a wrong sha256, a cut download, a source that is gone: the task runs, the files stay
+    base, remote, logged = update_install(monkeypatch, tmp_path, {"data/a.json": b"new"})
     before = tree(base)
     (remote / "2026.11.16" / "data" / "a.json").write_bytes(b"NEW")  # not what the manifest says
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
@@ -473,14 +473,14 @@ def test_a_task_starts_on_the_files_it_had_when_the_update_fails(context, monkey
 
 
 def test_a_task_starts_on_the_files_it_had_when_the_format_is_not_the_one_the_program_knows(context, monkeypatch, tmp_path):
-    base, remote, logged = update_install(context, monkeypatch, tmp_path, {"data/a.json": b"new"}, format=brp.rp.FORMAT + 1)
+    base, remote, logged = update_install(monkeypatch, tmp_path, {"data/a.json": b"new"}, format=brp.rp.FORMAT + 1)
     before = tree(base)
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
     assert tree(base) == before and any(f"format {brp.rp.FORMAT + 1}" in line and "skipped" in line for line in logged)
 
 
 def test_a_task_starts_after_its_update_and_names_the_package_it_runs_on(context, monkeypatch, tmp_path):
-    base, remote, logged = update_install(context, monkeypatch, tmp_path, {"data/a.json": b"new"})
+    base, remote, logged = update_install(monkeypatch, tmp_path, {"data/a.json": b"new"})
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
     assert (base / "data" / "a.json").read_bytes() == b"new"
     update = next(i for i, line in enumerate(logged) if "2026.11.01 -> 2026.11.16" in line)

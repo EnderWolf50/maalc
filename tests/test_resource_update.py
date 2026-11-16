@@ -2,6 +2,7 @@
 the log says. The remote is a folder (tests/fake_resource.py), or an https source answered by a fake urlopen
 for the failures only a network has."""
 
+import importlib
 import json
 import os
 import re
@@ -122,7 +123,7 @@ def test_a_format_the_program_does_not_know_is_skipped_and_logged(base, remote):
 
 
 @pytest.mark.parametrize("path", ["data/../image/t.png", "data//x.json", "/data/x.json", "data\\x.json", "model/ocr/x.bin",
-                                  "data/C:/x.json", "other/x.json"])
+                                  "data/C:/x.json", "other/x.json", "data/A.JSON", "data/x.", "data/x /y.json"])
 def test_a_path_outside_the_package_is_refused(base, remote, path):
     manifest = publish(remote, NEW, "2026.11.16")
     manifest["files"][path] = {"size": 1, "sha256": "0" * 64}  # only the manifest names it: not every system could hold the file
@@ -162,41 +163,41 @@ def test_a_swap_that_fails_midway_puts_the_old_files_back(base, remote, monkeypa
     assert tree(base) == before and "kept the current files" in said
 
 
-def test_a_crash_at_any_point_of_the_swap_converges_on_the_next_run(base, remote, monkeypatch):
-    class Crash(BaseException):
-        """The process ends: nothing runs after it, so no rollback."""
+class Crash(BaseException):
+    """The process ends: nothing runs after it, so no rollback."""
 
-    publish(remote, NEW, "2026.11.16")
-    expected = {**NEW, "image/t.png": OLD["image/t.png"]}
-    steps = 0
-    real = os.replace
-    counter = {"n": 0}
 
-    def count(src, dst, *a):
-        counter["n"] += 1
+def replaces_until(monkeypatch, crash_at=None):
+    """Count os.replace calls; the one numbered crash_at raises Crash. Returns the counter."""
+    real, count = os.replace, {"n": 0}
+
+    def replace(src, dst, *a):
+        count["n"] += 1
+        if count["n"] == crash_at:
+            raise Crash
         return real(src, dst, *a)
 
-    monkeypatch.setattr(os, "replace", count)
+    monkeypatch.setattr(os, "replace", replace)
+    return count
+
+
+def test_a_crash_at_any_point_of_the_swap_converges_on_the_next_run(base, remote, monkeypatch):
+    publish(remote, NEW, "2026.11.16")
+    expected = {**NEW, "image/t.png": OLD["image/t.png"]}
+    count = replaces_until(monkeypatch)
     run(base)
-    steps = counter["n"]
     monkeypatch.undo()
-    assert steps >= 4
-    for crash_at in range(1, steps + 1):
+    assert count["n"] >= 4
+    for crash_at in range(1, count["n"] + 1):
         install(base, OLD, "2026.11.01", [str(remote)])
         for stale in set(local_files(base)) - set(OLD):
             (base / stale).unlink()
-        n = {"n": 0}
-
-        def crashing(src, dst, *a):
-            n["n"] += 1
-            if n["n"] == crash_at:
-                raise Crash
-            return real(src, dst, *a)
-
-        monkeypatch.setattr(os, "replace", crashing)
+        replaces_until(monkeypatch, crash_at)
         with pytest.raises(Crash):
             ru.update(base, lambda line: None)
         monkeypatch.undo()
+        # the agent imports these at start: a crash must never leave one missing, whatever the next run does
+        assert (base / "data" / "a.json").is_file() and (base / "data" / "b.json").is_file() and (base / "manifest.json").is_file()
         run(base)
         assert local_files(base) == expected, f"crash at replace #{crash_at}"
         assert rp.read_manifest(base)["version"] == "2026.11.16"
@@ -299,3 +300,10 @@ def test_every_cache_in_agent_is_cleared_with_the_data_or_named_as_not_on_it():
     # a new @cache that reads data/ must join ru.DATA_CACHES, or say here that it does not
     not_data = {"run_start._compact", "run_start._keywords"}
     assert set(cache_decorated_functions()) == set(ru.DATA_CACHES) | not_data
+
+
+def test_every_function_that_rebuilds_a_table_made_at_import_exists():
+    # a rename of one is a silent miss at the next update, so the names DERIVED lists are resolved here
+    for name in ru.DERIVED:
+        module, _, function = name.partition(".")
+        assert callable(getattr(importlib.import_module(module), function)), name

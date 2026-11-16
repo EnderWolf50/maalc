@@ -1053,19 +1053,23 @@ def finish(context, reason):
 BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
 GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
-GIFTS = gift_cells.load()  # every gift a cell may show (#297)
-GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
-GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
+GIFTS = []  # every gift a cell may show (#297)
+GIFT_NAMES = {}
+GIFT_IDS = {}  # an English name plate's gift (#329)
 
 
 def reload_gifts():
-    """After an update of data/ (resource_update.clear_data_caches): the three above rebuilt in place, as the modules that
-    imported them by name hold the same objects."""
+    """Fill the three above from data/, at import and again after an update of data/ (resource_update.clear_data_caches).
+    In place, not as an accessor behind a cache: shop_actions and event_actions imported the three by name, in many
+    places that read them as plain tables, and each holds the same objects."""
     GIFTS[:] = gift_cells.load()
     GIFT_NAMES.clear()
     GIFT_NAMES.update({e["id"]: e["en"] for e in GIFTS})
     GIFT_IDS.clear()
     GIFT_IDS.update({e["en"]: e["id"] for e in GIFTS})
+
+
+reload_gifts()
 
 
 DIALOG_TEXT = [360, 280, 560, 140]

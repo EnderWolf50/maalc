@@ -93,7 +93,6 @@
 "test_release_draft.py": 0,
 "test_release_zip.py": 0,
 "test_resource_package.py": 0,
-"test_resource_update.py": 2,
 "test_resumed_run.py": 0,
 "test_review_lint.py": 3,
 "test_review_pack.py": 0,
