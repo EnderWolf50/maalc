@@ -3,10 +3,11 @@
 // never saves its own stale order over the Agent's.
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
-import { MIGRATIONS, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
+import cases from "../../tests/settings_cases.json";
+import { movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
 import { sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
@@ -168,15 +169,7 @@ describe("in the editor", () => {
   });
 
   test("an old file the Agent reorders while the editor writes its migration back shows and keeps the Agent's order", async () => {
-    const old = JSON.parse(file.text!);
-    old.version -= 1; // a version with a migration: none is left from before v0.1.0 (#653), so the test brings its own
-    old.run.floors = old.run.target_floor;
-    delete old.run.target_floor;
-    MIGRATIONS[old.version] = (d) => {
-      const { floors, ...run } = d.run as Record<string, unknown>;
-      return { ...d, run: { ...run, target_floor: floors } };
-    };
-    onTestFinished(() => { delete MIGRATIONS[old.version]; });
+    const old = { ...JSON.parse(file.text!), version: 20, ...cases.v20 }; // version 21 dropped these three sections (#782)
     file.text = text(old);
     file.beforeSave = () => { // the load's write-back meets the Agent's write, and a poll runs while it waits
       agentClaims("a");

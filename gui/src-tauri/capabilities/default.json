@@ -16,6 +16,7 @@
     "allow-save-settings",
     "allow-load-team-options",
     "allow-save-team-options",
+    "allow-save-old-settings",
     "allow-append-runs-log"
   ]
 }

@@ -9,6 +9,7 @@ fn main() {
             "save_settings",
             "load_team_options",
             "save_team_options",
+            "save_old_settings",
             "append_runs_log",
         ]),
     ))

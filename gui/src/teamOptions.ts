@@ -9,13 +9,29 @@ import type { Settings, Team } from "./model";
 /** assets/interface.json as this GUI was built with it: its whole-line // comments dropped, as the clients read them. */
 export const PI = JSON.parse(interfaceText.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")) as {
   import?: string[];
-  task: { entry: string; option?: string[] }[];
+  global_option?: string[];
+  setting?: { label: string; option: string[] }[];
+  task: { entry: string; label: string; option?: string[] }[];
   option: Record<string, Record<string, unknown>>;
 };
 
-/** Each team option and the settings file's Luxcavation task whose team it picks. */
+/** Each team option and the Luxcavation task of a version 20 settings file (luxcavation.<task>.team) whose team it picks. */
 export const TEAM_OPTIONS = { ExpTeam: "exp", ThreadTeam: "thread" } as const;
-type TeamOption = keyof typeof TEAM_OPTIONS;
+export type TeamOption = keyof typeof TEAM_OPTIONS;
+/** The team each option starts on in a new file (default_case): a teams[] id, null for none. */
+export type TeamPicks = Record<TeamOption, string | null>;
+export const NO_PICKS: TeamPicks = { ExpTeam: null, ThreadTeam: null };
+
+/** The teams a version 20 file picked for its Luxcavation tasks (#782): what a first team options file starts on. A pick
+ * that is not a team id (a file broken by hand) is none. */
+export function teamPicks(old: Record<string, unknown>): TeamPicks {
+  const of = (o: unknown, key: string) => (o && typeof o === "object" ? (o as Record<string, unknown>)[key] : undefined);
+  const pick = (task: string) => {
+    const team = of(of(old.luxcavation, task), "team");
+    return typeof team === "string" && team !== "" ? team : null;
+  };
+  return { ExpTeam: pick(TEAM_OPTIONS.ExpTeam), ThreadTeam: pick(TEAM_OPTIONS.ThreadTeam) };
+}
 
 /** Case 0, 「未選擇」: it sends nothing, so the task stops at its start and asks for a team. A team id is never "none" in
  * a file this GUI made (newId); a hand-made team of that id gets no case of its own. */
@@ -34,7 +50,7 @@ const entryOf = (key: TeamOption) => PI.task.find((t) => t.option?.includes(key)
 
 /** A team's label in the dropdown: its name and its in-game slot. The client shows it as it is: a name starting with $
  * would be read as a text key (MXU shows it without the $). */
-const label = (t: Team, lang: Settings["language"]) =>
+export const teamLabel = (t: Team, lang: Settings["language"]) =>
   lang === "zh_tw" ? `${t.name}（TEAMS #${t.game_team}）` : `${t.name} (TEAMS #${t.game_team})`;
 
 /** The previous file's cases and default_case of each team option; null when there is none or it does not read as one
@@ -60,10 +76,10 @@ function readPrevious(text: string | null): Partial<Record<TeamOption, Option>> 
  * already says it, or when there is neither a file nor a team (nothing to write). A file that does not read as one this
  * GUI wrote starts over, as a new one. Each option keeps the file's cases in
  * their order: a team there gets its name and slot of now (a rename changes only the label), a team gone stays,
- * marked deleted, and each new team goes last, in the team queue's order. A new file's default_case is the team the
- * settings file picks for that task (MXU starts a task it has no value for on it; MFAAvalonia starts on case 0), else
- * 「未選擇」; an existing file's stays. */
-export function teamOptionsText(previous: string | null, s: Settings): string | null {
+ * marked deleted, and each new team goes last, in the team queue's order. A new file's default_case is the team picks
+ * gives that option, the one a version 20 file picked (teamPicks; MXU starts a task it has no value for on it,
+ * MFAAvalonia starts on case 0), else 「未選擇」; an existing file's stays. */
+export function teamOptionsText(previous: string | null, s: Settings, picks: TeamPicks = NO_PICKS): string | null {
   const before = readPrevious(previous);
   if (previous === null && !s.teams.length) return null;
   const ids = new Set(s.teams.map((t) => t.id));
@@ -71,7 +87,7 @@ export function teamOptionsText(previous: string | null, s: Settings): string | 
   for (const key of Object.keys(TEAM_OPTIONS) as TeamOption[]) {
     const node = entryOf(key);
     const send = (id: string) => ({ [node]: { attach: { team: id } } });
-    const teamCase = (t: Team): Case => ({ name: t.id, label: label(t, s.language), pipeline_override: send(t.id) });
+    const teamCase = (t: Team): Case => ({ name: t.id, label: teamLabel(t, s.language), pipeline_override: send(t.id) });
     const gone = (c: Case): Case => {
       const base = Object.values(DELETED).reduce((l, mark) => (l.endsWith(mark) ? l.slice(0, -mark.length) : l), c.label);
       return { name: c.name, label: base + DELETED[s.language], pipeline_override: send(c.name) };
@@ -84,7 +100,7 @@ export function teamOptionsText(previous: string | null, s: Settings): string | 
     });
     const added = s.teams.filter((t) => t.id !== NONE && !kept.some((c) => c.name === t.id)).map(teamCase);
     const cases = [...kept, ...added];
-    const picked = s.luxcavation[TEAM_OPTIONS[key]].team;
+    const picked = picks[key];
     const default_case = old ? old.default_case : picked !== null && ids.has(picked) && picked !== NONE ? picked : NONE;
     const { cases: _cases, default_case: _default, ...placeholder } = PI.option[key];
     option[key] = { ...placeholder, default_case, cases };

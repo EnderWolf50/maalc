@@ -170,10 +170,6 @@ test("a card's price is its base price times 1, 2 or 3", () => {
   expect(gracePrice(10, "plus2")).toBe(180);
 });
 
-test("a new settings file forfeits a run whose wipe retries ran out instead of stopping the batch (#95)", () => {
-  expect(newSettings().run.after_retries).toBe("forfeit");
-});
-
 const SHARED: GiftList = {
   id: "g1", name: "Fire", order: GIFT_KEYWORDS, want: [9053], keep: [9071], gorder: { Burn: [9071, 9053] }, fusion_condition: "tier4",
 };
@@ -228,13 +224,6 @@ test("an import of something that is not a gift list throws", () => {
   expect(() => importGiftList("{", [], "")).toThrow();
   expect(() => importGiftList("[1]", [], "")).toThrow("not a gift list");
   expect(() => importGiftList("null", [], "")).toThrow("not a gift list");
-});
-
-test("a new settings file wins one EXP Luxcavation and three Thread Luxcavations, the dailies a day needs (#362)", () => {
-  const { exp, thread } = newSettings().luxcavation;
-  expect([exp.mode, thread.mode]).toEqual(["daily", "daily"]); // #431: the day's battles, read in the game
-  expect([exp.count, thread.count]).toEqual([1, 3]); // for count mode
-  expect([exp.consecutive, thread.consecutive]).toEqual([true, true]); // #375: on by default
 });
 
 test("a new team does not refresh the shop until the user sets a limit (the user, 2026-10-30)", () => {

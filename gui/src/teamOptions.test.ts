@@ -6,7 +6,7 @@ import cases from "../../tests/settings_cases.json";
 import fixture from "../../tests/team_options.json";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import { newSettings, newTeam, type Settings, type Team } from "./model";
-import { NONE, NONE_LABEL, PI, TEAM_OPTIONS, teamOptionsText } from "./teamOptions";
+import { NONE, NONE_LABEL, NO_PICKS, PI, TEAM_OPTIONS, teamOptionsText, teamPicks } from "./teamOptions";
 
 const team = (id: string, name: string, slot: number): Team => ({ ...newTeam(slot, name), id });
 const A = team("a", "Alpha", 1), B = team("b", "Beta", 2), C = team("c", "Gamma", 3);
@@ -51,16 +51,22 @@ test("a new order of the team queue leaves the cases where they are: nothing to 
   expect(teamOptionsText(first, settings([B, C, A], "zh_tw"))).toBeNull();
 });
 
-test("a first file's default_case is the team the settings file picks for that task; a later file keeps its own", () => {
+test("a first file's default_case is the team the version 20 file picked for that task; a later file keeps its own", () => {
   const s = settings([A, B]);
-  s.luxcavation.exp.team = "b";
-  const first = teamOptionsText(null, s)!;
+  const first = teamOptionsText(null, s, { ExpTeam: "b", ThreadTeam: null })!;
   expect([option(first).default_case, option(first, "ThreadTeam").default_case]).toEqual(["b", NONE]);
-  s.luxcavation.exp.team = "a";
-  s.luxcavation.thread.team = "b";
-  expect(teamOptionsText(first, s)).toBeNull();
-  s.luxcavation.exp.team = "gone"; // a pick the teams lack: 「未選擇」
-  expect(option(teamOptionsText(null, s)!).default_case).toBe(NONE);
+  expect(teamOptionsText(first, s, { ExpTeam: "a", ThreadTeam: "b" })).toBeNull();
+  expect(option(teamOptionsText(null, s, { ExpTeam: "gone", ThreadTeam: null })!).default_case).toBe(NONE); // not a team
+  expect(option(teamOptionsText(null, s)!).default_case).toBe(NONE); // a version 21 file has no pick
+});
+
+test("the picks of a version 20 file are its Luxcavation teams; a pick broken by hand is none (#782)", () => {
+  const old = { ...cases.valid, version: 20, ...cases.v20 } as Record<string, unknown>;
+  expect(teamPicks(old)).toEqual(NO_PICKS);
+  const lux = { exp: { ...cases.v20.luxcavation.exp, team: "b" }, thread: { ...cases.v20.luxcavation.thread, team: "a" } };
+  expect(teamPicks({ ...old, luxcavation: lux })).toEqual({ ExpTeam: "b", ThreadTeam: "a" });
+  expect(teamPicks({ ...old, luxcavation: { exp: { team: 3 }, thread: "x" } })).toEqual(NO_PICKS);
+  expect(teamPicks({ ...old, luxcavation: undefined })).toEqual(NO_PICKS);
 });
 
 test("nothing changed, or neither a file nor a team: nothing to write", () => {

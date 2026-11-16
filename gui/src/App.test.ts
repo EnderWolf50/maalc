@@ -3,9 +3,7 @@ import schema from "../../agent/settings.schema.json";
 import { TABS } from "./App";
 
 test("a problem in any settings section marks the tab that edits it", () => {
-  // run, luxcavation, charge_enkephalin: no tab edits them since their options went to the client (#779, #780, #781); the
-  // file keeps them, unread, until #782 drops them
+  // the header edits the language; how each task runs is the client's since version 21 (#782)
   const marked = TABS.flatMap((tab) => [...tab[3]]).sort();
-  const unread = ["version", "language", "run", "luxcavation", "charge_enkephalin"];
-  expect(marked).toEqual(schema.required.filter((k) => !unread.includes(k)).sort());
+  expect(marked).toEqual(schema.required.filter((k) => !["version", "language"].includes(k)).sort());
 });

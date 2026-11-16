@@ -71,6 +71,14 @@ export function saveSettings(text: string, expected: string | null): Promise<voi
   return Promise.resolve();
 }
 
+/** Keep a settings file of an older version beside the settings file, as it was, before its migration is written back
+ * (#782): config/settings.v<version>.json, written over when there is one (lib.rs save_old_settings). */
+export function saveOldSettings(version: number, text: string): Promise<void> {
+  if (tauri) return invoke("save_old_settings", { version, text });
+  localStorage.setItem(`settings.v${version}.json`, text);
+  return Promise.resolve();
+}
+
 /** The team options file's text (config/team_options.json, #780), null when there is none yet. */
 export const loadTeamOptions = (): Promise<string | null> =>
   tauri ? invoke("load_team_options") : Promise.resolve(localStorage.getItem("team_options.json"));

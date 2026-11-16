@@ -107,7 +107,23 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
 });
 
 test("parseSettings refuses a newer version", () => {
-  expect(() => parseSettings('{"version": 21}')).toThrow("newer");
+  expect(() => parseSettings('{"version": 22}')).toThrow("newer");
+});
+
+describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the valid file, its moved sections gone (#782)", () => {
+  const valid = parseSettings(JSON.stringify(cases.valid)).data; // its gift list cleaned, as any file's on load
+  for (const c of cases.migrate_v20 as { name: string; edits: Edit[] }[]) {
+    test(c.name, () => {
+      const old = applyEdits({ ...cases.valid, version: 20, ...cases.v20 }, c.edits);
+      const { data, migrated, old: read } = parseSettings(JSON.stringify(old));
+      expect([data, migrated, read]).toEqual([valid, true, old]);
+      expect(validate(data)).toEqual([]);
+    });
+  }
+
+  test("a version 21 file needs no migration and has no old file", () => {
+    expect(parseSettings(JSON.stringify(cases.valid))).toMatchObject({ migrated: false, old: null });
+  });
 });
 
 test.each(cases.too_old)("parseSettings refuses version $version as too old, in the agent's words (tests/settings_cases.json too_old)", ({ version, error }) => {
