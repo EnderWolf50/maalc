@@ -71,7 +71,7 @@ def test_every_gift_the_gui_shows_has_its_effect_in_english_and_chinese_as_runs(
     # every gift of the GUI's catalog, in its order; gui/src/GiftPopover.test.tsx checks the catalog itself has each one
     import llc_text
     effects, keywords = DATA["gift_effects"]["effects"], DATA["gift_effects"]["keywords"]
-    assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 466
+    assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 475  # 1.119.0 added 9292-9300
     for gid, e in effects.items():
         assert set(e) == {"en", "zh"}, gid
         for lang, runs in e.items():
