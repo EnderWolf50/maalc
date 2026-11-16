@@ -32,6 +32,8 @@ from urllib.request import urlopen
 
 import maa
 
+import build_resource_package
+
 PYTHON = ("https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
           "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3")
 # MaaFramework.dll from the EnderWolf50/MaaFramework fork: v5.14.3 plus two fixes. Batch OCR no longer
@@ -148,6 +150,14 @@ def mirror_repo(repo: Path, root: Path, child_exec: str) -> None:
             copy_file(src, root / src.name)
 
 
+def write_resource_manifest(root: Path, release: bool) -> None:
+    """root/resource/base/manifest.json (ADR 0012, #766), after mirror_repo, which drops it. A release lists the
+    published sources; a dev install lists none, so the agent never replaces a branch's files with the published ones."""
+    sources = build_resource_package.rp.SOURCES if release else []
+    manifest = build_resource_package.write_manifest(root / "resource" / "base", build_resource_package.today(), sources)
+    print(f"Resource package {manifest['version']}: {len(manifest['files'])} files, {len(sources)} sources")
+
+
 def mirror_maafw(wheel_bin: Path, root: Path, fixed_dll: bytes | None) -> None:
     maafw = root / "maafw"
     if fixed_dll is None:
@@ -200,6 +210,7 @@ if __name__ == "__main__":
         # never with the wheel's unpatched DLL.
         fixed_dll = fixed_framework_dll()
     mirror_repo(repo, install, "./python/python.exe" if release else Path(sys.executable).as_posix())
+    write_resource_manifest(install, release)
     mirror_maafw(wheel_bin, install, fixed_dll)
     for name in ("LICENSE", "NOTICE.md"):
         copy_file(repo / name, install / name)

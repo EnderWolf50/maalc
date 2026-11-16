@@ -10,6 +10,9 @@ node_modules/
 # OCR model, fetched by tools/fetch_ocr.py
 assets/resource/base/model/ocr/
 
+# The resource package's manifest is generated (tools/build_resource_package.py), never committed
+/assets/resource/base/manifest.json
+
 # Runtime output under <root>
 /debug/
 /logs/

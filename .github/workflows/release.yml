@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
   # Build (artifact only) when the release pipeline itself changes.
   pull_request:
-    paths: [.github/workflows/release.yml, tools/install.py, tools/release_draft.py, agent/main.py, tests/test_release_zip.py, tests/test_version.py]
+    paths: [.github/workflows/release.yml, tools/install.py, tools/build_resource_package.py, tools/release_draft.py, agent/main.py, agent/resource_package.py, tests/test_release_zip.py, tests/test_build_resource_package.py, tests/test_version.py]
   workflow_dispatch:
     inputs:
       tag:
@@ -42,7 +42,7 @@ jobs:
         working-directory: gui
       - run: uv run --frozen --no-dev python tools/fetch_ocr.py
       - run: uv run --frozen --no-dev python tools/install.py --release
-      - name: Check install/ (one copy of each MaaFramework binary, the fixed DLL where the clients load it)
+      - name: Check install/ (one copy of each MaaFramework binary, the fixed DLL where the clients load it, the resource package and its manifest)
         run: uv run --frozen pytest tests/test_release_zip.py
       - name: Zip install/ as maalc/
         run: |
