@@ -524,7 +524,7 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
-        resource_update.update(data_dir().parent, log)  # before the line below: it names the package this task runs on
+        resource_update.update(data_dir().parent, log, context.tasker)  # before the line below: it names the package this task runs on
         log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)

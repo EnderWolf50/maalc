@@ -33,9 +33,45 @@ def base(tmp_path, remote):
     return base
 
 
-def run(base):
+class Job:
+    def __init__(self, ok):
+        self.succeeded = ok
+
+    def wait(self):
+        return self
+
+
+class Tasker:
+    """MaaFramework's side of a reload, as far as the update uses it: `resource.clear()` and `post_bundle(path).wait()`.
+    `fail` names the calls that fail, by their number (1 = the first clear): a clear that returns False or a job that
+    fails; `raises` the calls that raise. `loads` is the bundle's files as each post_bundle found them."""
+
+    def __init__(self, fail=(), raises=()):
+        self.fail, self.raises, self.calls, self.loads = set(fail), set(raises), [], []
+
+    @property
+    def resource(self):
+        return self
+
+    def step(self, name):
+        self.calls.append(name)
+        n = len(self.calls)
+        if n in self.raises:
+            raise RuntimeError("the library is gone")
+        return n not in self.fail
+
+    def clear(self):
+        return self.step("clear")
+
+    def post_bundle(self, path):
+        ok = self.step("bundle")
+        self.loads.append(local_files(Path(path)))
+        return Job(ok)
+
+
+def run(base, tasker=None):
     lines = []
-    ru.update(base, lines.append)
+    ru.update(base, lines.append, tasker or Tasker())
     return "\n".join(lines)
 
 
@@ -74,13 +110,59 @@ def test_the_same_version_with_other_files_takes_the_published_ones(base, remote
     assert local_files(base)["data/a.json"] == NEW["data/a.json"]
 
 
-def test_a_part_the_program_does_not_apply_keeps_its_files_and_entries(base, remote):
-    # #772 adds image/ and pipeline/: until then a change there is neither downloaded nor written into the manifest
+def test_a_template_version_the_program_does_not_know_skips_image_and_pipeline_only(base, remote):
+    # #772: data/ still updates; image/ and pipeline/ keep their files and manifest entries, and nothing is reloaded
+    publish(remote, {**NEW, "image/t.png": b"png-2", "pipeline/p.json": b"{}"}, "2026.11.16", template=rp.TEMPLATE + 1)
+    before = rp.read_manifest(base)
+    tasker = Tasker()
+    said = run(base, tasker)
+    assert local_files(base) == {**NEW, "image/t.png": b"png-1"}
+    manifest = rp.read_manifest(base)
+    assert manifest["files"]["image/t.png"] == before["files"]["image/t.png"] and "pipeline/p.json" not in manifest["files"]
+    assert (manifest["version"], manifest["template"], manifest["format"]) == ("2026.11.16", before["template"], rp.FORMAT)
+    assert f"template {rp.TEMPLATE + 1}" in said and "image/ and pipeline/" in said and "skipped" in said
+    assert tasker.calls == []
+
+
+def test_a_template_the_program_knows_is_swapped_and_the_bundle_reloaded_once_on_the_new_files(base, remote):
+    publish(remote, {**NEW, "image/t.png": b"png-2", "pipeline/p.json": b"{}"}, "2026.11.16")
+    tasker = Tasker()
+    said = run(base, tasker)
+    assert tasker.calls == ["clear", "bundle"]  # the bundle is read after it is cleared, and the load is waited for
+    assert tasker.loads == [{**NEW, "image/t.png": b"png-2", "pipeline/p.json": b"{}"}]  # the swapped files, not the old
+    assert rp.read_manifest(base)["template"] == rp.TEMPLATE
+    assert "2026.11.01 -> 2026.11.16" in said and "reloaded" in said
+
+
+def test_a_change_of_data_only_reloads_nothing(base, remote):
+    publish(remote, {**NEW, "image/t.png": b"png-1"}, "2026.11.16")
+    tasker = Tasker()
+    run(base, tasker)
+    assert tasker.calls == []
+
+
+@pytest.mark.parametrize("fault, calls", [
+    (dict(fail=[1]), ["clear", "clear", "bundle"]),  # clear() refused (a load is still running): no bundle posted
+    (dict(fail=[2]), ["clear", "bundle", "clear", "bundle"]),  # the new bundle does not load
+    (dict(raises=[2]), ["clear", "bundle", "clear", "bundle"]),
+])
+def test_a_reload_that_fails_puts_the_previous_files_back_and_loads_them_again(base, remote, fault, calls):
+    tasker = Tasker(**fault)
+    publish(remote, {**NEW, "image/t.png": b"png-2", "pipeline/p.json": b"{}"}, "2026.11.16")
+    before = tree(base)
+    said = run(base, tasker)
+    assert tree(base) == before  # every part, data/ too: the version is one
+    assert tasker.calls == calls
+    assert tasker.loads[-1] == local_files(base)  # the second load is of the old files
+    assert "reload" in said and "previous" in said and "2026.11.16" in said
+    assert not (base.parent / ".update").exists()
+
+
+def test_a_reload_that_fails_twice_says_so_and_the_task_goes_on(base, remote):
     publish(remote, {**NEW, "image/t.png": b"png-2"}, "2026.11.16")
-    before = rp.read_manifest(base)["files"]["image/t.png"]
-    run(base)
-    assert local_files(base)["image/t.png"] == b"png-1"
-    assert rp.read_manifest(base)["files"]["image/t.png"] == before
+    before = tree(base)
+    said = run(base, Tasker(fail=[2, 4]))
+    assert tree(base) == before and "could not" in said
 
 
 @pytest.mark.parametrize("fault, reason", [
@@ -118,7 +200,7 @@ def test_a_format_the_program_does_not_know_is_skipped_and_logged(base, remote):
     publish(remote, NEW, "2026.11.16", format=rp.FORMAT + 1)
     before = tree(base)
     said = run(base)
-    assert tree(base) == before
+    assert tree(base) == before  # the template part, which it applies, has nothing to change: the version stays too
     assert f"format {rp.FORMAT + 1}" in said and "skipped" in said
 
 
@@ -194,7 +276,7 @@ def test_a_crash_at_any_point_of_the_swap_converges_on_the_next_run(base, remote
             (base / stale).unlink()
         replaces_until(monkeypatch, crash_at)
         with pytest.raises(Crash):
-            ru.update(base, lambda line: None)
+            ru.update(base, lambda line: None, Tasker())
         monkeypatch.undo()
         # the agent imports these at start: a crash must never leave one missing, whatever the next run does
         assert (base / "data" / "a.json").is_file() and (base / "data" / "b.json").is_file() and (base / "manifest.json").is_file()
