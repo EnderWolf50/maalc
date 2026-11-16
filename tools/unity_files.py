@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # Pillow is imported where an image is made: tools/game_data.
 BUNDLES = "raw/UnityCache"  # the bundles under .local/unpack/: <hash of the bundle name>/<content hash>/__data
 PLAYER_DATA = "apk-data/assets/bin/Data"  # the APK's player data under .local/unpack/
 INDEX = "out/sprite-index.tsv"  # every bundle's container entries (bundle_index)
-UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 and 1.118.1); the files carry a stripped version
+UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 to 1.119.0); the files carry a stripped version
 K = TypeVar("K")  # what a caller names a wanted sprite by
 
 

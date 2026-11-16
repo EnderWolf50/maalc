@@ -572,13 +572,14 @@ def test_a_greyed_refresh_button_with_no_count_is_not_pressed_again(context, mon
 
 def test_the_refresh_button_sweep_over_the_theme_pack_captures():
     # CODING_STANDARDS' sweep, #482: refresh_lit reads unlit the greyed buttons alone, with no count (HardLine1,
-    # RefreshGrey) or #319's `0/3` (Refresh0, which PackRefreshSpent reads too); `Refresh` alone (ThemePack) and 1/3, 2/3,
+    # RefreshGrey, WedgeRefreshed) or #319's `0/3` (Refresh0, which PackRefreshSpent reads too); `Refresh` alone (ThemePack) and 1/3, 2/3,
     # 3/3, 4/4 read lit. Off the theme pack page its box is dark on most captures, but PickThemePack asks it only on a
     # page page_guard took for ThemePack.
     lit = {path.stem: run_start_actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))}
-    assert [stem for stem, on in lit.items() if not on] == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey"]
+    assert [stem for stem, on in lit.items() if not on] == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey",
+                                                            "ThemePackWedgeRefreshed"]
     assert [stem for stem, on in lit.items() if on] == ["ThemePack", "ThemePackHardLine5", "ThemePackHardLineCover",
-                                                        "ThemePackMiracle", "ThemePackNormal", "ThemePackRefresh1"]
+                                                        "ThemePackMiracle", "ThemePackNormal", "ThemePackRefresh1", "ThemePackWedge"]
 
 
 def test_a_theme_pack_page_is_not_refreshed_by_a_spent_button_it_did_not_need(context, monkeypatch):
