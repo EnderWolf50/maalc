@@ -522,7 +522,7 @@ def mirror_task(context, monkeypatch, runs):
 
 @pytest.mark.parametrize("runs, why", [("FFF", "3 sinners of the deployment order alive, team 'A' needs 4"), ("FWW", "wipe retries used up")])
 def test_a_task_whose_settings_forfeit_every_run_stops_after_3_in_a_row(context, monkeypatch, runs, why):
-    # #560: a forfeited run does not count toward run.runs (as in AALC), so with no cap the bot started runs forever,
+    # #560: a forfeited run does not count toward the run cap (MirrorRuns, as in AALC), so with no cap the bot started runs forever,
     # each one spending starlight at the run start. The third forfeit in a row, either way, ends the task before a fourth.
     result, logged, started, lines = mirror_task(context, monkeypatch, runs)
     assert result is False

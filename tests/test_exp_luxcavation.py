@@ -384,7 +384,7 @@ def test_daily_mode_runs_on_the_options_the_client_sends_with_no_count():
 
 
 def test_count_mode_fights_the_count_the_client_sends():
-    # #781: ExpMode count, ExpCount 12: twelve won, the settings file's luxcavation.exp (daily mode, count 1) not read
+    # #781: ExpMode count, ExpCount 12: twelve won
     o = run_child(__file__)["x12"]
     assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, retries=0, consecutive=true, team=b"]
     assert o["succeeded"] and o["fights"] == [10, 2] and o["done"] == "EXP Luxcavation: 12 won"

@@ -250,7 +250,7 @@ def test_a_luxcavation_task_aims_at_the_days_battles_in_daily_mode_and_at_count_
 
 @pytest.mark.parametrize("key", ["exp", "thread"])
 def test_a_luxcavation_task_plays_by_the_retries_and_consecutive_the_client_sent(context, monkeypatch, key):
-    # #781: the settings file's luxcavation.<key> (retries 0, consecutive on) is not read
+    # #781: the retries and consecutive come from the client's options (the defaults are 0 and on)
     task = key.capitalize()
     ok, stops = lux_start(context, monkeypatch, key, f"{task}Retries=4", f"{task}Consecutive=No")
     lux = actions.RUN["lux"]

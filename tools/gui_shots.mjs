@@ -2,7 +2,7 @@
 // Stills of the settings GUI (gui/) rendered in a headless Edge or Chrome, for a design review or a PR's before/after.
 //
 //   pnpm --dir gui exec vite build; pnpm --dir gui exec vite preview --port 1420   (another shell: the built app)
-//   node tools/gui_shots.mjs --out <dir> [--scheme light|dark|both] [--only run,teams] [--lang en_us]
+//   node tools/gui_shots.mjs --out <dir> [--scheme light|dark|both] [--only teams,gifts] [--lang en_us]
 //                            [--settings FILE] [--url URL] [--width W --height H] [--scale 2] [--browser EXE]
 //   node tools/gui_shots.mjs --hold teams-full [--port 9222]   (keep that still's page open for a DevTools client)
 // A --hold stopped with a kill, not Ctrl-C, leaves its browser running until the next run of this tool stops it.
@@ -52,12 +52,12 @@ if (opt.hold && opt.port === "0") opt.port = "9222";
 const W = Number(opt.width), H = Number(opt.height), SCALE = Number(opt.scale);
 
 // The main tabs by their App.tsx TABS id (the tab's data-tab), so a still does not depend on the language. A build from before
-// data-tab is found by the tab's place, which is TABS's order there.
-const TAB = { run: 0, teams: 1, gifts: 2, deployment: 3, starlight: 4, themepacks: 5, events: 6, trials: 7, daily: 8 };
+// data-tab (2026-11-13) is found by the tab's place, which is TABS's order there: the Run options tab first, so teams is 1.
+// Since #776 there is no Run options or Daily tab: how each task runs is the client's task options.
+const TAB = { teams: 1, gifts: 2, deployment: 3, starlight: 4, themepacks: 5, events: 6, trials: 7 };
 
 /** Each still: page code run after the load (helpers in PAGE_HELPERS as `$`), and which settings it starts from. */
 const SHOTS = [
-  { name: "run-full", steps: `await $.tab("run", ${TAB.run});` },
   { name: "teams", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b");` },
   { name: "teams-full", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); $.openAll();` },
   // The panels as the page opens them: a closed one's disclosure triangle points right.
@@ -72,7 +72,6 @@ const SHOTS = [
   { name: "themepacks-images", steps: `await $.tab("themepacks", ${TAB.themepacks}); await $.pick("aside li", "Mine"); await $.click(".seg.view button:last-child");` },
   { name: "events", steps: `await $.tab("events", ${TAB.events});` },
   { name: "trials", steps: `await $.tab("trials", ${TAB.trials});` },
-  { name: "daily-full", steps: `await $.tab("daily", ${TAB.daily});` },
   // Save refused: two enabled teams on one TEAMS slot (validate.ts crossCheck), so the banner, the marked tab and field show.
   { name: "save-blocked", settings: "clash", steps: `await $.tab("teams", ${TAB.teams}); await $.click("header button.primary");` },
   // Unsaved changes: a team renamed and not saved, so the header shows what an edit leaves before Save.

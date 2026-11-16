@@ -38,6 +38,6 @@ status: accepted（修訂 ADR 0006、ADR 0010）
 - 設定 GUI 少了「執行選項」與「日常」兩頁，也不再在存檔時檢查目標層數對隊伍的規則：目標層數是 client 的任務選項，GUI 看不到。隊伍頁改放一行固定說明。
 - 設定檔升到版本 21，移除 `run`、`luxcavation`、`charge_enkephalin`（#782）；在那之前，這三段由 GUI 原封不動寫回，Agent 不讀。
 - 模板版本從 1 升到 2（`agent/resource_package.py` 的 `TEMPLATE`，#782）。這次 pipeline（新增 `pipeline/options.json` 的 `GlobalOptions` 節點）、`interface.json`（選項寫進入口節點與 `GlobalOptions` 的 `attach`）和 Agent（入口動作只從這兩個 `attach` 讀）一起改。版本 1 的程式拿到新的 pipeline，它的 `interface.json` 不送這些選項、Agent 也不讀；新的程式拿到版本 1 的 pipeline，就少了全域選項要寫進去的 `GlobalOptions` 節點。兩邊各自只套用和自己模板版本相同的資源包（ADR 0012），所以要加一。
-- 實機測試工具像 client 一樣送任務選項（`tools/client_override.py`、`bot.py run --option`）；`bot.py prep --set` 遇到搬走的鍵（`run.*`、`luxcavation.<任務>.*` 除了隊伍、`charge_enkephalin.count`）停下並指向 `--option`。
+- 實機測試工具像 client 一樣送任務選項（`tools/client_override.py`、`bot.py run --option`）；`bot.py prep --set` 遇到搬走的鍵（`run.*`、`luxcavation.<任務>.*`，隊伍也算、`charge_enkephalin.count`，以及整段 `--set run={...}`）停下並指向 `--option`。
 - MFAAvalonia 記錄任務送出的選項值時，只要有任何 `password` 輸入就整行遮掉；webhook 是 `password` 輸入，所以除錯時要看 Agent 自己記的 `options:` 那一行（webhook 只寫有沒有設定）。
 - 沒有在 MXU 或 MFAAvalonia 實際跑過；兩個 client 的行為都是讀原始碼得來的（#776「其他說明」），實機驗收在各張子 issue。

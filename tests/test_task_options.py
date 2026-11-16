@@ -19,9 +19,8 @@ import pytest
 
 from client_options import GLOBAL_DEFAULTS, TEAM_OPTIONS, TEAM_PICK, override, send
 from daily_child import bind, game_class, load, result, run_child, run_task, screen
-from test_settings import V20_NOTE, VALID, apply_edits, v20
+from test_settings import CASES, V20_NOTE, VALID, apply_edits, v20
 
-CASES = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
 LUX_KEYS = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}
 MIRROR_WHERE = "set it in the options of the MirrorDungeon task in the client's task list"
 WHERE = "set it in the options of the {} task in the client's task list"

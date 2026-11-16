@@ -61,7 +61,6 @@ const zh_tw = {
   "tab.trials": "試煉分數覆寫",
   loadError: "設定檔無法讀取，請修正或建立新的設定檔（會覆蓋原檔）：",
   newFile: "建立新的設定檔",
-  // run
   // plans
   name: "名稱",
   add: "新增",
