@@ -1,6 +1,7 @@
 """Run maalc headless from an install, and the chores around a live run.
 
     uv run python tools/live/bot.py run --install DIR --log run.log [--task MirrorDungeon[,ExpLuxcavation...]] [--port 16384]
+        [--option NAME=VALUE ...]
     uv run python tools/live/bot.py prep --install DIR [--source INSTALL] [--set KEY=VALUE ...]
     uv run python tools/live/bot.py awake [--minutes 240]
 
@@ -9,7 +10,11 @@ patched MaaFramework.dll) on the MuMu instance at `--port`, and writes every lin
 print to `--log`, each with its wall time (`HH:MM:SS.fff <line>`): the `[maalc]` lines and the controller's
 touch lines that `tools/live/evidence.py` reads. `--task A,B` posts several tasks up front, as a client queues its
 task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
-(`tools/live/queue.py detach`), as the maalc-live-test skill says.
+(`tools/live/queue.py detach`), as the maalc-live-test skill says. Each task goes with the override MXU would send
+(#778, `tools/client_override.py`): DIR's interface.json and its imports, every option at its default but those
+`--option NAME=VALUE` sets (a select's case, a switch's Yes or No, an input's text), the same values for every task of
+the list. A line per task says the values it used, `(default)` after one no `--option` set. An option, case or task
+interface.json lacks stops it, exit 1, before the device is touched.
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
 from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
@@ -39,6 +44,7 @@ TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
+import client_override  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
 
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
@@ -105,13 +111,28 @@ def stamped(cmd, log: Path, clock=clock) -> int:
     return code
 
 
-def run_tasks(t, tasks: list[str], say=print, sleep=time.sleep) -> list[str]:
-    """Post the whole list up front, as a client queues its task list (an account-level stop's post_stop leaves the
-    rest pending, unrun), then follow each in turn by its detail until it is done or the tasker has stopped, as MXU
-    does (G1: wait() and status go through a runner id a clear_cache drops), and return only once the tasker has
-    stopped, so the agent is not closed under a task still running: their states."""
+def plan(root: Path, tasks: list[str], options: list[str], say=print) -> list[tuple[str, str, list]]:
+    """(task, entry, override) of each task, as MXU would post it from root's interface.json and its imports with the
+    --option NAME=VALUE pairs (tools/client_override.py), and a line of the option values each task uses. An option,
+    case or task the interface lacks stops it before any task is posted."""
+    interface = client_override.load_interface(root / "interface.json", warn=lambda line: say(f"[run] {line}"))
+    try:
+        values = client_override.parse_options(interface, options)
+        jobs = [(name, *client_override.build(interface, name, values)) for name in tasks]
+    except ValueError as e:
+        raise SystemExit(f"[run] {e}: stopped before posting any task")
+    for name, _, _, used in jobs:
+        say(f"[run] {name} options: {', '.join(used) or 'none'}")
+    return [(name, entry, override) for name, entry, override, _ in jobs]
+
+
+def run_tasks(t, jobs: list[tuple[str, str, list]], say=print, sleep=time.sleep) -> list[str]:
+    """Post the whole list of (task, entry, override) up front, as a client queues its task list (an account-level
+    stop's post_stop leaves the rest pending, unrun), then follow each in turn by its detail until it is done or the
+    tasker has stopped, as MXU does (G1: wait() and status go through a runner id a clear_cache drops), and return only
+    once the tasker has stopped, so the agent is not closed under a task still running: their states."""
     states = []
-    for name, job in [(name, t.post_task(name)) for name in tasks]:
+    for name, job in [(name, t.post_task(entry, override)) for name, entry, override in jobs]:
         t0 = time.time()
         while (detail := job.get()) and not detail.status.done and t.running:
             sleep(1)
@@ -127,8 +148,13 @@ def run_tasks(t, tasks: list[str], say=print, sleep=time.sleep) -> list[str]:
     return states
 
 
-def tasker(root: Path, tasks: list[str], port: int) -> int:
-    """The tasks, run in this process in turn: MaaFramework from root/maafw, the agent as a child."""
+def tasker(root: Path, tasks: list[str], port: int, options: list[str]) -> int:
+    """The tasks, run in this process in turn: MaaFramework from root/maafw, the agent as a child. Their options are
+    checked before MaaFramework loads or the device is touched."""
+    def say(line):
+        print(line, flush=True)
+
+    jobs = plan(root, tasks, options, say)
     os.environ["MAAFW_BINARY_PATH"] = str(root / "maafw")
     from maa.agent_client import AgentClient
     from maa.resource import Resource
@@ -148,8 +174,8 @@ def tasker(root: Path, tasks: list[str], port: int) -> int:
     client.connect()
     t = Tasker()
     t.bind(res, ctl)
-    print(f"[run] start {','.join(tasks)} pid {os.getpid()} agent {agent.pid} install {root}", flush=True)
-    states = run_tasks(t, tasks, lambda line: print(line, flush=True))
+    say(f"[run] start {','.join(tasks)} pid {os.getpid()} agent {agent.pid} install {root}")
+    states = run_tasks(t, jobs, say)
     client.disconnect()
     agent.terminate()
     return 0 if set(states) == {"succeeded"} else 1
@@ -202,6 +228,8 @@ def main(argv=None) -> int:
         p.add_argument("--install", type=Path, required=True)
         p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
         p.add_argument("--port", type=int, default=16384)
+        p.add_argument("--option", action="append", default=[], metavar="NAME=VALUE",
+                       help="a task or global option of interface.json, as the client sets it; repeatable")
         if name == "run":
             p.add_argument("--log", type=Path, required=True)
     p = sub.add_parser("prep")
@@ -213,9 +241,11 @@ def main(argv=None) -> int:
 
     if a.command == "run":
         root = a.install.resolve()
-        return stamped([sys.executable, "-u", __file__, "tasker", "--install", str(root), "--task", a.task, "--port", str(a.port)], a.log)
+        options = [arg for pair in a.option for arg in ("--option", pair)]
+        return stamped([sys.executable, "-u", __file__, "tasker", "--install", str(root), "--task", a.task, "--port", str(a.port),
+                        *options], a.log)
     if a.command == "tasker":
-        return tasker(a.install, a.task.split(","), a.port)
+        return tasker(a.install, a.task.split(","), a.port, a.option)
     if a.command == "prep":
         print(prep(a.install, a.source or main_checkout() / "install", a.set).get("run"))
     elif a.command == "awake":
