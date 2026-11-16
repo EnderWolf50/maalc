@@ -21,7 +21,7 @@ from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, T
                      text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
-from team_queue import pick_team
+from team_queue import headed, pick_team, to_head
 
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
@@ -57,6 +57,11 @@ class PlanRun(CustomAction):
     Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
     the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False), and
     so do settings that forfeit run after run (the stop procedure, settlement.forfeits_stop).
+
+    The task's start team (the client's MirrorStartTeam, kept by TaskStart, #805) is at the head of the queue the
+    task's first new run picks from (team_queue.headed), and is written there once that run opens (team_queue.to_head):
+    a task that ends here with nothing left to do, or backs out to read the Modules, leaves the file alone. A start
+    team whose usage does not fit the run is passed over as the queue passes over any team, and the log says so.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -81,7 +86,8 @@ class PlanRun(CustomAction):
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
-        team = pick_team(settings, difficulty)
+        start = TASK.get("start_team")
+        team = pick_team(headed(settings, start) if start else settings, difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:
@@ -103,6 +109,13 @@ class PlanRun(CustomAction):
         else:
             log(f"new run: Modules {modules} >= {settlement.CLAIM_COST}")
         RUN.clear()
+        if start := TASK.pop("start_team", None):
+            log(to_head(ROOT, start))
+            first = next((t for t in settings["teams"] if t["id"] == start), None)  # None: deleted since the start
+            if first and team["id"] != start:
+                why = first["usage"] if first["enabled"] else "disabled"
+                log(f"start team {first['name']!r} (MirrorStartTeam) is {why}: a {difficulty} run passes over it, and "
+                    "it keeps its place in the team queue")
         # planned: the run's team is known (picked here, or after a restart the queue's, current_run), so the claim may
         # move it to the end of the queue and runs.jsonl names it.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"], run["target_floor"])

@@ -89,6 +89,51 @@
           }
         }
       ]
+    },
+    "MirrorStartTeam": {
+      "type": "select",
+      "label": "$MirrorStartTeam",
+      "description": "$MirrorStartTeam_description",
+      "default_case": "queue",
+      "cases": [
+        {
+          "name": "queue",
+          "label": "$MirrorStartTeam_queue"
+        },
+        {
+          "name": "a",
+          "label": "Team a（TEAMS #1）",
+          "pipeline_override": {
+            "MirrorDungeon": {
+              "attach": {
+                "start_team": "a"
+              }
+            }
+          }
+        },
+        {
+          "name": "b",
+          "label": "Team b（TEAMS #2）",
+          "pipeline_override": {
+            "MirrorDungeon": {
+              "attach": {
+                "start_team": "b"
+              }
+            }
+          }
+        },
+        {
+          "name": "gone",
+          "label": "Team gone（TEAMS #5）（已刪除）",
+          "pipeline_override": {
+            "MirrorDungeon": {
+              "attach": {
+                "start_team": "gone"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

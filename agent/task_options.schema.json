@@ -29,7 +29,8 @@
         "stop_when_weekly_bonus_out": { "title": "MirrorStopWhenBonusOut", "type": "boolean" },
         "starlight_unaffordable": { "title": "MirrorStarlightUnaffordable", "enum": ["skip", "stop"] },
         "wipe_retries": { "title": "MirrorWipeRetries", "type": "integer", "minimum": 0 },
-        "after_retries": { "title": "MirrorAfterRetries", "enum": ["forfeit", "stop"] }
+        "after_retries": { "title": "MirrorAfterRetries", "enum": ["forfeit", "stop"] },
+        "start_team": { "title": "MirrorStartTeam", "description": "the team this task starts from: a teams[] id of the settings file, a case of the team options file the settings GUI writes (config/team_options.json, #805); its case 0, follow the team queue, sends nothing. Any type passes, as a value the agent cannot read (not a string, or empty) is following the queue too (task_options.options); a team deleted or disabled stops the task at its start (task_options.start_team_errors)" }
       },
       "if": { "properties": { "runs_limited": { "const": true } }, "required": ["runs_limited"] },
       "then": { "required": ["runs"] }

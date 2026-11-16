@@ -4,7 +4,7 @@
 
 ## 1. 總則
 
-- 隊伍、方案、飾品清單與覆寫表放在一份設定檔 `<root>/config/settings.json`，由自製設定 GUI（`gui/`，Tauri 2 + React/TypeScript）寫入，Agent 讀取。理由見 [ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)。（#19，2026-10-14 定案）唯一的例外是隊伍佇列：Agent 在 bot 領到獎勵後把那一隊移到 `teams` 最後，只改順序（第 9 節「輪替」，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。
+- 隊伍、方案、飾品清單與覆寫表放在一份設定檔 `<root>/config/settings.json`，由自製設定 GUI（`gui/`，Tauri 2 + React/TypeScript）寫入，Agent 讀取。理由見 [ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)。（#19，2026-10-14 定案）唯一的例外是隊伍佇列：Agent 在 bot 領到獎勵後把那一隊移到 `team_queue` 最後，鏡牢任務有起頭隊伍時在第一局新局前把它移到第一，只改佇列（第 9 節「輪替」，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）。
 - 每個任務怎麼跑的單一的值（難度、目標層數、局數上限……）是 MXU／MFAAvalonia 的**任務選項**，每個任務都用到的 4 個是**全域選項**，定義在手寫的 `interface.json`，值存在 client 的設定裡，隨任務送給 Agent（第 5 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)）。執行仍在 MXU 或 MFAAvalonia：PI 用 `agent.child_exec` 啟動 Agent，Agent 在任務開始時讀任務選項與設定檔。（#6、#19，2026-10-14 定案；#776、#779，2026-11-16）
 - 第一階段（A1）的 GUI 只編輯設定，不執行 bot。之後 GUI 可能也負責執行（A2）；設定檔格式不得因此改變。（#19，2026-10-14 定案）
 - 方案與隊伍數量不限，名稱由使用者自取。方案與隊伍各有一個 id，由 GUI 產生，不隨改名或排序改變；所有引用都用 id。（#19，2026-10-14 定案）
@@ -59,7 +59,7 @@
     3. 以前主要體系以外、不在保留名單的飾品一律是合成材料；現在它們是清單上的 `drop`（仍可當材料或出售），和「認不出是哪個飾品」的格子（保守地視為 `keep`）不同。殘影不算無體系飾品，只有 `keep_gifts` 名列的才進 `keep`，其餘仍是 `drop`，照舊當材料。
     4. 過渡期：購買（#298）、出售與一般合成（#299）、配方合成（#300）都已照清單做。這段期間不發版。
     5. Agent 不寫回設定，在記憶體裡遷移；GUI 讀到版本 13 以前的檔案遷移後寫回。舊版 Agent 讀到版本 14 會報「比自己新」。
-- 只有 GUI 寫設定檔；Agent 只在領獎後改隊伍佇列（第 9 節「輪替」，#501、#803）。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
+- 只有 GUI 寫設定檔；Agent 只改隊伍佇列：領獎後，以及鏡牢任務的起頭隊伍（第 9 節「輪替」，#501、#803、#805）。寫入必須先寫暫存檔再改名，避免寫到一半損毀。（#6、#19，2026-10-14 定案）
 - 檢查分兩層。schema 負責結構檢查：（#19，2026-10-14 定案）
   - 型別、列舉值、數字範圍；
   - 出戰順序的罪人不重複（`uniqueItems`）；
@@ -109,7 +109,7 @@
 
 ## 5. 鏡牢任務選項與全域選項
 
-這組值不在設定檔，是 MXU／MFAAvalonia 的任務選項（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#776、#779）：鏡牢任務的 10 個在任務清單裡、鏡牢任務旁邊設定；4 個全域選項每個任務都會用到，MXU 在設定頁的「全域選項」區塊設定、所有實例共用一份，MFAAvalonia 在任務清單的全域選項項目設定、每個實例各一份。03 與 06 章說的「全域」設定就是這一組。版本 20 的設定檔的 `run` 有同名的鍵，版本 21 移除（#782）。（#19）
+這組值不在設定檔，是 MXU／MFAAvalonia 的任務選項（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#776、#779）：鏡牢任務的 11 個在任務清單裡、鏡牢任務旁邊設定；4 個全域選項每個任務都會用到，MXU 在設定頁的「全域選項」區塊設定、所有實例共用一份，MFAAvalonia 在任務清單的全域選項項目設定、每個實例各一份。03 與 06 章說的「全域」設定就是這一組。版本 20 的設定檔的 `run` 有同名的鍵，版本 21 移除（#782）。（#19）
 
 | 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
 |---|---|---|---|---|---|
@@ -122,6 +122,7 @@
 | 星光買不起時 | `MirrorStarlightUnaffordable` | `starlight_unaffordable` | 選擇：`skip` 跳過這個加成／`stop` 停止任務（見第 7 節） | `skip` | #9、#19 |
 | 全滅重打次數 N | `MirrorWipeRetries` | `wipe_retries` | 整數輸入 ≥ 0：同一場遭遇戰最多重打幾次 | 2 | #16 |
 | 重打用完後 | `MirrorAfterRetries` | `after_retries` | 選擇：`forfeit` 放棄這局（已通過第 5 層就在結算視窗 Claim、隊伍照常移到佇列最後，沒過第 5 層則不領獎勵、佇列不動）／`stop` 停止 | `forfeit` | #16、#95 |
+| 這次從哪一支隊伍開始 | `MirrorStartTeam` | `start_team` | 選擇，case 由隊伍選項檔提供（第 12 節）：`queue`「照隊伍佇列」不送值；其餘是 `teams[]` 的 id，任務開第一局新局前把它排到隊伍佇列第一（第 9 節「輪替」）。說明寫明 client 會記住選擇、平常留「照隊伍佇列」、停用或已刪除的隊伍會讓任務停下、新增或改名隊伍後要重開 client。Agent 讀不懂的值（不是字串、空字串）當成「照隊伍佇列」 | 「照隊伍佇列」 | #805 |
 | 每層最多刷新主題包 | `MirrorThemePackRefresh` | `theme_pack_refresh` | 選擇：`all` 全用／`once` 用一次／`none` 不用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
 | 失敗通知 webhook | `WebhookUrl`（全域） | `webhook_url` | 文字輸入（`password`，client 遮住並加密存）：停止時送出摘要的網址；空白 = 不送 | 空白 | #14 |
 | 自動同意使用者條款 | `AutoAcceptTerms`（全域） | `auto_accept_terms` | 開關。開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
@@ -135,6 +136,7 @@
 - 選擇型與開關的預設 case 放第一個，`default_case` 也指它：MFAAvalonia 的任務選項一律從第 0 個 case 開始。之後加 case 只加在最後，MFAAvalonia 存的是索引（ADR 0013）。開關的 case 叫 `Yes`／`No`：MFAAvalonia 看名字畫開關。輸入用 `pipeline_type: "int"` 送整數，`verify` 只用 JavaScript 與 .NET 都認得的簡單正則；MXU 不擋 `verify` 不過的值，打錯的整數讓那一筆整個不送，Agent 不信任 `verify`。巢狀的 `MirrorRuns` 只列在 `Yes` 底下，不另外列進任務的選項。`tests/test_interface_options.py` 檢查這些規則，以及每個 case 與預設經 `tools/client_override.py` 產生的值都通過 Agent 的 schema。
 - 每個任務的入口動作（`TaskStart`，以及繼承它的 `LuxStart`、`ChargeStart`）在點任何東西之前讀一次 `GlobalOptions` 的 `attach`，鏡牢任務再加 `MirrorDungeon` 的，日常任務加自己入口節點的（第 12 節），依 `agent/task_options.schema.json` 檢查型別、範圍和必填；之後所有讀這些值的地方都從那裡拿（`agent/task_options.py`），沒有「讀不到就用設定檔」的退路。任務開始時記一行 `options: ...`，列出讀到的值，webhook 只寫 `(set)`／`(not set)`。（#777、#779）
 - 少一個值、型別或範圍不對：任務在點任何東西之前結束，記一行 `stop: Invalid task options:`，每項寫選項名稱與鍵、收到的值（沒送就是 `not sent`）和要去哪裡改。鏡牢任務失敗結束；日常任務走停止程序。（#779）
+- 起頭隊伍（`MirrorStartTeam`）：鏡牢任務開始時，送來的 id 不在設定檔的 `teams` 裡（隊伍已刪除，隊伍選項檔仍留著它的 case），或那支隊伍停用，就在點任何東西之前走停止程序（有設定就送 webhook），記一行 `stop: Invalid task options:`，訊息點名選項和隊伍：`MirrorStartTeam (start_team): team '<id>' was deleted in the settings GUI; pick another team, or 「照隊伍佇列」 (follow the team queue), in the options of the MirrorDungeon task in the client's task list`，停用時是 `team '<隊名>' (id '<id>') is disabled; enable it in the settings GUI, or pick another team, ...`。（#805）
 - 目標層數大於 5 時（第 6 層起要求這一局每一層都是困難）：難度不能是 `normal`，每一支啟用的隊伍（輪替只用啟用的隊伍）的 `hard_from_floor` 必須是 1（關閉也不行），`usage` 不能是 `normal_only`。鏡牢任務開始時對設定檔的隊伍檢查，不符就在點任何東西之前失敗，訊息指出選項或隊伍（`MirrorDifficulty`、`teams/<i>/usage`、`teams/<i>/hard_from_floor`）；每局開始前 `PlanRun` 再對當下的隊伍檢查一次，存檔可能改了它們。GUI 看不到目標層數，不在存檔時檢查；隊伍頁在用途旁放一行固定說明。（#385、#777、#779）
 
 規則：
@@ -295,6 +297,7 @@
 
 - `team_queue` 就是隊伍佇列：`teams` 每個 id 各一次，順序就是輪到的先後。`teams` 的順序只是隊伍清單的顯示順序，選隊不看它。每一局由佇列裡第一支啟用、用途符合這局難度的隊伍出戰；用途不符或停用的隊伍跳過，留在原位。沒有任何可用的隊伍就以成功結束任務。（#9、#19、#364、#501、#803，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
 - bot 看到某隊完成一局並領到獎勵後，Agent 重新讀設定檔，把那一隊移到 `team_queue` 最後再寫回，`teams` 的順序與其他內容不動；放棄、停止，以及推不回隊伍的接續局都不動。啟用的隊伍因此依序各跑一局、循環下去。磁碟上的檔還是版本 20、21 時（GUI 還沒寫回），它的佇列就是 `teams` 的順序：Agent 在 `teams` 裡移動，照原本的版本寫回（第 2 節）。（#501、#803，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）
+- 鏡牢任務的起頭隊伍（任務選項 `MirrorStartTeam`，第 5 節）：任務要開第一局新局時，入口頁的 `PlanRun` 把它當成佇列第一來選隊；這一局確定要開（腦啡肽模組的檢查通過、按 Enter 之前），Agent 才把它移到 `team_queue` 第一，寫法和領獎後相同（版本 20、21 的檔在 `teams` 裡移動），記一行 `team queue: start team '<隊名>' (MirrorStartTeam) to the head`，本來就在第一時是 `... is already at the head`。沒開局就結束任務（沒事可做，例如每週獎勵用完就停），或先回 Drive 頁讀腦啡肽模組的那一趟，檔案不動。移到第一等於把排在它前面的隊伍依序移到最後，所以 GUI 的合併照下面的做法就對。任務開始時已經有一局在跑（Agent 重開、接續暫停的局、領上一局的獎勵）：那一局照移動前的佇列推回隊伍，起頭隊伍等這個任務的第一局新局才排。起頭隊伍的用途不符合這一局的難度：照常往後找第一支符合的隊伍，記一行 `start team '<隊名>' (MirrorStartTeam) is <usage>: a <難度> run passes over it, and it keeps its place in the team queue`，它留在佇列第一。只排一次：之後的局照佇列輪替。client 會記住選擇，所以每次開始這個任務都會再排一次。（#805，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
 - 隊伍清單的拖曳與 ↑↓ 只改 `teams` 的順序，清單不標順位；佇列在隊伍頁的「隊伍佇列」區塊顯示與調整（#804）。新增的隊伍加在 `teams` 與 `team_queue` 的最後；刪除的隊伍從兩者移除，復原時兩邊都回到原位。（#803）
 - 「隊伍佇列（每局輪替）」區塊在隊伍清單與隊伍編輯區之上，照 `team_queue` 列出每支隊伍：順位、名稱、遊戲內欄位（TEAMS #N）和用途（「都可」也標，隊伍清單只標限定的）。停用的隊伍變暗、標「停用」，留在原位。困難的下一局是佇列裡第一支啟用、用途可跑困難的隊伍，普通也一樣：兩個是同一支時只標「下一局」，不同時分別標「下一局（困難）」與「下一局（普通）」，哪個難度沒有可用的隊伍就不標那個。拖曳與 ↑↓ 只改 `team_queue`。Agent 改了佇列，區塊在設定視窗下一次讀檔後照新順序顯示（下一條的合併）。`team_queue` 裡不是任何隊伍的 id 自成一列、標紅，點這個問題會跳到那一列。區塊內的說明：領到獎勵的隊伍移到最後；鏡牢任務選項「這次從哪一支隊伍開始」可以指定起頭（#805）。（#804）
 - GUI 開著時 Agent 改了設定檔：GUI 每 2 秒、視窗回到前景與存檔前都重新讀檔；沒有未儲存的修改就直接採用新的檔案，有的話保留修改，再把 Agent 移到 `team_queue` 最後的隊伍也移到修改後佇列的最後，所以存檔不會蓋掉 Agent 寫的佇列，使用者還沒存的清單排序也留著。檔案被刪掉時保留編輯內容，存檔時重新寫入；開啟時沒有檔案、之後才出現的，以新設定檔為基準合併。GUI 與 Agent 寫入前都先確認檔案仍是自己上次讀到的內容，不是就重新讀檔再合併（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。狀態列顯示「設定檔在外部被改過，已重新讀取」或「設定檔不見了，儲存時會重新寫入」；存檔重試 3 次仍被拒（檔案一直被改動，或讀不懂），顯示「沒有儲存：設定檔一直在外部被改動，或讀不懂」，什麼都不寫。編輯中的隊伍被移走時，右邊仍顯示同一隊。（#501）
@@ -360,15 +363,16 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
   - 沒送值（選了「未選擇」，或選單是空的）：`ExpTeam (team): no team picked; pick one in the options of the ExpLuxcavation task in the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)`。
   - 送來的 id 不在設定檔的 `teams` 裡（隊伍已刪除）：`ExpTeam (team): team '<id>' was deleted in the settings GUI; pick another in the options of the ExpLuxcavation task in the client's task list`。紐本相同，選項是 `ThreadTeam`。
   - GUI 看不到 client 選的隊伍，存檔時不檢查。
-- **佔位定義**：`interface.json` 的 `ExpTeam`、`ThreadTeam` 有標題和說明（說明寫「先在設定視窗建立隊伍，存檔後重開 client」），`cases` 是空的。頂層的 `import` 引入 `config/team_options.json`。檔案不存在時兩個 client 都只記一行警告、照常載入，下拉選單是空的，任務什麼都不送。
-- **隊伍選項檔** `config/team_options.json`：設定視窗寫（`gui/src/teamOptions.ts`）。兩個選項各一份完整定義，和佔位定義相同，只換 `cases` 與 `default_case`：MXU 的引入是整個選項取代，MFAAvalonia 只換 `cases`。
-  - 第 0 個 case 是「未選擇」（名稱 `none`，標籤 `$LuxTeam_none`），不送值。
-  - 之後每支隊伍一個 case：名稱是隊伍 id，標籤是隊伍名稱加 `TEAMS #N`（`隊伍 A（TEAMS #3）`，英文介面 `Team A (TEAMS #3)`），override 寫 `team: <id>`。
+- **佔位定義**：`interface.json` 的 `ExpTeam`、`ThreadTeam` 有標題和說明（說明寫「先在設定視窗建立隊伍，存檔後重開 client」），`cases` 是空的；鏡牢任務的 `MirrorStartTeam`（第 5 節，#805）只有第 0 個 case「照隊伍佇列」，`default_case` 也是它。頂層的 `import` 引入 `config/team_options.json`。檔案不存在時兩個 client 都只記一行警告、照常載入，兩個隊伍下拉選單是空的、起頭隊伍只有「照隊伍佇列」，任務什麼都不送。
+- **隊伍選項檔** `config/team_options.json`：設定視窗寫（`gui/src/teamOptions.ts`）。`ExpTeam`、`ThreadTeam`、`MirrorStartTeam` 三個選項各一份完整定義，和佔位定義相同，只換 `cases` 與 `default_case`：MXU 的引入是整個選項取代，MFAAvalonia 只換 `cases`。
+  - 第 0 個 case 不送值：`ExpTeam`、`ThreadTeam` 是「未選擇」（名稱 `none`，標籤 `$LuxTeam_none`），`MirrorStartTeam` 是「照隊伍佇列」（名稱 `queue`，標籤 `$MirrorStartTeam_queue`，`default_case` 一律是它）。
+  - 之後每支隊伍一個 case：名稱是隊伍 id，標籤是隊伍名稱加 `TEAMS #N`（`隊伍 A（TEAMS #3）`，英文介面 `Team A (TEAMS #3)`），override 寫入那個任務入口節點的 `attach`：經驗本、紐本寫 `team: <id>`，鏡牢寫 `start_team: <id>`。
+  - 已經存在、但沒有某個選項的檔（#805 之前寫的檔沒有 `MirrorStartTeam`）：下次寫檔時補上那個選項，當成新檔的選項（第 0 個 case 加上現有的每支隊伍，照隊伍清單的順序）；其他選項的 case 與 `default_case` 不變。
   - **只往後加**：MFAAvalonia 存的是 case 的索引，MXU 存名稱，插入、重排或刪除會讓選好的值悄悄變成別隊或「未選擇」。新隊伍加在最後；順序是這個檔原本的順序，不跟隊伍佇列走（Agent 每次領獎都改佇列，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。刪掉的隊伍保留它的 case，標籤後面加「（已刪除）」（英文 ` (deleted)`），override 仍送它的 id，Agent 就停下。改名、改 `TEAMS #N` 只改標籤。標籤用設定視窗當下的語言。
   - 第一次產生時（檔案不存在，或讀不懂），`default_case` 是遷移前的版本 20 設定檔裡那個任務的 `luxcavation.<task>.team`（同一次開啟裡遷移過的才有；版本 21 的檔沒有，就是「未選擇」），它不在 `teams` 裡或沒選也是「未選擇」；之後沿用檔案裡的。MXU 對還沒存過值的任務用 `default_case`；MFAAvalonia 的任務選項一律從第 0 個 case 開始，停在「未選擇」。
   - 存檔成功後與啟動時（設定檔通過檢查時）產生，內容有變才寫，寫法和設定檔一樣：先寫暫存檔再改名（`save_team_options`）。沒有檔案也沒有隊伍時不寫。內容變了，狀態列說一次：「隊伍清單已更新：重新開啟 MXU／MFAAvalonia 後，任務選項的隊伍下拉選單才會更新。」存檔時是「已儲存。」接著這句。
   - 不做重新整理按鈕：兩個 client 執行中都不重讀 `interface.json`，改了隊伍要重開 client。
-- `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔（來源沒有就刪掉目的地的），`bot.py run --option ExpTeam=<隊伍 id>` 從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
+- `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔（來源沒有就刪掉目的地的），`bot.py run --option ExpTeam=<隊伍 id>`（鏡牢的 `--option MirrorStartTeam=<隊伍 id>` 也是）從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
 
 ### 版本 20 的 `luxcavation` 與 `charge_enkephalin`
 
@@ -380,8 +384,8 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 
 | 檔案 | 寫入者 | 內容 | 用途 | 來源 |
 |---|---|---|---|---|
-| `<root>/config/settings.json` | GUI；Agent 只改 `team_queue` | 本章的使用者設定；`team_queue` 就是隊伍佇列 | Agent 在任務開始時讀取；領獎後把那一隊移到佇列最後 | #19、#501、#803 |
-| `<root>/config/team_options.json` | GUI | 隊伍選項檔：`ExpTeam`、`ThreadTeam` 的完整定義，每支隊伍一個 case（第 12 節） | `interface.json` 引入，client 啟動時讀，成為經驗本與紐本的隊伍下拉選單 | #780 |
+| `<root>/config/settings.json` | GUI；Agent 只改 `team_queue` | 本章的使用者設定；`team_queue` 就是隊伍佇列 | Agent 在任務開始時讀取；領獎後把那一隊移到佇列最後，鏡牢任務的起頭隊伍在第一局新局前移到第一 | #19、#501、#803、#805 |
+| `<root>/config/team_options.json` | GUI | 隊伍選項檔：`ExpTeam`、`ThreadTeam`、`MirrorStartTeam` 的完整定義，每支隊伍一個 case（第 12 節） | `interface.json` 引入，client 啟動時讀，成為經驗本與紐本的隊伍下拉選單和鏡牢的起頭隊伍下拉選單 | #780、#805 |
 | `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算每層時間上限；不用於接續判斷 | #14、#19 |
 | `<root>/logs/evidence/<時間>/` | Agent | 停止時保存的證據 | 除錯與通知 | #14、#19 |
 

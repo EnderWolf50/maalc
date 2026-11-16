@@ -2,7 +2,9 @@
 queue order. The order of `teams` is the team list's, the user's to arrange in the settings GUI; no pick looks at it.
 
 A new run plays the first enabled team whose usage fits its difficulty. Once the bot saw that team claim, the team moves
-to the end of the queue (requeue): the one write the agent makes to the settings file.
+to the end of the queue (requeue); a Mirror Dungeon task given a start team picks its first new run with that team at
+the head (headed) and writes it there once the run opens (to_head, #805). These moves are the one write the agent makes
+to the settings file.
 """
 
 import contextlib
@@ -29,6 +31,14 @@ def pick_team(settings, difficulty):
     Skipped teams keep their place.
     """
     return next((t for t in queued(settings) if t["enabled"] and difficulty in USAGE_FITS[t["usage"]]), None)
+
+
+def headed(settings, team_id):
+    """settings with team team_id at the head of the queue, as to_head writes it; as they are when the queue lacks it."""
+    queue = settings["team_queue"]
+    if team_id not in queue:
+        return settings
+    return {**settings, "team_queue": [team_id, *(i for i in queue if i != team_id)]}
 
 
 def resumed_team(settings, difficulty):
@@ -64,6 +74,31 @@ def requeue(root, team_id):
     if teams is None:
         return f"team queue: {team_id!r} is already last or no longer listed, the queue stays"
     return f"team queue: {team_id!r} to the end, next {teams[0]['id']!r}"
+
+
+def to_head(root, team_id):
+    """MirrorDungeon's start team (the client's MirrorStartTeam, #805, ADR 0014): before the task's first new run picks
+    its team, move team team_id to the head of the queue, written as a claim's move to the end is. Moving it to the head
+    is moving each team before it to the end, in turn, so the settings GUI merges it as it merges claims (movedToEnd).
+
+    Returns a line for the log.
+    """
+    found = None  # the team, as the file has it
+
+    def head(teams):
+        nonlocal found
+        i = next((i for i, t in enumerate(teams) if t["id"] == team_id), None)
+        found = None if i is None else teams[i]
+        return [teams[i], *teams[:i], *teams[i + 1:]] if i else None
+
+    try:
+        moved = _reorder(root, head)
+    except UNUSABLE as e:
+        return f"team queue not written ({e!r}): start team {team_id!r} (MirrorStartTeam) keeps its place"
+    if found is None:
+        return f"team queue: start team {team_id!r} (MirrorStartTeam) is no longer listed, the queue stays"
+    name = found.get("name", team_id)
+    return f"team queue: start team {name!r} (MirrorStartTeam) {'to the head' if moved else 'is already at the head'}"
 
 
 def migrate_cursor(root, address):
