@@ -86,7 +86,7 @@
     // The game's own update notices mid-run (strings of the client, EN_MainUIText; no capture, so both ROIs are wide):
     // "A new download has been added. The game will be closed ..." / "... Returning to the title screen." and
     // "Version update available. Please download new resources and try again.". Before PopupButton, which would press
-    // their one button and leave the bot on a closed game. AcceptUpdate presses it (run.auto_download, else stops) and
+    // their one button and leave the bot on a closed game. AcceptUpdate presses it (the global option AutoDownload, else stops) and
     // restarts the game (RecoverL3); the title's download dialog follows.
     "UpdateDialog": {
         "recognition": "And",
@@ -117,7 +117,7 @@
         "custom_action": "AcceptUpdate"
     },
     // The title's User Agreement (live 2026-10-21, a new account: tests/screens/UserAgreement.png): two "I agree."
-    // boxes, Confirm lit once both are ticked. AcceptTerms ticks them (run.auto_accept_terms, else stops).
+    // boxes, Confirm lit once both are ticked. AcceptTerms ticks them (the global option AutoAcceptTerms, else stops).
     "UserAgreement": {
         "recognition": "And",
         "all_of": [

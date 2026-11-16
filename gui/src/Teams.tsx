@@ -257,7 +257,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
               {teamEnum("usage").filter((u) => u !== "any").map((u) => <option key={u} value={u}>{tv("usage", u)}</option>)}
             </Choice>
           </Mark>
-          <small className="wide">{t("team.target_floor_note")}</small>
+          <small>{t("team.target_floor_note")}</small>
         </div>
         <div className="grid">
           <Field label={t("team.heal")} path={`${path}/heal`}>

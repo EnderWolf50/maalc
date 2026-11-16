@@ -189,8 +189,8 @@ AGENT_OPTIONS = TOOLS.parent / "agent" / "task_options.schema.json"
 INTERFACE = TOOLS.parent / "assets" / "interface.json"
 # The settings sections whose keys the client's options took over, and the nodes whose attach the agent reads them from
 # now (agent/task_options.schema.json): run (#779), a daily task's own (#781), a Luxcavation task's team too (#780).
-MOVED = {"run": ("MirrorDungeon", "GlobalOptions"), "luxcavation.exp": ("ExpLuxcavation",),
-         "luxcavation.thread": ("ThreadLuxcavation",), "charge_enkephalin": ("ChargeEnkephalin",)}
+MOVED_NODES = {"run": ("MirrorDungeon", "GlobalOptions"), "luxcavation.exp": ("ExpLuxcavation",),
+               "luxcavation.thread": ("ThreadLuxcavation",), "charge_enkephalin": ("ChargeEnkephalin",)}
 
 
 def moved(key: str, value: str) -> str | None:
@@ -199,7 +199,7 @@ def moved(key: str, value: str) -> str | None:
     that holds one (luxcavation), and a key under a moved section that is no option get a line too. An input nested
     under a case comes after the case that sends it (luxcavation.exp.count=2: ExpMode=count, then ExpCount=2); a
     switch's true or false is its Yes or No, a team's null its 「未選擇」, none."""
-    for section, nodes in MOVED.items():
+    for section, nodes in MOVED_NODES.items():
         if key == section or section.startswith(key + "."):
             return f"the agent reads {section}'s keys from the client's options: set them with bot.py run --option"
         if not key.startswith(section + "."):

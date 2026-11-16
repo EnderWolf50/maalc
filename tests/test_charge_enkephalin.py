@@ -7,7 +7,7 @@ after one, and at 10/10, is the model's guess.
 
 The scenarios are the task's paths through its pipeline: a target of 0 (no window opened), the window that closes after
 each Confirm, the one that stays open, the Use Boxes tab, a target past the game's 10. The client sends the target as
-the task's option ChargeCount (#781); the settings file's charge_enkephalin (0) is not read. Each decision of the panel
+the task's option ChargeCount (#781); the settings file has no charge_enkephalin since version 21 (#782). Each decision of the panel
 is tested in process below (#641).
 """
 

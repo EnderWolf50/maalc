@@ -2,10 +2,10 @@
 // the queue's order left alone, a first file's default_case from the settings file, and nothing to write when nothing
 // changed.
 import { expect, test } from "vitest";
-import cases from "../../tests/settings_cases.json";
 import fixture from "../../tests/team_options.json";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import { newSettings, newTeam, type Settings, type Team } from "./model";
+import { cases } from "./settingsCases";
 import { NONE, NONE_LABEL, PI, TEAM_OPTIONS, teamOptionsText } from "./teamOptions";
 
 const team = (id: string, name: string, slot: number): Team => ({ ...newTeam(slot, name), id });

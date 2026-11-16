@@ -10,13 +10,15 @@ import re
 import shutil
 
 import pytest
+from jsonschema import Draft202012Validator
 
 import client_override
 import task_options
-from client_options import ROOT, TEAM_OPTIONS, TEAM_PICK, attach, interface
+from client_options import ROOT, TEAM_OPTIONS, TEAM_PICK, attach, client_interface
+from test_settings import CASES as SETTINGS_CASES, v20
 
-PI = interface()
-BARE = interface(teams=None)  # what a client loads before the settings GUI wrote the team options file
+PI = client_interface()
+BARE = client_interface(teams=None)  # what a client loads before the settings GUI wrote the team options file
 TEAM_KEYS = tuple(TEAM_PICK.values())  # the team options: their cases come from that file
 OPTIONS = PI["option"]
 TASKS = {t["name"]: t for t in PI["task"]}
@@ -228,3 +230,49 @@ def test_global_options_is_a_node_no_next_names():
 def test_the_entry_nodes_the_options_write_are_the_tasks_entries():
     for node in SCHEMA:
         assert node == task_options.GLOBAL_NODE or TASKS[node]["entry"] == node
+
+
+def old_attach(old):
+    """Each node's attach as a version 20 file held its values in run, luxcavation and charge_enkephalin, by the keys the
+    agent read there before #779, #780 and #781 moved them: a run cap of null is the limit switch off."""
+    run = dict(old.get("run", {}))
+    if "runs" in run:
+        runs = run.pop("runs")
+        run.update(runs_limited=runs is not None, **({} if runs is None else {"runs": runs}))
+    lux = old.get("luxcavation", {})
+    return {task_options.GLOBAL_NODE: {k: v for k, v in run.items() if k in task_options.GLOBAL},
+            "MirrorDungeon": {k: v for k, v in run.items() if k not in task_options.GLOBAL},
+            "ExpLuxcavation": lux.get("exp", {}), "ThreadLuxcavation": lux.get("thread", {}),
+            "ChargeEnkephalin": old.get("charge_enkephalin", {})}
+
+
+def sent_by_every_task(chosen):
+    """Each node's attach once a client posted every task of the interface with these options (parse_options')."""
+    nodes = {}
+    for task in TASKS:
+        for name, values in attach(client_override.build(PI, task, chosen)[1]).items():
+            nodes.setdefault(name, {}).update(values)
+    return nodes
+
+
+@pytest.mark.parametrize("case", SETTINGS_CASES["migrate_v20"], ids=lambda c: c["name"])
+def test_the_values_the_settings_window_lists_set_in_the_client_send_what_the_old_file_held(case):
+    # #782: the settings window lists a version 20 file's moved values off the client's defaults (the case's moved,
+    # which gui/src/movedOptions.test.ts checks the window lists, NAME=VALUE as bot.py run --option takes them). Each set
+    # in the client as listed, every task sends the old file's values; one the list leaves out is the client's default
+    # already, and one the agent refuses (a file broken by hand) gets the client's default. A count goes with count mode
+    # alone and the run cap with its switch on (the schema's descriptions: sent only while ...); a null team is none
+    # picked. The two pops below are those nestings, the only ones interface.json has: a new one fails the first assert.
+    assert {n for o in OPTIONS.values() for c in o.get("cases", []) for n in c.get("option", [])} == {
+        "MirrorRuns", "ExpCount", "ThreadCount"}
+    old = v20(case["edits"])
+    pairs = [f"WebhookUrl={old['run']['webhook_url']}" if p == "WebhookUrl=(set)" else p for p in case["moved"]]
+    sent, default = sent_by_every_task(client_override.parse_options(PI, pairs)), sent_by_every_task({})
+    for node, values in old_attach(old).items():
+        props = SCHEMA[node]["properties"]
+        want = {**default[node], **{k: v for k, v in values.items() if Draft202012Validator(props[k]).is_valid(v)}}
+        if want.get("runs_limited") is False:
+            want.pop("runs", None)
+        if want.get("mode") == "daily":
+            want.pop("count", None)
+        assert sent[node] == want, node

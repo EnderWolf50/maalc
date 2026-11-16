@@ -7,7 +7,7 @@
 - 鏡牢的流程必須寫在 Pipeline。每種畫面的辨識必須各自寫在自己的 Pipeline 節點；不用單一 custom recognition 對全螢幕做分類。（#8）
 - 需要判斷的選擇必須寫成 Agent 的 custom action 或 custom recognition，包括地圖節點、飾品、主題包、商店、星光、獎勵卡、事件選項、Boss 後的選擇、戰前的出戰順序。（#8、#9、#11、#17）
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
-- 使用者設定由設定 GUI 寫進 `<root>/config/settings.json`，Agent 在任務開始時讀取並檢查；PI 不帶使用者選項（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案）
+- 隊伍、方案、飾品清單與覆寫表由設定 GUI 寫進 `<root>/config/settings.json`（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；每個任務怎麼跑的單一的值是 PI 的任務選項與全域選項，client 隨任務送給 Agent（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)）。Agent 在任務開始時讀取並檢查兩者。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案；#776）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
 - Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；MXU 與 `tools/live/bot.py`（設 `MAAFW_BINARY_PATH`）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
 - Agent 的 `main.py` 在 `<root>/maafw/` 存在時，把沒設過的 `MAAFW_BINARY_PATH` 設成它，所以 Agent 也從 `maafw/` 載入。Agent 程序只載入 `MaaAgentServer.dll` 和它要的 `MaaUtils.dll`、`opencv_world4_maa.dll`、`DirectML.dll`，不載入 `MaaFramework.dll`：辨識在 client 的程序裡跑。發佈 zip 的內嵌 Python 因此不帶 wheel 的 `maa/bin/`，MaaFramework 的二進位只有 `maafw/` 一份。MFAAvalonia 只從它自己的 `runtimes/win-x64/native/` 載入 MaaFramework，不讀 `maafw/`；換成 fork 的做法見 README。（#497）
@@ -150,7 +150,7 @@
 - 用途和這一局難度不符的隊伍跳過，留在原位；沒有任何可用的隊伍就以成功結束任務（#364）。（#9）
 - 接續暫停中的局時，選隊之後沒有畫面顯示隊伍，Agent 從佇列推回這局的隊伍；推不回就不移動佇列（[03-decisions.md](03-decisions.md) 第 1 節，#436）。（#8、#19）
 - 「限制局數」只算這個任務開始後完成的局數，不存檔；清單裡第二個鏡牢任務從 0 局算起（#364）。「每週獎勵用完就停」的剩餘次數從畫面讀。（#8）
-- 難度、每週獎勵用法這類策略屬於設定檔，不另外存檔。（#8、#19）
+- 難度、每週獎勵用法這類策略是鏡牢的任務選項（[04](04-settings.md) 第 5 節），Agent 不另外存檔。（#8、#19、#776）
 - 刷新次數這類以層為單位的計數記在 Agent 記憶體，不存檔。（#10）
 - Agent 寫的檔案都在 `<root>` 底下，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中 `teams` 的順序，先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
 

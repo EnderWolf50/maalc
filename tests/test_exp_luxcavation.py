@@ -293,7 +293,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
     prefix = {"ExpLuxcavation": "Exp", "ThreadLuxcavation": "Thread"}[task]
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
         # the count set in daily mode too, as a user who switched back leaves it: the client does not send it there; the
-        # team is the client's dropdown (#780), the settings file's (none picked) not read
+        # team is the client's dropdown (#780)
         options = [f"{prefix}Mode={'daily' if scenario in daily else 'count'}", f"{prefix}Count={count}",
                    f"{prefix}Team={team}", f"{prefix}Retries={retries}",
                    f"{prefix}Consecutive={'Yes' if scenario in consecutive else 'No'}"]
@@ -384,7 +384,7 @@ def test_daily_mode_runs_on_the_options_the_client_sends_with_no_count():
 
 
 def test_count_mode_fights_the_count_the_client_sends():
-    # #781: ExpMode count, ExpCount 12: twelve won, the settings file's luxcavation.exp (daily mode, count 1) not read
+    # #781: ExpMode count, ExpCount 12: twelve won
     o = run_child(__file__)["x12"]
     assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, retries=0, consecutive=true, team=b"]
     assert o["succeeded"] and o["fights"] == [10, 2] and o["done"] == "EXP Luxcavation: 12 won"
