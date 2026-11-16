@@ -107,8 +107,8 @@ packs:
   The Dusk of Amber: {N: [4, 5], H: [4, 5], I: true}
   Twining Threads: {N: [5], H: [5], I: true}
   Mnestic Experience: {N: [5], H: [5], I: true}
-  # The running event's pack (Walpurgis Night 10, 1.119.0): no unlock code yet (the data adds 9129 for it), floor 5's
-  # leftmost card while the event runs. Its card tops the title with the "Walpurgis Night" art (live 2026-11-13).
+  # The running event's pack (Walpurgis Night 10, 1.119.0): its data has no unlockCondition (unlockcode-subchapter already
+  # holds 9129, likely its code once the event ends); floor 5's leftmost card while the event runs. Its card tops the title with the "Walpurgis Night" art (live 2026-11-13).
   The Wedge in the Wake of Dawnbreak: {N: [5], H: [5], I: true}
   # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it and
   # their own boss picture (1113 also the Long Battle overlay). Not event packs. A card reads as one by that line

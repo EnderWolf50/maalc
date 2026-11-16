@@ -3,7 +3,7 @@ the formation card's frame they sit in, gui/src/sinner_card/<part>.webp (#732).
 
 Usage: uv run --group unpack python tools/sinner_cards.py [--width 240]
 Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"). A sinner's default identity (LCB Sinner) is the personality
-of the static data whose `unitKeywordList` holds BASE_APPEARANCE (10101-11201 in 1.118.1); the sinner is the one of
+of the static data whose `unitKeywordList` holds BASE_APPEARANCE (10101-11201 in 1.118.1 and 1.119.0); the sinner is the one of
 EN_Characters whose English name the settings use. Its card is the identity list's art,
 `Sprite/Unit/Info/Normal/<id>_normal_info.png` (537 x 827) of the UnityCache bundles, written `--width` wide as WebP, with
 `index.json` ({sinner: file}, in the settings' sinner order). The deployment order tiles of the settings GUI show it.
@@ -36,7 +36,7 @@ CARD = "Assets/Resources_moved/Sprite/Unit/Info/Normal/{}_normal_info.png"
 QUALITY = 80  # every file the tool writes, the art and the frame parts
 # The formation screen's card: player-data file -> {part: (sprite, size)}. Read from the slot prefab
 # `PersonalityFormationSlot_<sinner>` of `[UIPanel]PersonalityFormationUIPanel` (sharedassets2) and the frame tables
-# `GacksungLevelFrame_Rank<rarity>` (IntSpritePairs: Uptie level 1-4 -> frame) in client 1.118.1. A part missing or of another
+# `GacksungLevelFrame_Rank<rarity>` (IntSpritePairs: Uptie level 1-4 -> frame) in clients 1.118.1 and 1.119.0. A part missing or of another
 # size: the client renumbered its atlases, read those again (docs/spec/05-game-data.md section 8).
 FRAME_PARTS = {
     # GacksungLevelFrame_Rank1 at Uptie 3: an LCB Sinner is rarity 1, and the identity list draws this vine frame round it
