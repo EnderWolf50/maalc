@@ -22,7 +22,7 @@ STATES = {"thread": {"bonuses": 2}, "thread_two_levels": {"bonuses": 0}, "thread
 def test_thread_luxcavation_is_a_task_of_the_interface():
     interface = interface_json()
     assert {"name": "ThreadLuxcavation", "label": "$ThreadLuxcavation", "entry": "ThreadLuxcavation",
-            "option": ["ThreadMode", "ThreadRetries", "ThreadConsecutive"]} in interface["task"]
+            "option": ["ThreadMode", "ThreadTeam", "ThreadRetries", "ThreadConsecutive"]} in interface["task"]
 
 
 def level_enters(o):

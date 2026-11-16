@@ -146,16 +146,8 @@ export function crossCheck(data: Settings): Problem[] {
     }
   });
 
-  const teamIds = new Set(teams.map((t) => t.id));
-  for (const [task, opts] of Object.entries(data.luxcavation)) {
-    if (opts.team !== null && !teamIds.has(opts.team)) {
-      const path = `luxcavation/${task}/team`;
-      errors.push({
-        paths: [path], text: `${path}: team ${pyRepr(opts.team)} is not in teams`,
-        say: { key: "problem.luxTeam", vars: { task: { key: `lux.${task}` as Key } } },
-      });
-    }
-  }
+  // A Luxcavation task's team is the agent's too, at that task's start: the team is the client's dropdown (ExpTeam,
+  // ThreadTeam, #780), whose cases the team options file gives (teamOptions.ts); a deleted team's case stays, and stops it.
 
   dupes("event_overrides", data.event_overrides.map((o) => o.question), "question", "question", twice("problem.dupeQuestion"));
   dupes("trial_risk_overrides", data.trial_risk_overrides.map((o) => o.trial), "trial", "trial", twice("problem.dupeTrial"));

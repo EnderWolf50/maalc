@@ -5,11 +5,11 @@ The client sends them (MXU, MFAAvalonia; ADR 0013). Each option of interface.jso
 task's entry node, a global option into attach of GlobalOptions, a node no next names; MaaFramework applies the client's
 override array entry by entry and merges attach key by key, so the entry action reads them with context.get_node_data.
 read checks both against task_options.schema.json; a value missing or wrong ends the task before any tap, with a line
-that names the option. There is no settings-file fallback. A Luxcavation task's team still comes from the settings file
-(luxcavation), until #780 moves it.
+that names the option. There is no settings-file fallback. A Luxcavation task's team is its option too (ExpTeam,
+ThreadTeam: the cases of the team options file the settings GUI writes, #780).
 
-The rule that crosses MirrorDungeon's target floor with the teams is checked here too, at the task's start: the teams
-stay in the settings file."""
+The rules that cross a task's options with the teams (MirrorDungeon's target floor, a Luxcavation task's team) are
+checked here too, at the task's start: the teams stay in the settings file."""
 
 import json
 from pathlib import Path
@@ -36,20 +36,25 @@ def nodes(task):
     return [GLOBAL_NODE, *([task] if task in SCHEMA["$defs"] else [])]
 
 
+def where(node):
+    """Where the user changes node's options, as a line that names one says it."""
+    return WHERE.get(node, f"the options of the {node} task in the client's task list")
+
+
 def check(node, values):
     """The errors of values, node's attach, against the schema's node, in its properties' order: each names the option
     (its title), what came and where to change it."""
     schema = SCHEMA["$defs"][node]
-    where = WHERE.get(node, f"the options of the {node} task in the client's task list")
+    place = where(node)
     found = {}
     for e in Draft202012Validator(schema).iter_errors(values):
         if not e.absolute_path and e.validator != "required":  # the attach itself, not one of its keys
-            return [f"{node}'s attach: {e.message}; {where}"]
+            return [f"{node}'s attach: {e.message}; {place}"]
         if e.validator == "required":  # one error per missing key, all naming the whole list
             found.update({k: "not sent" for k in e.validator_value if k not in e.instance})
         else:
             found.setdefault(e.absolute_path[0], e.message)
-    return [f"{schema['properties'][k]['title']} ({k}): {found[k]}; set it in {where}"
+    return [f"{schema['properties'][k]['title']} ({k}): {found[k]}; set it in {place}"
             for k in schema["properties"] if k in found]
 
 
@@ -82,12 +87,6 @@ def options(task, values):
     return {**out, "runs": values["runs"] if values["runs_limited"] else None}
 
 
-def luxcavation(settings, key):
-    """A Luxcavation task's option the settings file still holds (key "exp" or "thread"): team, luxcavation.<key>.team.
-    Its mode, count, retries and consecutive are the client's (#781); the file's are left as they are."""
-    return {"team": settings["luxcavation"][key]["team"]}
-
-
 def target_floor_errors(options, teams):
     """MirrorDungeon's rule (#385): a target floor past 5 needs the whole run HARD, so the difficulty is not normal and
     every enabled team (the rotation picks from them) plays HARD from floor 1 and is not normal_only. Floors 6+ open only
@@ -111,9 +110,15 @@ def target_floor_errors(options, teams):
     return errors
 
 
-def team_errors(key, team, teams):
-    """A Luxcavation task's rule (#366): its team (an id, None when none is picked) is one of teams, enabled or not. The
-    error in the words and settings path the file's load gave it."""
-    if team is not None and team not in {t["id"] for t in teams}:
-        return [f"luxcavation/{key}/team: team {team!r} is not in teams"]
+def team_errors(node, team, teams):
+    """A Luxcavation task's rule (#366, #780): its team option (node's team: ExpTeam, ThreadTeam), an id, names one of
+    teams, enabled or not. None, not sent: 「未選擇」 picked, or a list with no team (no team options file yet, or a
+    client not reopened since the settings GUI wrote it). An id not in teams: a team deleted in the settings GUI, whose
+    case the file keeps, so the client still sends it (#780)."""
+    option = f"{SCHEMA['$defs'][node]['properties']['team']['title']} (team)"
+    if team is None:
+        return [f"{option}: no team picked; pick one in {where(node)} (an empty list: create the team in the settings "
+                "GUI, save, then reopen the client)"]
+    if team not in {t["id"] for t in teams}:
+        return [f"{option}: team {team!r} was deleted in the settings GUI; pick another in {where(node)}"]
     return []

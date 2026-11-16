@@ -1,13 +1,13 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
-import { DailyTab } from "./Daily";
 import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { StarlightTab } from "./Starlight";
+import { teamOptionsText } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
 import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
@@ -15,7 +15,6 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["daily", "tab.daily", DailyTab, ["luxcavation"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -27,12 +26,28 @@ export const TABS = [
 
 type TabId = (typeof TABS)[number][0];
 
-/** The tabs in groups (what the bot runs: the daily tasks; the team and its gift list; the plans; the overrides): the tabs
- * that start a group. The Mirror Dungeon task's options and the global ones are the client's (MXU, MFAAvalonia; #779), so
- * are the daily tasks' but the Luxcavation team (#781). */
-const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
+/** The tabs in groups (the team and its gift list; the plans; the overrides): the tabs that start a group after the first.
+ * How each task runs is the client's (MXU, MFAAvalonia): the Mirror Dungeon task's options and the global ones (#779), the
+ * daily tasks' (#781) and the Luxcavation teams (#780), so there is no Run options or Daily tab. */
+const GROUP_STARTS = new Set<TabId>(["deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
+const sayStatus = (lang: Settings["language"], status: string) =>
+  Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
+/** Write the team options file when these settings change what it says (#780, teamOptions.ts), and the status after it:
+ * `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in with the error, in s's language,
+ * when the write failed. */
+async function teamOptionsNote(s: Settings, done: Key, failed: Key) {
+  try {
+    const text = teamOptionsText(await api.loadTeamOptions(), s);
+    if (text === null) return "";
+    await api.saveTeamOptions(text);
+    return done;
+  } catch (e) {
+    return fill(TEXT[s.language][failed], { error: String(e) });
+  }
+}
 /** The element id of the problem at this place in the problems block. */
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
@@ -123,7 +138,8 @@ export default function App() {
         const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
-        if (migrated && !validate(data).length) {
+        const ok = !validate(data).length;
+        if (migrated && ok) {
           try {
             await api.saveSettings(migratedText, text);
             disk.current = migratedText;
@@ -131,7 +147,12 @@ export default function App() {
             if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
           }
         }
-        setStatus(unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "");
+        // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
+        // checks refuse, whose teams may not read as teams
+        const teamNote = ok ? await teamOptionsNote(data, "teamOptions.updated", "teamOptions.failed") : "";
+        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teamNote].filter(Boolean);
+        // one note stays as it is, a key the header says anew in the language picked next
+        setStatus(notes.length === 1 ? notes[0] : notes.map((n) => sayStatus(data.language, n)).join(" "));
       } catch (e) {
         setLoadError(String(e));
       }
@@ -236,9 +257,10 @@ export default function App() {
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });
   const dirty = toText(s) !== savedText;
-  const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
+  const said = sayStatus(lang, status);
   // shown beside "unsaved" too (a refused save, the file read again), but not what an edit since has made stale
-  const note = status === "saved" || status === "reverted" ? "" : said;
+  const savedNow = status === "saved" || status === "savedTeams";
+  const note = savedNow || status === "reverted" ? "" : said;
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
@@ -266,7 +288,8 @@ export default function App() {
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
-        setStatus("saved");
+        // the team options file follows the teams saved; a change is said once, as the client reads it only at its start
+        setStatus((await teamOptionsNote(current, "savedTeams", "savedTeamsFailed")) || "saved");
         return true;
       }
     } catch (e) {
@@ -314,7 +337,7 @@ export default function App() {
   // The save state plate: problems to fix (a refused save, or problems a save would meet), a write that failed, unsaved,
   // saved, or a note. Save takes the crimson frame while problems stop it or after a write failed, the caution stripe while
   // unsaved changes can go through. It counts the problems the fields show, so it waits for a field being typed in too.
-  const state = shown.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  const state = shown.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : savedNow ? "saved" : said ? "note" : "clean";
   const stateText = [
     shown.length > 0 && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: shown.length }),
     dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!shown.length && t("saveState.clean")),

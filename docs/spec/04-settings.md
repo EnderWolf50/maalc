@@ -89,7 +89,7 @@
 | `teams` | 陣列 | 隊伍，順序就是隊伍佇列，見第 9 節 | #9、#501 |
 | `event_overrides` | 陣列 | 事件覆寫，見第 10 節 | #11 |
 | `trial_risk_overrides` | 陣列 | 試煉分數覆寫，見第 11 節 | #17、#381 |
-| `luxcavation` | 物件 | 經驗本與紐本的隊伍（`team`），見第 12 節；其餘的鍵 Agent 不再讀，改成第 12 節的任務選項，GUI 原封不動寫回，版本 21 移除（#782） | #366、#781 |
+| `luxcavation` | 物件 | 舊的經驗本與紐本選項，Agent 不再讀：改成第 12 節的任務選項（隊伍也是，#780）；GUI 原封不動寫回，版本 21 移除（#782） | #366、#780、#781 |
 | `charge_enkephalin` | 物件 | 舊的狂氣換腦啡肽次數，Agent 不再讀：改成第 12 節的任務選項 `ChargeCount`；GUI 原封不動寫回，版本 21 移除（#782） | #373、#781 |
 
 - 鍵名用 snake_case。（#19）
@@ -314,7 +314,7 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 
 經驗本（PI 任務 `ExpLuxcavation`）、紐本（`ThreadLuxcavation`，#368）與狂氣換腦啡肽（`ChargeEnkephalin`，#373）怎麼跑，是 MXU／MFAAvalonia 的任務選項，在任務清單裡、各任務旁邊設定（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#781）。送法、讀法與值不對時的停法同第 5 節：每個選項寫進任務入口節點的 `attach`，入口動作（`LuxStart`、`ChargeStart`）在點任何東西之前依 `agent/task_options.schema.json` 檢查、記一行 `options: ...`；少值或值不對時走停止程序。要跑哪些日常、依什麼順序，由任務清單決定（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）。（#362、#366）
 
-經驗本與紐本的選項相同，名稱分別以 `Exp`、`Thread` 開頭：
+經驗本與紐本的選項相同，名稱分別以 `Exp`、`Thread` 開頭；隊伍見下面的「經驗本與紐本的隊伍」：
 
 | 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
 |---|---|---|---|---|---|
@@ -330,19 +330,34 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 | 次數 | `ChargeCount` | `count` | 整數輸入 0–10：當天的目標 Daily Count：畫面上的 Daily Count（手動換的也算）已到就不換，否則換到 Daily Count = `count`；讀不到就不換（[spec 03 第 16 節](03-decisions.md)）。0 時任務一開始就成功結束，不開視窗、不碰 Use Lunacy 頁。遊戲一天最多 10 次（`chance` 9999） | 0 | #373、#429 |
 
 - `verify` 與 Agent 的範圍相同：次數 `^[1-9][0-9]*$`，戰敗重打 `^(0|[1-9][0-9]*)$`，`ChargeCount` `^([0-9]|10)$`。MXU 只把不符的欄位標紅、照樣送出，所以 `ChargeCount` 填 11 時，任務在入口記 `ChargeCount (count): 11 is greater than the maximum of 10` 並走停止程序。（#781）
-- 狂氣換腦啡肽不讀設定檔：設定檔讀不到時照常跑，和沒有自己選項的日常任務一樣。經驗本與紐本要讀隊伍，讀不到就走停止程序。（#781）
+- 狂氣換腦啡肽不讀設定檔：設定檔讀不到時照常跑，和沒有自己選項的日常任務一樣。經驗本與紐本要讀 `teams`（選的隊伍要在裡面），讀不到就走停止程序。（#781、#780）
 - 價格怎麼核對：[spec 03 第 16 節](03-decisions.md)。
 
-### 經驗本與紐本的隊伍（`luxcavation`）
+### 經驗本與紐本的隊伍：任務選項與隊伍選項檔
 
-隊伍仍在設定檔，GUI 的「日常」分頁編輯，#780 改成任務選項的下拉選單：
+經驗本與紐本的隊伍是任務選項 `ExpTeam`、`ThreadTeam`，一個下拉選單，選項是設定視窗裡的隊伍（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#780）。
 
-| 欄位 | 鍵 | 類型 | 值 | 來源 |
-|---|---|---|---|---|
-| 隊伍 | `luxcavation.exp.team`／`luxcavation.thread.team` | 字串或 `null` | `teams[]` 的 id：用它的遊戲隊伍編號、出戰順序和 `guard_turns`，不必啟用；`null` 是還沒選，任務開始時停止 | #366 |
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 隊伍 | `ExpTeam`／`ThreadTeam` | `team` | 選擇，case 由隊伍選項檔提供（見下）：`teams[]` 的 id，用它的遊戲內隊伍欄位（`game_team`）、出戰順序和 `guard_turns`，不必啟用；「未選擇」不送值 | 「未選擇」；MXU 上第一次產生的檔案用設定檔原本選的隊伍 | #366、#780 |
 
-- `team` 指向不存在的隊伍是交叉檢查錯誤。（#366）GUI 在存檔時檢查；Agent 在這個任務開始時檢查，不在讀設定檔時，不符就在點任何東西之前走停止程序，訊息相同（#777）。
-- 設定檔 `luxcavation` 的 `mode`、`count`、`retries`、`consecutive` 與 `charge_enkephalin.count`，Agent 不再讀，改讀上面的任務選項；GUI 不顯示它們、原封不動寫回，版本 21 移除（#781、#782）。
+- **檢查**：`LuxStart` 在任務開始時和其他選項一起讀，點任何東西之前不符就走停止程序，記一行 `stop: Invalid task options:`：
+  - 沒送值（選了「未選擇」，或選單是空的）：`ExpTeam (team): no team picked; pick one in the options of the ExpLuxcavation task in the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)`。
+  - 送來的 id 不在設定檔的 `teams` 裡（隊伍已刪除）：`ExpTeam (team): team '<id>' was deleted in the settings GUI; pick another in the options of the ExpLuxcavation task in the client's task list`。紐本相同，選項是 `ThreadTeam`。
+  - GUI 看不到 client 選的隊伍，存檔時不檢查。
+- **佔位定義**：`interface.json` 的 `ExpTeam`、`ThreadTeam` 有標題和說明（說明寫「先在設定視窗建立隊伍，存檔後重開 client」），`cases` 是空的。頂層的 `import` 引入 `config/team_options.json`。檔案不存在時兩個 client 都只記一行警告、照常載入，下拉選單是空的，任務什麼都不送。
+- **隊伍選項檔** `config/team_options.json`：設定視窗寫（`gui/src/teamOptions.ts`）。兩個選項各一份完整定義，和佔位定義相同，只換 `cases` 與 `default_case`：MXU 的引入是整個選項取代，MFAAvalonia 只換 `cases`。
+  - 第 0 個 case 是「未選擇」（名稱 `none`，標籤 `$LuxTeam_none`），不送值。
+  - 之後每支隊伍一個 case：名稱是隊伍 id，標籤是隊伍名稱加 `TEAMS #N`（`隊伍 A（TEAMS #3）`，英文介面 `Team A (TEAMS #3)`），override 寫 `team: <id>`。
+  - **只往後加**：MFAAvalonia 存的是 case 的索引，MXU 存名稱，插入、重排或刪除會讓選好的值悄悄變成別隊或「未選擇」。新隊伍加在最後；順序是這個檔原本的順序，不跟隊伍佇列走（Agent 每次領獎都改佇列，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。刪掉的隊伍保留它的 case，標籤後面加「（已刪除）」（英文 ` (deleted)`），override 仍送它的 id，Agent 就停下。改名、改 `TEAMS #N` 只改標籤。標籤用設定視窗當下的語言。
+  - 第一次產生時（檔案不存在，或讀不懂），`default_case` 是設定檔裡那個任務的 `luxcavation.<task>.team`，它不在 `teams` 裡或沒選就是「未選擇」；之後沿用檔案裡的。MXU 對還沒存過值的任務用 `default_case`；MFAAvalonia 的任務選項一律從第 0 個 case 開始，停在「未選擇」。
+  - 存檔成功後與啟動時（設定檔通過檢查時）產生，內容有變才寫，寫法和設定檔一樣：先寫暫存檔再改名（`save_team_options`）。沒有檔案也沒有隊伍時不寫。內容變了，狀態列說一次：「隊伍清單已更新：重新開啟 MXU／MFAAvalonia 後，任務選項的隊伍下拉選單才會更新。」存檔時是「已儲存。」接著這句。
+  - 不做重新整理按鈕：兩個 client 執行中都不重讀 `interface.json`，改了隊伍要重開 client。
+- `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔（來源沒有就刪掉目的地的），`bot.py run --option ExpTeam=<隊伍 id>` 從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
+
+### 設定檔的 `luxcavation` 與 `charge_enkephalin`
+
+- 設定檔 `luxcavation` 的 `mode`、`count`、`team`、`retries`、`consecutive` 與 `charge_enkephalin.count`，Agent 不再讀，改讀上面的任務選項；GUI 不顯示它們、原封不動寫回，版本 21 移除（#780、#781、#782）。設定視窗第一次產生隊伍選項檔時，用 `luxcavation.<task>.team` 當 `default_case`。
 - 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3，以及 `charge_enkephalin` `{"count": 0}`。（#366、#368、#373）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
 - 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 
@@ -351,6 +366,7 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 | 檔案 | 寫入者 | 內容 | 用途 | 來源 |
 |---|---|---|---|---|
 | `<root>/config/settings.json` | GUI；Agent 只改 `teams` 的順序 | 本章的使用者設定；`teams` 的順序就是隊伍佇列 | Agent 在任務開始時讀取；領獎後把那一隊移到最後 | #19、#501 |
+| `<root>/config/team_options.json` | GUI | 隊伍選項檔：`ExpTeam`、`ThreadTeam` 的完整定義，每支隊伍一個 case（第 12 節） | `interface.json` 引入，client 啟動時讀，成為經驗本與紐本的隊伍下拉選單 | #780 |
 | `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算每層時間上限；不用於接續判斷 | #14、#19 |
 | `<root>/logs/evidence/<時間>/` | Agent | 停止時保存的證據 | 除錯與通知 | #14、#19 |
 

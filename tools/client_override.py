@@ -41,9 +41,16 @@ def load_interface(path: Path, warn=lambda line: None) -> dict:
         except (OSError, ValueError) as e:
             warn(f"import {name} not read ({type(e).__name__}): skipped")
             continue
-        pi["task"] = [*pi.get("task", []), *imported.get("task", [])]
-        pi["global_option"] = list(dict.fromkeys([*pi.get("global_option", []), *imported.get("global_option", [])]))
-        pi["option"] = {**pi.get("option", {}), **imported.get("option", {})}
+        merge(pi, imported)
+    return pi
+
+
+def merge(pi: dict, imported: dict) -> dict:
+    """pi with one imported file merged in, as load_interface merges each: its options replace pi's whole definitions,
+    its tasks are appended, its global options appended once each."""
+    pi["task"] = [*pi.get("task", []), *imported.get("task", [])]
+    pi["global_option"] = list(dict.fromkeys([*pi.get("global_option", []), *imported.get("global_option", [])]))
+    pi["option"] = {**pi.get("option", {}), **imported.get("option", {})}
     return pi
 
 

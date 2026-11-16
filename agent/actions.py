@@ -548,7 +548,6 @@ class TaskStart(CustomAction):
             settings = load_settings(ROOT)
         except SettingsError as e:
             return self.unread(context, e)
-        TASK["options"].update(self.settings_options(argv, settings))
         return self.begin(context, argv, settings)
 
     def unsent(self, context, argv, error):
@@ -563,11 +562,6 @@ class TaskStart(CustomAction):
         """The settings did not load; the task goes on on the options it read: MirrorDungeon's PlanRun fails it when it
         loads the settings itself, and a task with no options in the settings needs none of them."""
         return True
-
-    def settings_options(self, argv, settings):
-        """The task's options the settings file still holds (a Luxcavation task's team, until #780): none, for a task
-        whose options all come from the client."""
-        return {}
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot

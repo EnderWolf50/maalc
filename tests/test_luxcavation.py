@@ -13,12 +13,13 @@ import lux_actions
 import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
 from agent_patch import patch_all
-from client_options import send
+from client_options import TEAM_PICK, send
 
 if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
     from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 SCREENS = Path(__file__).resolve().parent / "screens"
+ENTRY = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}  # a Luxcavation task's entry node by its settings key
 
 
 @pytest.mark.parametrize("task, today, fights", [
@@ -222,9 +223,8 @@ def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monke
 
 def lux_start(context, monkeypatch, key, *options, team="b"):
     """LuxStart posted by a client with these NAME=VALUE options (#781; every other at its default: daily mode, no
-    retries, Consecutive Battle on), on the settings file's team for it (luxcavation.<key>.team); its return, the stops."""
+    retries, Consecutive Battle on) and its team option picking team (#780; None: 「未選擇」); its return, the stops."""
     settings = json.loads((SCREENS.parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
-    settings["luxcavation"][key]["team"] = team
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
     stops = []
@@ -232,8 +232,8 @@ def lux_start(context, monkeypatch, key, *options, team="b"):
     # TaskStart starts a task afresh: its TASK and STUCK are put back after the test
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
     patch_all(monkeypatch, "STUCK", dict(actions.STUCK))
-    entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
-    send(context, entry, *options)
+    entry = ENTRY[key]
+    send(context, entry, *options, *([f"{TEAM_PICK[entry]}={team}"] if team else []))  # the client's team dropdown (#780)
     return lux_actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
 
 
@@ -257,10 +257,14 @@ def test_a_luxcavation_task_plays_by_the_retries_and_consecutive_the_client_sent
     assert ok is True and stops == [] and (lux["retries"], lux["consecutive"]) == (4, False)
 
 
-@pytest.mark.parametrize("key, name", [("exp", "EXP Luxcavation"), ("thread", "Thread Luxcavation")])
-def test_a_luxcavation_task_with_no_team_picked_stops_before_any_tap(context, monkeypatch, key, name):
+@pytest.mark.parametrize("key, entry", ENTRY.items())
+def test_a_luxcavation_task_with_no_team_picked_stops_before_any_tap(context, monkeypatch, key, entry):
+    # #780: the client's team option at 「未選擇」 sends no team
     ok, stops = lux_start(context, monkeypatch, key, team=None)
-    assert ok is False and stops == [f"{name} has no team: pick one in the settings GUI's Daily tab"]
+    assert ok is False and stops == [
+        f"Invalid task options:\n- {TEAM_PICK[entry]} (team): no team picked; pick one in the options of the {entry} task in "
+        "the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)"]
+    context.tasker.controller.post_click.assert_not_called()
 
 
 def run_plan(monkeypatch, today, seen, **lux):

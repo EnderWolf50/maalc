@@ -2,6 +2,7 @@ import json
 import os
 import signal
 import sys
+import shutil
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 import client_override
-from client_options import override
+from client_options import TEAM_OPTIONS, override
 from live import bot
 
 
@@ -55,14 +56,16 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     src, dst = tmp_path / "main", tmp_path / "test"
     (src / "config").mkdir(parents=True)
     (src / "state").mkdir()
-    # a Luxcavation task's team is still the settings file's (#781 moved the task's other keys to the client)
-    (src / "config/settings.json").write_text(json.dumps({"language": "zh_tw", "luxcavation": {"exp": {"team": None}}}))
+    # the keys the agent still reads from the settings file: the teams and plans, not a task's options (#779-#781)
+    (src / "config/settings.json").write_text(json.dumps({"language": "zh_tw", "teams": [{"id": "t3", "heal": "none"}]}))
     (src / "config/maa_option.json").write_text("{}")
+    (src / "config/team_options.json").write_text('{"option": {}}')  # the settings GUI's (#780)
     (src / "state/progress.json").write_text("{}")
-    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "language=en_us", "--set", "luxcavation.exp.team=t3"])
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "language=en_us", "--set", "teams.t3.heal=revive"])
     s = json.loads((dst / "config/settings.json").read_text())
-    assert s == {"language": "en_us", "luxcavation": {"exp": {"team": "t3"}}}
+    assert s == {"language": "en_us", "teams": [{"id": "t3", "heal": "revive"}]}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
+    assert (dst / "config/team_options.json").read_text() == '{"option": {}}'  # bot.py run --option ExpTeam= picks from it
     assert json.loads((src / "config/settings.json").read_text())["language"] == "zh_tw"  # the source stays
 
 
@@ -83,16 +86,18 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     # a key under a moved section that is not an option, and a whole section, or one that holds one: all stop
     ("run.x.y=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
     ("charge_enkephalin.nope=1", "the settings' charge_enkephalin section is no longer read: set its options with bot.py run --option"),
-    ("luxcavation.exp.nope=1",
-     "the settings' luxcavation.exp section is no longer read but its team: set its options with bot.py run --option"),
+    ("luxcavation.exp.nope=1", "the settings' luxcavation.exp section is no longer read: set its options with bot.py run --option"),
     ("run={}", "the agent reads run's keys from the client's options: set them with bot.py run --option"),
     ("luxcavation.thread={}", "the agent reads luxcavation.thread's keys from the client's options: set them with bot.py "
-     "run --option, its team with --set luxcavation.thread.team"),
-    ("luxcavation={}", "the agent reads luxcavation.exp's keys from the client's options: set them with bot.py run --option, "
-     "its team with --set luxcavation.exp.team"),
+     "run --option"),
+    ("luxcavation={}", "the agent reads luxcavation.exp's keys from the client's options: set them with bot.py run --option"),
+    # #780: a Luxcavation task's team is its dropdown, a case per team id; null is 「未選擇」
+    ("luxcavation.exp.team=t3", "bot.py run --option ExpTeam=t3"),
+    ("luxcavation.thread.team=null", "bot.py run --option ThreadTeam=none"),
+    ("run.webhook_url=null", "bot.py run --option WebhookUrl=null"),  # none is a team's 「未選擇」 alone
 ])
 def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
-    # #779, #781: the agent no longer reads these keys of the settings file; a value set there would not happen
+    # #779, #780, #781: the agent no longer reads these keys of the settings file; a value set there would not happen
     src, dst = prep_source(tmp_path), tmp_path / "test"
     with pytest.raises(SystemExit) as e:
         bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", key])
@@ -105,7 +110,7 @@ def test_every_key_prep_refuses_names_an_option_of_the_interface():
     options = client_override.load_interface(REPO / "assets/interface.json")["option"]
     schema = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))
     keys = [*(f"run.{k}" for k in schema["properties"]["run"]["properties"]),
-            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in schema["$defs"]["luxcavation"]["properties"] if k != "team"),
+            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in schema["$defs"]["luxcavation"]["properties"]),
             *(f"charge_enkephalin.{k}" for k in schema["properties"]["charge_enkephalin"]["properties"])]
     for key in keys:
         where = bot.moved(key, "1")
@@ -123,9 +128,13 @@ def prep_source(tmp_path):
 
 
 def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
-    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/
+    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/.
+    # #780: nor a team options file, and one an earlier prep left goes: its teams may not be the source's
     src, dst = prep_source(tmp_path), tmp_path / "test"
+    (dst / "config").mkdir(parents=True)
+    (dst / "config/team_options.json").write_text("{}")
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive"])
+    assert not (dst / "config/team_options.json").exists()
     assert json.loads((dst / "config/settings.json").read_text())["teams"][1]["heal"] == "revive"
     assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
 
@@ -172,14 +181,30 @@ def test_plan_posts_each_task_with_the_override_mxu_would_send_and_says_the_valu
 
 
 def test_plan_posts_every_task_of_the_interface_with_the_global_options_and_its_own():
-    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too
+    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too. The repo's
+    # assets/ has no team options file (#780): a line says so, as MXU warns, and the team dropdowns have no case.
     tasks = [t["name"] for t in client_override.load_interface(REPO / "assets/interface.json")["task"]]
     lines = []
     jobs = bot.plan(REPO / "assets", tasks, ["MirrorRuns=2"], lines.append)
-    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2")) for name in tasks]
+    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2", teams=None)) for name in tasks]
+    assert lines[0] == "[run] import config/team_options.json not read (FileNotFoundError): skipped"
     assert all(line.startswith(f"[run] {name} options: WebhookUrl=(not set) (default), AutoAcceptTerms=Yes (default)")
-               for name, line in zip(tasks, lines))
-    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[tasks.index("MirrorDungeon")]
+               for name, line in zip(tasks, lines[1:]))
+    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[1 + tasks.index("MirrorDungeon")]
+    assert ", ExpTeam=(no case) (default), " in lines[1 + tasks.index("ExpLuxcavation")]
+
+
+def test_run_option_picks_a_team_of_the_team_options_file_the_install_has(tmp_path):
+    # #780: --option ExpTeam=<team id> sends the case of that team, which writes its id into the entry's attach
+    shutil.copy(REPO / "assets/interface.json", tmp_path / "interface.json")
+    (tmp_path / "config").mkdir()
+    shutil.copy(TEAM_OPTIONS, tmp_path / "config/team_options.json")
+    lines = []
+    ((_, entry, array),) = bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=b"], lines.append)
+    assert entry == "ExpLuxcavation" and {"ExpLuxcavation": {"attach": {"team": "b"}}} in array
+    assert ", ExpTeam=b, " in lines[0]
+    with pytest.raises(SystemExit, match="ExpTeam has no case t9"):
+        bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=t9"], lines.append)
 
 
 @pytest.mark.parametrize("tasks, option, says", [

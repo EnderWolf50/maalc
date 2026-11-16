@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -6,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+import client_override
+from client_options import TEAM_OPTIONS
 from install import mirror_maafw, mirror_repo
 
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
@@ -40,6 +43,24 @@ def test_assembling_again_drops_what_the_repo_deleted_and_keeps_config(tmp_path)
                            "resource/base/pipeline/Kept.json", "config/settings.json"}
     assert not (root / "agent/old").exists()
     assert (root / "config/settings.json").read_text(encoding="utf-8") == "{}"
+
+
+def test_assembling_again_keeps_the_team_options_file_interface_json_imports(tmp_path):
+    # #780: the settings GUI writes config/team_options.json; a new assembly writes interface.json again, which still
+    # imports it from there, and leaves the file as it was
+    repo, root = tmp_path / "repo", tmp_path / "install"
+    (repo / "agent").mkdir(parents=True)
+    (repo / "assets").mkdir()
+    shutil.copy(INSTALL.parent.parent / "assets/interface.json", repo / "assets/interface.json")
+    mirror_repo(repo, root, EXE)
+    (root / "config").mkdir()
+    shutil.copy(TEAM_OPTIONS, root / "config/team_options.json")
+
+    mirror_repo(repo, root, EXE)
+
+    assert (root / "config/team_options.json").read_bytes() == TEAM_OPTIONS.read_bytes()
+    cases = client_override.load_interface(root / "interface.json")["option"]["ExpTeam"]["cases"]
+    assert [c["name"] for c in cases] == ["none", "a", "b", "gone"]
 
 
 def test_maafw_drops_what_the_wheel_dropped_and_keeps_the_fixed_dll(tmp_path):

@@ -29,10 +29,9 @@ function applyEdits(data: unknown, edits: Edit[]) {
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
 
-  // task_start's Luxcavation cases too: the agent checks those at a task's start (tests/test_task_options.py), the GUI here,
-  // when it saves. Not MirrorDungeon's: its target floor is a client option the GUI does not see (#779).
-  const saved = cases.task_start.filter((c) => c.task !== "MirrorDungeon");
-  for (const c of [...cases.cases, ...saved] as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
+  // Not task_start's: the agent checks those at a task's start (tests/test_task_options.py), on the target floor and the
+  // team the client sends, which the GUI does not see (#779, #780).
+  for (const c of cases.cases as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
     test(c.name, () => {
       const problems = validate(applyEdits(cases.valid, c.edits));
       if (c.cross) {
@@ -59,7 +58,6 @@ function everyProblem(): Settings {
   ];
   s.starlight_plans = [{ ...s.starlight_plans[0], id: "s1", name: "Same" }, { ...s.starlight_plans[0], id: "s1", name: "Same" }];
   s.gift_lists = [{ ...s.gift_lists[0], want: [9780], keep: [9780] }];
-  s.luxcavation.exp.team = "gone";
   s.event_overrides = [{ question: "Q", option: "a" }, { question: "Q", option: "b" }];
   s.trial_risk_overrides = [{ trial: "Growth I", risk: 1 }, { trial: "Growth I", risk: 2 }];
   return s;

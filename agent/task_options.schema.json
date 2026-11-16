@@ -41,7 +41,8 @@
         "mode": { "title": "ExpMode", "enum": ["daily", "count"], "description": "daily: the battles the day still needs, read on the pass's Daily row Clear EXP Luxcavation (1 while under way), none when it does not read (#429); count: count battles this run, nothing read (#431)" },
         "count": { "title": "ExpCount", "type": "integer", "minimum": 1, "description": "the battles to win this run; sent only while mode is count" },
         "retries": { "title": "ExpRetries", "type": "integer", "minimum": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
-        "consecutive": { "title": "ExpConsecutive", "type": "boolean", "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+        "consecutive": { "title": "ExpConsecutive", "type": "boolean", "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" },
+        "team": { "title": "ExpTeam", "type": "string", "minLength": 1, "description": "a teams[] id of the settings file: a case of the team options file the settings GUI writes (config/team_options.json, #780); not sent when none is picked, which task_options.team_errors stops on" }
       },
       "if": { "properties": { "mode": { "const": "count" } }, "required": ["mode"] },
       "then": { "required": ["count"] }
@@ -53,7 +54,8 @@
         "mode": { "title": "ThreadMode", "enum": ["daily", "count"], "description": "daily: the battles the day still needs, read on the Thread tab's Daily Bonuses (n/3 left: n), none when they do not read (#429); count: count battles this run, nothing read (#431)" },
         "count": { "title": "ThreadCount", "type": "integer", "minimum": 1, "description": "the battles to win this run; sent only while mode is count" },
         "retries": { "title": "ThreadRetries", "type": "integer", "minimum": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
-        "consecutive": { "title": "ThreadConsecutive", "type": "boolean", "description": "set the card's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+        "consecutive": { "title": "ThreadConsecutive", "type": "boolean", "description": "set the card's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" },
+        "team": { "title": "ThreadTeam", "type": "string", "minLength": 1, "description": "as ExpLuxcavation's team" }
       },
       "if": { "properties": { "mode": { "const": "count" } }, "required": ["mode"] },
       "then": { "required": ["count"] }

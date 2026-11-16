@@ -384,7 +384,7 @@ describe("clicking a problem", () => {
   ] as const)("focuses %s", async (_, change, text, label) => {
     const s = settings();
     change(s);
-    const user = await openOn(s, zh["tab.daily"]);
+    const user = await openOn(s, zh["tab.events"]);
     await user.click(problem(text));
     expect(screen.getByRole("checkbox", { name: zh[label] })).toHaveFocus();
   });
@@ -437,7 +437,7 @@ describe("closing the window", () => {
   test("with nothing unsaved, closes without asking, also after a save", async () => {
     const user = await edited();
     await user.click(screen.getByRole("button", { name: zh.save }));
-    await screen.findByText(zh.saved);
+    await screen.findByText(zh.savedTeams); // the rename changed the team list too (#780)
     expect(requestClose()).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -548,7 +548,7 @@ describe("reloading the page (F5, Ctrl+R)", () => {
   test("also after a save: nothing is unsaved then", async () => {
     const user = await edited();
     await user.click(screen.getByRole("button", { name: zh.save }));
-    await screen.findByText(zh.saved);
+    await screen.findByText(zh.savedTeams); // the rename changed the team list too (#780)
     expect(press(KEYS[0][1])).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -637,7 +637,7 @@ describe("Ctrl+S", () => {
     expect(ctrlS()).toBe(true);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
-    expect(await screen.findByText(zh.saved)).toBeInTheDocument();
+    expect(await screen.findByText(zh.savedTeams)).toBeInTheDocument(); // the rename changed the team list too (#780)
   });
 
   test("is refused while a problem stands, and writes nothing", async () => {
