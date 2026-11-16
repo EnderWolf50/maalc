@@ -1,5 +1,6 @@
 // The window shows the data it reads when it starts (gameData.ts), not what the build held (#767).
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import css from "./index.css?raw";
 import { StartError } from "./StartError";
@@ -67,4 +68,15 @@ test("the window says why it cannot start instead of staying blank", () => {
 test("the reason of a string rejection (what Tauri's invoke gives) is shown too", () => {
   render(<StartError error={"no resource folder under <root>"} />);
   expect(screen.getByRole("alert")).toHaveTextContent("no resource folder under <root>");
+});
+
+test("the error page has a way to close the window: the window has no title bar of its own", async () => {
+  const destroy = vi.fn().mockResolvedValue(undefined);
+  vi.doMock("@tauri-apps/api/core", () => ({ isTauri: () => true, invoke: vi.fn(), convertFileSrc: String }));
+  vi.doMock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({ destroy }) }));
+  const { StartError: Fresh } = await import("./StartError");
+  render(<Fresh error="x" />);
+  await userEvent.click(screen.getByRole("button", { name: /關閉/ }));
+  expect(destroy).toHaveBeenCalled();
+  vi.doUnmock("@tauri-apps/api/window");
 });
