@@ -24,6 +24,7 @@ from pathlib import Path
 import opencc
 
 from local_dir import local_dir
+from sin_icons import COLOURS as SINS  # ATTRIBUTE_TYPE 0..6, CRIMSON..VIOLET
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
@@ -32,7 +33,11 @@ EFFECTS = REPO / "gui/src/gift_effects.json"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
-BUFFS = "static/Assets/Resources_moved/StaticData/static-data/buff"  # the client's buff records, under .local/unpack/
+STATIC = "static/Assets/Resources_moved/StaticData/static-data"  # the client's static data, under .local/unpack/
+BUFFS = STATIC + "/buff"  # the client's buff records
+# The gift records that carry a gift's sin (attributeType): the mirror dungeon's own first, then the plain ones; 9038, 9111
+# and 9195 carry another sin in the plain tables (client 1.118.1).
+GIFT_TABLES = ("ego-gift-mirrordungeon", "ego-gift")
 _S2TWP = opencc.OpenCC("s2twp")
 FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # where s2twp's Taiwan wording is wrong for the game text
 YELLOW = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
@@ -71,7 +76,9 @@ def note_effects(client):
     return ("The effect text of each gift the settings GUI shows (gift_search.json's, then gift_recipes.json's fusion gifts, "
             f"materials, extra gifts and vestiges), as the game's gift panel prints it. English: the game client {client}'s "
             "EN_EGOgift_*.json desc; Chinese: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json desc (Simplified "
-            "Chinese), by gift id. Each text is a list of runs: a string is plain text; {\"kw\": id} a [tag] that names a keyword, "
+            "Chinese), by gift id. sin: the gift's sin, which colours the plate the game draws its name on (the attributeType of "
+            "its record in the same client's static data, ego-gift-mirrordungeon/*.json before ego-gift/*.json). "
+            "Each text is a list of runs: a string is plain text; {\"kw\": id} a [tag] that names a keyword, "
             "drawn as its icon and its name in its colour; {\"text\", \"i\", \"colour\"} italic or coloured text (flavour text). "
             "keywords: each keyword the texts name: its name in each language (Bufs*.json, BattleKeywords*.json of each), its "
             "colour as the client's ColorCode table names it (its buff's buffType in the static data buff/*.json) and its icon "
@@ -213,6 +220,26 @@ def keyword_entry(buff, en, zh):
     return {"colour": buff["buffType"], "icon": buff.get("iconId") or buff["id"], "en": en, "zh": zh}
 
 
+def gift_sins(unpack, ids):
+    """gift id -> its sin, for each of `ids`: the attributeType of its record in the client's static data, the mirror
+    dungeon's tables (GIFT_TABLES) first. The game draws the gift's name on a plate of that sin's colour (#786). Two records
+    of one table folder that disagree, or a gift with no sin of SINS, stop the tool: the GUI would have no plate for it."""
+    sins = {}
+    for folder in GIFT_TABLES:
+        found = {}
+        for f in sorted((unpack / STATIC / folder).glob("*.json")):
+            for g in json.loads(f.read_text(encoding="utf-8-sig")).get("list", []):
+                if isinstance(g, dict) and "attributeType" in g:
+                    if found.setdefault(g["id"], g["attributeType"]) != g["attributeType"]:
+                        raise ValueError(f"gift {g['id']}: {folder} gives it both {found[g['id']]} and {g['attributeType']}")
+        for i, sin in found.items():
+            sins.setdefault(i, sin)
+    missing = [i for i in ids if sins.get(i) not in SINS]
+    if missing:
+        raise ValueError(f"gifts with no sin of {SINS}: {[(i, sins.get(i)) for i in missing]}")
+    return {i: sins[i] for i in ids}
+
+
 def catalog_ids():
     """Every gift the settings GUI shows, in its catalog's order (gui/src/giftCatalog.ts CATALOG): gift_search.json's, then
     gift_recipes.json's fusion gifts, materials, extra gifts and vestiges."""
@@ -222,9 +249,9 @@ def catalog_ids():
 
 
 def gift_effects(z, unpack, ids):
-    """(keywords, effects): effects str(gift id) -> {"en", "zh"}, each gift's effect text as runs (effect_runs), in the order
-    of `ids`; keywords keyword id -> keyword_entry, every keyword the effects name, by id. A keyword that names no buff of the
-    static data stops the tool: the GUI would have no colour and no icon for it."""
+    """(keywords, effects): effects str(gift id) -> {"sin", "en", "zh"}, each gift's sin (gift_sins) and effect text as runs
+    (effect_runs), in the order of `ids`; keywords keyword id -> keyword_entry, every keyword the effects name, by id. A
+    keyword that names no buff of the static data stops the tool: the GUI would have no colour and no icon for it."""
     en = _en_list(unpack, "EN_EGOgift_*.json")
     en_names = en_keyword_names(unpack)
     zh = {}
@@ -232,9 +259,10 @@ def gift_effects(z, unpack, ids):
         for x in read(z, f):
             zh.setdefault(x["id"], x)
     zh_names = keyword_names(z)
-    effects = {str(i): {"en": effect_runs(en[i]["desc"].strip(), en_names),
+    sins = gift_sins(unpack, ids)
+    effects = {str(i): {"sin": sins[i], "en": effect_runs(en[i]["desc"].strip(), en_names),
                         "zh": effect_runs(zh[i]["desc"].strip(), zh_names, to_traditional)} for i in ids}
-    used = sorted({r["kw"] for e in effects.values() for runs in e.values() for r in runs if isinstance(r, dict) and "kw" in r})
+    used = sorted({r["kw"] for e in effects.values() for runs in (e["en"], e["zh"]) for r in runs if isinstance(r, dict) and "kw" in r})
     buffs = buff_records(unpack)
     missing = [k for k in used if k not in buffs or k not in en_names or k not in zh_names]
     if missing:

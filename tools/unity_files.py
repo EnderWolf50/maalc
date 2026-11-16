@@ -100,12 +100,12 @@ def player_sprites(data: Path, parts: dict[str, dict[str, tuple[str, tuple[int, 
     return out
 
 
-def write_webps(images: dict[str, "Image.Image"], out: Path, quality: int) -> int:
-    """Each image as `<name>.webp` in out, alpha kept; files of other names removed: a folder of the GUI's game art, as the art
-    tools write it. The bytes written."""
+def write_webps(images: dict[str, "Image.Image"], out: Path, quality: int, lossless: bool = False) -> int:
+    """Each image as `<name>.webp` in out, alpha kept (`lossless`: every pixel kept); files of other names removed: a folder
+    of the GUI's game art, as the art tools write it. The bytes written."""
     out.mkdir(exist_ok=True)
     for name, im in images.items():
-        im.save(out / f"{name}.webp", "WEBP", quality=quality, method=6)
+        im.save(out / f"{name}.webp", "WEBP", quality=quality, method=6, lossless=lossless)
     for stale in set(out.glob("*.webp")) - {out / f"{n}.webp" for n in images}:
         stale.unlink()
     return sum((out / f"{n}.webp").stat().st_size for n in images)

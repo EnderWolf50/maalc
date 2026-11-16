@@ -3,6 +3,7 @@
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import effects from "./gift_effects.json";
+import plates from "./gift_plates/plates.json";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { GIFT_SOURCES, SHOP_GIFTS, parseThemePacks, type DataGift } from "./model";
 import { webpFolder } from "./webpFolder";
@@ -44,11 +45,22 @@ export type EffectRun = string | { kw: string } | { text: string; i?: boolean; c
  * printed in, its status icon (buf_icons/<icon>.webp) and its names. */
 export interface StatusWord { colour: Colour; icon: string; en: string; zh: string }
 export const STATUS_WORDS = effects.keywords as Record<string, StatusWord>;
-const EFFECTS = effects.effects as Record<string, { en: EffectRun[]; zh: EffectRun[] }>;
+/** A gift's sin, its attributeType in the game's data (ATTRIBUTE_TYPE 0..6). */
+export type Sin = keyof typeof plates.plates;
+const EFFECTS = effects.effects as Record<string, { sin: Sin; en: EffectRun[]; zh: EffectRun[] }>;
 /** The gift's effect text in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764). */
 export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** The gift's sin (gift_effects.json, tools/llc_text.py gift_sins): the colour of the plate the game draws its name on (#786). */
+export const giftSin = (id: number): Sin | undefined => EFFECTS[id]?.sin;
 /** A status word's icon URL (gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). */
 export const bufIconUrl = webpFolder(import.meta.glob<string>("./buf_icons/*.webp", { eager: true, query: "?url", import: "default" }));
+const plateUrl = webpFolder(import.meta.glob<string>("./gift_plates/*.webp", { eager: true, query: "?url", import: "default" }));
+/** A sin's name plate (gui/src/gift_plates/, tools/gift_plates.py): the game's plate sprite tinted by the sin's colour, and
+ * the ink the name holds 4.5:1 in on it, dark on a bright plate, light on the others. */
+export const plateOf = (sin: Sin) => {
+  const { ink } = plates.plates[sin] as { ink: keyof typeof plates.inks };
+  return { url: plateUrl(sin)!, ink, colour: plates.inks[ink] };
+};
 
 /** The icon's URL (assets/.../gift_icons/<id>.webp). */
 export const iconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" }));
