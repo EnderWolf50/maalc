@@ -612,7 +612,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 經驗本（`ExpLuxcavation`）與紐本（`ThreadLuxcavation`）的腦啡肽模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`、`fights`（`tests/test_luxcavation.py` 列舉情況），兩個任務共用，只有每場的消耗與今天已打的讀法不同：經驗本 3、紐本 2（Level Select 每級都是 2）。（#367、#368、#362、#429、#431）
 
 - **讀腦啡肽模組數**（`lux_actions.module_count`）：左下面板有兩個數字：黃色卡片圖示旁的是 Enkephalin Box，**圓形圖示旁的是 Enkephalin Module**（實機 2026-10-26）。面板的 x 隨頁面移動（主畫面、Drive 在 393，Luxcavation 頁在 242），所以先用模板 `ModuleIcon` 找圓形圖示，再把圖示右邊那一行當一個數字 OCR。圖示不在畫面上或數字讀不出來回 None。鏡牢開局前的門檻（#369）重用這個函式。截圖：`tests/screens/MainWindow.png`、`Drive.png`、`LuxExp.png` 等，`tests/test_module_count.py`。
-- **兩種模式**（`luxcavation.<任務>.mode`，#431，使用者 2026-11-05；兩個任務預設都是每日模式）。這次要打的場數是 `luxcavation.fights(mode, 目標, 今天已贏)`，判斷在 `lux_actions.plan`，兩個任務共用：
+- **兩種模式**（任務選項 `ExpMode`／`ThreadMode`，#431、#781，使用者 2026-11-05；兩個任務預設都是每日模式）。這次要打的場數是 `luxcavation.fights(mode, 目標, 今天已贏)`，判斷在 `lux_actions.plan`，兩個任務共用：
   - **自訂次數**（`count`，#362 D5）：這次打贏 `count` 場，不讀今天打過幾場：經驗本不走通行證頁（`ExpLuxcavation` 先試 `ExpCountMode`，自訂辨識 `LuxCountMode` 在這個模式命中，直接到 `ExpHome`），紐本不讀 Daily Bonuses。`LuxHome` 讀完腦啡肽模組就 `plan`，log 例如 `EXP Luxcavation: count mode, 1 this run: Modules 182 >= 3 needed, fight 1`。
   - **每日模式**（`daily`，#429）：打今天還沒打的。當天的場數 `luxcavation.DAILY`：經驗本 1（通行證 Daily 的一列），紐本 3（3 次 Daily Bonuses）；當天已經打贏的場數（手動打的也算）先扣掉，這次只打 max(0, 當天的場數 − 今天已贏) 場。不用 `count`。
   - **經驗本（每日模式）**：開頭先 `GoHome`，走通行證頁（`ExpPassHub`，同 `ClaimPassMissions` 的 `PassBanner` → `PassMissionsTab`，停在 Weekly／Seasonal 分頁就點 Daily，`ExpPassDaily`），在 Daily 分頁用 OCR 找 `Clear EXP Luxcavation 1 time(s)` 那一列（`PassExpRow`，最近的 `pass_missions.ROWS_Y`），看它的樣子（`pass_missions.row_done`：進度條滿或蓋了 CLEAR 章，可領或已領）：完成算今天已贏 1 場，進行中算 0 場（`ExpPassRead`）。這一列只分得出 0 和「至少 1」。不點任何一列。60 秒都沒到通行證頁（`ExpPassLost`）或 3 秒內找不到這一列：算讀不到。然後 `ExpHome`（`LuxHome`）回主畫面讀腦啡肽模組、`plan`。
@@ -622,7 +622,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **開始時檢查一次**：主畫面讀到的腦啡肽模組數 m（`LuxHome`）；m < 最難關每場消耗 × 這次要打的場數（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed for k, skipped`，回主畫面、以成功結束（`finish()`），清單繼續。面板讀不出來：停止程序，不花任何腦啡肽模組。之後不再檢查。
 - **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿這次要打的場數（`RUN["lux"]["fights"]`）就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
 - **戰敗**：不算次數，不扣腦啡肽模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。`retries` 是每一場各自的次數，打贏就重算（同鏡牢的全滅重打）：`retries` 1、這次要打 3 場時，每一場都可以輸一次再打。`lose` 的訊號是結算頁的紅字 `Defeat`（實機 2026-10-27：手動 Give Up，沒有確認框；戰敗不扣腦啡肽模組、不吃紐本的 Daily Bonuses，verified）。回到分頁卻沒看到結算頁，也走停止程序，不算一次。（live-1 F2、F3）
-- **連戰**（`luxcavation.<任務>.consecutive`，預設開，#375）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
+- **連戰**（任務選項 `ExpConsecutive`／`ThreadConsecutive`，預設開，#375、#781）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
 - 計數存在記憶體（`RUN["lux"]`：`mode` 模式、`target` 目標（自訂次數是 `count`，每日模式是 `DAILY` 的當天場數）、`today` 讀到的今天已贏、`fights` 這次要打的場數，`plan` 之前是 None），每個任務開始時由 `TaskStart` 清掉（ADR 0003：不存檔；今天已做的次數每次從畫面讀，不記憶）。
 
 ## 16. 狂氣換腦啡肽的價格核對

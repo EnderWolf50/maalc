@@ -12,6 +12,9 @@ sys.path.insert(0, str(ROOT / "tools"))  # a child process (daily_child.py) has 
 
 import client_override
 
+# The global options at their defaults, as the options line at a task's start shows them (task_options.line, #779).
+GLOBAL_DEFAULTS = "webhook_url (not set), auto_accept_terms=true, auto_download=true, keep_dismissed_screens=true"
+
 
 def interface():
     """assets/interface.json with its imports, as a client loads it."""

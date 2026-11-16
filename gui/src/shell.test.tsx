@@ -86,6 +86,23 @@ test("a save writes the file's run section back as it was, though no tab shows i
   expect(saved.run).toEqual(s.run);
 });
 
+test("a save writes the file's daily options back as they were, though no tab shows them (#781)", async () => {
+  // #782 drops them from the file but the Luxcavation team (#780 moves it); until then nothing reads them, nothing loses them
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta")];
+  s.luxcavation.exp = { ...s.luxcavation.exp, mode: "count", count: 7, retries: 4, consecutive: false };
+  s.luxcavation.thread = { ...s.luxcavation.thread, count: 9, retries: 2 };
+  s.charge_enkephalin.count = 5;
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  await user.click(screen.getByRole("button", { name: zh.save }));
+  await waitFor(() => expect(file.saved).toHaveLength(1));
+  const saved = JSON.parse(file.saved[0]);
+  expect([saved.luxcavation, saved.charge_enkephalin]).toEqual([s.luxcavation, s.charge_enkephalin]);
+});
+
 test("with nothing edited the header says there is nothing to save", async () => {
   render(<App />);
   await screen.findByRole("button", { name: zh.save });

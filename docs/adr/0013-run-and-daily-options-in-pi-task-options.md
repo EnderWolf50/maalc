@@ -37,6 +37,6 @@ status: accepted（修訂 ADR 0006、ADR 0010）
 
 - 設定 GUI 少了「執行選項」與「日常」兩頁，也不再在存檔時檢查目標層數對隊伍的規則：目標層數是 client 的任務選項，GUI 看不到。隊伍頁改放一行固定說明。
 - 設定檔升到版本 21，移除 `run`、`luxcavation`、`charge_enkephalin`（#782）；在那之前，這三段由 GUI 原封不動寫回，Agent 不讀。
-- 實機測試工具像 client 一樣送任務選項（`tools/client_override.py`、`bot.py run --option`），`bot.py prep --set run.*` 停下並指向 `--option`。
+- 實機測試工具像 client 一樣送任務選項（`tools/client_override.py`、`bot.py run --option`）；`bot.py prep --set` 遇到搬走的鍵（`run.*`、`luxcavation.<任務>.*` 除了隊伍、`charge_enkephalin.count`）停下並指向 `--option`。
 - MFAAvalonia 記錄任務送出的選項值時，只要有任何 `password` 輸入就整行遮掉；webhook 是 `password` 輸入，所以除錯時要看 Agent 自己記的 `options:` 那一行（webhook 只寫有沒有設定）。
 - 沒有在 MXU 或 MFAAvalonia 實際跑過；兩個 client 的行為都是讀原始碼得來的（#776「其他說明」），實機驗收在各張子 issue。

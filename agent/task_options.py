@@ -1,12 +1,12 @@
-"""A task's options (#776, #777, #779): the values its entry action (TaskStart, and LuxStart and ChargeStart built on it)
+"""A task's options (#776, #777, #779, #781): the values its entry action (TaskStart, and LuxStart and ChargeStart built on it)
 reads once, before any tap, and keeps in actions.TASK["options"]; every reader takes them from there.
 
 The client sends them (MXU, MFAAvalonia; ADR 0013). Each option of interface.json writes its key into attach of the
 task's entry node, a global option into attach of GlobalOptions, a node no next names; MaaFramework applies the client's
 override array entry by entry and merges attach key by key, so the entry action reads them with context.get_node_data.
 read checks both against task_options.schema.json; a value missing or wrong ends the task before any tap, with a line
-that names the option. There is no settings-file fallback. A Luxcavation task's and ChargeEnkephalin's own options still
-come from the settings file (luxcavation, charge), until #781 and #780 move them.
+that names the option. There is no settings-file fallback. A Luxcavation task's team still comes from the settings file
+(luxcavation), until #780 moves it.
 
 The rule that crosses MirrorDungeon's target floor with the teams is checked here too, at the task's start: the teams
 stay in the settings file."""
@@ -83,14 +83,9 @@ def options(task, values):
 
 
 def luxcavation(settings, key):
-    """A Luxcavation task's options the settings file still holds (key "exp" or "thread"): luxcavation.<key>'s mode,
-    count, team, retries and consecutive."""
-    return dict(settings["luxcavation"][key])
-
-
-def charge(settings):
-    """ChargeEnkephalin's option the settings file still holds: count, charge_enkephalin.count."""
-    return {"count": settings["charge_enkephalin"]["count"]}
+    """A Luxcavation task's option the settings file still holds (key "exp" or "thread"): team, luxcavation.<key>.team.
+    Its mode, count, retries and consecutive are the client's (#781); the file's are left as they are."""
+    return {"team": settings["luxcavation"][key]["team"]}
 
 
 def target_floor_errors(options, teams):

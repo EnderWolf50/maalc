@@ -1,4 +1,4 @@
-"""A task's options (#777, #779, agent/task_options.py): its entry action (TaskStart, LuxStart, ChargeStart) reads them
+"""A task's options (#777, #779, #781, agent/task_options.py): its entry action (TaskStart, LuxStart, ChargeStart) reads them
 once, before any tap, from the attach a client's override array leaves on the entry node and on GlobalOptions, and
 every reader takes them from there. A value missing or wrong, or a rule that crosses them with the teams, ends the task
 at its start: MirrorDungeon fails, a daily task takes the stop procedure.
@@ -16,13 +16,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from client_options import override, send
+from client_options import GLOBAL_DEFAULTS, override, send
 from daily_child import bind, game_class, load, result, run_child, run_task, screen
 from test_settings import VALID, apply_edits
 
 CASES = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
 LUX_KEYS = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}
 MIRROR_WHERE = "set it in the options of the MirrorDungeon task in the client's task list"
+WHERE = "set it in the options of the {} task in the client's task list"
 GLOBAL_WHERE = "set it in the client's global options (MXU: Settings; MFAAvalonia: the global options item of the task list)"
 # Every option of MirrorDungeon and every global one off its default (target 15 needs every team HARD from floor 1),
 # and what the task reads from them.
@@ -127,6 +128,37 @@ def test_runs_limit_off_is_no_limit(context, monkeypatch):
     assert actions.TASK["options"]["runs"] is None  # settlement.runs_done: no cap; MirrorRuns, not sent, is not read
 
 
+@pytest.mark.parametrize("task, options, read, line", [
+    # #781: daily mode sends no count (the client sends a nested input only under its case), count mode does; a
+    # Luxcavation task's team is still the settings file's (#780 moves it), not on the options line
+    ("ExpLuxcavation", (), {"mode": "daily", "retries": 0, "consecutive": True, "team": "a"},
+     "mode=daily, retries=0, consecutive=true"),
+    ("ThreadLuxcavation", ("ThreadMode=count", "ThreadCount=5", "ThreadRetries=2", "ThreadConsecutive=No"),
+     {"mode": "count", "count": 5, "retries": 2, "consecutive": False, "team": "b"}, "mode=count, count=5, retries=2, consecutive=false"),
+    ("ChargeEnkephalin", ("ChargeCount=10",), {"count": 10}, "count=10"),
+])
+def test_a_daily_task_reads_its_own_options_the_client_sent(context, monkeypatch, task, options, read, line):
+    write(apply_edits(CASES["valid"], [{"set": "luxcavation/exp/team", "value": "a"}, {"set": "luxcavation/thread/team", "value": "b"}]))
+    ok, stops, said = start(context, monkeypatch, task, *options)
+    own = {k: v for k, v in actions.TASK["options"].items() if k not in task_options.GLOBAL}
+    assert ok is True and stops == [] and own == read
+    assert said[1] == f"options: {GLOBAL_DEFAULTS}, {line}"
+
+
+def test_the_settings_files_daily_sections_are_not_read(context, monkeypatch):
+    # #781: the client's options are the only source; the file's luxcavation (but its team, #780) and charge_enkephalin,
+    # every key off the client's default here, are left as they are for the GUI to write back (#782 drops them).
+    edits = [{"set": f"luxcavation/{key}/{k}", "value": v} for key in ("exp", "thread")
+             for k, v in (("mode", "count"), ("count", 7), ("retries", 5), ("consecutive", False))]
+    write(apply_edits(CASES["valid"], [*edits, {"set": "luxcavation/exp/team", "value": "a"}, {"set": "charge_enkephalin/count", "value": 9}]))
+    assert start(context, monkeypatch, "ExpLuxcavation")[0] is True
+    assert {k: actions.TASK["options"][k] for k in ("mode", "retries", "consecutive", "team")} == {
+        "mode": "daily", "retries": 0, "consecutive": True, "team": "a"}
+    assert "count" not in actions.TASK["options"]
+    ok, _, said = start(context, monkeypatch, "ChargeEnkephalin")
+    assert ok is True and actions.TASK["options"]["count"] == 0 and said[-1] == "done: ChargeCount is 0: Lunacy left alone"
+
+
 def test_a_task_with_no_options_of_its_own_reads_the_global_ones(context, monkeypatch):
     write(VALID)
     ok, _, said = start(context, monkeypatch, "ClaimMail", "AutoAcceptTerms=No", "WebhookUrl=http://hook.invalid/")
@@ -146,6 +178,12 @@ def test_a_task_with_no_options_of_its_own_reads_the_global_ones(context, monkey
     ("ClaimMail", (), ("webhook_url",), f"WebhookUrl (webhook_url): not sent; {GLOBAL_WHERE}"),
     ("ExpLuxcavation", (), ("keep_dismissed_screens",), f"KeepDismissedScreens (keep_dismissed_screens): not sent; {GLOBAL_WHERE}"),
     ("ChargeEnkephalin", (), ("auto_accept_terms",), f"AutoAcceptTerms (auto_accept_terms): not sent; {GLOBAL_WHERE}"),
+    # #781: a daily task's own; count mode with no count, a typo that MXU sends as nothing, past the game's 10 a day
+    ("ExpLuxcavation", ("ExpMode=count",), ("count",), f"ExpCount (count): not sent; {WHERE.format('ExpLuxcavation')}"),
+    ("ThreadLuxcavation", ("ThreadRetries=x",), (), f"ThreadRetries (retries): not sent; {WHERE.format('ThreadLuxcavation')}"),
+    ("ExpLuxcavation", (), ("consecutive",), f"ExpConsecutive (consecutive): not sent; {WHERE.format('ExpLuxcavation')}"),
+    ("ChargeEnkephalin", ("ChargeCount=11",), (),
+     f"ChargeCount (count): 11 is greater than the maximum of 10; {WHERE.format('ChargeEnkephalin')}"),
 ])
 def test_an_option_not_sent_or_wrong_ends_the_task_at_its_start_naming_it(context, monkeypatch, task, options, drop, error):
     # #779: no fallback to the settings file or a default. MirrorDungeon fails, as on settings it cannot run on; a daily
@@ -229,10 +267,11 @@ def test_a_settings_file_saved_mid_task_changes_nothing_the_task_reads(context, 
 
 
 @pytest.mark.parametrize("task, stopped", [("MirrorDungeon", False), ("ClaimMail", False), ("ExpLuxcavation", True),
-                                           ("ThreadLuxcavation", True), ("ChargeEnkephalin", True)])
+                                           ("ThreadLuxcavation", True), ("ChargeEnkephalin", False)])
 def test_a_task_whose_settings_do_not_load_at_its_start_goes_on_or_stops_as_before(context, monkeypatch, task, stopped):
     # No settings file: MirrorDungeon goes on to PlanRun, which fails it and says why (test_settings.py); a task with no
-    # options in the settings goes on with the client's; a Luxcavation task and ChargeEnkephalin stop, before any tap.
+    # options in the settings goes on with the client's, ChargeEnkephalin too since its count is the client's (#781); a
+    # Luxcavation task, whose team the file holds, stops before any tap.
     ok, stops, _ = start(context, monkeypatch, task, "AutoDownload=No")
     assert ok is not stopped
     assert stops == ([f"Invalid settings:\n- {actions.ROOT / 'config' / 'settings.json'} not found. {NO_TEAM}"]

@@ -33,6 +33,37 @@
       },
       "if": { "properties": { "runs_limited": { "const": true } }, "required": ["runs_limited"] },
       "then": { "required": ["runs"] }
+    },
+    "ExpLuxcavation": {
+      "type": "object",
+      "required": ["mode", "retries", "consecutive"],
+      "properties": {
+        "mode": { "title": "ExpMode", "enum": ["daily", "count"], "description": "daily: the battles the day still needs, read on the pass's Daily row Clear EXP Luxcavation (1 while under way), none when it does not read (#429); count: count battles this run, nothing read (#431)" },
+        "count": { "title": "ExpCount", "type": "integer", "minimum": 1, "description": "the battles to win this run; sent only while mode is count" },
+        "retries": { "title": "ExpRetries", "type": "integer", "minimum": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
+        "consecutive": { "title": "ExpConsecutive", "type": "boolean", "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+      },
+      "if": { "properties": { "mode": { "const": "count" } }, "required": ["mode"] },
+      "then": { "required": ["count"] }
+    },
+    "ThreadLuxcavation": {
+      "type": "object",
+      "required": ["mode", "retries", "consecutive"],
+      "properties": {
+        "mode": { "title": "ThreadMode", "enum": ["daily", "count"], "description": "daily: the battles the day still needs, read on the Thread tab's Daily Bonuses (n/3 left: n), none when they do not read (#429); count: count battles this run, nothing read (#431)" },
+        "count": { "title": "ThreadCount", "type": "integer", "minimum": 1, "description": "the battles to win this run; sent only while mode is count" },
+        "retries": { "title": "ThreadRetries", "type": "integer", "minimum": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
+        "consecutive": { "title": "ThreadConsecutive", "type": "boolean", "description": "set the card's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+      },
+      "if": { "properties": { "mode": { "const": "count" } }, "required": ["mode"] },
+      "then": { "required": ["count"] }
+    },
+    "ChargeEnkephalin": {
+      "type": "object",
+      "required": ["count"],
+      "properties": {
+        "count": { "title": "ChargeCount", "type": "integer", "minimum": 0, "maximum": 10, "description": "the day's target Daily Count: charges made earlier today, by hand too, count toward it, and none is made once it is reached or when the Daily Count does not read (#429); 0: the Use Lunacy tab is never touched; the game allows 10 a day" }
+      }
     }
   }
 }

@@ -15,7 +15,7 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
+  ["daily", "tab.daily", DailyTab, ["luxcavation"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -28,7 +28,8 @@ export const TABS = [
 type TabId = (typeof TABS)[number][0];
 
 /** The tabs in groups (what the bot runs: the daily tasks; the team and its gift list; the plans; the overrides): the tabs
- * that start a group. The Mirror Dungeon task's options and the global ones are the client's (MXU, MFAAvalonia; #779). */
+ * that start a group. The Mirror Dungeon task's options and the global ones are the client's (MXU, MFAAvalonia; #779), so
+ * are the daily tasks' but the Luxcavation team (#781). */
 const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
