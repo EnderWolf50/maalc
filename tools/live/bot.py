@@ -199,7 +199,7 @@ def moved(key: str, value: str) -> str | None:
         props = nodes.get(LUX_NODES.get(task), {}).get("properties", {})
         if name not in props:
             return None
-        case = {"true": "Yes", "false": "No", "null": "none"}.get(value, value)  # a switch's cases; a team's 「未選擇」
+        case = "none" if value == "null" else value  # a team's 「未選擇」
         return f"bot.py run --option {props[name]['title']}={case}"
     if section != "run":
         return None
@@ -240,8 +240,11 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
             node[last] = value
     (install / "config").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "config/maa_option.json", install / "config/maa_option.json")
-    if (source / "config/team_options.json").is_file():  # the GUI's, which interface.json imports (#780)
-        shutil.copy2(source / "config/team_options.json", install / "config/team_options.json")
+    teams = install / "config/team_options.json"  # the GUI's, which interface.json imports (#780)
+    if (source / "config/team_options.json").is_file():
+        shutil.copy2(source / "config/team_options.json", teams)
+    else:
+        teams.unlink(missing_ok=True)  # an earlier prep's would offer teams the source's settings may lack
     if (source / "state").is_dir():
         shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
     (install / "config/settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")

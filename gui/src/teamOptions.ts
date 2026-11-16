@@ -7,7 +7,8 @@ import interfaceText from "../../assets/interface.json?raw";
 import type { Settings, Team } from "./model";
 
 /** assets/interface.json as this GUI was built with it: its whole-line // comments dropped, as the clients read them. */
-const PI = JSON.parse(interfaceText.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")) as {
+export const PI = JSON.parse(interfaceText.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")) as {
+  import?: string[];
   task: { entry: string; option?: string[] }[];
   option: Record<string, Record<string, unknown>>;
 };

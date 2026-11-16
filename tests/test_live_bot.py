@@ -110,9 +110,13 @@ def prep_source(tmp_path):
 
 
 def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
-    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/
+    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/.
+    # #780: nor a team options file, and one an earlier prep left goes: its teams may not be the source's
     src, dst = prep_source(tmp_path), tmp_path / "test"
+    (dst / "config").mkdir(parents=True)
+    (dst / "config/team_options.json").write_text("{}")
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive"])
+    assert not (dst / "config/team_options.json").exists()
     assert json.loads((dst / "config/settings.json").read_text())["teams"][1]["heal"] == "revive"
     assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
 

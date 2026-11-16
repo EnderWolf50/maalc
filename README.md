@@ -84,7 +84,7 @@ MFAAvalonia 只從自己的 `runtimes\` 載入 MaaFramework，不讀 `maafw\`。
 
 ### 經驗本與紐本的隊伍
 
-經驗本、紐本各在 MXU 或 MFAAvalonia 任務清單裡、任務旁邊的「隊伍」下拉選單選隊伍（任務選項 `ExpTeam`、`ThreadTeam`）。選單列出 `maalc-gui.exe` 裡的每一支隊伍，名稱後面是它的 `TEAMS #N`；bot 用那支隊伍的遊戲隊伍編號、出戰順序與防禦回合數，隊伍不必啟用。
+經驗本、紐本各在 MXU 或 MFAAvalonia 任務清單裡、任務旁邊的「隊伍」下拉選單選隊伍（任務選項 `ExpTeam`、`ThreadTeam`）。選單列出 `maalc-gui.exe` 裡的每一支隊伍，名稱後面是它的 `TEAMS #N`；bot 用那支隊伍的遊戲內隊伍欄位、出戰順序與防禦回合數，隊伍不必啟用。
 
 - 選單來自設定視窗寫的**隊伍選項檔** `config/team_options.json`，`interface.json` 引入它。設定視窗在存檔與啟動時更新這個檔，內容有變時狀態列說一次「隊伍清單已更新」。MXU 和 MFAAvalonia 只在啟動時讀 `interface.json`，所以新增、改名或刪掉隊伍並存檔後，要**重新開啟 client**，選單才會更新。
 - 還沒在設定視窗建立隊伍時，選單是空的。選單第一項是「未選擇」，新加入的任務停在這一項。沒選隊伍時，任務在點任何東西之前停下，說明要選隊伍。

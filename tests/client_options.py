@@ -20,6 +20,7 @@ import client_override
 # The team options file the settings GUI writes for settings_cases.json's valid teams, a team "gone" since deleted
 # (gui/src/teamOptions.test.ts checks the GUI writes this).
 TEAM_OPTIONS = ROOT / "tests" / "team_options.json"
+TEAM_PICK = {"ExpLuxcavation": "ExpTeam", "ThreadLuxcavation": "ThreadTeam"}  # each Luxcavation task's team option
 
 
 def interface(teams=TEAM_OPTIONS):
@@ -28,10 +29,15 @@ def interface(teams=TEAM_OPTIONS):
     return client_override.merge(pi, client_override.read_jsonc(teams)) if teams else pi
 
 
+def posting(task, *pairs, teams=TEAM_OPTIONS):
+    """(entry, override array) a client posts task with: these NAME=VALUE options set, every other option its default."""
+    pi = interface(teams)
+    return client_override.build(pi, task, client_override.parse_options(pi, list(pairs)))[:2]
+
+
 def override(task, *pairs, teams=TEAM_OPTIONS):
     """The override array a client posts task with: these NAME=VALUE options set, every other option its default."""
-    pi = interface(teams)
-    return client_override.build(pi, task, client_override.parse_options(pi, list(pairs)))[1]
+    return posting(task, *pairs, teams=teams)[1]
 
 
 def attach(array):
@@ -47,8 +53,7 @@ def send(context, task, *pairs, drop=(), teams=TEAM_OPTIONS):
     """context (a MagicMock) answers get_node_data as MaaFramework does with task posted by a client with these
     options: the attach of the nodes the array writes, without the keys in drop (a value the client did not send), and
     the task's entry node an empty one when no option writes it. Any other node gets the mock's own answer."""
-    pi = interface(teams)
-    entry, array, _ = client_override.build(pi, task, client_override.parse_options(pi, list(pairs)))
+    entry, array = posting(task, *pairs, teams=teams)
     nodes = {entry: {}, **attach(array)}
     for values in nodes.values():
         for key in drop:

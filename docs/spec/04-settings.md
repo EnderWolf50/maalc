@@ -330,7 +330,7 @@ GUI 的「日常」分頁編輯，隊伍除外：隊伍是 client 的任務選�
 
 經驗本與紐本的隊伍是 client 的任務選項 `ExpTeam`、`ThreadTeam`，一個下拉選單，選項是設定視窗裡的隊伍（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#780）。
 
-- **送法**：選了隊伍的 case 把隊伍 id 寫進入口節點（`ExpLuxcavation`、`ThreadLuxcavation`）`attach` 的 `team`，不動 `custom_action_param`。`LuxStart` 在任務開始時和其他選項一起讀（`agent/task_options.schema.json`），用那支隊伍的遊戲隊伍編號（`game_team`）、出戰順序和 `guard_turns`，隊伍不必啟用；選項那一行寫 `team=<id>`。
+- **送法**：選了隊伍的 case 把隊伍 id 寫進入口節點（`ExpLuxcavation`、`ThreadLuxcavation`）`attach` 的 `team`，不動 `custom_action_param`。`LuxStart` 在任務開始時和其他選項一起讀（`agent/task_options.schema.json`），用那支隊伍的遊戲內隊伍欄位（`game_team`）、出戰順序和 `guard_turns`，隊伍不必啟用；選項那一行寫 `team=<id>`。
 - **檢查**：在點任何東西之前，不符就走停止程序，記一行 `stop: Invalid task options:`：
   - 沒送值（選了「未選擇」，或選單是空的）：`ExpTeam (team): no team picked; pick one in the options of the ExpLuxcavation task in the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)`。
   - 送來的 id 不在設定檔的 `teams` 裡（隊伍已刪除）：`ExpTeam (team): team '<id>' was deleted in the settings GUI; pick another in the options of the ExpLuxcavation task in the client's task list`。紐本相同，選項是 `ThreadTeam`。

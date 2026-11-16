@@ -15,6 +15,7 @@ next step, the Consecutive Battle's count) is tested in process in test_luxcavat
 import json
 
 import numpy as np
+from client_options import TEAM_PICK
 from daily_child import ROOT, bind, game_class, inside, interface as interface_json, live_frame, load, posted, result, run_child, screen
 from agent_patch import rebind
 
@@ -67,7 +68,6 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
                "ev_continue": (EVENT_BUTTON, "fight")}
 
 
-TEAM_OPTION = {"ExpLuxcavation": "ExpTeam", "ThreadLuxcavation": "ThreadTeam"}  # the client's team dropdown (#780)
 # scenario: (start screen, team, count, retries, how the battles end, then for the Thread task the tab Luxcavation
 # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2. A
 # battle the list does not reach ends in a win. CONSECUTIVE: the scenarios that fight their wins as Consecutive Battles
@@ -299,7 +299,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
         override = state.pop("override", {})
         for name, value in state.items():
             setattr(game, name, value)
-        array = posted(task, override, [f"{TEAM_OPTION[task]}={team}"])
+        array = posted(task, override, [f"{TEAM_PICK[task]}={team}"])  # the client's team dropdown (#780)
         out[scenario] = {**result(tasker.post_task(task, array).wait().get(), game, actions), "swipes": game.swipes,
                          "drags": game.drags, "fights": game.fights, "presses": game.presses,
                          "restarts": [game.stops, game.starts]}

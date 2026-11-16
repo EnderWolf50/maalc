@@ -4,10 +4,9 @@
 import { expect, test } from "vitest";
 import cases from "../../tests/settings_cases.json";
 import fixture from "../../tests/team_options.json";
-import interfaceText from "../../assets/interface.json?raw";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import { newSettings, newTeam, type Settings, type Team } from "./model";
-import { NONE, TEAM_OPTIONS, teamOptionsText } from "./teamOptions";
+import { NONE, PI, TEAM_OPTIONS, teamOptionsText } from "./teamOptions";
 
 const team = (id: string, name: string, slot: number): Team => ({ ...newTeam(slot, name), id });
 const A = team("a", "Alpha", 1), B = team("b", "Beta", 2), C = team("c", "Gamma", 3);
@@ -18,7 +17,6 @@ const option = (text: string, key: keyof typeof TEAM_OPTIONS = "ExpTeam") =>
 const names = (text: string, key: keyof typeof TEAM_OPTIONS = "ExpTeam") => option(text, key).cases.map((c) => c.name);
 const caseOf = (text: string, name: string, key: keyof typeof TEAM_OPTIONS = "ExpTeam") =>
   option(text, key).cases.find((c) => c.name === name)!;
-const PI = JSON.parse(interfaceText.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n"));
 
 test("a new team goes last, after the teams the file has, wherever it is in the queue", () => {
   const first = teamOptionsText(null, settings([A, B]))!;
@@ -103,6 +101,6 @@ test("each option is interface.json's placeholder, its cases and default_case fi
 
 test("interface.json imports the file the GUI writes (src-tauri lib.rs team_options_path)", () => {
   expect(PI.import).toEqual(["config/team_options.json"]);
-  const joined = PI.import[0].split("/").map((part: string) => `.join("${part}")`).join("");
+  const joined = PI.import![0].split("/").map((part) => `.join("${part}")`).join("");
   expect(libRs.replace(/\r\n/g, "\n")).toContain(`fn team_options_path() -> Result<PathBuf, String> {\n    Ok(root()?${joined})`);
 });

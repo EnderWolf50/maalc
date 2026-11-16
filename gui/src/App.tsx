@@ -33,6 +33,9 @@ type TabId = (typeof TABS)[number][0];
 const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
+const sayStatus = (lang: Settings["language"], status: string) =>
+  Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
 /** Write the team options file when these settings change what it says (#780, teamOptions.ts): true when it was written. */
 async function writeTeamOptions(s: Settings) {
   const text = teamOptionsText(await api.loadTeamOptions(), s);
@@ -152,8 +155,8 @@ export default function App() {
         // checks refuse, whose teams may not read as teams
         const teams = ok ? await teamOptionsNote(data, "teamOptions.updated", "teamOptions.failed") : "";
         const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teams].filter(Boolean);
-        const say = (n: string) => (Object.prototype.hasOwnProperty.call(TEXT[data.language], n) ? TEXT[data.language][n as Key] : n);
-        setStatus(notes.length === 1 ? notes[0] : notes.map(say).join(" ")); // one note stays a key: a language switch says it anew
+        // one note stays as it is, a key the header says anew in the language picked next
+        setStatus(notes.length === 1 ? notes[0] : notes.map((n) => sayStatus(data.language, n)).join(" "));
       } catch (e) {
         setLoadError(String(e));
       }
@@ -258,7 +261,7 @@ export default function App() {
     chooseList: (id, open) => { setGiftList(id); if (open) setTab("gifts"); },
   });
   const dirty = toText(s) !== savedText;
-  const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
+  const said = sayStatus(lang, status);
   // shown beside "unsaved" too (a refused save, the file read again), but not what an edit since has made stale
   const savedNow = status === "saved" || status === "savedTeams";
   const note = savedNow || status === "reverted" ? "" : said;

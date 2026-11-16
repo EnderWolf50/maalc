@@ -13,11 +13,11 @@ import pytest
 
 import client_override
 import task_options
-from client_options import ROOT, TEAM_OPTIONS, attach, interface
+from client_options import ROOT, TEAM_OPTIONS, TEAM_PICK, attach, interface
 
 PI = interface()
 BARE = interface(teams=None)  # what a client loads before the settings GUI wrote the team options file
-TEAM_KEYS = ("ExpTeam", "ThreadTeam")  # the team options: their cases come from that file
+TEAM_KEYS = tuple(TEAM_PICK.values())  # the team options: their cases come from that file
 OPTIONS = PI["option"]
 TASKS = {t["name"]: t for t in PI["task"]}
 SCHEMA = task_options.SCHEMA["$defs"]

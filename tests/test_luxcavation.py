@@ -13,13 +13,13 @@ import lux_actions
 import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
 from agent_patch import patch_all
-from client_options import send
+from client_options import TEAM_PICK, send
 
 if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
     from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
 
 SCREENS = Path(__file__).resolve().parent / "screens"
-TEAM_OPTION = {"exp": "ExpTeam", "thread": "ThreadTeam"}  # a Luxcavation task's team, the client's dropdown (#780)
+ENTRY = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}  # a Luxcavation task's entry node by its settings key
 
 
 @pytest.mark.parametrize("task, today, fights", [
@@ -233,8 +233,8 @@ def lux_start(context, monkeypatch, key, team="b", **opts):
     # TaskStart starts a task afresh: its TASK and STUCK are put back after the test
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
     patch_all(monkeypatch, "STUCK", dict(actions.STUCK))
-    entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
-    send(context, entry, *([f"{TEAM_OPTION[key]}={team}"] if team else []))
+    entry = ENTRY[key]
+    send(context, entry, *([f"{TEAM_PICK[entry]}={team}"] if team else []))  # the client's team dropdown (#780)
     return lux_actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
 
 
@@ -248,12 +248,12 @@ def test_a_luxcavation_task_aims_at_the_days_battles_in_daily_mode_and_at_count_
     assert ok is True and stops == [] and (lux["mode"], lux["target"], lux["cost"], lux["fights"]) == (mode, target, cost, None)
 
 
-@pytest.mark.parametrize("key, entry", [("exp", "ExpLuxcavation"), ("thread", "ThreadLuxcavation")])
+@pytest.mark.parametrize("key, entry", ENTRY.items())
 def test_a_luxcavation_task_with_no_team_picked_stops_before_any_tap(context, monkeypatch, key, entry):
     # #780: the client's team option at 「未選擇」 sends no team
     ok, stops = lux_start(context, monkeypatch, key, team=None)
     assert ok is False and stops == [
-        f"Invalid task options:\n- {TEAM_OPTION[key]} (team): no team picked; pick one in the options of the {entry} task in "
+        f"Invalid task options:\n- {TEAM_PICK[entry]} (team): no team picked; pick one in the options of the {entry} task in "
         "the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)"]
     context.tasker.controller.post_click.assert_not_called()
 
