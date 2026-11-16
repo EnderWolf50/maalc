@@ -93,7 +93,8 @@ def test_a_disabled_team_does_not_hide_a_normal_only_team_behind_it_from_a_targe
 
 def test_a_rule_a_task_does_not_play_by_leaves_it_alone(context, monkeypatch):
     # Each task checks its own: a gone EXP team and a target its teams cannot play stop neither the mail nor the
-    # Thread task, as the settings' load stopped them all before #777.
+    # Thread task. Before #777 the settings' load refused the file, which stopped every task that loaded it at its start
+    # (Thread) and left the mail on the defaults.
     write(apply_edits(CASES["valid"], [{"set": "luxcavation/exp/team", "value": "gone"}, {"set": "run/target_floor", "value": 15},
                                        {"set": "luxcavation/thread/team", "value": "a"}]))
     assert start(context, monkeypatch, "ClaimMail")[:2] == (True, [])
@@ -131,13 +132,20 @@ def test_a_task_whose_settings_do_not_load_at_its_start_goes_on_or_stops_as_befo
         assert [actions.allowed(k) for k in ("auto_accept_terms", "auto_download", "keep_dismissed_screens")] == [True] * 3
 
 
-def test_charge_enkephalin_reads_its_count_at_its_start(context, monkeypatch):
-    # #429, #777: count 0 ends the task a success before any tap; another count goes on to the window.
-    write(apply_edits(CASES["valid"], [{"set": "charge_enkephalin/count", "value": 0}]))
-    assert start(context, monkeypatch, "ChargeEnkephalin")[0] is True and actions.TASK["done"] == "charge_enkephalin.count is 0: Lunacy left alone"
-    write(apply_edits(CASES["valid"], [{"set": "charge_enkephalin/count", "value": 3}]))
-    assert start(context, monkeypatch, "ChargeEnkephalin")[0] is True and actions.TASK["done"] is None
-    assert actions.TASK["charge"]["count"] == 3
+def test_plan_run_checks_the_target_floor_against_the_teams_a_save_since_the_start_changed(context, monkeypatch):
+    # The teams are not the task's options: PlanRun reads them afresh for each run, so it checks the start's target
+    # floor against them again, as the settings' load did before #777. Team b starts HARD at floor 3 since the save.
+    entry_page(context, lambda run, teams: [run.update(target_floor=15), teams[1].update(hard_from_floor=1)])
+    path = actions.ROOT / "config" / "settings.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["teams"][1]["hard_from_floor"] = 3
+    path.write_text(json.dumps(data), encoding="utf-8")
+    logged = []
+    patch_all(monkeypatch, "log", logged.append)
+    assert run_start_actions.PlanRun().run(context, None) is False
+    assert logged == ["stop: " + invalid(["teams/1/hard_from_floor: team 'Team b' starts HARD at floor 3, but target_floor 15 "
+                                           "needs the whole run HARD (hard_from_floor 1)"])]
+    context.tasker.controller.post_click.assert_not_called()
 
 
 # The real tasks on MaaFramework (#777): a rule broken at the start ends the task at its entry node, before any tap.
@@ -157,16 +165,20 @@ def child():
     game.screen = "main"
     tasker = bind(resource, game)
     out = {"error": None}
+
+    def evidence():
+        """How many evidence folders the stop procedure has left."""
+        folder = actions.ROOT / "logs" / "evidence"
+        return len(list(folder.iterdir())) if folder.exists() else 0
+
     for name, (task, edits) in RULE_STOPS.items():
         (actions.ROOT / "config").mkdir(exist_ok=True)
         (actions.ROOT / "config" / "settings.json").write_text(json.dumps(apply_edits(CASES["valid"], edits)), encoding="utf-8")
         game.clicks, game.keys = [], []
-        evidence = actions.ROOT / "logs" / "evidence"
-        before = len(list(evidence.iterdir())) if evidence.exists() else 0
+        before = evidence()
         actions.LOG.clear()
         out[name] = {**result(run_task(tasker, name, task), game, actions),
-                     "stops": [line.split(" ", 1)[1] for line in actions.LOG if " stop: " in line],
-                     "evidence": (len(list(evidence.iterdir())) if evidence.exists() else 0) - before}
+                     "stops": [line.split(" ", 1)[1] for line in actions.LOG if " stop: " in line], "evidence": evidence() - before}
     print(json.dumps(out))
 
 

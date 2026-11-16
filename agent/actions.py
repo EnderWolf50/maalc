@@ -410,6 +410,11 @@ def options():
     return TASK["options"]
 
 
+def option(key, default):
+    """This task's option key, as its start read it; default when it read none or not that one."""
+    return TASK.get("options", {}).get(key, default)
+
+
 def current_run(context):
     """The run plan; made up from settings, the task's options and the team queue when the agent restarted mid-run."""
     if "settings" not in RUN:  # a run plan, not just counters left by an action
@@ -453,7 +458,7 @@ def run_line(run, outcome, hard, floors, bonuses=0):
     """This run's runs.jsonl line (spec 06 執行記錄)."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
-    target = TASK.get("options", {}).get("target_floor", 5)
+    target = option("target_floor", 5)
     return {
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
@@ -493,7 +498,7 @@ def stop(context, reason, line=None, whole_list=False):
         log(f"evidence: {folder}")
     except OSError as e:
         log(f"evidence not saved: {e}")
-    if url := TASK.get("options", {}).get("webhook_url"):  # none when the task read no options
+    if url := option("webhook_url", None):
         body = json.dumps({**(line or {}), "reason": reason, "evidence": str(folder)}, ensure_ascii=False).encode()
         try:
             urllib.request.urlopen(urllib.request.Request(url, body, {"Content-Type": "application/json"}), timeout=10).close()
@@ -549,7 +554,7 @@ class TaskStart(CustomAction):
 
     def options(self, argv, settings):
         """The task's options from settings: MirrorDungeon's, else the ones every task has."""
-        return task_options.mirror(settings) if argv.node_name == "MirrorDungeon" else task_options.common(settings)
+        return task_options.mirror(settings) if argv.node_name == "MirrorDungeon" else task_options.global_options(settings)
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
@@ -867,7 +872,7 @@ def restart_floor_clock():
 def allowed(key):
     """The task's option key (auto_accept_terms, auto_download, keep_dismissed_screens); on, the default, when the task
     read no options."""
-    return TASK.get("options", {}).get(key, True)
+    return option(key, True)
 
 
 DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)

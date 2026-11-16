@@ -499,10 +499,10 @@ class Wipe(CustomAction):
     @hands_back
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         current_run(context)  # the run plan, made up after a restart
-        settings = options()
+        opts = options()
         used = RUN.get("wipes", 0)
-        choice = battle.after_wipe(used, settings["wipe_retries"], settings["after_retries"])
-        log(f"wipe: {used} of {settings['wipe_retries']} retries used: {choice}")
+        choice = battle.after_wipe(used, opts["wipe_retries"], opts["after_retries"])
+        log(f"wipe: {used} of {opts['wipe_retries']} retries used: {choice}")
         if choice == "stop":
             return stop(context, "retries used up")
         for _ in range(3):

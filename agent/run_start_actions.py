@@ -14,9 +14,11 @@ import pack_cover
 import recovery
 import run_start
 import settlement
+import task_options
 from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, grid_moved, hands_back, log, number, ocr, options, page_guard, restart_floor_clock,
-                     run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then, text, until)
+                     finish, grid_moved, hands_back, log, number, ocr, option, options, page_guard,
+                     restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
+                     text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
 from team_queue import pick_team
@@ -61,6 +63,9 @@ class PlanRun(CustomAction):
         try:
             settings = load_settings(ROOT)
             run = options()
+            # TaskStart checked the teams of the task's start: a save since may have changed them
+            if errors := task_options.target_floor_errors(run, settings["teams"]):
+                raise SettingsError(errors)
         except SettingsError as e:
             log(f"stop: {e}")
             return False
@@ -698,7 +703,7 @@ class PickThemePack(CustomAction):
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
-            STUCK["ladder"].floor(floor, TASK.get("options", {}).get("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
+            STUCK["ladder"].floor(floor, option("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")

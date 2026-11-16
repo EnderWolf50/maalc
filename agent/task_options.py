@@ -12,25 +12,26 @@ MIRROR = ("difficulty", "target_floor", "runs", "theme_pack_refresh", "weekly_bo
           "stop_when_weekly_bonus_out", "starlight_unaffordable", "wipe_retries", "after_retries")
 
 
-def common(settings):
-    """The options of a task that has none of its own (AssembleModules, ClaimMail, ClaimPassMissions): GLOBAL."""
+def global_options(settings):
+    """GLOBAL's options, every task's; the only ones of a task with none of its own (AssembleModules, ClaimMail,
+    ClaimPassMissions)."""
     return {key: settings["run"][key] for key in GLOBAL}
 
 
 def mirror(settings):
     """MirrorDungeon's options: GLOBAL and MIRROR."""
-    return {**common(settings), **{key: settings["run"][key] for key in MIRROR}}
+    return {**global_options(settings), **{key: settings["run"][key] for key in MIRROR}}
 
 
 def luxcavation(settings, key):
     """A Luxcavation task's options (key "exp" or "thread"): GLOBAL and luxcavation.<key>'s mode, count, team, retries
     and consecutive."""
-    return {**common(settings), **settings["luxcavation"][key]}
+    return {**global_options(settings), **settings["luxcavation"][key]}
 
 
 def charge(settings):
     """ChargeEnkephalin's options: GLOBAL and count, charge_enkephalin.count."""
-    return {**common(settings), "count": settings["charge_enkephalin"]["count"]}
+    return {**global_options(settings), "count": settings["charge_enkephalin"]["count"]}
 
 
 def target_floor_errors(options, teams):
