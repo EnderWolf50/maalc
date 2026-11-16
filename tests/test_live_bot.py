@@ -66,11 +66,18 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
 def prep_source(tmp_path):
     src = tmp_path / "main"
     (src / "config").mkdir(parents=True)
-    (src / "state").mkdir()
     teams = [{"id": "t1", "heal": "none"}, {"id": "t3", "heal": "none", "min_alive": 3}]
     (src / "config/settings.json").write_text(json.dumps({"teams": teams}))
     (src / "config/maa_option.json").write_text("{}")
     return src
+
+
+def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
+    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/
+    src, dst = prep_source(tmp_path), tmp_path / "test"
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive"])
+    assert json.loads((dst / "config/settings.json").read_text())["teams"][1]["heal"] == "revive"
+    assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
 
 
 def test_prep_sets_a_list_item_by_its_id(tmp_path):
