@@ -23,8 +23,8 @@ def test_gift_text_names_the_buff_tags_squeezes_blank_lines_and_drops_markup():
 
 def test_gift_info_reads_keyword_tier_and_both_names_of_a_gift():
     static = [{"id": 9001, "keyword": "Combustion", "tag": ["X", "TIER_2"]}, {"id": 9002, "tag": []}, {"id": 5, "keyword": "Hit"}]
-    en = {9001: {"name": "Hellterfly’s Dream"}, 9002: {"name": "Perversion"}}
-    cn = {9001: {"name": "地狱蝶之梦"}, 9002: {"name": "倒错症"}}
+    en = {9001: "Hellterfly’s Dream", 9002: "Perversion"}
+    cn = {9001: "地狱蝶之梦", 9002: "倒错症"}
     info = tt.gift_info({9001, 9002}, static, en, cn)
     assert info[9001] == {"en": "Hellterfly's Dream", "zh": "地獄蝶之夢", "keyword": "Burn", "tier": 2}
     assert info[9002] == {"en": "Perversion", "zh": "倒錯症", "keyword": "Keywordless", "tier": None}
@@ -57,9 +57,15 @@ def test_gift_rows_carry_names_both_effects_and_the_enhanced_effect_by_id_plus_1
     base = {9006: {"en": "Coffee and Cranes", "zh": "咖啡與紙鶴", "keyword": "Keywordless", "tier": 2}}
     en = {9006: {"name": "x", "desc": "Gain [Combustion]"}, 19006: {"name": "x+", "desc": "Gain 2 [Combustion]"}}
     cn = {9006: {"name": "咖啡与纸鹤", "desc": "获得[Combustion]"}}
-    rows = tt.gift_rows(base, en, cn, {"Combustion": "Burn"}, {"Combustion": "烧伤"})
+    rows = tt.gift_rows(base, en, cn, {9006: "咖啡与纸鹤"}, {"Combustion": "Burn"}, {"Combustion": "烧伤"})
     assert rows == {9006: {"en": "Coffee and Cranes", "zh": "咖啡與紙鶴", "cn": "咖啡与纸鹤", "keyword": "Keywordless", "tier": 2,
-                           "desc_en": "Gain 「Burn」", "desc_zh": "獲得「燒傷」", "plus_en": "Gain 2 「Burn」", "plus_zh": ""}}
+                           "desc_en": "Gain 「Burn」", "desc_cn": "获得「烧伤」", "desc_zh": "獲得「燒傷」",
+                           "plus_en": "Gain 2 「Burn」", "plus_cn": "", "plus_zh": ""}}
+
+
+def test_first_names_skips_a_row_without_a_name_and_takes_the_first_file_that_names_an_id():
+    files = [[{"id": 1, "name": ""}, {"id": 2, "name": "<b>甲</b>"}], [{"id": 1, "name": "乙"}, {"id": 2, "name": "丙"}]]
+    assert tt.first_names(files) == {1: "乙", 2: "甲"}
 
 
 def test_trial_rows_are_keyed_by_buff_id_with_english_simplified_and_traditional_text():

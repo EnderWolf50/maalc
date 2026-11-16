@@ -100,7 +100,7 @@ def test_gift_text_names_every_gift_of_the_tables_and_every_gift_an_option_gives
     ids |= tt.event_gift_ids(committed("event_table.json"))
     assert sorted(text, key=int) == [str(i) for i in sorted(ids)]
     for i, g in text.items():
-        assert set(g) == {"en", "zh", "cn", "keyword", "tier", "desc_en", "desc_zh", "plus_en", "plus_zh"}
+        assert set(g) == {"en", "zh", "cn", "keyword", "tier", "desc_en", "desc_cn", "desc_zh", "plus_en", "plus_cn", "plus_zh"}
         assert g["en"] and g["zh"] and g["cn"] and g["desc_en"] and g["desc_zh"], f"gift {i} lacks a name or an effect"
     assert text[str(search["gifts"][0]["id"])]["zh"] == search["gifts"][0]["zh"]
 
