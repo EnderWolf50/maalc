@@ -4,7 +4,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import { iconUrl } from "./giftCatalog";
+import { bufIconUrl, iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
@@ -319,6 +319,9 @@ describe("the E.G.O Gift Search gifts: icon first, details on hover (#721)", () 
     expect(card()).toHaveClass("gl-tip");
     expect(within(card()!).getByText(DUST.en)).toBeInTheDocument();
     expect(card()).toHaveTextContent(DUST.zhEffect);
+    // as on the gift list tab's card (#764): each Burn its status icon, then its name
+    expect(within(card()!).getAllByText("燒傷").map((x) => x.previousElementSibling?.getAttribute("src"))).toEqual([
+      bufIconUrl("Combustion"), bufIconUrl("Combustion"), bufIconUrl("Combustion"), bufIconUrl("Combustion")]);
     await r.user.unhover(t);
     await waitFor(() => expect(card()).toBeNull());
   });

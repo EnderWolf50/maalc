@@ -1,21 +1,38 @@
 // Component tests of the gift list tab's hover popover, search and help (#307): what the user sees and does, and what the
 // settings hold afterwards.
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { CATALOG, GIFT_BY_ID, packName } from "./giftCatalog";
+import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, KEYWORDS, keywordIconUrl, packName } from "./giftCatalog";
+import giftCss from "./giftlists.css?raw";
 import { GiftListsTab } from "./GiftLists";
-import { place, usedText } from "./GiftPopover";
+import { EffectText, place, usedText } from "./GiftPopover";
 import { queue } from "./gifts";
 import { TEXT } from "./i18n";
+import indexCss from "./index.css?raw";
 import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, newSettings, type GiftList, type Settings } from "./model";
-import { renderEditor } from "./testing";
+import { cssValueOf, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 type Text = keyof typeof zh;
 const say = (s: string, vars: Record<string, string | number> = {}) => s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k]));
 const nameOf = (id: number) => GIFT_BY_ID.get(id)!.zh;
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// A colour token of index.css in a theme, as sRGB 0-1: the light scheme's block sets it, or the dark :root's holds for both.
+const [darkCss, lightCss] = indexCss.split("@media (prefers-color-scheme: light)");
+const tokenIn = (theme: "dark" | "light", name: string) => {
+  const find = (text: string) => text.match(new RegExp(`${name}:\\s*#([0-9a-f]{6})\\b`, "i"))?.[1];
+  const hex = (theme === "light" && find(lightCss.slice(0, lightCss.indexOf("\n}")))) || find(darkCss)!;
+  return hex.match(/../g)!.map((c) => parseInt(c, 16) / 255);
+};
+// WCAG 2's contrast ratio of two sRGB colours.
+const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const luminance = (rgb: number[]) => rgb.map(linear).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+const contrast = (a: number[], b: number[]) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
 
 const mine = (patch: Partial<GiftList> = {}): GiftList => ({
   id: "mine", name: "Mine", order: [...GIFT_KEYWORDS], want: [], keep: [], gorder: defaultGorder(), fusion_condition: "any", ...patch,
@@ -280,6 +297,85 @@ describe("hover popover: what it says", () => {
     expect(p.getByText(en["gl.tip_set"])).toBeInTheDocument();
     expect(p.getByText(say(en["gl.tip_buy_rank"], { n: 1, total: 1 }))).toBeInTheDocument();
     expect(popover()).toHaveAccessibleName(GIFT_BY_ID.get(a)!.en);
+  });
+});
+
+describe("hover card: the gift's effect as the game's gift panel prints it (#764)", () => {
+  /** What the stylesheet gives an element of the card. */
+  const style = (el: Element, prop: string) => cssValueOf(giftCss, el, prop);
+  /** The paragraph of the effect text the card shows. */
+  const effectOf = (card: HTMLElement) => card.querySelector<HTMLElement>(".gl-tip-effect")!;
+
+  test("a keyword is its status icon, then its name in its buff's colour, underlined; plain text and a note as written", () => {
+    render(<EffectText runs={["Inflict 3 ", { kw: "Sinking" }, " Count [Cannot Stack]"]} zh={false} />);
+    const name = screen.getByText("Sinking");
+    const icon = name.previousElementSibling!;
+    expect(icon).toHaveAttribute("src", bufIconUrl("Sinking"));
+    expect(icon).toHaveAttribute("alt", ""); // the name says it
+    expect(style(name, "color")).toBe("var(--kw-neg)"); // Sinking is a Negative buff: the game's red
+    expect(style(name, "text-decoration-line")).toBe("underline");
+    expect(name.closest("p")).toHaveTextContent(/^Inflict 3 Sinking Count \[Cannot Stack\]$/);
+  });
+
+  test("a Positive keyword in the game's yellow, a Neutral one in its brown; in Chinese the keyword's Chinese name", () => {
+    render(<EffectText runs={[{ kw: "Breath" }, "、", { kw: "Aggro" }]} zh />);
+    expect(style(screen.getByText(KEYWORDS.Breath.zh), "color")).toBe("var(--kw-pos)");
+    expect(style(screen.getByText(KEYWORDS.Aggro.zh), "color")).toBe("var(--kw-neu)");
+  });
+
+  test("flavour text is italic, in the game's Neutral brown when the text colours it", () => {
+    render(<EffectText runs={["+0.5% damage\n\n", { text: "Artifacts used.", i: true, colour: "Neutral" }, "\n", { text: '"A quote."', i: true }]} zh={false} />);
+    const flavour = screen.getByText("Artifacts used."), quote = screen.getByText('"A quote."');
+    expect(style(flavour, "font-style")).toBe("italic");
+    expect(style(flavour, "color")).toBe("var(--kw-neu)");
+    expect(style(quote, "font-style")).toBe("italic");
+    expect(style(quote, "color")).toBeUndefined(); // the card's own text colour
+  });
+
+  // The game's colours (its ColorCode table: Positive #f8c200, Negative #e30000, Neutral #a16a3b) where they read on the card,
+  // a lighter or darker shade of the same hue where they do not: each keyword colour holds 4.5:1 on the card in both themes.
+  test.each(["--kw-pos", "--kw-neg", "--kw-neu"])("%s reads at 4.5:1 or more on the card, dark and light", (token) => {
+    for (const theme of ["dark", "light"] as const) expect(contrast(tokenIn(theme, token), tokenIn(theme, "--panel"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("the gift list tab's card shows the gift's effect under its name, then what the list makes of it (Distant Star)", async () => {
+    const r = await open([mine()]);
+    const p = await hover(r, 9125);
+    const effect = effectOf(popover()!);
+    expect(effect).toHaveTextContent(/^使用增加沉淪強度，施加沉淪層數或施加特殊沉淪/);
+    expect(within(effect).getAllByText(KEYWORDS.Sinking.zh).length).toBeGreaterThanOrEqual(3);
+    expect(effect.querySelectorAll("img")).toHaveLength(within(effect).getAllByText(KEYWORDS.Sinking.zh).length);
+    expect(effect.compareDocumentPosition(p.getByRole("group", { name: zh["gl.tip_set_group"] })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("in English the card gives the English effect, a short one too", async () => {
+    const en = TEXT.en_us;
+    const r = await open([mine()], "en_us");
+    const hoverEn = async (keyword: string, name: string) => {
+      await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + en[`kw.${keyword}` as Text]) }));
+      await r.user.hover(screen.getByRole("button", { name: new RegExp("^" + escape(name) + ", ") }));
+      return effectOf(popover()!);
+    };
+    expect(await hoverEn("Sinking", "Distant Star")).toHaveTextContent(/^When activating the Sinking effect\(including 'Unique Sinking'\)/);
+    const short = await hoverEn("Keywordless", "Trauma Shield"); // 9810: one line, one keyword
+    expect(short.textContent).toBe("Encounter Start: all allies gain 2 Trauma Shield");
+    expect(style(within(short).getByText("Trauma Shield"), "color")).toBe("var(--kw-pos)");
+  });
+
+  test("every gift the tab shows has its effect in its card", () => {
+    for (const g of CATALOG) for (const zhText of [true, false]) expect(giftEffect(g.id, zhText)?.length, `${g.id}`).toBeGreaterThan(0);
+  });
+
+  test("the card's icon carries the gift's tier at its top left and its keyword's icon at its bottom right, as the game's", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9125);
+    const icon = popover()!.querySelector(".gl-tip-icon")!;
+    expect(within(icon as HTMLElement).getByText("III")).toBeInTheDocument();
+    expect(icon.querySelector(`img[src="${keywordIconUrl("Sinking")}"]`)).not.toBeNull();
+    await hover(r, 9302); // The Measure of Frost: Keywordless, no keyword icon
+    const plain = popover()!.querySelector(".gl-tip-icon")!;
+    expect(within(plain as HTMLElement).getByText("III")).toBeInTheDocument();
+    expect(plain.querySelectorAll("img")).toHaveLength(1); // the gift's own
   });
 });
 

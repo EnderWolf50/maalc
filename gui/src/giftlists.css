@@ -116,11 +116,25 @@
   background: var(--gl-panel); color: var(--gl-fg); border: 1px solid var(--line-2); border-radius: 10px 0 10px 0; corner-shape: bevel; box-shadow: 0 8px 24px #0006;
 }
 .gl-tip:focus { outline: none; }
-.gl-tip-head { display: flex; align-items: center; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--gl-line); }
-.gl-tip-head img { width: 44px; height: 44px; object-fit: contain; }
+.gl-tip-head { display: flex; align-items: center; gap: 14px; padding: 2px 0 8px 2px; border-bottom: 1px solid var(--gl-line); }
+/* The gift's icon as the game's panel draws it: its tier at the top left, its keyword's icon at the bottom right. */
+.gl-tip-icon { position: relative; flex: none; width: 48px; height: 48px; }
+.gl-tip-icon > img:first-child { width: 48px; height: 48px; object-fit: contain; }
+.gl-tip-icon .gl-tierno { position: absolute; left: -3px; top: -2px; font-size: 11px; line-height: 15px; padding: 0 4px; letter-spacing: 0.06em; }
+.gl-tip-kwi { position: absolute; right: -4px; bottom: -3px; width: 20px; height: 20px; object-fit: contain; filter: drop-shadow(0 1px 1px #000a); }
 .gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }
-.gl-tip-head b { font-size: 14.5px; }
-.gl-tip-effect { margin: 0; padding-top: 8px; white-space: pre-line; line-height: 1.55; } /* the game's effect text; a blank line between its parts */
+.gl-tip-head > div > b { font-size: 14.5px; }
+/* The game's effect text (#764): a blank line between its parts. A keyword is its status icon, then its name underlined in its
+ * buff's colour, the two kept on one line; flavour text italic. */
+.gl-tip-effect { margin: 0; padding: 8px 0 2px; white-space: pre-line; line-height: 1.6; }
+.gl-kw { white-space: nowrap; }
+.gl-kw img { width: 1.3em; height: 1.3em; object-fit: contain; vertical-align: -0.32em; margin-right: 1px; }
+.gl-kw-name { text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.gl-fl { font-style: italic; }
+.gl-pos { color: var(--kw-pos); }
+.gl-neg { color: var(--kw-neg); }
+.gl-neu { color: var(--kw-neu); }
+.gl-tip-effect + .gl-tip-set { margin-top: 8px; border-top: 1px solid var(--gl-line); padding-top: 9px; }
 .gl-tip-note { margin: 8px 0 0; padding-top: 7px; border-top: 1px solid var(--gl-line); color: var(--gl-muted); }
 .gl-tip-head small, .gl-tip-why { color: var(--gl-muted); }
 .gl-tip-set { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 2px; }

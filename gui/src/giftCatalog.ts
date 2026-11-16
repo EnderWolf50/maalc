@@ -1,5 +1,5 @@
 // Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons
-// (and, for the Gift Search page's, their effect text).
+// and their effect text.
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import effects from "./gift_effects.json";
@@ -34,10 +34,19 @@ export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));
 /** Whether the list may want it: the shop sells it or fusing makes it. */
 export const wantable = (g: CatalogGift) => g.kind === "buyable" || g.kind === "fusion";
 
-const EFFECTS: Record<string, { en: string; zh: string }> = effects.effects;
-/** The gift's effect text in the GUI's language: the game's, for the Gift Search page's gifts (gift_effects.json, #721); none
- * for the others. */
-export const giftEffect = (id: number, zh: boolean): string | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** A colour of a gift's effect text, by its name in the game's ColorCode table (a keyword's buffType; Neutral for flavour text). */
+export type Colour = "Positive" | "Negative" | "Neutral";
+/** A run of a gift's effect text (gift_effects.json, tools/llc_text.py effect_runs): plain text, a keyword the game draws as its
+ * icon and its name, or italic or coloured text (flavour text). */
+export type EffectRun = string | { kw: string } | { text: string; i?: boolean; colour?: Colour };
+/** A keyword of the effect texts: the colour its name is printed in, its status icon (buf_icons/<icon>.webp) and its names. */
+export interface Keyword { colour: Colour; icon: string; en: string; zh: string }
+export const KEYWORDS = effects.keywords as Record<string, Keyword>;
+const EFFECTS = effects.effects as Record<string, { en: EffectRun[]; zh: EffectRun[] }>;
+/** The gift's effect text in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764). */
+export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** A keyword's status icon URL (gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). */
+export const bufIconUrl = webpFolder(import.meta.glob<string>("./buf_icons/*.webp", { eager: true, query: "?url", import: "default" }));
 
 /** The icon's URL (assets/.../gift_icons/<id>.webp). */
 export const iconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" }));
