@@ -1,33 +1,28 @@
 // What a version 20 file's moved values are once they sit in the client (#782): the shared cases' list
 // (tests/settings_cases.json migrate_v20 moved), then how the window says each one.
 import { describe, expect, test } from "vitest";
-import cases from "../../tests/settings_cases.json";
-import { movedOptions, sayMoved } from "./movedOptions";
+import { movedOptions, sayMoved, teamPicks } from "./movedOptions";
 import { newTeam, type Team } from "./model";
+import { cases, v20File, type Edit } from "./settingsCases";
+import { NO_PICKS } from "./teamOptions";
 
-type Edit = { set: string; value: unknown } | { delete: string };
-
-/** The edit format of tests/settings_cases.json (validate.test.ts reads it the same way). */
-function applyEdits(data: unknown, edits: Edit[]) {
-  const out = structuredClone(data) as Record<string, unknown>;
-  for (const edit of edits) {
-    const parts = ("set" in edit ? edit.set : edit.delete).split("/");
-    const last = parts.pop()!;
-    let node = out as Record<string, unknown>;
-    for (const key of parts) node = node[key] as Record<string, unknown>;
-    if (!("set" in edit)) delete node[last];
-    else node[last] = edit.value;
-  }
-  return out;
-}
-
-const v20 = (edits: Edit[]) => applyEdits({ ...cases.valid, version: 20, ...cases.v20 }, edits);
 const pairs = (old: Record<string, unknown>) => movedOptions(old).map((m) => `${m.option}=${m.value}`);
 
 describe("tests/settings_cases.json migrate_v20: the values off the client's default, as the client option to set", () => {
   for (const c of cases.migrate_v20 as { name: string; edits: Edit[]; moved: string[] }[]) {
-    test(c.name, () => expect(pairs(v20(c.edits))).toEqual(c.moved));
+    test(c.name, () => expect(pairs(v20File(c.edits))).toEqual(c.moved));
   }
+});
+
+test("the picks of a version 20 file are its Luxcavation teams, what a first team options file starts on", () => {
+  expect(teamPicks(v20File())).toEqual(NO_PICKS);
+  const picked = v20File([{ set: "luxcavation/exp/team", value: "b" }, { set: "luxcavation/thread/team", value: "a" }]);
+  expect(teamPicks(picked)).toEqual({ ExpTeam: "b", ThreadTeam: "a" });
+});
+
+test("a pick broken by hand is none", () => {
+  expect(teamPicks(v20File([{ set: "luxcavation", value: { exp: { team: 3 }, thread: "x" } }]))).toEqual(NO_PICKS);
+  expect(teamPicks(v20File([{ delete: "luxcavation" }]))).toEqual(NO_PICKS);
 });
 
 test("a file with no moved section has nothing to list", () => {

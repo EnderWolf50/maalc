@@ -203,13 +203,18 @@ V20_NOTE = ("settings version 20: its run, luxcavation and charge_enkephalin are
             "the values to set in the client")
 
 
+def v20(edits=()):
+    """settings_cases' valid file at version 20 with the three sections version 21 dropped (#782), these edits made."""
+    return apply_edits({**CASES["valid"], "version": 20, **CASES["v20"]}, list(edits))
+
+
 def test_a_version_20_file_is_read_as_version_21_in_memory_and_says_where_its_values_went(tmp_path):
     # #782: the three sections go, the file on disk stays as it was, and a task's start logs the line (TaskStart) until
     # the GUI writes the file back.
-    old = {**VALID, "version": 20, **copy.deepcopy(CASES["v20"])}
+    old = v20()
     notes = []
     got = load(tmp_path, old, notes=notes)
-    assert {**got, "gift_lists": None} == {**VALID, "gift_lists": None}
+    assert {**got, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
     assert notes == [V20_NOTE]
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 
@@ -327,8 +332,7 @@ def test_shared_valid_loads(tmp_path):
 def test_shared_v20_migration(tmp_path, case):
     """#782: a version 20 file, its moved sections at any value (broken by hand too), reads as the valid file: the GUI
     migrates the same cases to the same file (gui/src/validate.test.ts)."""
-    old = apply_edits({**CASES["valid"], "version": 20, **CASES["v20"]}, case["edits"])
-    loaded = load(tmp_path, old)
+    loaded = load(tmp_path, v20(case["edits"]))
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
 
 

@@ -1,6 +1,5 @@
 // Runs tests/settings_cases.json, which tests/test_settings.py runs against agent/settings.py too.
 import { describe, expect, test } from "vitest";
-import cases from "../../tests/settings_cases.json";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import {
   MIGRATIONS, OLDEST_VERSION, SKILL_SWAPS, VERSION, cleanGiftList, newSettings, newTeam, parseSettings, parseThemePacks, schema,
@@ -8,23 +7,8 @@ import {
 } from "./model";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT } from "./i18n";
+import { applyEdits, cases, v20File, type Edit } from "./settingsCases";
 import { pyRepr, sayProblem, validate } from "./validate";
-
-type Edit = { set: string; value: unknown } | { delete: string };
-
-function applyEdits(data: unknown, edits: Edit[]) {
-  const out = structuredClone(data) as Record<string, unknown>;
-  for (const edit of edits) {
-    const parts = ("set" in edit ? edit.set : edit.delete).split("/");
-    const last = parts.pop()!;
-    let node = out as Record<string, unknown>;
-    for (const key of parts) node = node[key] as Record<string, unknown>;
-    if (!("set" in edit)) delete node[last];
-    else if (last === "-") (node as unknown as unknown[]).push(edit.value);
-    else node[last] = edit.value;
-  }
-  return out;
-}
 
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
@@ -114,9 +98,9 @@ describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the 
   const valid = parseSettings(JSON.stringify(cases.valid)).data; // its gift list cleaned, as any file's on load
   for (const c of cases.migrate_v20 as { name: string; edits: Edit[] }[]) {
     test(c.name, () => {
-      const old = applyEdits({ ...cases.valid, version: 20, ...cases.v20 }, c.edits);
+      const old = v20File(c.edits);
       const { data, migrated, old: read } = parseSettings(JSON.stringify(old));
-      expect([data, migrated, read]).toEqual([valid, true, old]);
+      expect([data, migrated, read]).toEqual([valid, true, { version: 20, data: old }]);
       expect(validate(data)).toEqual([]);
     });
   }

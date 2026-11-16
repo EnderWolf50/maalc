@@ -353,11 +353,13 @@ export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<s
 };
 
 /** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
- * (spec 04 section 2). old: the file as it read, before its migration (null when it needed none), for what the caller does
- * with an old file before it writes it back (App.tsx). */
-export function parseSettings(text: string): { data: Settings; migrated: boolean; unknown: number; old: Record<string, unknown> | null } {
+ * (spec 04 section 2). old: the file's version and the file as it read, before its migration (null when it needed none),
+ * for what the caller does with an older file before it writes it back (App.tsx). */
+export function parseSettings(text: string): {
+  data: Settings; migrated: boolean; unknown: number; old: { version: number; data: Record<string, unknown> } | null;
+} {
   let data = JSON.parse(text);
-  const read = data;
+  const asRead = data;
   let version = data?.version;
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
   if (version > VERSION) throw new Error(`settings version ${version} is newer than this GUI supports (${VERSION}); update maalc`);
@@ -379,7 +381,7 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
       return cleaned.list;
     }),
   };
-  return { data, migrated, unknown, old: migrated ? read : null };
+  return { data, migrated, unknown, old: migrated ? { version: asRead.version, data: asRead } : null };
 }
 
 /** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a

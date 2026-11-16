@@ -5,10 +5,10 @@ import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, type Settings } from "./model";
-import { movedOptions, sayMoved, type Moved } from "./movedOptions";
+import { movedOptions, sayMoved, teamPicks, type Moved } from "./movedOptions";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { StarlightTab } from "./Starlight";
-import { NO_PICKS, teamOptionsText, teamPicks, type TeamPicks } from "./teamOptions";
+import { NO_PICKS, teamOptionsText, type TeamPicks } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
 import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, withBreaks, type Picked } from "./ui";
@@ -39,15 +39,15 @@ const sayStatus = (lang: Settings["language"], status: string) =>
   Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
 /** Write the team options file when these settings change what it says (#780, teamOptions.ts), a new one starting on
  * picks, and the status after it: `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in
- * with the error, in s's language, when the write failed. */
+ * with the error, in s's language, when the write failed (then `failed` is true). */
 async function teamOptionsNote(s: Settings, picks: TeamPicks, done: Key, failed: Key) {
   try {
     const text = teamOptionsText(await api.loadTeamOptions(), s, picks);
-    if (text === null) return "";
+    if (text === null) return { note: "", failed: false };
     await api.saveTeamOptions(text);
-    return done;
+    return { note: done as string, failed: false };
   } catch (e) {
-    return fill(TEXT[s.language][failed], { error: String(e) });
+    return { note: fill(TEXT[s.language][failed], { error: String(e) }), failed: true };
   }
 }
 /** The element id of the problem at this place in the problems block. */
@@ -98,8 +98,16 @@ export default function App() {
   // The teams a version 20 file picked for EXP and Thread Luxcavation: what a first team options file starts on, at the
   // start or at a save, should the start not write one (#782).
   const picks = useRef<TeamPicks>(NO_PICKS);
-  // A version 20 file's values the client holds now, off its defaults: listed once, until dismissed (#782).
+  // An older file read and kept aside, not yet written back (#782): its version and the values the client holds now
+  // that are off the client's defaults, which show once it is written back, until dismissed.
+  const pending = useRef<{ from: number; values: Moved[] } | null>(null);
   const [moved, setMoved] = useState<{ from: number; values: Moved[] } | null>(null);
+  /** The file is written: an older one's migration is done, and its list shows. */
+  const wroteBack = () => {
+    if (!pending.current) return;
+    setMoved(pending.current);
+    pending.current = null;
+  };
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
 
@@ -141,28 +149,32 @@ export default function App() {
       if (text === null) return setS(newSettings());
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
-        const { data, migrated, unknown, old } = parseSettings(text);
+        const { data, unknown, old } = parseSettings(text);
         const migratedText = toText(data);
-        if (old) { // before anything writes over it, also a save of a file the checks refuse (#782): a failure is the load's
-          await api.saveOldSettings(old.version as number, text);
-          picks.current = teamPicks(old);
+        // An older file is kept aside before anything writes over it, a save of a file the checks refuse too (#782). When
+        // it cannot be, the load fails with why, and nothing is written.
+        if (old) {
+          await api.saveOldSettings(old.version, text);
+          picks.current = teamPicks(old.data);
+          pending.current = { from: old.version, values: movedOptions(old.data) };
         }
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
         const ok = !validate(data).length;
         // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
         // checks refuse, whose teams may not read as teams. Before the write-back: a first one from the old file's teams
-        const teamNote = ok ? await teamOptionsNote(data, picks.current, "teamOptions.updated", "teamOptions.failed") : "";
-        if (migrated && ok) {
+        const team = ok ? await teamOptionsNote(data, picks.current, "teamOptions.updated", "teamOptions.failed") : null;
+        // a team options file not written leaves the old file as it is, so the next start makes it from the old teams
+        if (pending.current && team && !team.failed) {
           try {
             await api.saveSettings(migratedText, text);
             disk.current = migratedText;
+            wroteBack();
           } catch (e) {
-            if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
+            if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file, and a save writes it back
           }
         }
-        if (old) setMoved({ from: old.version as number, values: movedOptions(old) });
-        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teamNote].filter(Boolean);
+        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", team?.note ?? ""].filter(Boolean);
         // one note stays as it is, a key the header says anew in the language picked next
         setStatus(notes.length === 1 ? notes[0] : notes.map((n) => sayStatus(data.language, n)).join(" "));
       } catch (e) {
@@ -288,6 +300,8 @@ export default function App() {
           return false;
         }
         const written = toText(current);
+        // the write-back of an older file: the team options file comes first, from its teams (#782)
+        const early = pending.current ? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed") : null;
         try {
           await api.saveSettings(written, disk.current);
         } catch (e) {
@@ -300,8 +314,9 @@ export default function App() {
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
+        wroteBack();
         // the team options file follows the teams saved; a change is said once, as the client reads it only at its start
-        setStatus((await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed")) || "saved");
+        setStatus((early ?? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed")).note || "saved");
         return true;
       }
     } catch (e) {

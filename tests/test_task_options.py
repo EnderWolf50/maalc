@@ -19,7 +19,7 @@ import pytest
 
 from client_options import GLOBAL_DEFAULTS, TEAM_OPTIONS, TEAM_PICK, override, send
 from daily_child import bind, game_class, load, result, run_child, run_task, screen
-from test_settings import V20_NOTE, VALID, apply_edits
+from test_settings import V20_NOTE, VALID, apply_edits, v20
 
 CASES = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
 LUX_KEYS = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}
@@ -118,11 +118,6 @@ def test_mirror_dungeon_reads_every_option_the_client_sent_and_logs_them(context
     assert actions.TASK["options"] == NOT_DEFAULT_READ
     assert options_line(said) == NOT_DEFAULT_LINE and "hook.invalid" not in "\n".join(said)  # the webhook only set or not
     context.tasker.controller.post_click.assert_not_called()
-
-
-def v20(edits=()):
-    """settings_cases' valid file as version 20 (#782): the three sections it still had, these edits made to them."""
-    return apply_edits({**CASES["valid"], "version": 20, **CASES["v20"]}, list(edits))
 
 
 def test_a_version_20_files_run_section_is_not_read_and_each_start_says_so(context, monkeypatch):

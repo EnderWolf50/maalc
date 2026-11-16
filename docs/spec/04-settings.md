@@ -39,9 +39,9 @@
     - Agent 在記憶體裡遷移，不寫回。檔案還是版本 20 時，每個任務開始時（讀任務選項之前，選項有錯也記）記一行 `settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists the values to set in the client`，GUI 寫回之前每次都記。
     - GUI 讀到版本 20 時，在寫回之前依序：
       1. 舊檔原樣另存成 `config/settings.v20.json`（已有就蓋掉；存不了就顯示讀取失敗，設定檔不動）。
-      2. 用舊檔的 `luxcavation.exp.team`、`luxcavation.thread.team` 產生第一份隊伍選項檔的 `default_case`（第 12 節；隊伍選項檔已經存在時沿用它的）。
-      3. 寫回版本 21（設定檔通過檢查時；沒通過就等使用者改好存檔）。
-      4. 在分頁上方列出一次搬走的值裡和 client 預設不同的：每項是 client 裡的任務、選項名稱與原本的值（選擇型用 case 的名稱，開關說開或關），webhook 只說「有設定」。巢狀的輸入只在舊值選了它所屬的 case 時才比，例如自訂次數的場數只在模式是自訂次數時列。client 不接受的舊值（手改壞的）不列。全部是預設值時不顯示。使用者按「知道了」收起；寫回之後再打開就不會再列。client 的預設取自 `interface.json`（`gui/src/movedOptions.ts`）。
+      2. 用舊檔的 `luxcavation.exp.team`、`luxcavation.thread.team` 產生第一份隊伍選項檔的 `default_case`（第 12 節；隊伍選項檔已經存在時沿用它的）。隊伍選項檔寫不進去時不寫回，設定檔留在版本 20，下次開啟再從舊檔的隊伍產生。
+      3. 寫回版本 21。設定檔沒通過檢查時，等使用者改好按儲存：那次儲存照樣先寫隊伍選項檔、再寫設定檔（這時隊伍選項檔寫不進去也照樣儲存，狀態列說它沒寫入）。
+      4. 寫回之後，在分頁上方列出一次搬走的值裡和 client 預設不同的：每項是 client 裡的任務、選項名稱與原本的值（選擇型用 case 的名稱，開關說開或關），webhook 只說「有設定」。巢狀的輸入只在舊值選了它所屬的 case 時才比，例如自訂次數的場數只在模式是自訂次數時列。client 不接受的舊值（手改壞的）不列。全部是預設值時不顯示。使用者按「知道了」收起；寫回之後再打開就不會再列。client 的預設取自 `interface.json`（`gui/src/movedOptions.ts`）。
     - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `v20`、`migrate_v20`）。舊版 Agent 讀到版本 21 會報「比自己新」。
   - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；

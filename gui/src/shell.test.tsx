@@ -2,11 +2,11 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import cases from "../../tests/settings_cases.json";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { MOVED, newSettings, newTeam } from "./model";
+import { v20File, type Edit } from "./settingsCases";
 
 const zh = TEXT.zh_tw;
 // teamOptions: the team options file's text (null: none), teamWrites each text written to it, teamFail the error its write
@@ -174,38 +174,42 @@ describe("the team options file (#780)", () => {
 });
 
 describe("a version 20 file (#782)", () => {
-  type Lux = { team: string | null } & Record<string, unknown>;
-  type Old = typeof cases.valid & {
-    run: Record<string, unknown>; luxcavation: { exp: Lux; thread: Lux }; charge_enkephalin: { count: number };
-  };
-  /** settings_cases' valid file at version 20 with the three sections it had, as edit leaves them, as the file. */
-  const v20 = (edit: (d: Old) => void = () => {}) => {
-    const old = structuredClone({ ...cases.valid, version: 20, ...cases.v20 }) as Old;
-    edit(old);
-    file.text = JSON.stringify(old, null, 2) + "\n";
-    return file.text;
-  };
+  /** settings_cases' valid file at version 20 with the three sections it had, these edits made, as the file. */
+  const v20 = (edits: Edit[] = []) => (file.text = JSON.stringify(v20File(edits), null, 2) + "\n");
   const list = () => screen.queryByRole("region", { name: zh["moved.title"] });
+  const defaults = () => {
+    const option = JSON.parse(file.teamOptions!).option;
+    return [option.ExpTeam.default_case, option.ThreadTeam.default_case];
+  };
 
-  test("is kept aside, gives the team options file the teams it picked, then is written back as version 21", async () => {
-    const text = v20((d) => { d.luxcavation.exp.team = "b"; });
+  test("is written back as version 21, without the three sections", async () => {
+    v20();
     render(<App />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
     expect(saved.version).toBe(21);
     expect(MOVED.filter((k) => k in saved)).toEqual([]);
-    expect(file.old).toEqual([[20, text]]); // the file as it was, beside it
+  });
+
+  test("is kept beside it as it was, before anything is written", async () => {
+    const text = v20();
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.old).toEqual([[20, text]]);
     expect(file.writes).toEqual(["old", "team options", "settings"]);
-    const option = JSON.parse(file.teamOptions!).option;
-    expect([option.ExpTeam.default_case, option.ThreadTeam.default_case]).toEqual(["b", "none"]);
+  });
+
+  test("gives a first team options file the teams it picked, before the write-back", async () => {
+    v20([{ set: "luxcavation/exp/team", value: "b" }]);
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(defaults()).toEqual(["b", "none"]);
   });
 
   test("lists once the values off the client's default, by the client's names, the webhook only as set", async () => {
-    v20((d) => {
-      Object.assign(d.run, { target_floor: 15, runs: null, webhook_url: "http://hook.invalid/secret" });
-      d.charge_enkephalin.count = 3;
-      d.luxcavation.thread.team = "a";
-    });
+    v20([{ set: "run/target_floor", value: 15 }, { set: "run/runs", value: null },
+      { set: "run/webhook_url", value: "http://hook.invalid/secret" }, { set: "charge_enkephalin/count", value: 3 },
+      { set: "luxcavation/thread/team", value: "a" }]);
     const user = userEvent.setup();
     render(<App />);
     await waitFor(() => expect(list()).not.toBeNull());
@@ -226,13 +230,30 @@ describe("a version 20 file (#782)", () => {
     expect(list()).toBeNull();
   });
 
-  test("a file the checks refuse is kept aside too, before a save writes over it, and is not written back", async () => {
-    v20((d) => { d.teams[1].game_team = 1; }); // two enabled teams on TEAMS #1
+  test("a file the checks refuse is kept aside and waits for a save, which writes the team options file first", async () => {
+    v20([{ set: "teams/1/game_team", value: 1 }, { set: "luxcavation/exp/team", value: "b" },
+      { set: "run/target_floor", value: 10 }]); // two enabled teams on TEAMS #1
+    const user = userEvent.setup();
     render(<App />);
-    await waitFor(() => expect(file.old).toHaveLength(1));
     expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
-    expect(file.saved).toEqual([]);
-    expect(file.teamWrites).toEqual([]);
+    expect([file.writes, list()]).toEqual([["old"], null]); // not written back: nothing listed yet
+    await user.click(within(document.querySelector("aside")!).getByText("Team b"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "2" } });
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.writes).toEqual(["old", "team options", "settings"]);
+    expect(defaults()).toEqual(["b", "none"]);
+    expect(within(list()!).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "鏡牢 › 目標層數：10 層（無限）", "經驗本 › 隊伍：Team b（TEAMS #2）",
+    ]);
+  });
+
+  test("a team options file that cannot be written leaves the old file as it is, for the next start", async () => {
+    v20([{ set: "luxcavation/exp/team", value: "b" }]);
+    file.teamFail = "disk full";
+    render(<App />);
+    await waitFor(() => expect(document.querySelector(".status")).toHaveTextContent("disk full"));
+    expect([file.writes, file.saved, list()]).toEqual([["old"], [], null]);
   });
 
   test("when it cannot be kept aside the window says why and writes nothing", async () => {

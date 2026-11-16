@@ -18,20 +18,9 @@ export const PI = JSON.parse(interfaceText.split("\n").filter((line) => !line.tr
 /** Each team option and the Luxcavation task of a version 20 settings file (luxcavation.<task>.team) whose team it picks. */
 export const TEAM_OPTIONS = { ExpTeam: "exp", ThreadTeam: "thread" } as const;
 export type TeamOption = keyof typeof TEAM_OPTIONS;
-/** The team each option starts on in a new file (default_case): a teams[] id, null for none. */
+/** The team each option starts on in a new file (default_case): a teams[] id, null for none (movedOptions.ts teamPicks). */
 export type TeamPicks = Record<TeamOption, string | null>;
 export const NO_PICKS: TeamPicks = { ExpTeam: null, ThreadTeam: null };
-
-/** The teams a version 20 file picked for its Luxcavation tasks (#782): what a first team options file starts on. A pick
- * that is not a team id (a file broken by hand) is none. */
-export function teamPicks(old: Record<string, unknown>): TeamPicks {
-  const of = (o: unknown, key: string) => (o && typeof o === "object" ? (o as Record<string, unknown>)[key] : undefined);
-  const pick = (task: string) => {
-    const team = of(of(old.luxcavation, task), "team");
-    return typeof team === "string" && team !== "" ? team : null;
-  };
-  return { ExpTeam: pick(TEAM_OPTIONS.ExpTeam), ThreadTeam: pick(TEAM_OPTIONS.ThreadTeam) };
-}
 
 /** Case 0, 「未選擇」: it sends nothing, so the task stops at its start and asks for a team. A team id is never "none" in
  * a file this GUI made (newId); a hand-made team of that id gets no case of its own. */
@@ -45,8 +34,10 @@ const DELETED = { zh_tw: "（已刪除）", en_us: " (deleted)" } as const;
 interface Case { name: string; label: string; pipeline_override?: Record<string, { attach: { team: string } }> }
 interface Option { cases: Case[]; default_case: string }
 
+/** The task whose options list key, undefined for a global option or one nested under a case. */
+export const taskOf = (key: string) => PI.task.find((t) => t.option?.includes(key));
 /** The entry node of the task whose options list key: its cases write team into that node's attach. */
-const entryOf = (key: TeamOption) => PI.task.find((t) => t.option?.includes(key))!.entry;
+const entryOf = (key: TeamOption) => taskOf(key)!.entry;
 
 /** A team's label in the dropdown: its name and its in-game slot. The client shows it as it is: a name starting with $
  * would be read as a text key (MXU shows it without the $). */
