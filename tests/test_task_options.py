@@ -87,6 +87,13 @@ def start(context, monkeypatch, task, *options, drop=(), teams=TEAM_OPTIONS):
     return ok, stops, [line.split(" ", 1)[1] for line in actions.LOG]
 
 
+def options_line(said):
+    """The options line among what a task's start logged (the resource update's and the package's lines come first)."""
+    lines = [line for line in said if line.startswith("options: ")]
+    assert len(lines) == 1, said
+    return lines[0]
+
+
 def test_the_options_line_names_no_webhook():
     # #779: the webhook's address stays out of the log, as the client keeps a password input out of its own
     line = task_options.line({"webhook_url": "http://secret.invalid/", "auto_download": True})
@@ -109,7 +116,7 @@ def test_mirror_dungeon_reads_every_option_the_client_sent_and_logs_them(context
     ok, stops, said = start(context, monkeypatch, "MirrorDungeon", *NOT_DEFAULT)
     assert ok is True and stops == []
     assert actions.TASK["options"] == NOT_DEFAULT_READ
-    assert said[1] == NOT_DEFAULT_LINE and "hook.invalid" not in "\n".join(said)  # the webhook only set or not
+    assert options_line(said) == NOT_DEFAULT_LINE and "hook.invalid" not in "\n".join(said)  # the webhook only set or not
     context.tasker.controller.post_click.assert_not_called()
 
 
@@ -148,7 +155,7 @@ def test_a_daily_task_reads_its_own_options_the_client_sent(context, monkeypatch
     ok, stops, said = start(context, monkeypatch, task, *options)
     own = {k: v for k, v in actions.TASK["options"].items() if k not in task_options.GLOBAL}
     assert ok is True and stops == [] and own == read
-    assert said[1] == f"options: {GLOBAL_DEFAULTS}, {line}"
+    assert options_line(said) == f"options: {GLOBAL_DEFAULTS}, {line}"
 
 
 def test_the_settings_files_daily_sections_are_not_read(context, monkeypatch):
@@ -170,8 +177,8 @@ def test_a_task_with_no_options_of_its_own_reads_the_global_ones(context, monkey
     ok, _, said = start(context, monkeypatch, "ClaimMail", "AutoAcceptTerms=No", "WebhookUrl=http://hook.invalid/")
     assert ok is True and actions.TASK["options"] == {"webhook_url": "http://hook.invalid/", "auto_accept_terms": False,
                                                        "auto_download": True, "keep_dismissed_screens": True}
-    assert said[1] == ("options: webhook_url (set), auto_accept_terms=false, auto_download=true, "
-                       "keep_dismissed_screens=true")
+    assert options_line(said) == ("options: webhook_url (set), auto_accept_terms=false, auto_download=true, "
+                                  "keep_dismissed_screens=true")
 
 
 @pytest.mark.parametrize("task, options, drop, error", [
@@ -268,7 +275,7 @@ def test_a_luxcavation_task_plays_the_team_its_option_picked(context, monkeypatc
     write(apply_edits(CASES["valid"], [{"set": f"luxcavation/{LUX_KEYS[task]}/team", "value": "a"}]))
     ok, stops, said = start(context, monkeypatch, task, f"{option}=b")
     assert ok is True and stops == []
-    assert actions.TASK["options"]["team"] == "b" and said[1].endswith(", team=b")
+    assert actions.TASK["options"]["team"] == "b" and options_line(said).endswith(", team=b")
     assert (actions.RUN["team"]["id"], actions.RUN["team"]["game_team"], actions.RUN["guard"]) == ("b", 2, 3)
     assert said[-1].startswith(f"{name}: team 'Team b' (TEAMS #2), 3 guard turns, ")
     context.tasker.controller.post_click.assert_not_called()

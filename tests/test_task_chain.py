@@ -123,7 +123,8 @@ def child(work=None):
         for n in (1, 2):
             if n == 2:  # the next publish, between two tasks of the same agent
                 shutil.copyfile(work / "next.json", work / "remote" / "main" / "manifest.json")
-            detail = tasker.post_task("MirrorDungeon").wait().get()
+            # as a client posts it (#779): its options override the entry node, which MaaFramework builds on the old bundle
+            detail = tasker.post_task("MirrorDungeon", override("MirrorDungeon")).wait().get()
             out["succeeded"] = detail.status.succeeded
             out["nodes"].append([node.name for node in detail.nodes])
         print(json.dumps(out))
@@ -488,6 +489,8 @@ def test_a_bundle_that_does_not_load_puts_the_old_files_back_and_the_task_runs_o
 def test_the_pipeline_a_task_found_is_the_pipeline_it_runs(tmp_path):
     # #772: TaskStart swaps image/ and pipeline/ and reloads the bundle, so the node the fake remote's pipeline added is
     # reached by the very task that found it; the custom actions and recognitions registered before the reload still answer.
+    # The probe follows the entry node, which the client's options override (#779): TaskStart takes it from the new bundle
+    # again, with the options the client sent, which the task then reads.
     base, _ = update_scene(tmp_path)
     run = subprocess.run([sys.executable, __file__, "update", str(tmp_path)], capture_output=True, text=True, timeout=300, cwd=ROOT)
     assert run.returncode == 0, run.stderr[-2000:]

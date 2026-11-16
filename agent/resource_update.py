@@ -2,7 +2,7 @@
 take the files maalc-resource published since, so a new event table, template or pipeline reaches the task that found it.
 
 `update(base, log, tasker)` is the one entry; it never raises, and a failure leaves the files as they were, with one log line
-saying why. The steps, one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan
+saying why. It says whether it reloaded the bundle, for TaskStart to rebuild the task's entry node (#779). The steps, one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan
 what changes for each part of the package (`plan_part`), download it into a staging folder and verify it (`stage`), swap it
 in all or nothing and write the new manifest last (`swap`), then reload the bundle and clear what the old files left in memory (`refresh`).
 
@@ -353,13 +353,15 @@ def refresh(plans, tasker, base, undo, log):
 
 
 def update(base, log, tasker):
-    """Take the newer files of the package maalc-resource published, if any. Never raises."""
+    """Take the newer files of the package maalc-resource published, if any. Never raises. True when it reloaded the
+    bundle, or tried to: the task's entry node may be the one posted on the old bundle (TaskStart, #779)."""
     try:
-        run_update(Path(base), log, tasker)
+        return run_update(Path(base), log, tasker)
     except UpdateError as e:
         log(f"{PREFIX}kept the current files: {e}")
     except Exception as e:  # a task starts without an update
         log(f"{PREFIX}kept the current files: {type(e).__name__}: {e}")
+    return False
 
 
 def run_update(base, log, tasker):
@@ -367,13 +369,13 @@ def run_update(base, log, tasker):
         local = rp.read_manifest(base)
     except rp.ManifestError as e:
         log(f"{PREFIX}skipped: {e}")
-        return
+        return False
     if local is None:
         log(f"{PREFIX}skipped: no {rp.MANIFEST}")
-        return
+        return False
     if not local["sources"]:
         log(f"{PREFIX}skipped: the manifest lists no source (updates off)")
-        return
+        return False
     staging = base.parent / STAGING
     shutil.rmtree(staging, ignore_errors=True)  # what a crash left
     deadline = time.monotonic() + CHECK_SECONDS
@@ -388,15 +390,15 @@ def run_update(base, log, tasker):
         raise UpdateError("; ".join(reasons))
     if rp.version_key(remote["version"]) < rp.version_key(local["version"]):
         log(f"{PREFIX}up to date: the remote {remote['version']} is older than {local['version']}")
-        return
+        return False
     plans = plan_update(base, local, remote, log)
     if not plans:
-        return
+        return False
     if not any(plans):
         if remote["version"] != local["version"] and len(plans) == sum(len(parts) for parts, _, _ in APPLIED):  # none skipped
             write_manifest_only(base, merged_manifest(local, remote, plans), staging)
         log(f"{PREFIX}up to date: {remote['version']} changes no file")
-        return
+        return False
     try:
         stage(source, plans, staging / remote["version"], DOWNLOAD_SECONDS)
         undo = swap(base, plans, merged_manifest(local, remote, plans), staging / remote["version"])
@@ -407,6 +409,7 @@ def run_update(base, log, tasker):
         changed, removed = sum(len(p.changed) for p in plans), sum(len(p.removed) for p in plans)
         reloaded = ", bundle reloaded" if needs_reload(plans) else ""
         log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed{reloaded}")
+    return needs_reload(plans)
 
 
 def write_manifest_only(base, manifest, staging):
