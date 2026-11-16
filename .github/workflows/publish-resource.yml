@@ -1,0 +1,51 @@
+name: publish-resource
+
+# A change to main that touches the resource package publishes it to the public maalc-resource repository: one commit
+# on its main plus a tag named after the version (tools/publish_resource.py; ADR 0012, #770). A package equal to the
+# latest published one publishes nothing, so a path listed here that did not change a package file is harmless.
+on:
+  push:
+    branches: [main]
+    paths:
+      - assets/resource/base/data/**
+      - assets/resource/base/image/**
+      - assets/resource/base/pipeline/**
+      - agent/resource_package.py
+      - tools/build_resource_package.py
+      - tools/publish_resource.py
+      - LICENSE
+      - NOTICE.md
+      - .github/workflows/publish-resource.yml
+  workflow_dispatch:
+
+# Runs queue one after another, never side by side: two publishes would race for the same tag and the same push.
+concurrency:
+  group: publish-resource
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The deploy key can write maalc-resource and nothing else. The private key goes to a file readable by this job only.
+      - name: Set up the deploy key
+        env:
+          DEPLOY_KEY: ${{ secrets.MAALC_RESOURCE_DEPLOY_KEY }}
+        run: |
+          test -n "$DEPLOY_KEY" || { echo "::error::the Actions secret MAALC_RESOURCE_DEPLOY_KEY is not set"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/maalc_resource
+          chmod 600 ~/.ssh/maalc_resource
+          ssh-keyscan -t ed25519,rsa github.com >> ~/.ssh/known_hosts
+      - name: Publish
+        env:
+          GIT_SSH_COMMAND: ssh -i $HOME/.ssh/maalc_resource -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+        run: python3 tools/publish_resource.py --remote git@github.com:EnderWolf50/maalc-resource.git --work "$RUNNER_TEMP/maalc-resource"
