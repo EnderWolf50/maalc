@@ -195,7 +195,8 @@ def migrate(data):
 
 
 def cross_check(data):
-    """The checks spec 04 section 2 says the schema cannot express."""
+    """The checks spec 04 section 2 says the schema cannot express, but the two that cross a task's options with the
+    teams (the target floor's, a Luxcavation task's team): the task's start checks those (task_options, #777)."""
     errors = []
 
     def dupes(path, values, what):
@@ -239,32 +240,11 @@ def cross_check(data):
             if target["s3"] < 1:
                 errors.append(f"{path}/s3: {who} targets {target['s3']} of skill 3, but swaps only raise it from the game's 1")
 
-    target_floor = data["run"]["target_floor"]
-    if target_floor > 5:
-        # floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
-        need = f"but target_floor {target_floor} needs the whole run HARD"
-        if data["run"]["difficulty"] == "normal":
-            errors.append(f"run/difficulty: difficulty is 'normal', {need}")
-        for i, t in enumerate(teams):
-            if not t["enabled"]:
-                continue
-            if t["usage"] == "normal_only":
-                errors.append(f"teams/{i}/usage: team {t['name']!r} is normal_only, {need}")
-            if t["hard_from_floor"] is None:
-                errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} never switches to HARD, {need} (hard_from_floor 1)")
-            elif t["hard_from_floor"] != 1:
-                errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} starts HARD at floor {t['hard_from_floor']}, {need} (hard_from_floor 1)")
-
     for i, gift_list in enumerate(data["gift_lists"]):
         errors.extend(
             f"gift_lists/{i}: list {gift_list['name']!r} has gift {gid} in both want and keep"
             for gid in gift_list["want"] if gid in gift_list["keep"]
         )
-
-    team_ids = {t["id"] for t in teams}
-    for task, opts in data["luxcavation"].items():
-        if opts["team"] is not None and opts["team"] not in team_ids:
-            errors.append(f"luxcavation/{task}/team: team {opts['team']!r} is not in teams")
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")

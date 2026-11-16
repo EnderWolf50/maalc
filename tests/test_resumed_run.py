@@ -21,13 +21,21 @@ clock, context = test_actions.clock, test_actions.context  # its fixtures: the f
 @pytest.fixture
 def resumed(context, monkeypatch):
     """settings_cases' valid file under the agent's ROOT: auto difficulty, the queue team a (any) then team b
-    (hard_only); the adb address "default"; no run plan in memory."""
+    (hard_only); the adb address "default"; MirrorDungeon started on it (start), no run plan in memory."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     context.tasker.controller.info = {}  # address "default"
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # the task started here ends with the test
+    start(context)
     actions.RUN.clear()
     return context
+
+
+def start(context):
+    """MirrorDungeon's TaskStart: the task reads its options from the settings file as it is now, as a task the client
+    starts after the agent's restart does."""
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
 
 
 def queue():
@@ -80,6 +88,7 @@ def test_auto_with_a_target_above_floor_5_begins_hard_so_the_queues_hard_team_is
         data["teams"][1]["hard_from_floor"] = 1  # a target above 5 needs the whole run HARD
         b_first(data)
     edit_settings(target_10)
+    start(resumed)  # a target is the task's option: read at its start
     claim(resumed, monkeypatch, "HARD")
     assert queue() == ["a", "b"] and last_line()["team"] == "b"
 

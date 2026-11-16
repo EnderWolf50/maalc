@@ -10,10 +10,11 @@ from maa.custom_action import CustomAction
 
 import luxcavation
 import pass_missions
-from actions import (ROOT, RUN, TASK, TaskStart, box_centre, end_battle, finish, go_home, log, log_change, ocr_texts,
-                     param, screen, seen, shows, stop, tap, tap_then, text, until)
+import task_options
+from actions import (RUN, TASK, TaskStart, box_centre, end_battle, finish, go_home, log, log_change, ocr_texts, param,
+                     screen, seen, shows, stop, tap, tap_then, text, until)
 from ocrtext import digits
-from settings import SettingsError, load_settings
+from settings import SettingsError
 
 
 def module_count(context, image):
@@ -36,20 +37,23 @@ LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxc
 
 @AgentServer.custom_action("LuxStart")
 class LuxStart(TaskStart):
-    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, then the team
-    luxcavation.<key> names, whose guard turns the battle plays (spec 03 section 8), its mode (#431), count and retries (#367).
-    No team picked, or settings that do not load: the stop procedure, before any tap."""
+    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, its options
+    luxcavation.<key> (#777), then the team they name, whose guard turns the battle plays (spec 03 section 8), its mode
+    (#431), count and retries (#367). No team picked, a team that is gone, or settings that do not load: the stop
+    procedure, before any tap."""
 
-    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if not super().run(context, argv):
-            return False
+    def unread(self, context, error):
+        return stop(context, str(error))
+
+    def options(self, argv, settings):
+        return task_options.luxcavation(settings, json.loads(argv.custom_action_param))
+
+    def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
         key = json.loads(argv.custom_action_param)
         name, cost = LUX[key]
-        try:
-            settings = load_settings(ROOT)
-        except SettingsError as e:
-            return stop(context, str(e))
-        opts = settings["luxcavation"][key]
+        opts = TASK["options"]
+        if errors := task_options.team_errors(key, opts["team"], settings["teams"]):
+            return stop(context, str(SettingsError(errors)))
         team = next((t for t in settings["teams"] if t["id"] == opts["team"]), None)
         if team is None:
             return stop(context, f"{name} has no team: pick one in the settings GUI's Daily tab")

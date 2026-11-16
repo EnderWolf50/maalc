@@ -8,10 +8,10 @@ from maa.custom_action import CustomAction
 
 import lunacy
 import pass_missions
-from actions import (ROOT, TASK, TaskStart, back, done, finish, log, node_results, ocr_texts, screen, seen, stop, tap,
+import task_options
+from actions import (TASK, TaskStart, back, done, finish, log, node_results, ocr_texts, screen, seen, stop, tap,
                      tap_then)
 from ocrtext import fractions as text_fractions
-from settings import SettingsError, load_settings
 
 
 @AgentServer.custom_action("MailDone")
@@ -208,17 +208,18 @@ CHARGE_TRIES = 3  # reads of the prompt and price, and Cancels over a decided ta
 
 @AgentServer.custom_action("ChargeStart")
 class ChargeStart(TaskStart):
-    """ChargeEnkephalin's entry: TaskStart, then charge_enkephalin.count, the day's target Daily Count (#429). 0, the
-    default, ends the task at once, a success, before GoHome or any tap: the window is never opened, so the Use Lunacy
-    tab is never touched."""
+    """ChargeEnkephalin's entry: TaskStart, then its option count, charge_enkephalin.count, the day's target Daily Count
+    (#429, #777). 0, the default, ends the task at once, a success, before GoHome or any tap: the window is never opened,
+    so the Use Lunacy tab is never touched. Settings that do not load: the stop procedure, before any tap."""
 
-    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        if not super().run(context, argv):
-            return False
-        try:
-            count = load_settings(ROOT)["charge_enkephalin"]["count"]
-        except SettingsError as e:
-            return stop(context, str(e))
+    def unread(self, context, error):
+        return stop(context, str(error))
+
+    def options(self, argv, settings):
+        return task_options.charge(settings)
+
+    def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
+        count = TASK["options"]["count"]
         TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
         return done("charge_enkephalin.count is 0: Lunacy left alone") if count == 0 else True
 

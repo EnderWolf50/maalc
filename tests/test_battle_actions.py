@@ -35,7 +35,8 @@ def test_a_missed_victory_does_not_carry_the_battle_clock_into_the_next_battle(c
 
 def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
     # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
-    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "stop"}})
+    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={})
+    monkeypatch.setitem(actions.TASK, "options", {"after_retries": "stop"})
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
     patch_all(monkeypatch, "tap_shown", lambda *a, **k: None)
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])  # ends the action after the count
@@ -53,7 +54,8 @@ def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monk
 
 def few_alive(context, monkeypatch, after_retries, min_alive):
     """A formation page with 4 of 12 alive; the stops and taps it leads to."""
-    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={})
+    monkeypatch.setitem(actions.TASK, "options", {"after_retries": after_retries})
     stops, taps = [], []
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
     patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
@@ -503,7 +505,8 @@ RETRY_STAGE = battle_actions.DEFEAT_OPTIONS["retry"]
 
 def wipe(context, monkeypatch, card, confirm):
     """The DEFEAT dialog's Wipe with retries left: the answers of the Retry Stage card and of Confirm."""
-    actions.RUN.update(settings={"run": {"wipe_retries": 2, "after_retries": "stop"}}, wipes=0)
+    actions.RUN.update(settings={}, wipes=0)
+    monkeypatch.setitem(actions.TASK, "options", {"wipe_retries": 2, "after_retries": "stop"})
     game = TimedGame(monkeypatch, context, {WIPE_TEXT: "All participating Sinners have been killed."},
                      {RETRY_STAGE: card, battle_actions.DEFEAT_CONFIRM: confirm})
     assert battle_actions.Wipe().run(context, None)

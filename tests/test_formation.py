@@ -157,7 +157,8 @@ def formation_page(context, monkeypatch, reads, answers):
 def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s(context, clock, monkeypatch):
     # #258: the back arrow slept 2 s so that MirrorHub would not find the page again and back out twice; the wait now
     # ends when the Formation node no longer hits.
-    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={"run": {"after_retries": "forfeit"}})
+    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={})
+    monkeypatch.setitem(actions.TASK, "options", {"after_retries": "forfeit"})
     patch_all(monkeypatch, "participants", lambda context, image: (4, 4))
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])
     patch_all(monkeypatch, "dead_sinners", lambda image: set())
@@ -170,7 +171,8 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
 
 def test_the_details_view_is_folded_and_read_once_its_button_shows_not_after_1_5_s(context, clock, monkeypatch):
     # #258: the » slept 1.5 s; now the order marks are read on the folded page once Details shows and the page is still.
-    actions.RUN.update(team={"min_alive": 0, "name": "t"}, settings={"run": {"after_retries": "stop"}})
+    actions.RUN.update(team={"min_alive": 0, "name": "t"}, settings={})
+    monkeypatch.setitem(actions.TASK, "options", {"after_retries": "stop"})
     patch_all(monkeypatch, "participants", lambda context, image: (5, 12))
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])  # ends the action after the dead are read
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
@@ -189,7 +191,8 @@ SPIDER_NEST = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Rodion", "Ishmael", "
 
 def order_page(context, monkeypatch, plan, dead, min_alive, screen_alive, after_retries="forfeit"):
     """A formation page (screen count screen_alive of 12) whose grey cards are `dead`; the stops, taps and log lines (#616)."""
-    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={"run": {"after_retries": after_retries}})
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={})
+    monkeypatch.setitem(actions.TASK, "options", {"after_retries": after_retries})
     actions.RUN.pop("forfeit", None)
     stops, taps, lines = [], [], []
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
