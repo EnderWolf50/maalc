@@ -302,12 +302,21 @@ def clear_data_caches():
             getattr(sys.modules[module], function)()
 
 
+class ClearRefused(UpdateError):
+    """resource.clear() said no: the resource still holds what it held."""
+
+
+def needs_reload(plans):
+    """The bundle holds image/ and pipeline/; data/ is read from disk by the agent."""
+    return any(p for p in plans if p.part != "data")  # a plan with no change is falsy
+
+
 def reload_bundle(tasker, base):
     """Drop what the resource holds and load `base` again, waiting for the load. MaaFramework has no guard against doing
     this inside a running task: the task goes on with the new pipeline and templates (the test in test_task_chain.py)."""
     resource = tasker.resource
     if not resource.clear():
-        raise UpdateError("resource.clear() failed (a load is still running)")
+        raise ClearRefused("resource.clear() failed (a load is still running)")
     if not resource.post_bundle(base).wait().succeeded:
         raise UpdateError("resource.post_bundle() did not load the bundle")
 
@@ -317,7 +326,7 @@ def refresh(plans, tasker, base, undo, log):
     data caches when data/ did. A reload that fails puts the previous files back (every part: the version is one), loads
     them again and says so. True when the new files stand."""
     stands = True
-    if any(p for p in plans if p.part != "data"):
+    if needs_reload(plans):
         try:
             reload_bundle(tasker, base)
         except Exception as e:
@@ -325,10 +334,13 @@ def refresh(plans, tasker, base, undo, log):
             failed = rollback(undo)
             log(f"{PREFIX}the reload of the {plans[0].version} bundle failed ({type(e).__name__}: {e}): the previous files are back"
                 + (f", except {', '.join(failed)}" if failed else ""))
-            try:
-                reload_bundle(tasker, base)
-            except Exception as e:
-                log(f"{PREFIX}the previous bundle could not be reloaded either ({type(e).__name__}: {e})")
+            if isinstance(e, ClearRefused):  # the resource was not touched: the previous bundle is still loaded
+                log(f"{PREFIX}the previous bundle is still loaded")
+            else:
+                try:
+                    reload_bundle(tasker, base)
+                except Exception as e:
+                    log(f"{PREFIX}the previous bundle could not be reloaded either ({type(e).__name__}: {e})")
     if any(p for p in plans if p.part == "data"):
         try:
             clear_data_caches()
@@ -393,7 +405,7 @@ def run_update(base, log, tasker):
         shutil.rmtree(staging, ignore_errors=True)
     if stands:
         changed, removed = sum(len(p.changed) for p in plans), sum(len(p.removed) for p in plans)
-        reloaded = ", bundle reloaded" if any(p for p in plans if p.part != "data") else ""
+        reloaded = ", bundle reloaded" if needs_reload(plans) else ""
         log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed{reloaded}")
 
 

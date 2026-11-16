@@ -141,8 +141,17 @@ def test_a_change_of_data_only_reloads_nothing(base, remote):
     assert tasker.calls == []
 
 
+def test_a_refused_clear_leaves_the_bundle_loaded_so_the_old_files_are_not_loaded_again(base, remote):
+    # clear() refused (a load is still running): the resource was not touched, the files go back and nothing is reloaded
+    publish(remote, {**NEW, "image/t.png": b"png-2", "pipeline/p.json": b"{}"}, "2026.11.16")
+    tasker = Tasker(fail=[1])
+    before = tree(base)
+    said = run(base, tasker)
+    assert tree(base) == before and tasker.calls == ["clear"]
+    assert "still loaded" in said and "could not be reloaded" not in said
+
+
 @pytest.mark.parametrize("fault, calls", [
-    (dict(fail=[1]), ["clear", "clear", "bundle"]),  # clear() refused (a load is still running): no bundle posted
     (dict(fail=[2]), ["clear", "bundle", "clear", "bundle"]),  # the new bundle does not load
     (dict(raises=[2]), ["clear", "bundle", "clear", "bundle"]),
 ])
