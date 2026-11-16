@@ -20,7 +20,7 @@ export const GAME_TEXTS = [
   "sinner_cards/index.json", "theme_pack_covers/index.json",
 ];
 /** Every image folder the window lists (under data/). */
-export const GAME_FOLDERS = ["gift_icons", "keyword_icons", "grace_icons", "sinner_cards", "theme_pack_covers"];
+export const GAME_FOLDERS = ["gift_icons", "keyword_icons", "buf_icons", "grace_icons", "sinner_cards", "theme_pack_covers"];
 
 const DATA = "../../assets/resource/base/data/";
 const under = (key: string) => key.slice(key.indexOf("/data/") + "/data/".length);

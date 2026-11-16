@@ -707,7 +707,11 @@ class PickThemePack(CustomAction):
         setting = run["settings"]["run"]["theme_pack_refresh"]
         prev = None
         for used in range(10):  # a greyed button or its `0/m` ends it (#319, #482); unread, a refresh that changes nothing does
-            settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=2)
+            # Three alike pairs in a row (#774): two let the deal's last small swing through. The 2026-11-10 recording
+            # replayed at 7 screenshot phases, counting the replays that fired before the recorded pull: two fired
+            # before the cards stopped in 14 of 552, up to 0.40 s early; three in 3 of 496, at most 0.07 s, for one more
+            # screenshot (~0.2 s) per read.
+            settled = still(context, timeout=CARDS_SETTLE, roi=PACK_CARDS, runs=3)
             if settled is None:
                 log(f"floor {floor}: the cards still moved after {CARDS_SETTLE:g} s")
             page = page_guard(context, "ThemePack", settled)
