@@ -1,6 +1,6 @@
 // Test harness for the editor tabs: renders a tab inside the same EditorContext App builds, over real settings state, and lets
 // the test read the settings back after the user's clicks. Not bundled (only tests import it).
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { useState, type ReactElement } from "react";
 import { expect } from "vitest";
@@ -35,6 +35,16 @@ export const sideList = () => within(document.querySelector("aside")!);
 
 /** Pick the team or plan named `name` in the side list, as the user clicks it. */
 export const pickInList = (user: UserEvent, name: string) => user.click(sideList().getByText(name));
+
+/** Drag row `from` of a sortable list (ui.tsx ReorderList) onto row `to` and drop it: the HTML5 events the list handles. The
+ * real window takes a drag only in the foreground or over DevTools (docs/agents/gui-driving.md). */
+export function dragOnto(from: Element, to: Element) {
+  const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
+  fireEvent.dragStart(from, { dataTransfer: dt() });
+  fireEvent.dragOver(to, { dataTransfer: dt() });
+  fireEvent.drop(to, { dataTransfer: dt() });
+  fireEvent.dragEnd(from, { dataTransfer: dt() });
+}
 
 /** A grace effect line's text, its runs joined. */
 export const textOf = (runs: TextRun[]) => runs.map((r) => r.text).join("");

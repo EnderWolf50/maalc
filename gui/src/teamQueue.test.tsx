@@ -2,15 +2,16 @@
 // that team to its end. The team list is the user's to arrange: its drag and its ↑↓ leave the queue alone. A team added goes
 // last in both, a team deleted leaves both. The editor takes the queue on disk, keeps the user's unsaved edits on top of it,
 // and never saves its own stale queue over the Agent's.
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import { TEXT } from "./i18n";
+import { TEXT, fill } from "./i18n";
 import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
 import { cases } from "./settingsCases";
+import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
-import { pickInList, renderEditor, sideList } from "./testing";
+import { cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
 const file = vi.hoisted(() => ({ text: "" as string | null, saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
@@ -51,6 +52,8 @@ const claimedOld = (s: Settings, id: string): Settings => {
   return { ...s, teams: [...s.teams.slice(0, at), ...s.teams.slice(at + 1), s.teams[at]] };
 };
 const text = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The rows of the team queue block (#804). */
+const queueRows = () => within(screen.getByRole("group", { name: zh["queue.title"] })).getAllByRole("listitem");
 
 describe("movedToEnd: the teams another writer moved to the end of the queue", () => {
   test.each([
@@ -142,6 +145,65 @@ describe("the team list and the queue in the teams tab", () => {
   });
 });
 
+describe("the team queue block above the list and the editor (#804)", () => {
+  const rows = queueRows;
+  /** Each row's text, as the user reads it. */
+  const shown = () => rows().map((li) => li.querySelector(".item")!.textContent);
+
+  test("lists every team in the queue's order, each with its place, name, in-game slot and usage", () => {
+    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
+    s.teams[1].game_team = 7;
+    s.teams[1].usage = "normal_only";
+    renderEditor(<TeamsTab />, s);
+    expect(shown()).toEqual([
+      expect.stringMatching(/^1\. Tc TEAMS #3/), expect.stringMatching(/^2\. Ta TEAMS #1/), expect.stringMatching(/^3\. Tb TEAMS #7/),
+    ]);
+    expect(rows().map((li) => [zh["usage.any"], zh["usage.normal_only"]].filter((u) => within(li).queryByText(u))))
+      .toEqual([[zh["usage.any"]], [zh["usage.any"]], [zh["usage.normal_only"]]]); // 都可 too: the list shows only a kept one
+  });
+
+  test("a team that is off stays in its place, dimmed and tagged off", () => {
+    const s = queue("a", "b", "c");
+    s.teams[1].enabled = false;
+    renderEditor(<TeamsTab />, s);
+    const [a, b] = rows();
+    expect(b).toHaveTextContent(`2. Tb`);
+    expect(b).toHaveTextContent(zh["team.disabled"]);
+    expect(a).not.toHaveTextContent(zh["team.disabled"]);
+    expect(cssValueOf(css, b.querySelector(".item > span")!, "color")).toBe("var(--muted)");
+    expect(cssValueOf(css, a.querySelector(".item > span")!, "color")).not.toBe("var(--muted)");
+  });
+
+  // The next run of each difficulty is the first enabled team in the queue whose usage fits it (agent/team_queue.py pick_team).
+  /** The next-run marks, by row: "" for a row without one. */
+  const marks = () => rows().map((li) => [zh["queue.next"], zh["queue.next_hard"], zh["queue.next_normal"]]
+    .filter((m) => [...li.querySelectorAll("em")].some((em) => em.textContent === m)).join(" "));
+  type Edit = Partial<Pick<Settings["teams"][number], "enabled" | "usage">>;
+  test.each<[string, Edit[], string[]]>([
+    ["one team plays both: one mark", [{ enabled: false }, {}, { usage: "hard_only" }], ["", zh["queue.next"], ""]],
+    ["hard and normal play different teams: a mark each",
+      [{ enabled: false, usage: "any" }, { usage: "hard_only" }, { usage: "any" }], ["", zh["queue.next_hard"], zh["queue.next_normal"]]],
+    ["a team kept to Normal first, then one for both", [{ usage: "normal_only" }, {}, {}], [zh["queue.next_normal"], zh["queue.next_hard"], ""]],
+    ["no team to play: no mark", [{ enabled: false }, { enabled: false }, { enabled: false }], ["", "", ""]],
+    ["only Hard has a team: its mark says Hard", [{ usage: "hard_only" }, { enabled: false }, { usage: "hard_only" }], [zh["queue.next_hard"], "", ""]],
+  ])("%s", (_, edits, expected) => {
+    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] }; // the list's order is not the queue's
+    const inQueue = s.team_queue.map((id) => s.teams.find((x) => x.id === id)!);
+    edits.forEach((e, j) => Object.assign(inQueue[j], e));
+    renderEditor(<TeamsTab />, s);
+    expect(marks()).toEqual(expected);
+  });
+
+  test("its ↑↓ move a team in the queue, not in the list", async () => {
+    const r = renderEditor(<TeamsTab />, queue("a", "b", "c"));
+    await r.user.click(within(rows()[2]).getByRole("button", { name: zh.up }));
+    expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c"], ["a", "c", "b"]]);
+    await r.user.click(within(rows()[0]).getByRole("button", { name: zh.down }));
+    expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c"], ["c", "a", "b"]]);
+    expect(shown()).toEqual([expect.stringMatching(/^1\. Tc/), expect.stringMatching(/^2\. Ta/), expect.stringMatching(/^3\. Tb/)]);
+  });
+});
+
 describe("in the editor", () => {
   beforeEach(() => { file.text = text(queue("a", "b", "c")); file.saved = []; file.beforeSave = undefined; });
   const shown = () => sideList().getAllByRole("listitem").map((li) => li.textContent!.match(/T\w/)![0]);
@@ -157,17 +219,66 @@ describe("in the editor", () => {
     render(<App />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
     const rows = () => sideList().getAllByRole("listitem");
-    const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
-    fireEvent.dragStart(rows()[2], { dataTransfer: dt() });
-    fireEvent.dragOver(rows()[0], { dataTransfer: dt() });
-    fireEvent.drop(rows()[0], { dataTransfer: dt() });
-    fireEvent.dragEnd(rows()[2], { dataTransfer: dt() });
+    dragOnto(rows()[2], rows()[0]);
     expect(shown()).toEqual(["Tc", "Ta", "Tb"]);
     expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved: Settings = JSON.parse(file.saved[0]);
     expect([ids(saved), saved.team_queue]).toEqual([["c", "a", "b"], ["a", "b", "c"]]);
+  });
+
+  describe("the queue block", () => {
+    const rows = queueRows;
+    const inBlock = () => rows().map((li) => li.textContent!.match(/T\w/)![0]);
+
+    test("a drag and an ↑ in it save the queue in their order, and the team list as it was", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
+      dragOnto(rows()[2], rows()[0]);
+      expect(inBlock()).toEqual(["Tc", "Ta", "Tb"]);
+      await user.click(within(rows()[2]).getByRole("button", { name: zh.up }));
+      expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]);
+      await user.click(screen.getByRole("button", { name: zh.save }));
+      await waitFor(() => expect(file.saved).toHaveLength(1));
+      const saved: Settings = JSON.parse(file.saved[0]);
+      expect([saved.team_queue, ids(saved)]).toEqual([["c", "b", "a"], ["a", "b", "c"]]);
+      expect(shown()).toEqual(["Ta", "Tb", "Tc"]);
+    });
+
+    test.each([
+      ["the Agent moves a claimed team to the end", (s: Settings) => claimed(s, "a"), ["Tb", "Tc", "Ta"]],
+      ["a task's start team is put first (#802)", (s: Settings) => ({ ...s, team_queue: ["c", "a", "b"] }), ["Tc", "Ta", "Tb"]],
+    ])("shows the order the file has once the editor reads it again: %s", async (_, write, expected) => {
+      render(<App />);
+      await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
+      file.text = text(write(JSON.parse(file.text!)));
+      act(() => { window.dispatchEvent(new Event("focus")); });
+      await waitFor(() => expect(inBlock()).toEqual(expected));
+      expect(shown()).toEqual(["Ta", "Tb", "Tc"]);
+    });
+
+    test("an unsaved move in it and the Agent's claim are both shown", async () => {
+      const user = userEvent.setup();
+      render(<App />);
+      await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
+      await user.click(within(rows()[2]).getByRole("button", { name: zh.up })); // a, c, b
+      agentClaims("a");
+      act(() => { window.dispatchEvent(new Event("focus")); });
+      await waitFor(() => expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]));
+    });
+
+    test("an id of the queue that names no team is its own row, marked, and the problem's click focuses it", async () => {
+      file.text = text({ ...queue("a", "b", "c"), team_queue: ["a", "b", "c", "x"] });
+      const user = userEvent.setup();
+      render(<App />);
+      const extra = fill(zh["problem.queueExtra"], { name: "x" });
+      await user.click(await within(await screen.findByRole("alert")).findByRole("button", { name: extra }));
+      expect(rows()[3].querySelector(".item")).toHaveTextContent(/^4\. \? x$/);
+      expect(within(rows()[3]).getByText(zh.hasProblem)).toBeInTheDocument();
+      expect(document.activeElement).toBe(rows()[3].querySelector("[data-path='team_queue/3']"));
+    });
   });
 
   test("the queue the Agent wrote is taken when the window comes back to the front; the list keeps its order", async () => {
