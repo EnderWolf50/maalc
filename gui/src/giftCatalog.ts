@@ -1,5 +1,5 @@
 // Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons
-// (and, for the Gift Search page's, their effect text).
+// and their effect text.
 import { effects, recipes, webpFolder } from "./gameData";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { GIFT_SOURCES, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
@@ -31,10 +31,21 @@ export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));
 /** Whether the list may want it: the shop sells it or fusing makes it. */
 export const wantable = (g: CatalogGift) => g.kind === "buyable" || g.kind === "fusion";
 
-const EFFECTS: Record<string, { en: string; zh: string }> = effects.effects;
-/** The gift's effect text in the GUI's language: the game's, for the Gift Search page's gifts (gift_effects.json, #721); none
- * for the others. */
-export const giftEffect = (id: number, zh: boolean): string | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** A colour of a gift's effect text, by its name in the game's ColorCode table (a status word's buffType; Neutral for flavour
+ * text). */
+export type Colour = "Positive" | "Negative" | "Neutral";
+/** A run of a gift's effect text (gift_effects.json, tools/llc_text.py effect_runs): plain text, a status word (狀態詞, the
+ * game's `[tag]`, by its id) the game draws as its status icon and its name, or italic or coloured text (flavour text). */
+export type EffectRun = string | { kw: string } | { text: string; i?: boolean; colour?: Colour };
+/** A status word of the effect texts (gift_effects.json `keywords`; not a gift's keyword, its 體系): the colour its name is
+ * printed in, its status icon (data/buf_icons/<icon>.webp) and its names. */
+export interface StatusWord { colour: Colour; icon: string; en: string; zh: string }
+export const STATUS_WORDS = effects.keywords as Record<string, StatusWord>;
+const EFFECTS = effects.effects as Record<string, { en: EffectRun[]; zh: EffectRun[] }>;
+/** The gift's effect text in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764). */
+export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** A status word's icon URL (data/buf_icons/<icon>.webp, tools/buf_icons.py). */
+export const bufIconUrl = webpFolder("buf_icons");
 
 /** The icon's URL (data/gift_icons/<id>.webp). */
 export const iconUrl = webpFolder("gift_icons");
