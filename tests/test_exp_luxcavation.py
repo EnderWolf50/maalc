@@ -15,7 +15,7 @@ next step, the Consecutive Battle's count) is tested in process in test_luxcavat
 import json
 
 import numpy as np
-from daily_child import ROOT, bind, game_class, inside, interface as interface_json, live_frame, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, inside, interface as interface_json, live_frame, load, posted, result, run_child, screen
 from agent_patch import rebind
 
 WINDOW_TAB = (790, 608, 70, 64)
@@ -297,7 +297,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
         override = state.pop("override", {})
         for name, value in state.items():
             setattr(game, name, value)
-        out[scenario] = {**result(tasker.post_task(task, override).wait().get(), game, actions), "swipes": game.swipes,
+        out[scenario] = {**result(tasker.post_task(task, posted(task, override)).wait().get(), game, actions), "swipes": game.swipes,
                          "drags": game.drags, "fights": game.fights, "presses": game.presses,
                          "restarts": [game.stops, game.starts]}
     print(json.dumps(out))

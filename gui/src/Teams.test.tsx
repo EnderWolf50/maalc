@@ -166,7 +166,7 @@ describe("in the whole editor", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(await screen.findByRole("button", { name: zh["team.edit_list"] }));
-    await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
+    await user.click(screen.getByRole("tab", { name: zh["tab.events"] }));
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("other");
   });
@@ -200,6 +200,13 @@ describe("deleting a team", () => {
     await r.user.click(screen.getByRole("button", { name: zh.undo }));
     expect(r.settings().teams.map((x) => x.id)).toEqual(["b", "c", "a"]);
   });
+});
+
+test("the team page says what a target past floor 5 asks of a team, which the Mirror Dungeon task's start checks (#779)", () => {
+  // the target floor is a client option now: the GUI no longer refuses a save over it, so the rule shows beside usage
+  renderEditor(<TeamsTab />, settings());
+  expect(screen.getByText(zh["team.target_floor_note"])).toBeVisible();
+  expect(zh["team.min_alive_note"]).toContain("鏡牢任務選項");
 });
 
 test("the team page's long notes show one topic to a line", () => {

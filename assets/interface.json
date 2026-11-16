@@ -36,11 +36,47 @@
             "./agent/main.py"
         ]
     },
+    // Task and global options (#776, ADR 0013): each case or input writes one key into attach of its task's entry node, a
+    // global option into attach of GlobalOptions, which no next names. The node names and the attach keys are the
+    // agent's (agent/task_options.schema.json); a select's or switch's default case is its first, and a later case
+    // goes last: MFAAvalonia stores the index.
+    "global_option": [
+        "WebhookUrl",
+        "AutoAcceptTerms",
+        "AutoDownload",
+        "KeepDismissedScreens"
+    ],
+    // MXU v2.7.1 shows the global options only in a setting section of its Settings page.
+    "setting": [
+        {
+            "name": "GlobalOptions",
+            "label": "$GlobalOptions",
+            "description": "$GlobalOptions_description",
+            "option": [
+                "WebhookUrl",
+                "AutoAcceptTerms",
+                "AutoDownload",
+                "KeepDismissedScreens"
+            ]
+        }
+    ],
     "task": [
         {
             "name": "MirrorDungeon",
             "label": "$MirrorDungeon",
-            "entry": "MirrorDungeon"
+            "entry": "MirrorDungeon",
+            "option": [
+                "MirrorDifficulty",
+                "MirrorTargetFloor",
+                "MirrorRunsLimit",
+                "MirrorThemePackRefresh",
+                "MirrorWeeklyBonusUse",
+                "MirrorWeeklyBonusAmount",
+                "MirrorStopWhenBonusOut",
+                "MirrorStarlightUnaffordable",
+                "MirrorWipeRetries",
+                "MirrorAfterRetries"
+            ]
         },
         {
             "name": "AssembleModules",
@@ -72,5 +108,154 @@
             "label": "$ChargeEnkephalin",
             "entry": "ChargeEnkephalin"
         }
-    ]
+    ],
+    "option": {
+        "MirrorDifficulty": {
+            "type": "select",
+            "label": "$MirrorDifficulty",
+            "default_case": "auto",
+            "cases": [
+                {"name": "auto", "label": "$MirrorDifficulty_auto", "pipeline_override": {"MirrorDungeon": {"attach": {"difficulty": "auto"}}}},
+                {"name": "hard", "label": "$MirrorDifficulty_hard", "pipeline_override": {"MirrorDungeon": {"attach": {"difficulty": "hard"}}}},
+                {"name": "normal", "label": "$MirrorDifficulty_normal", "pipeline_override": {"MirrorDungeon": {"attach": {"difficulty": "normal"}}}}
+            ]
+        },
+        "MirrorTargetFloor": {
+            "type": "select",
+            "label": "$MirrorTargetFloor",
+            "description": "$MirrorTargetFloor_description",
+            "default_case": "5",
+            "cases": [
+                {"name": "5", "label": "$MirrorTargetFloor_5", "pipeline_override": {"MirrorDungeon": {"attach": {"target_floor": 5}}}},
+                {"name": "10", "label": "$MirrorTargetFloor_10", "pipeline_override": {"MirrorDungeon": {"attach": {"target_floor": 10}}}},
+                {"name": "15", "label": "$MirrorTargetFloor_15", "pipeline_override": {"MirrorDungeon": {"attach": {"target_floor": 15}}}}
+            ]
+        },
+        "MirrorRunsLimit": {
+            "type": "switch",
+            "label": "$MirrorRunsLimit",
+            "description": "$MirrorRunsLimit_description",
+            "default_case": "Yes",
+            "cases": [
+                {"name": "Yes", "option": ["MirrorRuns"], "pipeline_override": {"MirrorDungeon": {"attach": {"runs_limited": true}}}},
+                {"name": "No", "pipeline_override": {"MirrorDungeon": {"attach": {"runs_limited": false}}}}
+            ]
+        },
+        // Only under MirrorRunsLimit's Yes, not in the task's own list: MFAAvalonia would send it twice.
+        "MirrorRuns": {
+            "type": "input",
+            "label": "$MirrorRuns",
+            "inputs": [
+                {"name": "runs", "label": "$MirrorRuns", "default": "1", "pipeline_type": "int", "verify": "^[1-9][0-9]*$", "pattern_msg": "$WholeNumberFromOne"}
+            ],
+            "pipeline_override": {"MirrorDungeon": {"attach": {"runs": "{runs}"}}}
+        },
+        "MirrorThemePackRefresh": {
+            "type": "select",
+            "label": "$MirrorThemePackRefresh",
+            "description": "$MirrorThemePackRefresh_description",
+            "default_case": "all",
+            "cases": [
+                {"name": "all", "label": "$MirrorThemePackRefresh_all", "pipeline_override": {"MirrorDungeon": {"attach": {"theme_pack_refresh": "all"}}}},
+                {"name": "once", "label": "$MirrorThemePackRefresh_once", "pipeline_override": {"MirrorDungeon": {"attach": {"theme_pack_refresh": "once"}}}},
+                {"name": "none", "label": "$MirrorThemePackRefresh_none", "pipeline_override": {"MirrorDungeon": {"attach": {"theme_pack_refresh": "none"}}}}
+            ]
+        },
+        "MirrorWeeklyBonusUse": {
+            "type": "select",
+            "label": "$MirrorWeeklyBonusUse",
+            "description": "$MirrorWeeklyBonusUse_description",
+            "default_case": "hard",
+            "cases": [
+                {"name": "hard", "label": "$MirrorWeeklyBonusUse_hard", "pipeline_override": {"MirrorDungeon": {"attach": {"weekly_bonus_use": "hard"}}}},
+                {"name": "normal", "label": "$MirrorWeeklyBonusUse_normal", "pipeline_override": {"MirrorDungeon": {"attach": {"weekly_bonus_use": "normal"}}}},
+                {"name": "none", "label": "$MirrorWeeklyBonusUse_none", "pipeline_override": {"MirrorDungeon": {"attach": {"weekly_bonus_use": "none"}}}}
+            ]
+        },
+        "MirrorWeeklyBonusAmount": {
+            "type": "select",
+            "label": "$MirrorWeeklyBonusAmount",
+            "default_case": "all",
+            "cases": [
+                {"name": "all", "label": "$MirrorWeeklyBonusAmount_all", "pipeline_override": {"MirrorDungeon": {"attach": {"weekly_bonus_amount": "all"}}}},
+                {"name": "one", "label": "$MirrorWeeklyBonusAmount_one", "pipeline_override": {"MirrorDungeon": {"attach": {"weekly_bonus_amount": "one"}}}}
+            ]
+        },
+        "MirrorStopWhenBonusOut": {
+            "type": "switch",
+            "label": "$MirrorStopWhenBonusOut",
+            "default_case": "No",
+            "cases": [
+                {"name": "No", "pipeline_override": {"MirrorDungeon": {"attach": {"stop_when_weekly_bonus_out": false}}}},
+                {"name": "Yes", "pipeline_override": {"MirrorDungeon": {"attach": {"stop_when_weekly_bonus_out": true}}}}
+            ]
+        },
+        "MirrorStarlightUnaffordable": {
+            "type": "select",
+            "label": "$MirrorStarlightUnaffordable",
+            "default_case": "skip",
+            "cases": [
+                {"name": "skip", "label": "$MirrorStarlightUnaffordable_skip", "pipeline_override": {"MirrorDungeon": {"attach": {"starlight_unaffordable": "skip"}}}},
+                {"name": "stop", "label": "$MirrorStarlightUnaffordable_stop", "pipeline_override": {"MirrorDungeon": {"attach": {"starlight_unaffordable": "stop"}}}}
+            ]
+        },
+        "MirrorWipeRetries": {
+            "type": "input",
+            "label": "$MirrorWipeRetries",
+            "inputs": [
+                {"name": "wipe_retries", "label": "$MirrorWipeRetries", "default": "2", "pipeline_type": "int", "verify": "^(0|[1-9][0-9]*)$", "pattern_msg": "$WholeNumberFromZero"}
+            ],
+            "pipeline_override": {"MirrorDungeon": {"attach": {"wipe_retries": "{wipe_retries}"}}}
+        },
+        "MirrorAfterRetries": {
+            "type": "select",
+            "label": "$MirrorAfterRetries",
+            "description": "$MirrorAfterRetries_description",
+            "default_case": "forfeit",
+            "cases": [
+                {"name": "forfeit", "label": "$MirrorAfterRetries_forfeit", "pipeline_override": {"MirrorDungeon": {"attach": {"after_retries": "forfeit"}}}},
+                {"name": "stop", "label": "$MirrorAfterRetries_stop", "pipeline_override": {"MirrorDungeon": {"attach": {"after_retries": "stop"}}}}
+            ]
+        },
+        // A password input: the clients mask and encrypt it, and the PI schema refuses a default on one.
+        "WebhookUrl": {
+            "type": "input",
+            "label": "$WebhookUrl",
+            "description": "$WebhookUrl_description",
+            "inputs": [
+                {"name": "url", "label": "$WebhookUrl", "pipeline_type": "string", "password": true}
+            ],
+            "pipeline_override": {"GlobalOptions": {"attach": {"webhook_url": "{url}"}}}
+        },
+        "AutoAcceptTerms": {
+            "type": "switch",
+            "label": "$AutoAcceptTerms",
+            "description": "$AutoAcceptTerms_description",
+            "default_case": "Yes",
+            "cases": [
+                {"name": "Yes", "pipeline_override": {"GlobalOptions": {"attach": {"auto_accept_terms": true}}}},
+                {"name": "No", "pipeline_override": {"GlobalOptions": {"attach": {"auto_accept_terms": false}}}}
+            ]
+        },
+        "AutoDownload": {
+            "type": "switch",
+            "label": "$AutoDownload",
+            "description": "$AutoDownload_description",
+            "default_case": "Yes",
+            "cases": [
+                {"name": "Yes", "pipeline_override": {"GlobalOptions": {"attach": {"auto_download": true}}}},
+                {"name": "No", "pipeline_override": {"GlobalOptions": {"attach": {"auto_download": false}}}}
+            ]
+        },
+        "KeepDismissedScreens": {
+            "type": "switch",
+            "label": "$KeepDismissedScreens",
+            "description": "$KeepDismissedScreens_description",
+            "default_case": "Yes",
+            "cases": [
+                {"name": "Yes", "pipeline_override": {"GlobalOptions": {"attach": {"keep_dismissed_screens": true}}}},
+                {"name": "No", "pipeline_override": {"GlobalOptions": {"attach": {"keep_dismissed_screens": false}}}}
+            ]
+        }
+    }
 }

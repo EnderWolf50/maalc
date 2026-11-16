@@ -25,8 +25,7 @@ export interface GraceEffects { base: TextRun[][]; plus?: TextRun[][]; plus2?: T
 /** A grace's names and its effects in each language (#751). */
 export interface Grace { en: string; zh: string; effects: { en: GraceEffects; zh: GraceEffects } }
 
-/** Enum values of a run or team field, in schema order. */
-export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k] as { enum: string[] }).enum;
+/** Enum values of a team field, in schema order. */
 export const teamEnum = (k: keyof typeof TEAM) => (TEAM[k] as { enum: string[] }).enum;
 
 export type Order = string[];

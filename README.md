@@ -6,7 +6,7 @@
 
 1. 從 [Releases](https://github.com/EnderWolf50/maalc/releases) 下載 `maalc-<版本>.zip`，解壓縮到任意資料夾，得到一個 `maalc/` 資料夾。
 2. 執行 `maalc-gui.exe` 編輯設定（隊伍、方案、覆寫），設定存在 `config/settings.json`。
-3. 執行 `mxu.exe`，連上模擬器後開始鏡牢任務。MXU 會用 `python/` 內附的 Python 啟動 Agent，不需要另外安裝 Python。
+3. 執行 `mxu.exe`，連上模擬器，在任務清單設好鏡牢任務的選項（難度、目標層數、局數……，見下面的「鏡牢與全域的任務選項」），再開始任務。MXU 會用 `python/` 內附的 Python 啟動 Agent，不需要另外安裝 Python。
 
 zip 不是安裝程式，也不會自動更新；換版時下載新 zip，把舊資料夾的 `config/` 複製過去，就能沿用 maalc 的設定。
 
@@ -20,6 +20,19 @@ MFAAvalonia 只從自己的 `runtimes\` 載入 MaaFramework，不讀 `maafw\`。
 - 批次 OCR 會把被 roi 切掉一半以上的字框切成 1 px 細條重讀，曾讓記憶體從 4 GB 漲到 12 GB（#157）。現在只有等遊戲開機的畫面用到批次 OCR。
 
 這份 `MaaFramework.dll` 是 MaaFramework 5.14.3 加上這兩個修正，MFAAvalonia v2.16.4 附的也是 5.14.3。換之前先看 MFAAvalonia「設定」→「更新設定」的「框架版本」，不是 `v5.14.3` 就先不要換：不同版本的 MaaFramework DLL 混用沒有試過。換完後這裡仍然顯示 `v5.14.3`，修過的版本號沒有變。
+
+### 鏡牢與全域的任務選項
+
+鏡牢怎麼跑（難度、目標層數、局數上限、每週獎勵、星光買不起時、全滅重打）在 MXU 或 MFAAvalonia 的任務清單裡、鏡牢任務旁邊的選項設定，跟著任務存在 client 的設定裡：清單裡可以排兩個鏡牢任務各用不同的值，兩個實例也各有自己的。設定視窗沒有這些欄位。
+
+失敗通知 webhook、自動同意使用者條款、自動接受下載與更新、關畫面前存截圖是**全域選項**，每個任務都會用到：
+
+- MXU：「設定」頁的「全域選項」區塊，所有實例共用一份。
+- MFAAvalonia：任務清單裡多一個全域選項項目，每個實例各一份。
+
+每個選項的意思與預設見 [spec 04 第 5 節](docs/spec/04-settings.md#5-鏡牢任務選項與全域選項)。任務開始時，記錄裡有一行 `options: ...` 列出這次讀到的值，webhook 只寫有沒有設定。選項少了或值不對（例如重打次數填了字母），任務在點任何東西之前停下，那一行寫出是哪個選項、要去哪裡改。
+
+兩個 client 的這些行為依原始碼確認（MXU v2.7.1、MFAAvalonia v2.16.4），還沒有實機驗證。
 
 ### 辨識失敗時的截圖（`save_on_error`）
 

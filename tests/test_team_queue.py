@@ -185,10 +185,10 @@ def test_a_settings_file_with_no_team_still_drops_the_state(tmp_path):
 
 
 def test_a_team_the_difficulty_skips_keeps_its_place_and_only_the_claimed_team_goes_last(context, monkeypatch):
-    def queue_b_a_c(run, teams):  # b is hard_only, a any
+    def queue_b_a_c(teams):  # b is hard_only, a any
         teams.append({**teams[0], "id": "c", "name": "Team c", "game_team": 3})
         teams.insert(0, teams.pop(1))
-    entry_page(context, queue_b_a_c)  # auto, no weekly bonus left: a normal run
+    entry_page(context, teams=queue_b_a_c)  # auto, no weekly bonus left: a normal run
     actions.TASK.update(runs=0, done=None, modules=20)
     assert run_start_actions.PlanRun().run(context, None) is True
     assert (actions.RUN["team"]["id"], actions.RUN["difficulty"]) == ("a", "normal")

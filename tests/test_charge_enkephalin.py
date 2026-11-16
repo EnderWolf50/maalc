@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from daily_child import ROOT, bind, game_class, interface as interface_json, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, interface as interface_json, load, posted, result, run_child, screen
 from test_settings import VALID
 from agent_patch import patch_all, rebind
 
@@ -96,7 +96,7 @@ def child():
     }.items():
         rebind("ROOT", settings(count))  # the settings, and the stop procedure's evidence and log
         game.set(**state)
-        out[scenario] = result(tasker.post_task("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}}).wait().get(), game, actions)
+        out[scenario] = result(tasker.post_task("ChargeEnkephalin", posted("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}})).wait().get(), game, actions)
     for shown in ("modules", "lunacy0"):  # the prompt: the Modules tab's own line is not it
         game.set()
         game.screen = shown

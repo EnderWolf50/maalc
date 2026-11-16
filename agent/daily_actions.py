@@ -216,7 +216,7 @@ class ChargeStart(TaskStart):
         return stop(context, str(error))
 
     def options(self, argv, settings):
-        return task_options.charge(settings)
+        return task_options.charge(TASK["options"], settings)
 
     def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
         count = TASK["options"]["count"]

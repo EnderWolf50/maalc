@@ -96,7 +96,7 @@ def test_no_confirm_while_a_box_stays_unticked(game):
 def test_terms_off_stops_without_a_tap(game):
     actions.TASK["options"]["auto_accept_terms"] = False
     assert not actions.AcceptTerms().run(game.ctx, None)
-    assert game.taps == [] and "auto_accept_terms" in game.stops[0]
+    assert game.taps == [] and "AutoAcceptTerms" in game.stops[0]
 
 
 def test_download_off_stops_without_a_tap(game):

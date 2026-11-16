@@ -1,6 +1,8 @@
 ---
-status: accepted（取代 ADR 0004，修訂 ADR 0005）；由 ADR 0011 修訂
+status: accepted（取代 ADR 0004，修訂 ADR 0005）；由 ADR 0011、ADR 0013 修訂
 ---
+
+> [ADR 0013](0013-run-and-daily-options-in-pi-task-options.md) 修訂：執行選項與日常參數（25 個單一的值）改成 MXU／MFAAvalonia 的任務選項與全域選項，用 `pipeline_override` 寫進入口節點與 `GlobalOptions` 的 `attach` 傳給 Agent。下文「鏡牢任務沒有使用者選項」與「`global_option`、用 `pipeline_override` 傳值都不再需要」已不成立；隊伍、方案、清單與覆寫表仍由 GUI 寫進設定檔。（#776、#779，2026-11-16）
 
 > [ADR 0011](0011-team-list-order-is-the-queue.md) 修訂：Agent 在領獎後改寫設定檔裡 `teams` 的順序（隊伍佇列），只改順序；其他設定仍只由 GUI 寫。下文的「輪替游標」已被隊伍佇列取代。（#501，2026-11-08）
 

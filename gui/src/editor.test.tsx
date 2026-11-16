@@ -39,10 +39,10 @@ describe("a tab switch", () => {
   test("keeps the team the user picked", async () => {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("tab", { name: zh["tab.run"] });
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
     await pickInList(user, "Tb");
     expect(nameBox()).toHaveValue("Tb");
-    await user.click(tab(zh["tab.run"]));
+    await user.click(tab(zh["tab.events"]));
     await user.click(tab(zh["tab.teams"]));
     expect(nameBox()).toHaveValue("Tb");
   });
@@ -54,7 +54,7 @@ describe("a tab switch", () => {
   ] as const)("keeps the plan the user picked in %s", async (label, plan) => {
     const user = userEvent.setup();
     render(<App />);
-    await screen.findByRole("tab", { name: zh["tab.run"] });
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
     await user.click(tab(zh[label]));
     await pickInList(user, plan);
     expect(nameBox()).toHaveValue(plan);
@@ -121,18 +121,18 @@ describe("a problem shows while editing, before any save", () => {
 
   test("a choice made wrong, at once; put right, every mark goes at once", async () => {
     const s = settings();
-    s.run.target_floor = 10;
-    s.run.difficulty = "hard";
-    s.teams.forEach((x) => { x.hard_from_floor = 1; });
-    const user = await openOn(s, zh["tab.run"]);
-    const difficulty = screen.getByRole("combobox", { name: zh["run.difficulty"] });
-    unmarked(difficulty, zh["tab.run"]);
-    await user.selectOptions(difficulty, "normal");
-    marked(difficulty, zh["tab.run"]);
-    expect(problem(/但難度是普通/)).toBeInTheDocument();
+    s.teams[1].game_team = 1;
+    s.teams[1].enabled = false;
+    const user = await openOn(s, zh["tab.teams"]);
+    await pickInList(user, "Tb");
+    const enabled = screen.getByRole("checkbox", { name: zh["team.enabled"] });
+    unmarked(slot(), zh["tab.teams"]);
+    await user.click(enabled);
+    marked(slot(), zh["tab.teams"]);
+    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
     expect(plate()).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
-    await user.selectOptions(difficulty, "hard");
-    unmarked(difficulty, zh["tab.run"]);
+    await user.click(enabled);
+    unmarked(slot(), zh["tab.teams"]);
   });
 
   test("a text field is marked once it loses focus, not while it is typed in; a letter typed back clears it at once", async () => {
@@ -282,14 +282,14 @@ describe("the problems block", () => {
   test("sits inside the tab panel, below the tab bar", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await openOn(s, zh["tab.run"]);
+    await openOn(s, zh["tab.events"]);
     expect(screen.getByRole("main")).toContainElement(screen.getByRole("alert"));
   });
 
   test("says each problem in the editor's language, with the teams' names; the bot's own words stay on hover", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await openOn(s, zh["tab.run"]);
+    await openOn(s, zh["tab.events"]);
     const item = problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/).closest("li")!;
     expect(item).not.toHaveTextContent("teams:");
     expect(item).toHaveAttribute("title", "teams: enabled teams 'Ta', 'Tb' all use TEAMS #1");
@@ -301,11 +301,7 @@ describe("a field marked red", () => {
   test.each([
     ["a choice of a team", (s: Settings) => { s.teams[0].theme_pack_plan = "gone"; }, "tab.teams", /隊伍「Ta」用的主題包方案已經不在了/,
       box("combobox", "team.theme_pack_plan")],
-    ["a choice of the run options", (s: Settings) => { s.run.target_floor = 10; s.run.difficulty = "normal"; s.teams.forEach((x) => { x.hard_from_floor = 1; }); },
-      "tab.run", /但難度是普通/, box("combobox", "run.difficulty")],
     ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, "tab.teams", /teams\/0\/guard_turns/, box("checkbox", "team.guard_turns")],
-    ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; }, "tab.run",
-      /run\/auto_download/, box("checkbox", "run.auto_download")],
     ["a cell of an override table", (s: Settings) => { s.event_overrides = [{ question: "q", option: "a" }, { question: "q", option: "b" }]; },
       "tab.events", /事件覆寫有 2 列是同一個問題「q」/, () => screen.getAllByDisplayValue("q")[1]],
     ["a team's on switch", (s: Settings) => { Object.assign(s.teams[0], { enabled: "yes" }); }, "tab.teams", /teams\/0\/enabled/,
@@ -325,7 +321,7 @@ describe("a field marked red", () => {
   test("a wrong team row says so without its colour: a cross, and words a screen reader reads, also while picked", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    await openOn(s, zh["tab.run"]);
+    await openOn(s, zh["tab.events"]);
     await userEvent.setup().click(tab(zh["tab.teams"]));
     const rows = [...document.querySelectorAll("aside li")] as HTMLElement[];
     expect(rows[0]).toHaveClass("selected");
@@ -348,7 +344,7 @@ describe("clicking a problem", () => {
   test("opens its team on the teams tab and focuses the field", async () => {
     const s = settings();
     s.teams[1].theme_pack_plan = "gone";
-    const user = await openOn(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.events"]);
     await user.click(problem(/隊伍「Tb」用的主題包方案已經不在了/));
     expect(tab(zh["tab.teams"])).toHaveAttribute("aria-selected", "true");
     expect(nameBox()).toHaveValue("Tb");
@@ -358,7 +354,7 @@ describe("clicking a problem", () => {
   test("focuses the plan choice of a team's deployment order", async () => {
     const s = settings();
     s.teams[1].deployment_order = { plan: "gone" };
-    const user = await openOn(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.events"]);
     await user.click(problem(/隊伍「Tb」用的出戰順序方案已經不在了/));
     expect(nameBox()).toHaveValue("Tb");
     expect(document.activeElement).toHaveValue("gone");
@@ -367,7 +363,7 @@ describe("clicking a problem", () => {
   test("opens the closed panel that holds it", async () => {
     const s = settings();
     s.teams[0].skill_replacement.sinners = [{ sinner: "Yi Sang", target: { s1: 3, s2: 2, s3: 2 }, s1_s3_first: true }];
-    const user = await openOn(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.events"]);
     await user.click(problem(/Yi Sang：三個技能的目標合計 7/));
     expect(screen.getByText(new RegExp(zh["skill.title"]), { selector: "summary" }).closest("details")).toHaveAttribute("open");
     // the row itself: its first enabled control is its delete button, which Space would press
@@ -377,7 +373,7 @@ describe("clicking a problem", () => {
   test("with no field of its own, focuses its team's first field, not the list beside it", async () => {
     const s = settings();
     s.teams[1].id = "a"; // two teams with one id
-    const user = await openOn(s, zh["tab.run"]);
+    const user = await openOn(s, zh["tab.events"]);
     await user.click(problem(/隊伍裡有 2 個用同一個 id「a」/));
     expect(nameBox()).toHaveValue("Ta");
     expect(nameBox()).toHaveFocus();
@@ -385,8 +381,6 @@ describe("clicking a problem", () => {
 
   test.each([
     ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, /teams\/0\/guard_turns/, "team.guard_turns"],
-    ["a switch of the run options", (s: Settings) => { (s.run as Record<string, unknown>).auto_download = "yes"; },
-      /run\/auto_download/, "run.auto_download"],
   ] as const)("focuses %s", async (_, change, text, label) => {
     const s = settings();
     change(s);
@@ -403,17 +397,6 @@ describe("clicking a problem", () => {
     expect(tab(zh["tab.deployment"])).toHaveAttribute("aria-selected", "true");
     expect(nameBox()).toHaveValue("D2");
     expect(nameBox()).toHaveFocus();
-  });
-
-  test("focuses a field of the run options", async () => {
-    const s = settings();
-    s.run.target_floor = 10;
-    s.run.difficulty = "normal";
-    s.teams.forEach((x) => { x.hard_from_floor = 1; });
-    const user = await openOn(s, zh["tab.teams"]);
-    await user.click(problem(/但難度是普通/));
-    expect(tab(zh["tab.run"])).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("combobox", { name: zh["run.difficulty"] })).toHaveFocus();
   });
 
   test("shows its list on the gift list tab", async () => {
@@ -557,7 +540,7 @@ describe("reloading the page (F5, Ctrl+R)", () => {
 
   test.each(KEYS)("%s with nothing unsaved is left to the browser, which reloads", async (_, init) => {
     render(<App />);
-    await screen.findByRole("tab", { name: zh["tab.run"] });
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
     expect(press(init)).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -662,7 +645,7 @@ describe("Ctrl+S", () => {
     s.teams[1].game_team = 1;
     file.text = JSON.stringify(s);
     render(<App />);
-    await screen.findByRole("tab", { name: zh["tab.run"] });
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
     expect(ctrlS()).toBe(true);
     await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
     expect(screen.getByRole("alert")).toHaveTextContent(zh.saveBlocked);
@@ -694,7 +677,7 @@ describe("Ctrl+S", () => {
   test("on a Dvorak keyboard, the key that types O does not save", async () => {
     file.text = JSON.stringify(settings());
     render(<App />);
-    await screen.findByRole("tab", { name: zh["tab.run"] });
+    await screen.findByRole("tab", { name: zh["tab.teams"] });
     expect(ctrlS({ key: "o" })).toBe(false); // KeyS is where Dvorak puts O
   });
 });

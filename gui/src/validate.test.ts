@@ -29,8 +29,10 @@ function applyEdits(data: unknown, edits: Edit[]) {
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
 
-  // task_start too: the agent checks those at a task's start (tests/test_task_options.py), the GUI here, when it saves
-  for (const c of [...cases.cases, ...cases.task_start] as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
+  // task_start's Luxcavation cases too: the agent checks those at a task's start (tests/test_task_options.py), the GUI here,
+  // when it saves. Not MirrorDungeon's: its target floor is a client option the GUI does not see (#779).
+  const saved = cases.task_start.filter((c) => c.task !== "MirrorDungeon");
+  for (const c of [...cases.cases, ...saved] as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
     test(c.name, () => {
       const problems = validate(applyEdits(cases.valid, c.edits));
       if (c.cross) {
@@ -55,11 +57,6 @@ function everyProblem(): Settings {
     { sinner: "Yi Sang", target: { s1: 2, s2: 4, s3: 0 }, s1_s3_first: true },
     { sinner: "Faust", target: { s1: 1, s2: 1, s3: 1 }, s1_s3_first: true },
   ];
-  s.run.target_floor = 10;
-  s.run.difficulty = "normal";
-  s.teams[1].usage = "normal_only";
-  s.teams[2].hard_from_floor = 3;
-  s.teams[3].hard_from_floor = null;
   s.starlight_plans = [{ ...s.starlight_plans[0], id: "s1", name: "Same" }, { ...s.starlight_plans[0], id: "s1", name: "Same" }];
   s.gift_lists = [{ ...s.gift_lists[0], want: [9780], keep: [9780] }];
   s.luxcavation.exp.team = "gone";

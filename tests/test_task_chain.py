@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from agent_patch import patch_all
+from client_options import override, send
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -88,10 +89,10 @@ def child():
     tasker = Tasker()
     tasker.bind(resource, controller)
     actions.TASK["done"] = "left by the last task"
-    detail = tasker.post_task("MirrorDungeon").wait().get()
+    detail = tasker.post_task("MirrorDungeon", override("MirrorDungeon")).wait().get()  # what a client posts (#779)
     out.update(succeeded=detail.status.succeeded, nodes=[n.name for n in detail.nodes], first_starts=out["starts"])
     actions.STUCK["halted"] = "maintenance"  # D8: an account-level stop earlier this launch
-    detail = tasker.post_task("MirrorDungeon").wait().get()
+    detail = tasker.post_task("MirrorDungeon", override("MirrorDungeon")).wait().get()
     out["after_halt"] = {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes]}
     print(json.dumps(out))
 
@@ -126,7 +127,8 @@ def test_each_task_starts_with_a_clean_slate_but_the_game_restarts_count_per_lau
     actions.STUCK["ladder"].stuck("MirrorMap", 1, restarts)
     actions.SCREENS.append(np.zeros((720, 1280, 3), np.uint8))
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
-    assert actions.RUN == {} and actions.TASK == {"runs": 0, "done": None, "entry": "MirrorDungeon", "ended": False} and not actions.SCREENS
+    fresh = {k: v for k, v in actions.TASK.items() if k != "options"}  # options: this task's own, read at its start
+    assert actions.RUN == {} and fresh == {"runs": 0, "done": None, "entry": "MirrorDungeon", "ended": False} and not actions.SCREENS
     assert (actions.STUCK["flag"], actions.STUCK["kind"]) == (None, None)
     assert actions.STUCK["ladder"].counts == recovery.Ladder().counts
     assert not actions.STUCK["watch"].held(1.0)
@@ -168,30 +170,35 @@ def test_an_interrupted_run_does_not_reach_another_task(context, monkeypatch):
     assert interrupted_run(context, lambda: None) == {}
 
 
-def entry_page(context, edit=lambda run, teams: None):
-    """settings.json under the agent's ROOT (settings_cases' valid file, edited), MirrorDungeon started on it (its
-    options read); the entry page reads no weekly bonus; GoHome ends on the main window."""
+# The options entry_page's MirrorDungeon starts on before its own: no run limit, stop when the retries run out, a webhook.
+ENTRY_OPTIONS = ("MirrorRunsLimit=No", "MirrorAfterRetries=stop", "WebhookUrl=http://hook.invalid/")
+
+
+def entry_page(context, *options, teams=lambda teams: None):
+    """settings.json under the agent's ROOT (settings_cases' valid file, its teams edited), MirrorDungeon started on it
+    with ENTRY_OPTIONS and options (NAME=VALUE) as a client sends them; the entry page reads no weekly bonus; GoHome
+    ends on the main window."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
-    edit(data["run"], data["teams"])
-    data["run"]["webhook_url"] = "http://hook.invalid/"
+    teams(data["teams"])
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
+    send(context, "MirrorDungeon", *ENTRY_OPTIONS, *options)
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     actions.RUN.clear()
     actions.TASK["modules"] = 20  # what OpenDrive read on this trip (#369)
     context.tasker.get_node_detail.return_value = SimpleNamespace(name="HomeReached")
 
 
-@pytest.mark.parametrize("edit, done", [
-    (lambda run, teams: run.update(runs=1), "1 of 1 runs done"),
-    (lambda run, teams: run.update(stop_when_weekly_bonus_out=True), "weekly bonuses used up"),
-    (lambda run, teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
-    (lambda run, teams: [t.update(enabled=False) for t in teams], "no enabled team"),  # review S3: no team at all
+@pytest.mark.parametrize("options, teams, done", [
+    (("MirrorRunsLimit=Yes", "MirrorRuns=1"), lambda teams: None, "1 of 1 runs done"),
+    (("MirrorStopWhenBonusOut=Yes",), lambda teams: None, "weekly bonuses used up"),
+    ((), lambda teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
+    ((), lambda teams: [t.update(enabled=False) for t in teams], "no enabled team"),  # review S3: no team at all
 ])
-def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, edit, done):
+def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, options, teams, done):
     # #364: the run count reached, the weekly bonuses out, no team for the difficulty: the task is done, not failed, so
     # the client's list goes on. No stop procedure: no runs.jsonl line, no webhook, no evidence; Enter is not pressed.
-    entry_page(context, edit)
+    entry_page(context, *options, teams=teams)
     actions.TASK.update(runs=1, done=None)
     urlopen = MagicMock()
     monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)

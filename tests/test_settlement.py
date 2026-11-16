@@ -14,6 +14,7 @@ from daily_child import probe_child, run_child, screen
 
 from settlement import NOT_SEEN, Result, all_hard, append_run, bonus_toggles, claim_bonuses, claim_dialog, claim_ok, counts_as_run, first_floor_hard, floors_passed, new_run_gate, now, read_result, runs_done, target_reached
 from agent_patch import patch_all
+from client_options import send
 import battle
 import settlement
 
@@ -480,7 +481,6 @@ def mirror_task(context, monkeypatch, runs):
     The screen reads one text wherever OCR looks, and a tap leads to the next screen. Returns PlanRun's result on the
     entry page after those runs, the log, the runs started (taps on the entry page) and the runs.jsonl results."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
-    data["run"].update(after_retries="forfeit", wipe_retries=0, weekly_bonus_use="none")
     data["teams"] = [{**data["teams"][0], "name": "A", "min_alive": 4}]
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
@@ -504,6 +504,8 @@ def mirror_task(context, monkeypatch, runs):
     patch_all(monkeypatch, "toggles", lambda context, image: [False] * 3)
     patch_all(monkeypatch, "dead_sinners", lambda image: set(battle.SINNERS[3:]))  # the 3 alive of "3/3": the first 3 cards
     patch_all(monkeypatch, "log", logged.append)
+    send(context, "MirrorDungeon", "MirrorRunsLimit=No", "MirrorAfterRetries=forfeit", "MirrorWipeRetries=0",
+         "MirrorWeeklyBonusUse=none")
     actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     for run in runs:
         actions.TASK["modules"] = 20  # what OpenDrive read on the way to the entry page (#369)

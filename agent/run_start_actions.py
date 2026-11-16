@@ -65,8 +65,8 @@ class PlanRun(CustomAction):
             run = options()
             # TaskStart checked the teams of the task's start: a save since may have changed them
             if errors := task_options.target_floor_errors(run, settings["teams"]):
-                raise SettingsError(errors)
-        except SettingsError as e:
+                raise task_options.OptionsError(errors)
+        except (SettingsError, task_options.OptionsError) as e:
             log(f"stop: {e}")
             return False
         if not any(t["enabled"] for t in settings["teams"]):

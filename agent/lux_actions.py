@@ -38,15 +38,15 @@ LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxc
 @AgentServer.custom_action("LuxStart")
 class LuxStart(TaskStart):
     """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, its options
-    luxcavation.<key> (#777), then the team they name, whose guard turns the battle plays (spec 03 section 8), its mode
-    (#431), count and retries (#367). No team picked, a team that is gone, or settings that do not load: the stop
-    procedure, before any tap."""
+    luxcavation.<key> (#777) beside the global ones, then the team they name, whose guard turns the battle plays (spec 03
+    section 8), its mode (#431), count and retries (#367). No team picked, a team that is gone, or settings that do not
+    load: the stop procedure, before any tap."""
 
     def unread(self, context, error):
         return stop(context, str(error))
 
     def options(self, argv, settings):
-        return task_options.luxcavation(settings, json.loads(argv.custom_action_param))
+        return task_options.luxcavation(TASK["options"], settings, json.loads(argv.custom_action_param))
 
     def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
         key = json.loads(argv.custom_action_param)

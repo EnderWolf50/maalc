@@ -133,37 +133,8 @@ export function crossCheck(data: Settings): Problem[] {
     });
   });
 
-  const targetFloor = data.run.target_floor;
-  if (targetFloor > 5) {
-    // floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
-    const need = `but target_floor ${targetFloor} needs the whole run HARD`;
-    if (data.run.difficulty === "normal") {
-      errors.push({
-        paths: ["run/difficulty"], text: `run/difficulty: difficulty is 'normal', ${need}`,
-        say: { key: "problem.floorDifficulty", vars: { floor: targetFloor } },
-      });
-    }
-    teams.forEach((t, i) => {
-      if (!t.enabled) return;
-      if (t.usage === "normal_only") {
-        const path = `teams/${i}/usage`;
-        errors.push({
-          paths: [path], text: `${path}: team ${pyRepr(t.name)} is normal_only, ${need}`,
-          say: { key: "problem.floorNormalOnly", vars: { floor: targetFloor, team: named(t.name) } },
-        });
-      }
-      if (t.hard_from_floor !== 1) {
-        const path = `teams/${i}/hard_from_floor`;
-        const what = t.hard_from_floor === null ? "never switches to HARD" : `starts HARD at floor ${t.hard_from_floor}`;
-        errors.push({
-          paths: [path], text: `${path}: team ${pyRepr(t.name)} ${what}, ${need} (hard_from_floor 1)`,
-          say: t.hard_from_floor === null
-            ? { key: "problem.floorNeverHard", vars: { floor: targetFloor, team: named(t.name) } }
-            : { key: "problem.floorHardFrom", vars: { floor: targetFloor, team: named(t.name), k: t.hard_from_floor } },
-        });
-      }
-    });
-  }
+  // The target floor's rule (#385) is the agent's, at the Mirror Dungeon task's start: the target floor is a task option of
+  // the client (MXU, MFAAvalonia; #779), which the GUI does not see. The Teams tab says so (team.target_floor_note).
 
   data.gift_lists.forEach((list, i) => {
     for (const id of list.want.filter((g) => list.keep.includes(g))) {
