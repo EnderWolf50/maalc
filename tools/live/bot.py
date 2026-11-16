@@ -11,8 +11,9 @@ touch lines that `tools/live/evidence.py` reads. `--task A,B` posts several task
 task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
 (`tools/live/queue.py detach`), as the maalc-live-test skill says.
 
-**prep** copies `config/settings.json`, `config/maa_option.json` and `state/` from `--source` (default the
-main checkout's install/) into DIR, then sets each dotted KEY to VALUE (JSON, else a string):
+**prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
+from `--source` (default the main checkout's install/) into DIR; the bot's first start migrates the old state files
+into the team queue and removes `state/` (#501). Then it sets each dotted KEY to VALUE (JSON, else a string):
 `--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`; a list's item goes by its id,
 `--set teams.t3.heal=revive`. A key it cannot set stops it before DIR is touched. DIR comes from `tools/install.py`
 (a worktree's install/) or a copy of one under `.local/scratch/<task>/`.
@@ -174,7 +175,8 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
             node[last] = value
     (install / "config").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "config/maa_option.json", install / "config/maa_option.json")
-    shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
+    if (source / "state").is_dir():
+        shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
     (install / "config/settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
     return settings
 

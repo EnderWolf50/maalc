@@ -63,11 +63,21 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     assert json.loads((src / "config/settings.json").read_text())["run"]["runs"] == 5  # the source stays
 
 
+def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
+    # #763: the team queue (#501) migrates the state files on the bot's first start and removes state/
+    src, dst = tmp_path / "main", tmp_path / "test"
+    (src / "config").mkdir(parents=True)
+    (src / "config/settings.json").write_text(json.dumps({"run": {"runs": 5}}))
+    (src / "config/maa_option.json").write_text("{}")
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1"])
+    assert json.loads((dst / "config/settings.json").read_text())["run"] == {"runs": 1}
+    assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
+
+
 def prep_source(tmp_path):
     src = tmp_path / "main"
     (src / "config").mkdir(parents=True)
-    (src / "state").mkdir()
-    teams = [{"id": "t1", "heal": "none"}, {"id": "t3", "heal": "none", "min_alive": 3}]
+    teams =[{"id": "t1", "heal": "none"}, {"id": "t3", "heal": "none", "min_alive": 3}]
     (src / "config/settings.json").write_text(json.dumps({"teams": teams}))
     (src / "config/maa_option.json").write_text("{}")
     return src
