@@ -3,10 +3,10 @@
 Usage: uv run --group unpack python tools/llc_text.py [--release <tag>]  (default: the release the data files carry)
 Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases
 (cached under `.local/llc/`) and rewrites the `zh` of assets/resource/base/data/gift_search.json and gift_recipes.json
-(from `LLC_zh-CN/EGOgift_*.json`, by gift id) and gui/src/graces.json (names: `MirrorDungeonUI_5.json`
+(from `LLC_zh-CN/EGOgift_*.json`, by gift id) and data/graces.json (names: `MirrorDungeonUI_5.json`
 `mirror_dungeon_5_buffs_title_<id>`; effects: the `DungeonStartBuffs_MD7.json` templates filled with the effect values of
 `.local/unpack/` static data mirrordungeon-start-buffs-08, each line as runs that say which text the game prints yellow; the
-English effects the same from the client's `EN_DungeonStartBuffs_MD7.json`). It writes gui/src/gift_effects.json too: the effect text of each
+English effects the same from the client's `EN_DungeonStartBuffs_MD7.json`). It writes data/gift_effects.json too: the effect text of each
 gift of gift_search.json, English from the client's `EN_EGOgift_*.json` and Chinese from `LLC_zh-CN/EGOgift_*.json` (`desc`),
 a keyword tag named by the `Bufs*.json` and `BattleKeywords*.json` of each. Simplified to Traditional with OpenCC s2twp. Fails
 on a gift or grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
@@ -25,8 +25,8 @@ from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
-GRACES = REPO / "gui/src/graces.json"
-EFFECTS = REPO / "gui/src/gift_effects.json"
+GRACES = DATA / "graces.json"
+EFFECTS = DATA / "gift_effects.json"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}

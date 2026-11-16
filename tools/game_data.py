@@ -55,8 +55,7 @@ GENERATORS = [("tools/theme_pack_floors.py", False), ("tools/trial_table.py", Fa
               ("tools/theme_pack_signatures.py", False), ("tools/sinner_cards.py", False),
               ("tools/sin_icons.py", False), ("tools/gift_slot.py", False)]
 # What regen writes, for diff.
-OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe",
-           "gui/src/graces.json", "gui/src/gift_effects.json", "gui/src/grace_icons", "gui/src/grace_card", "gui/src/sinner_card"]
+OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe"]
 
 
 def parse_cache_listing(text: str) -> dict[str, str]:

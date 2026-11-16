@@ -38,14 +38,14 @@
   --season-plate: #4e61ba;
   --gold: #ffd34d; /* the starlight's gold: a pick's place, a lit + or ++ */
   /* A sinner tile is the game's formation card (#718, #732): the identity's art in the card's frame, the game's plates and its
-   * glow (gui/src/sinner_card/, tools/sinner_cards.py). It stays the game's in both themes, as Grace of the Star does, so
+   * glow (data/sinner_frame/, tools/sinner_cards.py). It stays the game's in both themes, as Grace of the Star does, so
    * what sits on it keeps the game's ink. The colours are sampled from the game's captures: the deployed number #ffb904
    * and the backup one #22fde3 (the formation screen), the name #fbc500 (the identity list). The deployed plate's word is
    * lighter than the game's (it reads 4.6:1 on the plate's brightest line, #bc4512), the backup's 4.8:1 on its (#0d687a). */
   --art-shade: #0b0806; --art-top: #2c2219; --art-dep: #ffb904; --art-bak: #22fde3; --art-name: #fbc500;
   --dep-ink: #fff0cc; --dep-rim: #9f441f; --bak-ink: #81f1ff; --bak-rim: #18675a;
   /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
-   * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the
+   * price icon, the Enhance All panel and the page (data/grace_card/, tools/grace_icons.py). What sits on them is the
    * game's light ink, the same in both themes, as the game's page is: each holds 5:1 and more over the face's lightest
    * pixels where it sits (the 99th percentile of the price strip, the title band, the English name's line and the effects,
    * unselected and selected). */
@@ -448,10 +448,10 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
  * to none of it (what hides it there is in the game's code, not read) */
 .sinner::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; transition: filter 0.12s ease-out;
-  background: url("./sinner_card/frame.webp") 0 0 / 100% 100% no-repeat;
+  background: var(--sprite-sinner-frame-frame) 0 0 / 100% 100% no-repeat;
 }
 .sinner.deployed::after, .sinner.backup::after {
-  background: url("./sinner_card/glow.webp") 0 0 / 100% 100% no-repeat, url("./sinner_card/frame.webp") 0 0 / 100% 100% no-repeat;
+  background: var(--sprite-sinner-frame-glow) 0 0 / 100% 100% no-repeat, var(--sprite-sinner-frame-frame) 0 0 / 100% 100% no-repeat;
 }
 .sinner > span { position: absolute; z-index: 1; }
 .sinner:hover:not(:disabled) { background: none; } /* not a button's fill, which shows round the frame's edge */
@@ -504,8 +504,8 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   font: 700 12cqw/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap;
   background: 0 0 / 100% 100% no-repeat; text-shadow: 0 1px 2px var(--art-shade);
 }
-.sinner.deployed .banner { background-image: url("./sinner_card/plate-deployed.webp"); color: var(--dep-ink); }
-.sinner.backup .banner { background-image: url("./sinner_card/plate-backup.webp"); color: var(--bak-ink); }
+.sinner.deployed .banner { background-image: var(--sprite-sinner-frame-plate-deployed); color: var(--dep-ink); }
+.sinner.backup .banner { background-image: var(--sprite-sinner-frame-plate-backup); color: var(--bak-ink); }
 /* the name at the foot, right-aligned on the frame's shade, as the game writes an identity's */
 .sinner .name {
   right: 10%; bottom: 7%; left: 10%; text-align: right; text-wrap: balance; font: 700 clamp(11px, 12cqw, 20px)/1.1 var(--font-display);
@@ -521,7 +521,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
   color-scheme: dark; /* the game's page in both themes: its checkbox and scrollbars dark too */
   display: flex; flex-direction: column; gap: 14px; padding: 12px; color: var(--season-ink);
   border: 1px solid var(--season-plate); border-radius: 10px 0 10px 0; corner-shape: bevel;
-  background: var(--season-bg) url("./grace_card/page.webp") center / cover;
+  background: var(--season-bg) var(--sprite-grace-card-page) center / cover;
 }
 .graces { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 12px; min-width: 0; }
 .graces.bad { outline: 2px solid var(--bad); outline-offset: 4px; }
@@ -535,14 +535,14 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
  * middle stretches with the text, as the game stretches its own card (the 380 x 438 face drawn at 450 x 569). */
 .grace::before, .grace::after { content: ""; position: absolute; inset: 0; z-index: -1; border: 0 solid transparent; pointer-events: none; }
 .grace::before {
-  border-image: url("./grace_card/face.webp") 150 30 110 30 fill / calc(150 * var(--u)) calc(30 * var(--u)) calc(110 * var(--u)) calc(30 * var(--u));
+  border-image: var(--sprite-grace-card-face) 150 30 110 30 fill / calc(150 * var(--u)) calc(30 * var(--u)) calc(110 * var(--u)) calc(30 * var(--u));
 }
-.grace:not(.none)::before { border-image-source: url("./grace_card/face-picked.webp"); border-image-slice: 153 30 113 30 fill; } /* 444 tall */
+.grace:not(.none)::before { border-image-source: var(--sprite-grace-card-face-picked); border-image-slice: 153 30 113 30 fill; } /* 444 tall */
 /* Under the pointer, the game's hover frame (its Hover image, 9-sliced at 105 px), its line on the face's frame line: the
  * image draws it 22-25 px in, the selected face 14-18 px, so the frame stands 6-8 px out of the card. */
 .grace::after {
   inset: calc(-8 * var(--u)) calc(-7 * var(--u)) calc(-8 * var(--u)) calc(-6 * var(--u)); opacity: 0; transition: opacity 0.12s ease-out;
-  border-image: url("./grace_card/hover.webp") 105 fill / calc(105 * var(--u));
+  border-image: var(--sprite-grace-card-hover) 105 fill / calc(105 * var(--u));
 }
 .grace:hover::after { opacity: 1; }
 .grace[aria-disabled="true"]::after { display: none; }
@@ -553,7 +553,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 }
 .starlight .star {
   display: inline-block; width: 1.15em; height: 1.15em; margin-right: 0.1em; vertical-align: -0.2em; overflow: hidden; color: transparent;
-  background: url("./grace_card/star.webp") center / contain no-repeat;
+  background: var(--sprite-grace-card-star) center / contain no-repeat;
 }
 /* Its place in the buying order (spec 04 section 7): the bot's, not the game's, so it keeps the starlight's gold. */
 .grace .rank {
@@ -597,16 +597,16 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
  * plate over it and the orange glyph. */
 .grace .enhance button, .grace-side button {
   border: 0 solid transparent; border-radius: 0; background: none; color: var(--season-btn-ink); font-weight: 700;
-  border-image: url("./grace_card/button.webp") 25 fill / 11px;
+  border-image: var(--sprite-grace-card-button) 25 fill / 11px;
 }
 .grace .enhance button { flex: 1; height: calc(46 * var(--u)); display: flex; align-items: center; justify-content: center; padding: 0; }
 .grace .enhance button:hover:not(:disabled), .grace-side button:hover:not(:disabled) { background: none; filter: brightness(1.35); }
 .grace .enhance button:disabled { opacity: 1; cursor: default; }
 .grace .enhance button[aria-pressed="true"], .grace-side button[aria-pressed="true"] {
-  border-image-source: url("./grace_card/button-lit.webp"); color: var(--season-ink);
+  border-image-source: var(--sprite-grace-card-button-lit); color: var(--season-ink);
 }
-.starlight .glyph { display: inline-block; width: 15px; height: 15px; background: url("./grace_card/plus.webp") center / 12px auto no-repeat; }
-.starlight button[aria-pressed="true"] .glyph { background-image: url("./grace_card/plus-lit.webp"); background-size: 23px auto; } /* its + is 20 of 39 px */
+.starlight .glyph { display: inline-block; width: 15px; height: 15px; background: var(--sprite-grace-card-plus) center / 12px auto no-repeat; }
+.starlight button[aria-pressed="true"] .glyph { background-image: var(--sprite-grace-card-plus-lit); background-size: 23px auto; } /* its + is 20 of 39 px */
 /* Select All, Enhance All and the total, on the game's Enhance All panel (9-sliced). It stays in view while the cards scroll
  * (#740): flush with the top of the scrolling page (a sticky inset counts from inside main's 16 px top padding), and on the
  * team page right under its section index. How far the index reaches below that padding, --sections-shown, is measured by
@@ -616,7 +616,7 @@ details.hint > p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; max-
 .grace-side {
   order: -1; flex: none; position: sticky; top: -16px; z-index: 4; display: flex; flex-wrap: wrap; align-items: center;
   gap: 8px 10px; padding: 14px 20px 12px; background: var(--season-bg);
-  border: 0 solid transparent; border-image: url("./grace_card/side.webp") 96 60 54 60 fill / 26px 16px 15px 16px;
+  border: 0 solid transparent; border-image: var(--sprite-grace-card-side) 96 60 54 60 fill / 26px 16px 15px 16px;
 }
 .team .grace-side { top: calc(var(--sections-shown, 32.75px) - 0.75px); }
 /* A card's button the keyboard's focus scrolls up to stops below the bar, not under it (WCAG 2.4.11), with about 9 px to
@@ -802,3 +802,8 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
 @media (max-height: 640px) {
   .split aside { position: static; }
 }
+
+/* main.tsx: the window could not start (StartError.tsx), usually because the game data cannot be read. */
+.start-error { max-width: 720px; margin: 10vh auto; padding: 0 24px; line-height: 1.6; }
+.start-error h1 { font-size: 20px; }
+.start-error pre { white-space: pre-wrap; word-break: break-all; padding: 12px; border: 1px solid currentColor; border-radius: 6px; }
