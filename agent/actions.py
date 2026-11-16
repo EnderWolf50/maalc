@@ -24,6 +24,7 @@ import gift_cells
 import hub_text
 import recovery
 import resource_package
+import resource_update
 import run_start
 import settlement
 from gifts import main_keyword, resolve_list, want_kind
@@ -523,6 +524,7 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
+        resource_update.update(data_dir().parent, log)  # before the line below: it names the package this task runs on
         log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
@@ -1054,6 +1056,18 @@ GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
 GIFTS = gift_cells.load()  # every gift a cell may show (#297)
 GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
 GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
+
+
+def reload_gifts():
+    """After an update of data/ (resource_update.clear_data_caches): the three above rebuilt in place, as the modules that
+    imported them by name hold the same objects."""
+    GIFTS[:] = gift_cells.load()
+    GIFT_NAMES.clear()
+    GIFT_NAMES.update({e["id"]: e["en"] for e in GIFTS})
+    GIFT_IDS.clear()
+    GIFT_IDS.update({e["en"]: e["id"] for e in GIFTS})
+
+
 DIALOG_TEXT = [360, 280, 560, 140]
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 

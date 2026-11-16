@@ -7,7 +7,9 @@ DoneFlag. The pytest process holds MaaFramework in AgentServer mode, so the task
 run as a script, as test_map_cost.py does.
 """
 
+import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import traceback
@@ -22,18 +24,22 @@ from agent_patch import patch_all
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
+UPDATE_GIFT = 9990001  # a gift the fake maalc-resource adds to data/gift_search.json
 
 if __name__ != "__main__":  # pytest; the script (child) imports actions itself, under a stand-in AgentServer
+    import build_resource_package as brp
     import actions
     import daily_actions
     import run_start_actions
     import lux_actions
     import recovery
     from test_actions import clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
+    from fake_resource import install, publish, tree
 
 
-def child():
-    """Run MirrorDungeon until TaskDone; print its status and nodes."""
+def child(work=None):
+    """Run MirrorDungeon until TaskDone; print its status and nodes. With `work` (a folder update_scene made): the install
+    in it is the bundle and the data folder, and two tasks run on it, each starting with an update from its fake remote."""
     from maa.controller import CustomController
     from maa.custom_recognition import CustomRecognition
     from maa.resource import Resource
@@ -46,6 +52,13 @@ def child():
     sys.modules["maa.agent"] = types.ModuleType("maa.agent")
     sys.modules["maa.agent.agent_server"] = stub
     import actions
+
+    if work:
+        import event_actions
+        import settings
+        import shop_actions
+
+        settings.ROOT = work / "root"  # data_dir() is the install's now; the swap writes there, never in the checkout
 
     class Still(CustomController):
         def connect(self):
@@ -60,7 +73,13 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"error": None, "starts": 0}
+    out = {"error": None, "starts": 0, "seen": []}
+
+    def seen():
+        """What the agent holds of data/ at this moment."""
+        return {"events": [e["id"] for e in event_actions.event_table() if e["id"] in (990001, 990002)],
+                "gift": actions.GIFT_NAMES.get(UPDATE_GIFT), "tier": shop_actions.GIFT_TIERS.get(UPDATE_GIFT),
+                "log": [line[9:] for line in actions.LOG if "resource" in line]}
 
     class HubText(CustomRecognition):
         """MirrorHub's first pass: an action found nothing left to do (PlanRun on the entry page); no screen hits."""
@@ -68,6 +87,8 @@ def child():
         def analyze(self, context, argv):
             try:
                 out["done_was"] = actions.TASK["done"]  # TaskStart cleared the last task's
+                if work:
+                    out["seen"].append(seen())
                 actions.done("nothing left to do")
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
@@ -82,11 +103,19 @@ def child():
     resource.register_custom_recognition("StuckFlag", actions.StuckFlag())
     resource.register_custom_recognition("DoneFlag", actions.DoneFlag())
     resource.register_custom_recognition("HubText", HubText())
-    resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
+    resource.post_bundle(settings.ROOT / "resource" / "base" if work else ROOT / "assets" / "resource" / "base").wait()
     controller = Still()
     controller.post_connection().wait()
     tasker = Tasker()
     tasker.bind(resource, controller)
+    if work:
+        out["before"] = seen()  # the caches are warm: a task that sees the new data found them cleared
+        for n in (1, 2):
+            if n == 2:  # the next publish, between two tasks of the same agent
+                shutil.copyfile(work / "next.json", work / "remote" / "main" / "manifest.json")
+            out["succeeded"] = tasker.post_task("MirrorDungeon").wait().get().status.succeeded
+        print(json.dumps(out))
+        return
     actions.TASK["done"] = "left by the last task"
     detail = tasker.post_task("MirrorDungeon").wait().get()
     out.update(succeeded=detail.status.succeeded, nodes=[n.name for n in detail.nodes], first_starts=out["starts"])
@@ -369,5 +398,94 @@ def test_a_page_gone_mid_action_names_the_hub_of_the_task_under_way():
     actions.TASK.pop("entry")
 
 
+def update_scene(work):
+    """An install of the repo's data/, image/ and pipeline/ under `work`, and a fake maalc-resource beside it that publishes
+    2026.11.16 (an event and a gift more) and, in next.json, 2026.11.17 (the gift renamed, another event): the folder layout
+    of the real one, as the install's manifest lists it as its source."""
+    base, remote = work / "root" / "resource" / "base", work / "remote"
+    for part in brp.rp.PARTS:
+        shutil.copytree(ROOT / "assets" / "resource" / "base" / part, base / part)
+    installed = brp.write_manifest(base, "2026.11.01", [str(remote)])
+    manifests = []
+    for version, event, gift in (("2026.11.16", 990001, "Gift One"), ("2026.11.17", 990002, "Gift Two")):
+        files = {}  # the files this publish changes: the rest of the package is the installed one, unchanged
+        events = json.loads((base / "data" / "event_table.json").read_text(encoding="utf-8"))
+        events["events"].append({"id": event, "key": "update", "options": []})
+        files["data/event_table.json"] = json.dumps(events).encode()
+        gifts = json.loads((base / "data" / "gift_search.json").read_text(encoding="utf-8"))
+        gifts["gifts"].append({"id": UPDATE_GIFT, "keyword": "Burn", "tier": 2, "en": gift, "zh": gift})
+        files["data/gift_search.json"] = json.dumps(gifts).encode()
+        entries = dict(installed["files"])
+        for name, data in files.items():
+            (remote / version / name).parent.mkdir(parents=True, exist_ok=True)
+            (remote / version / name).write_bytes(data)
+            entries[name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        manifests.append({**installed, "version": version, "sources": [], "files": entries})
+    (remote / "main").mkdir()
+    brp.dump(manifests[0], remote / "main" / "manifest.json")
+    brp.dump(manifests[1], work / "next.json")
+    return base, remote
+
+
+def test_new_data_is_the_data_of_the_task_that_found_it_and_of_the_next_task_of_the_same_agent(tmp_path):
+    # #771: the agent updates data/ at TaskStart and forgets what it read of the old files (every cache, and the gift
+    # tables the modules built when they were imported). Both tasks run in one process whose caches were warm.
+    update_scene(tmp_path)
+    run = subprocess.run([sys.executable, __file__, "update", str(tmp_path)], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    assert run.returncode == 0, run.stderr[-2000:]
+    out = json.loads(run.stdout.strip().splitlines()[-1])
+    assert out["error"] is None, out["error"]
+    assert out["before"]["events"] == [] and out["before"]["gift"] is None and out["before"]["tier"] is None
+    first, second = out["seen"]
+    assert (first["events"], first["gift"], first["tier"]) == ([990001], "Gift One", 2)
+    assert (second["events"], second["gift"], second["tier"]) == ([990002], "Gift Two", 2)
+    assert any("2026.11.01 -> 2026.11.16" in line for line in first["log"])
+    assert any("version 2026.11.16" in line for line in first["log"]) and any("version 2026.11.17" in line for line in second["log"])
+    assert out["succeeded"] is True
+
+
+def update_install(context, monkeypatch, tmp_path, remote_files, **fields):
+    """An install of two data files and a fake remote publishing remote_files; TaskStart logs into the list returned."""
+    base, remote = tmp_path / "resource" / "base", tmp_path / "remote"
+    install(base, {"data/a.json": b"old"}, "2026.11.01", [str(remote)])
+    publish(remote, remote_files, "2026.11.16", **fields)
+    patch_all(monkeypatch, "data_dir", lambda: base / "data")
+    logged = []
+    patch_all(monkeypatch, "log", logged.append)
+    return base, remote, logged
+
+
+def test_a_task_starts_on_the_files_it_had_when_the_update_fails(context, monkeypatch, tmp_path):
+    # #771: no connection, a wrong sha256, a cut download, a format the program does not know: the task runs, the files stay
+    base, remote, logged = update_install(context, monkeypatch, tmp_path, {"data/a.json": b"new"})
+    before = tree(base)
+    (remote / "2026.11.16" / "data" / "a.json").write_bytes(b"NEW")  # not what the manifest says
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
+    assert tree(base) == before and any("sha256" in line and "kept the current files" in line for line in logged)
+    logged.clear()
+    (remote / "2026.11.16" / "data" / "a.json").write_bytes(b"ne")  # cut off
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
+    assert tree(base) == before and any("interrupted" in line for line in logged)
+    logged.clear()
+    shutil.rmtree(remote)
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True  # the source is gone
+    assert tree(base) == before and any("kept the current files" in line for line in logged)
+
+
+def test_a_task_starts_on_the_files_it_had_when_the_format_is_not_the_one_the_program_knows(context, monkeypatch, tmp_path):
+    base, remote, logged = update_install(context, monkeypatch, tmp_path, {"data/a.json": b"new"}, format=brp.rp.FORMAT + 1)
+    before = tree(base)
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
+    assert tree(base) == before and any(f"format {brp.rp.FORMAT + 1}" in line and "skipped" in line for line in logged)
+
+
+def test_a_task_starts_after_its_update_and_names_the_package_it_runs_on(context, monkeypatch, tmp_path):
+    base, remote, logged = update_install(context, monkeypatch, tmp_path, {"data/a.json": b"new"})
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon")) is True
+    assert (base / "data" / "a.json").read_bytes() == b"new"
+    update = next(i for i, line in enumerate(logged) if "2026.11.01 -> 2026.11.16" in line)
+    assert "resource package: version 2026.11.16" in logged[update + 1]  # the update, then the package it made
+
+
 if __name__ == "__main__":
-    child()
+    child(Path(sys.argv[2]) if sys.argv[1:2] == ["update"] else None)
