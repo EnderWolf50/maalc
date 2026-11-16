@@ -1,0 +1,62 @@
+{
+ "note": "The plate the game draws a gift's name on, one per sin (#786), written by tools/gift_plates.py: sprite MainUI_MirrorDungeon3_3_1 (the Image NamePanel/img_namePlate of the game's gift panels) times the sin's colour in UIColorManager, as the game tints it. colour: the game's; shade: what the colour is multiplied by so the ink holds 4.6:1; ink: the name's ink (inks); contrast: the least the ink reaches against the plate where the name can go (the sprite's middle half in height, all but 8 % at each end in width, halftone included). border: the sprite's slice border in its pixels (top, right, bottom, left).",
+ "sprite": "MainUI_MirrorDungeon3_3_1",
+ "size": [
+  235,
+  86
+ ],
+ "border": [
+  19.5,
+  137.0,
+  61.0,
+  79.5
+ ],
+ "inks": {
+  "dark": "#000000",
+  "light": "#ffffff"
+ },
+ "plates": {
+  "CRIMSON": {
+   "colour": "#ff0000",
+   "shade": 0.92,
+   "ink": "light",
+   "contrast": 4.63
+  },
+  "SCARLET": {
+   "colour": "#fd6600",
+   "shade": 0.78,
+   "ink": "light",
+   "contrast": 4.64
+  },
+  "AMBER": {
+   "colour": "#fecc2b",
+   "shade": 1.0,
+   "ink": "dark",
+   "contrast": 4.76
+  },
+  "SHAMROCK": {
+   "colour": "#9eff00",
+   "shade": 1.0,
+   "ink": "dark",
+   "contrast": 5.54
+  },
+  "AZURE": {
+   "colour": "#15c3ee",
+   "shade": 0.65,
+   "ink": "light",
+   "contrast": 4.63
+  },
+  "INDIGO": {
+   "colour": "#004bd5",
+   "shade": 1.0,
+   "ink": "light",
+   "contrast": 7.07
+  },
+  "VIOLET": {
+   "colour": "#9400dc",
+   "shade": 1.0,
+   "ink": "light",
+   "contrast": 6.37
+  }
+ }
+}

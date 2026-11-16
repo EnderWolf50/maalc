@@ -92,6 +92,7 @@ jobs:
               - 'gui/src-tauri/tauri.conf.json'
               - 'gui/src/buf_icons/**'
               - 'gui/src/gift_effects.json'
+              - 'gui/src/gift_plates/**'
               - 'gui/src/grace_card/**'
               - 'gui/src/grace_icons/**'
               - 'gui/src/graces.json'
