@@ -1,10 +1,10 @@
-"""The update of the resource package at TaskStart (#771, ADR 0012, spec #759): the installed `data/` takes the files
-maalc-resource published since, so a new event table or gift table reaches the next task without a new zip.
+"""The update of the resource package at TaskStart (#771, ADR 0012, spec #759): the installed `data/`, `image/` and `pipeline/`
+take the files maalc-resource published since, so a new event table, template or pipeline reaches the task that found it.
 
 `update(base, log, tasker)` is the one entry; it never raises, and a failure leaves the files as they were, with one log line
 saying why. The steps, one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan
 what changes for each part of the package (`plan_part`), download it into a staging folder and verify it (`stage`), swap it
-in all or nothing and write the new manifest last (`swap`), then clear what the old files left in memory (`refresh`).
+in all or nothing and write the new manifest last (`swap`), then reload the bundle and clear what the old files left in memory (`refresh`).
 
 `APPLIED` names the parts this build applies, each group by the version that covers it. An update of `image/` or `pipeline/`
 also reloads the bundle in the running task, and puts the previous files back when that fails (#772). Stdlib only: the release's bundled Python runs it.
@@ -242,7 +242,7 @@ def swap(base, plans, manifest, staging):
 
 
 def rollback(undo):
-    """Put back every file `swap` changed, newest first, the manifest last. The paths that would not go back."""
+    """Put back every file `swap` changed, newest first: the manifest, which `swap` writes last, goes back first. The paths that would not go back."""
     failed = []
     for target, old in reversed(undo):
         try:  # one file that cannot go back must not keep the others from it
@@ -252,7 +252,7 @@ def rollback(undo):
                 target.parent.mkdir(parents=True, exist_ok=True)  # a folder the swap pruned
                 os.replace(old, target)
         except OSError:
-            failed.append(target.name)
+            failed.append(f"{target.parent.name}/{target.name}")
     return failed
 
 
@@ -327,7 +327,10 @@ def refresh(plans, tasker, base, undo, log):
             except Exception as e:
                 log(f"{PREFIX}the previous bundle could not be reloaded either ({type(e).__name__}: {e})")
     if any(p for p in plans if p.part == "data"):
-        clear_data_caches()
+        try:
+            clear_data_caches()
+        except Exception as e:  # the files are whichever stand now: say so, not "kept"
+            log(f"{PREFIX}what the agent had read of the old files could not all be cleared: {type(e).__name__}: {e}")
     return stands
 
 
@@ -335,7 +338,7 @@ def refresh(plans, tasker, base, undo, log):
 
 
 def update(base, log, tasker):
-    """Take the newer data/ files maalc-resource published, if any. Never raises."""
+    """Take the newer files of the package maalc-resource published, if any. Never raises."""
     try:
         run_update(Path(base), log, tasker)
     except UpdateError as e:
@@ -382,11 +385,7 @@ def run_update(base, log, tasker):
     try:
         stage(source, plans, staging / remote["version"], DOWNLOAD_SECONDS)
         undo = swap(base, plans, merged_manifest(local, remote, plans), staging / remote["version"])
-        try:
-            stands = refresh(plans, tasker, base, undo, log)
-        except Exception as e:  # the files are the new ones now: say so, not "kept"
-            stands = True
-            log(f"{PREFIX}swapped, but what the agent had read of the old files could not all be cleared: {type(e).__name__}: {e}")
+        stands = refresh(plans, tasker, base, undo, log)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
     if stands:

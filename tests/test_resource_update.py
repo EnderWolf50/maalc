@@ -158,6 +158,14 @@ def test_a_reload_that_fails_puts_the_previous_files_back_and_loads_them_again(b
     assert not (base.parent / ".update").exists()
 
 
+def test_a_rolled_back_update_is_not_logged_as_done_when_a_cache_will_not_clear(base, remote, monkeypatch):
+    publish(remote, {**NEW, "image/t.png": b"png-2"}, "2026.11.16")
+    monkeypatch.setattr(ru, "clear_data_caches", lambda: 1 / 0)
+    before = tree(base)
+    said = run(base, Tasker(fail=[2]))
+    assert tree(base) == before and "2026.11.01 -> 2026.11.16" not in said and "could not all be cleared" in said
+
+
 def test_a_reload_that_fails_twice_says_so_and_the_task_goes_on(base, remote):
     publish(remote, {**NEW, "image/t.png": b"png-2"}, "2026.11.16")
     before = tree(base)
