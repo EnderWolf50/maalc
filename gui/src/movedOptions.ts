@@ -51,7 +51,7 @@ export function teamPicks(old: Attach): TeamPicks {
 }
 
 /** The node and attach key an override writes, and the value (one each, ADR 0013). */
-const writes = (override: Case["pipeline_override"]) => {
+const overrideTarget = (override: Case["pipeline_override"]) => {
   const [node, values] = Object.entries(override ?? {})[0] ?? [];
   const [key, value] = Object.entries(values?.attach ?? {})[0] ?? [];
   return node && key ? { node, key, value } : null;
@@ -68,7 +68,7 @@ function collect(key: string, attach: Record<string, Attach>, out: Moved[]) {
     return;
   }
   if (opt.type === "input") {
-    const input = opt.inputs![0], to = writes(opt.pipeline_override);
+    const input = opt.inputs![0], to = overrideTarget(opt.pipeline_override);
     if (!to) return;
     const value = attach[to.node]?.[to.key];
     const int = input.pipeline_type === "int";
@@ -80,7 +80,7 @@ function collect(key: string, attach: Record<string, Attach>, out: Moved[]) {
   }
   const cases = opt.cases ?? [];
   const picked = cases.find((c) => {
-    const to = writes(c.pipeline_override);
+    const to = overrideTarget(c.pipeline_override);
     return to !== null && attach[to.node]?.[to.key] === to.value;
   });
   if (!picked) return;

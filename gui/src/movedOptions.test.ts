@@ -1,5 +1,6 @@
 // What a version 20 file's moved values are once they sit in the client (#782): the shared cases' list
-// (tests/settings_cases.json migrate_v20 moved), then how the window says each one.
+// (tests/settings_cases.json migrate_v20 moved), the teams it picked for a first team options file, then how the window
+// says each value.
 import { describe, expect, test } from "vitest";
 import { movedOptions, sayMoved, teamPicks } from "./movedOptions";
 import { newTeam, type Team } from "./model";

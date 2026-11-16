@@ -60,7 +60,6 @@ test("a first file's default_case is the team the version 20 file picked for tha
   expect(option(teamOptionsText(null, s)!).default_case).toBe(NONE); // a version 21 file has no pick
 });
 
-
 test("nothing changed, or neither a file nor a team: nothing to write", () => {
   const first = teamOptionsText(null, settings([A]))!;
   expect(teamOptionsText(first, settings([A]))).toBeNull();

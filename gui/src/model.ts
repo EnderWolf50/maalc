@@ -356,7 +356,7 @@ export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<s
  * (spec 04 section 2). old: the file's version and the file as it read, before its migration (null when it needed none),
  * for what the caller does with an older file before it writes it back (App.tsx). */
 export function parseSettings(text: string): {
-  data: Settings; migrated: boolean; unknown: number; old: { version: number; data: Record<string, unknown> } | null;
+  data: Settings; unknown: number; old: { version: number; data: Record<string, unknown> } | null;
 } {
   let data = JSON.parse(text);
   const asRead = data;
@@ -381,7 +381,7 @@ export function parseSettings(text: string): {
       return cleaned.list;
     }),
   };
-  return { data, migrated, unknown, old: migrated ? { version: asRead.version, data: asRead } : null };
+  return { data, unknown, old: migrated ? { version: asRead.version, data: asRead } : null };
 }
 
 /** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a

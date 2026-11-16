@@ -37,10 +37,15 @@ const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
 const sayStatus = (lang: Settings["language"], status: string) =>
   Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
+/** What a write of the team options file says: the status, and whether the write failed. */
+type TeamNote = { note: string; failed: boolean };
+/** An older file's values the client holds now, off its defaults (#782), and the version it had. */
+type MovedList = { from: number; values: Moved[] };
+
 /** Write the team options file when these settings change what it says (#780, teamOptions.ts), a new one starting on
  * picks, and the status after it: `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in
  * with the error, in s's language, when the write failed (then `failed` is true). */
-async function teamOptionsNote(s: Settings, picks: TeamPicks, done: Key, failed: Key) {
+async function teamOptionsNote(s: Settings, picks: TeamPicks, done: Key, failed: Key): Promise<TeamNote> {
   try {
     const text = teamOptionsText(await api.loadTeamOptions(), s, picks);
     if (text === null) return { note: "", failed: false };
@@ -100,8 +105,8 @@ export default function App() {
   const picks = useRef<TeamPicks>(NO_PICKS);
   // An older file read and kept aside, not yet written back (#782): its version and the values the client holds now
   // that are off the client's defaults, which show once it is written back, until dismissed.
-  const pending = useRef<{ from: number; values: Moved[] } | null>(null);
-  const [moved, setMoved] = useState<{ from: number; values: Moved[] } | null>(null);
+  const pending = useRef<MovedList | null>(null);
+  const [moved, setMoved] = useState<MovedList | null>(null);
   /** The file is written: an older one's migration is done, and its list shows. */
   const wroteBack = () => {
     if (!pending.current) return;
@@ -291,6 +296,7 @@ export default function App() {
     setTyped(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
     setFailed(false);
     setRefused(false);
+    let teamFirst: TeamNote | null = null; // the team options file written before an older file's write-back
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
@@ -300,8 +306,17 @@ export default function App() {
           return false;
         }
         const written = toText(current);
-        // the write-back of an older file: the team options file comes first, from its teams (#782)
-        const early = pending.current ? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed") : null;
+        // The write-back of an older file writes the team options file first, from its teams (#782). One that cannot be
+        // written stops the save, as at the start: the old file stays for the next try, with its teams.
+        if (pending.current) {
+          const team = await teamOptionsNote(current, picks.current, "savedTeams", "teamOptions.failed");
+          if (team.failed) {
+            setFailed(true);
+            setStatus(team.note);
+            return false;
+          }
+          if (team.note || !teamFirst) teamFirst = team; // a retry finds it written: the first write's note stays
+        }
         try {
           await api.saveSettings(written, disk.current);
         } catch (e) {
@@ -316,7 +331,7 @@ export default function App() {
         setSavedText(written);
         wroteBack();
         // the team options file follows the teams saved; a change is said once, as the client reads it only at its start
-        setStatus((early ?? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed")).note || "saved");
+        setStatus((teamFirst ?? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed")).note || "saved");
         return true;
       }
     } catch (e) {

@@ -6,8 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
-import cases from "../../tests/settings_cases.json";
 import { movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
+import { cases } from "./settingsCases";
 import { sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.

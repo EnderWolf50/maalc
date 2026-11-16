@@ -248,6 +248,25 @@ describe("a version 20 file (#782)", () => {
     ]);
   });
 
+  test("a save of it that cannot write the team options file writes nothing, as the start; the next save does", async () => {
+    v20([{ set: "teams/1/game_team", value: 1 }, { set: "luxcavation/exp/team", value: "b" }]);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole("alert");
+    await user.click(within(document.querySelector("aside")!).getByText("Team b"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "2" } });
+    file.teamFail = "disk full";
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "failed"));
+    expect(document.querySelector(".status")).toHaveTextContent("disk full");
+    expect([file.writes, file.saved]).toEqual([["old"], []]);
+    file.teamFail = "";
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.writes).toEqual(["old", "team options", "settings"]);
+    expect(defaults()).toEqual(["b", "none"]);
+  });
+
   test("a team options file that cannot be written leaves the old file as it is, for the next start", async () => {
     v20([{ set: "luxcavation/exp/team", value: "b" }]);
     file.teamFail = "disk full";

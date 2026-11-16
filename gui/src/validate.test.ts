@@ -99,14 +99,14 @@ describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the 
   for (const c of cases.migrate_v20 as { name: string; edits: Edit[] }[]) {
     test(c.name, () => {
       const old = v20File(c.edits);
-      const { data, migrated, old: read } = parseSettings(JSON.stringify(old));
-      expect([data, migrated, read]).toEqual([valid, true, { version: 20, data: old }]);
+      const { data, old: read } = parseSettings(JSON.stringify(old));
+      expect([data, read]).toEqual([valid, { version: 20, data: old }]);
       expect(validate(data)).toEqual([]);
     });
   }
 
   test("a version 21 file needs no migration and has no old file", () => {
-    expect(parseSettings(JSON.stringify(cases.valid))).toMatchObject({ migrated: false, old: null });
+    expect(parseSettings(JSON.stringify(cases.valid)).old).toBeNull();
   });
 });
 
@@ -209,8 +209,8 @@ test("loading drops gift ids no data file has, fills gorder and counts them", ()
   const file = structuredClone(cases.valid) as unknown as { gift_lists: { want: number[]; keep: number[]; gorder: Record<string, number[]> }[] };
   file.gift_lists[0].want = [9053, 424242];
   file.gift_lists[0].keep = [9071, 5];
-  const { data, migrated, unknown } = parseSettings(JSON.stringify(file));
-  expect(migrated).toBe(false);
+  const { data, old, unknown } = parseSettings(JSON.stringify(file));
+  expect(old).toBeNull();
   expect(unknown).toBe(2);
   expect([data.gift_lists[0].want, data.gift_lists[0].keep]).toEqual([[9053], [9071]]);
   expect(Object.keys(data.gift_lists[0].gorder)).toHaveLength(11); // a keyword the file lacks gets the default order
