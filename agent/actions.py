@@ -23,6 +23,8 @@ from maa.define import Rect
 import gift_cells
 import hub_text
 import recovery
+import resource_package
+import resource_update
 import run_start
 import settlement
 import task_options
@@ -536,6 +538,8 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
+        resource_update.update(data_dir().parent, log, context.tasker)  # before the line below: it names the package this task runs on
+        log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
         try:
@@ -1084,9 +1088,25 @@ def finish(context, reason):
 BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
 GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
-GIFTS = gift_cells.load()  # every gift a cell may show (#297)
-GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
-GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
+GIFTS = []  # every gift a cell may show (#297)
+GIFT_NAMES = {}
+GIFT_IDS = {}  # an English name plate's gift (#329)
+
+
+def reload_gifts():
+    """Fill the three above from data/, at import and again after an update of data/ (resource_update.clear_data_caches).
+    In place, not as an accessor behind a cache: shop_actions and event_actions imported the three by name, in many
+    places that read them as plain tables, and each holds the same objects."""
+    GIFTS[:] = gift_cells.load()
+    GIFT_NAMES.clear()
+    GIFT_NAMES.update({e["id"]: e["en"] for e in GIFTS})
+    GIFT_IDS.clear()
+    GIFT_IDS.update({e["en"]: e["id"] for e in GIFTS})
+
+
+reload_gifts()
+
+
 DIALOG_TEXT = [360, 280, 560, 140]
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 

@@ -1,12 +1,8 @@
 // Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons
 // and their effect text.
-import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
-import effects from "./gift_effects.json";
-import plates from "./gift_plates/plates.json";
+import { effects, plates, recipes, webpFolder } from "./gameData";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { GIFT_SOURCES, SHOP_GIFTS, parseThemePacks, type DataGift } from "./model";
-import { webpFolder } from "./webpFolder";
+import { GIFT_SOURCES, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
 
 /** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
  * fusion: made by fusing, so wantable but never bought; material: a recipe's material no shop sells; other: no shop sells it
@@ -42,7 +38,7 @@ export type Colour = "Positive" | "Negative" | "Neutral";
  * game's `[tag]`, by its id) the game draws as its status icon and its name, or italic or coloured text (flavour text). */
 export type EffectRun = string | { kw: string } | { text: string; i?: boolean; colour?: Colour };
 /** A status word of the effect texts (gift_effects.json `keywords`; not a gift's keyword, its 體系): the colour its name is
- * printed in, its status icon (buf_icons/<icon>.webp) and its names. */
+ * printed in, its status icon (data/buf_icons/<icon>.webp) and its names. */
 export interface StatusWord { colour: Colour; icon: string; en: string; zh: string }
 export const STATUS_WORDS = effects.keywords as Record<string, StatusWord>;
 /** A gift's sin, its attributeType in the game's data (ATTRIBUTE_TYPE 0..6). */
@@ -52,21 +48,21 @@ const EFFECTS = effects.effects as Record<string, { sin: Sin; en: EffectRun[]; z
 export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
 /** The gift's sin (gift_effects.json, tools/llc_text.py gift_sins): the colour of the plate the game draws its name on (#786). */
 export const giftSin = (id: number): Sin | undefined => EFFECTS[id]?.sin;
-/** A status word's icon URL (gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). */
-export const bufIconUrl = webpFolder(import.meta.glob<string>("./buf_icons/*.webp", { eager: true, query: "?url", import: "default" }));
-const plateUrl = webpFolder(import.meta.glob<string>("./gift_plates/*.webp", { eager: true, query: "?url", import: "default" }));
-/** A sin's name plate (gui/src/gift_plates/, tools/gift_plates.py): the game's plate sprite tinted by the sin's colour, and
+/** A status word's icon URL (data/buf_icons/<icon>.webp, tools/buf_icons.py). */
+export const bufIconUrl = webpFolder("buf_icons");
+const plateUrl = webpFolder("gift_plates");
+/** A sin's name plate (data/gift_plates/, tools/gift_plates.py): the game's plate sprite tinted by the sin's colour, and
  * the ink the name holds 4.5:1 in on it, dark on a bright plate, light on the others. */
 export const plateOf = (sin: Sin) => {
   const { ink } = plates.plates[sin] as { ink: keyof typeof plates.inks };
   return { url: plateUrl(sin)!, ink, colour: plates.inks[ink] };
 };
 
-/** The icon's URL (assets/.../gift_icons/<id>.webp). */
-export const iconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" }));
+/** The icon's URL (data/gift_icons/<id>.webp). */
+export const iconUrl = webpFolder("gift_icons");
 
-/** The keyword's game icon URL (assets/.../keyword_icons/<keyword>.webp); Keywordless has none. */
-export const keywordIconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/keyword_icons/*.webp", { eager: true, query: "?url", import: "default" }));
+/** The keyword's game icon URL (data/keyword_icons/<keyword>.webp); Keywordless has none. */
+export const keywordIconUrl = webpFolder("keyword_icons");
 
 /** A keyword's gifts by tier, highest tier first: the list's own order (`gorder`) for what the shop sells, then the rest in data order. */
 export function tiersOf(gorder: Record<string, number[]>, keyword: string): { tier: number; ids: number[] }[] {
@@ -83,7 +79,7 @@ export const FUSION_BY_ID = new Map(FUSIONS.map((f) => [f.id, f]));
 /** The fusion gifts that have this gift among their materials, in data order. */
 export const usedIn = (id: number): Fusion[] => FUSIONS.filter((f) => materialsOf(f).includes(id));
 
-const PACK_NAMES = new Map(Object.entries(parseThemePacks(packsYaml).pack_ids).map(([name, id]): [number, string] => [id, name]));
+const PACK_NAMES = new Map(Object.entries(THEME_PACKS.pack_ids).map(([name, id]): [number, string] => [id, name]));
 /** A theme pack's name in the season's file (its `pack_ids`); its id as "#1234" for a pack the file does not know. */
 export const packName = (id: number): string => PACK_NAMES.get(id) ?? `#${id}`;
 

@@ -7,8 +7,8 @@ from PIL import Image
 import grace_icons as gi
 import unity_files
 
-GUI = Path(__file__).resolve().parent.parent / "gui/src"
-CARD = GUI / "grace_card"
+DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data"
+CARD = DATA / "grace_card"
 # What tools/grace_icons.py writes for the card (#726): name -> size. The sprites keep the game's size; the page background
 # and the price icon are made smaller (PAGE_SIZE, STAR_SIZE). The lit plate is the button's size.
 PARTS = {"face": (380, 438), "face-picked": (380, 444), "hover": (365, 432), "button": (209, 69), "button-lit": (209, 69),

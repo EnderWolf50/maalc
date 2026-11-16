@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 import client_override
+import resource_package as rp
 from client_options import TEAM_OPTIONS
-from install import mirror_maafw, mirror_repo
+from install import mirror_maafw, mirror_repo, write_resource_manifest
 
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
 EXE = "./python/python.exe"
@@ -202,3 +203,15 @@ def test_unknown_flag_prints_usage_and_changes_nothing():
     r = run("--hepl")
     assert r.returncode == 2 and "usage:" in r.stderr
     assert snapshot(install) == before
+
+
+def test_the_install_gets_a_manifest_with_no_sources_and_a_release_one_with_the_real_list(tmp_path):
+    base = tmp_path / "resource/base"
+    for name in ("data/client.json", "data/a.json", "pipeline/p.json", "model/ocr/det.onnx"):
+        (base / name).parent.mkdir(parents=True, exist_ok=True)
+        (base / name).write_text('{"client": "1.118.1"}', encoding="utf-8")
+    write_resource_manifest(tmp_path, release=False)
+    dev = rp.read_manifest(base)
+    assert dev["sources"] == [] and "model/ocr/det.onnx" not in dev["files"] and "data/a.json" in dev["files"]
+    write_resource_manifest(tmp_path, release=True)
+    assert rp.read_manifest(base)["sources"] == rp.SOURCES and rp.SOURCES

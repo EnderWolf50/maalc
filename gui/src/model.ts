@@ -2,10 +2,7 @@
 import { giftList as giftListCheck } from "virtual:settings-validator";
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
-import gifts from "../../assets/resource/base/data/gift_search.json";
-import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import shopYaml from "../../assets/resource/base/data/shop.yaml?raw";
-import graces from "./graces.json";
+import { graces, recipes, search as gifts, shopYaml, themePacksYaml } from "./gameData";
 
 export { schema };
 
@@ -171,6 +168,8 @@ export function parseThemePacks(text: string): ThemePacks {
   const data = (parseYaml(text) ?? {}) as Partial<ThemePacks>;
   return { packs: data.packs ?? {}, pack_ids: data.pack_ids ?? {}, default_plan: { ...newPackPlan(), ...data.default_plan } };
 }
+/** The season's theme pack data file, read when the window starts (gameData.ts). */
+export const THEME_PACKS: ThemePacks = parseThemePacks(themePacksYaml);
 
 /** The pack filter's difficulties, "" any: the modes of the data file's floors. */
 export type PackMode = "" | "normal" | "hard" | "infinity" | "extreme";

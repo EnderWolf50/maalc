@@ -1,5 +1,5 @@
-"""Write the settings GUI's status icons (#764): gui/src/buf_icons/<icon>.webp, one for each icon the keywords of
-gui/src/gift_effects.json name.
+"""Write the settings GUI's status icons (#764): assets/resource/base/data/buf_icons/<icon>.webp, one for each icon the keywords of
+data/gift_effects.json name.
 
 Usage: uv run --group unpack python tools/buf_icons.py  (after tools/llc_text.py, which names the icons)
 Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"). The game prints a keyword of a gift's effect text as
@@ -20,8 +20,8 @@ from local_dir import local_dir
 from unity_files import bundle_sprites, sprite_image, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
-EFFECTS = REPO / "gui/src/gift_effects.json"
-OUT = REPO / "gui/src/buf_icons"
+EFFECTS = REPO / "assets/resource/base/data/gift_effects.json"
+OUT = REPO / "assets/resource/base/data/buf_icons"
 FOLDER = "Assets/Resources_moved/Buf/"
 SIZE = 32  # px: the card draws an icon at about 15 CSS px, so 2x screens get theirs sharp
 QUALITY = 80

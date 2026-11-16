@@ -8,7 +8,7 @@ import sinner_cards as sc
 
 REPO = Path(__file__).resolve().parent.parent
 CARDS = REPO / "assets/resource/base/data/sinner_cards"
-FRAME = REPO / "gui/src/sinner_card"
+FRAME = REPO / "assets/resource/base/data/sinner_frame"
 # tools/sinner_cards.py --width: the art shows in the frame's opening, at most 143 CSS px wide (a 162 px tile, #732), so 240 holds
 # it at 150 % scaling; the identity list's art is 537 x 827, so 240 x 370
 WIDTH, HEIGHT = 240, 370
@@ -114,7 +114,7 @@ def test_the_glow_part_is_its_ring():
 
 
 def test_the_committed_glow_has_no_wash():
-    """gui/src/sinner_card/glow.webp is the ring alone (#756): nothing over the art's middle, the ring's crest opaque."""
+    """data/sinner_frame/glow.webp is the ring alone (#756): nothing over the art's middle, the ring's crest opaque."""
     glow = Image.open(FRAME / "glow.webp").convert("RGBA")
     w, h = glow.size
     middle = glow.crop((w // 4, h // 4, w * 3 // 4, h * 3 // 4))

@@ -10,7 +10,7 @@ import { EffectText, place, usedText } from "./GiftPopover";
 import { queue } from "./gifts";
 import { TEXT } from "./i18n";
 import indexCss from "./index.css?raw";
-import plates from "./gift_plates/plates.json";
+import plates from "../../assets/resource/base/data/gift_plates/plates.json";
 import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, newSettings, type GiftList, type Settings } from "./model";
 import { contrast, cssValueOf, renderEditor } from "./testing";
 
