@@ -384,7 +384,7 @@ describe("clicking a problem", () => {
   ] as const)("focuses %s", async (_, change, text, label) => {
     const s = settings();
     change(s);
-    const user = await openOn(s, zh["tab.daily"]);
+    const user = await openOn(s, zh["tab.events"]);
     await user.click(problem(text));
     expect(screen.getByRole("checkbox", { name: zh[label] })).toHaveFocus();
   });

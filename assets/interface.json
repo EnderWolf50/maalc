@@ -99,7 +99,10 @@
             "label": "$ExpLuxcavation",
             "entry": "ExpLuxcavation",
             "option": [
-                "ExpTeam"
+                "ExpMode",
+                "ExpTeam",
+                "ExpRetries",
+                "ExpConsecutive"
             ]
         },
         {
@@ -107,7 +110,10 @@
             "label": "$ThreadLuxcavation",
             "entry": "ThreadLuxcavation",
             "option": [
-                "ThreadTeam"
+                "ThreadMode",
+                "ThreadTeam",
+                "ThreadRetries",
+                "ThreadConsecutive"
             ]
         },
         {
@@ -118,7 +124,10 @@
         {
             "name": "ChargeEnkephalin",
             "label": "$ChargeEnkephalin",
-            "entry": "ChargeEnkephalin"
+            "entry": "ChargeEnkephalin",
+            "option": [
+                "ChargeCount"
+            ]
         }
     ],
     "option": {
@@ -234,15 +243,101 @@
         // default_case is the team the settings file picked, which MXU starts a task on and MFAAvalonia does not.
         "ExpTeam": {
             "type": "select",
-            "label": "$ExpTeam",
-            "description": "$ExpTeam_description",
+            "label": "$LuxTeam",
+            "description": "$LuxTeam_description",
             "cases": []
         },
         "ThreadTeam": {
             "type": "select",
-            "label": "$ThreadTeam",
-            "description": "$ThreadTeam_description",
+            "label": "$LuxTeam",
+            "description": "$LuxTeam_description",
             "cases": []
+        },
+        "ExpMode": {
+            "type": "select",
+            "label": "$LuxMode",
+            "description": "$ExpMode_description",
+            "default_case": "daily",
+            "cases": [
+                {"name": "daily", "label": "$LuxMode_daily", "pipeline_override": {"ExpLuxcavation": {"attach": {"mode": "daily"}}}},
+                {"name": "count", "label": "$LuxMode_count", "option": ["ExpCount"], "pipeline_override": {"ExpLuxcavation": {"attach": {"mode": "count"}}}}
+            ]
+        },
+        // Only under ExpMode's count, not in the task's own list: MFAAvalonia would send it twice.
+        "ExpCount": {
+            "type": "input",
+            "label": "$LuxCount",
+            "inputs": [
+                {"name": "count", "label": "$LuxCount", "default": "1", "pipeline_type": "int", "verify": "^[1-9][0-9]*$", "pattern_msg": "$WholeNumberFromOne"}
+            ],
+            "pipeline_override": {"ExpLuxcavation": {"attach": {"count": "{count}"}}}
+        },
+        "ExpRetries": {
+            "type": "input",
+            "label": "$LuxRetries",
+            "description": "$LuxRetries_description",
+            "inputs": [
+                {"name": "retries", "label": "$LuxRetries", "default": "0", "pipeline_type": "int", "verify": "^(0|[1-9][0-9]*)$", "pattern_msg": "$WholeNumberFromZero"}
+            ],
+            "pipeline_override": {"ExpLuxcavation": {"attach": {"retries": "{retries}"}}}
+        },
+        "ExpConsecutive": {
+            "type": "switch",
+            "label": "$LuxConsecutive",
+            "description": "$LuxConsecutive_description",
+            "default_case": "Yes",
+            "cases": [
+                {"name": "Yes", "pipeline_override": {"ExpLuxcavation": {"attach": {"consecutive": true}}}},
+                {"name": "No", "pipeline_override": {"ExpLuxcavation": {"attach": {"consecutive": false}}}}
+            ]
+        },
+        "ThreadMode": {
+            "type": "select",
+            "label": "$LuxMode",
+            "description": "$ThreadMode_description",
+            "default_case": "daily",
+            "cases": [
+                {"name": "daily", "label": "$LuxMode_daily", "pipeline_override": {"ThreadLuxcavation": {"attach": {"mode": "daily"}}}},
+                {"name": "count", "label": "$LuxMode_count", "option": ["ThreadCount"], "pipeline_override": {"ThreadLuxcavation": {"attach": {"mode": "count"}}}}
+            ]
+        },
+        // Only under ThreadMode's count, not in the task's own list: MFAAvalonia would send it twice.
+        "ThreadCount": {
+            "type": "input",
+            "label": "$LuxCount",
+            "inputs": [
+                {"name": "count", "label": "$LuxCount", "default": "3", "pipeline_type": "int", "verify": "^[1-9][0-9]*$", "pattern_msg": "$WholeNumberFromOne"}
+            ],
+            "pipeline_override": {"ThreadLuxcavation": {"attach": {"count": "{count}"}}}
+        },
+        "ThreadRetries": {
+            "type": "input",
+            "label": "$LuxRetries",
+            "description": "$LuxRetries_description",
+            "inputs": [
+                {"name": "retries", "label": "$LuxRetries", "default": "0", "pipeline_type": "int", "verify": "^(0|[1-9][0-9]*)$", "pattern_msg": "$WholeNumberFromZero"}
+            ],
+            "pipeline_override": {"ThreadLuxcavation": {"attach": {"retries": "{retries}"}}}
+        },
+        "ThreadConsecutive": {
+            "type": "switch",
+            "label": "$LuxConsecutive",
+            "description": "$LuxConsecutive_description",
+            "default_case": "Yes",
+            "cases": [
+                {"name": "Yes", "pipeline_override": {"ThreadLuxcavation": {"attach": {"consecutive": true}}}},
+                {"name": "No", "pipeline_override": {"ThreadLuxcavation": {"attach": {"consecutive": false}}}}
+            ]
+        },
+        // 0-10: the game allows 10 charges a day.
+        "ChargeCount": {
+            "type": "input",
+            "label": "$ChargeCount",
+            "description": "$ChargeCount_description",
+            "inputs": [
+                {"name": "count", "label": "$ChargeCount", "default": "0", "pipeline_type": "int", "verify": "^([0-9]|10)$", "pattern_msg": "$WholeNumberZeroToTen"}
+            ],
+            "pipeline_override": {"ChargeEnkephalin": {"attach": {"count": "{count}"}}}
         },
         // A password input: the clients mask and encrypt it, and the PI schema refuses a default on one.
         "WebhookUrl": {

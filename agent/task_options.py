@@ -1,13 +1,12 @@
-"""A task's options (#776, #777, #779): the values its entry action (TaskStart, and LuxStart and ChargeStart built on it)
+"""A task's options (#776, #777, #779, #781): the values its entry action (TaskStart, and LuxStart and ChargeStart built on it)
 reads once, before any tap, and keeps in actions.TASK["options"]; every reader takes them from there.
 
 The client sends them (MXU, MFAAvalonia; ADR 0013). Each option of interface.json writes its key into attach of the
 task's entry node, a global option into attach of GlobalOptions, a node no next names; MaaFramework applies the client's
 override array entry by entry and merges attach key by key, so the entry action reads them with context.get_node_data.
 read checks both against task_options.schema.json; a value missing or wrong ends the task before any tap, with a line
-that names the option. There is no settings-file fallback. A Luxcavation task's team is its option (ExpTeam, ThreadTeam:
-the cases of the team options file the settings GUI writes, #780); its other options and ChargeEnkephalin's still come
-from the settings file (luxcavation, charge), until #781 moves them.
+that names the option. There is no settings-file fallback. A Luxcavation task's team is its option too (ExpTeam,
+ThreadTeam: the cases of the team options file the settings GUI writes, #780).
 
 The rules that cross a task's options with the teams (MirrorDungeon's target floor, a Luxcavation task's team) are
 checked here too, at the task's start: the teams stay in the settings file."""
@@ -86,17 +85,6 @@ def options(task, values):
         return dict(values)
     out = {k: v for k, v in values.items() if k not in ("runs_limited", "runs")}
     return {**out, "runs": values["runs"] if values["runs_limited"] else None}
-
-
-def luxcavation(settings, key):
-    """A Luxcavation task's options the settings file still holds (key "exp" or "thread"): luxcavation.<key>'s mode,
-    count, retries and consecutive. Its team is the client's option (#780): the file's is not read."""
-    return {k: v for k, v in settings["luxcavation"][key].items() if k != "team"}
-
-
-def charge(settings):
-    """ChargeEnkephalin's option the settings file still holds: count, charge_enkephalin.count."""
-    return {"count": settings["charge_enkephalin"]["count"]}
 
 
 def target_floor_errors(options, teams):

@@ -153,8 +153,8 @@ def bind(resource, game):
 
 
 def posted(task, own=None, options=()):
-    """What a client posts task with (client_options: these NAME=VALUE options, every other option at its default), then
-    the test's own override: a task's entry action ends it on an option the client did not send (#779)."""
+    """What a client posts task with (client_options: these NAME=VALUE options, every other at its default), then the
+    test's own override: a task's entry action ends it on an option the client did not send (#779)."""
     return [*client_override(task, *options), *([own] if own else [])]
 
 
@@ -170,6 +170,11 @@ def run_task(tasker, scenario, entry, override=None):
     while not (detail := job.get()).status.done or tasker.stopping:  # #461: post_stop's queue clear ends wait() early
         time.sleep(0.01)
     return detail
+
+
+def said(actions, marker):
+    """The agent's log lines that hold marker (" stop: ", " options: "), each without its time."""
+    return [line.split(" ", 1)[1] for line in actions.LOG if marker in line]
 
 
 def result(detail, game, actions):

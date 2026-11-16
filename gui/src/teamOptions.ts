@@ -20,6 +20,8 @@ type TeamOption = keyof typeof TEAM_OPTIONS;
 /** Case 0, 「未選擇」: it sends nothing, so the task stops at its start and asks for a team. A team id is never "none" in
  * a file this GUI made (newId); a hand-made team of that id gets no case of its own. */
 export const NONE = "none";
+/** Its label, a text key of interface.json's languages: the client says it in its own. */
+export const NONE_LABEL = "$LuxTeam_none";
 /** What a deleted team's label ends with, in each language of the GUI: its case stays and still sends its id, which
  * stops the task with a line saying so. */
 const DELETED = { zh_tw: "（已刪除）", en_us: " (deleted)" } as const;
@@ -76,7 +78,7 @@ export function teamOptionsText(previous: string | null, s: Settings): string | 
     };
     const old = before?.[key];
     const kept = (old?.cases ?? [{ name: NONE, label: "" }]).map((c) => {
-      if (c.name === NONE) return { name: NONE, label: `$${key}_none` };
+      if (c.name === NONE) return { name: NONE, label: NONE_LABEL };
       const team = s.teams.find((t) => t.id === c.name);
       return team ? teamCase(team) : gone(c);
     });

@@ -19,8 +19,9 @@ DAILY = {"exp": 1, "thread": DAILY_BONUSES}  # the day's battles daily mode figh
 
 
 def fights(mode, target, today):
-    """The battles this run fights (#431): in count mode the target, luxcavation.<task>.count; in daily mode the day's
-    target (DAILY) less `today`, those won today as read, and None when it did not read (#429)."""
+    """The battles this run fights (#431): in count mode the target, the task's count option (ExpCount, ThreadCount,
+    #781); in daily mode the day's target (DAILY) less `today`, those won today as read, and None when it did not read
+    (#429)."""
     if mode == "count":
         return target
     return None if today is None else max(0, target - today)

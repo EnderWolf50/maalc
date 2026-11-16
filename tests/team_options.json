@@ -2,13 +2,13 @@
   "option": {
     "ExpTeam": {
       "type": "select",
-      "label": "$ExpTeam",
-      "description": "$ExpTeam_description",
+      "label": "$LuxTeam",
+      "description": "$LuxTeam_description",
       "default_case": "none",
       "cases": [
         {
           "name": "none",
-          "label": "$ExpTeam_none"
+          "label": "$LuxTeam_none"
         },
         {
           "name": "a",
@@ -47,13 +47,13 @@
     },
     "ThreadTeam": {
       "type": "select",
-      "label": "$ThreadTeam",
-      "description": "$ThreadTeam_description",
+      "label": "$LuxTeam",
+      "description": "$LuxTeam_description",
       "default_case": "none",
       "cases": [
         {
           "name": "none",
-          "label": "$ThreadTeam_none"
+          "label": "$LuxTeam_none"
         },
         {
           "name": "a",

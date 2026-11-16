@@ -55,38 +55,39 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   render(<App />);
   const teams = await screen.findByRole("tab", { name: zh["tab.teams"] });
   expect(teams).toHaveAttribute("tabindex", "0");
-  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("tabindex", "-1");
+  expect(screen.getByRole("tab", { name: zh["tab.gifts"] })).toHaveAttribute("tabindex", "-1");
   teams.focus();
-  await user.keyboard("{ArrowRight}");
-  const gifts = screen.getByRole("tab", { name: zh["tab.gifts"] });
-  expect(gifts).toHaveAttribute("aria-selected", "true");
-  expect(gifts).toHaveFocus();
-  await user.keyboard("{ArrowLeft}{ArrowLeft}");
-  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveFocus();
+  await user.keyboard("{ArrowRight}{ArrowRight}");
+  const deployment = screen.getByRole("tab", { name: zh["tab.deployment"] });
+  expect(deployment).toHaveAttribute("aria-selected", "true");
+  expect(deployment).toHaveFocus();
+  await user.keyboard("{ArrowLeft}");
+  expect(screen.getByRole("tab", { name: zh["tab.gifts"] })).toHaveFocus();
   await user.keyboard("{End}");
   expect(screen.getByRole("tab", { name: zh["tab.trials"] })).toHaveAttribute("aria-selected", "true");
   await user.keyboard("{Home}");
-  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("aria-selected", "true");
-  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.daily"] }).id);
+  expect(teams).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", teams.id);
 });
 
-test("the tabs come in four groups: what the bot runs (the daily tasks), the team, the plans, the overrides (#721)", async () => {
+test("the tabs come in three groups: the team, the plans, the overrides (#721; the daily tasks' went to the client, #780)", async () => {
   render(<App />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   // a separator between two groups shows as "|"
   const row = [...screen.getByRole("tablist").children].map((x) => (x.getAttribute("role") === "tab" ? x.textContent : "|"));
   expect(row).toEqual([
-    zh["tab.daily"], "|", zh["tab.teams"], zh["tab.gifts"], "|",
+    zh["tab.teams"], zh["tab.gifts"], "|",
     zh["tab.deployment"], zh["tab.starlight"], zh["tab.themepacks"], "|", zh["tab.events"], zh["tab.trials"],
   ]);
 });
 
-test("the Run options tab is gone: the Mirror Dungeon task options and the global ones are the client's (#779)", async () => {
+test("the Run options and Daily tabs are gone: what they set is the client's task options (#779, #780, #781)", async () => {
   render(<App />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   const tabs = screen.getAllByRole("tab").map((x) => x.textContent);
   expect(tabs).not.toContain("執行選項");
-  expect(tabs).toHaveLength(8);
+  expect(tabs).not.toContain("日常");
+  expect(tabs).toHaveLength(7);
 });
 
 test("a save writes the file's run section back as it was, though no tab shows it (#779)", async () => {
@@ -105,21 +106,6 @@ test("a save writes the file's run section back as it was, though no tab shows i
   const saved = JSON.parse(file.saved[0]);
   expect(saved.teams[0].name).toBe("Ta!");
   expect(saved.run).toEqual(s.run);
-});
-
-test("a save writes the file's Luxcavation teams back as they were, though no tab picks them (#780)", async () => {
-  // the team is the client's dropdown now; a team id the teams lack saves too: the agent stops that task at its start
-  const s = newSettings();
-  s.teams = [newTeam(1, "Ta")];
-  s.luxcavation.exp.team = "gone";
-  s.luxcavation.thread.team = s.teams[0].id;
-  file.text = JSON.stringify(s, null, 2) + "\n";
-  const user = userEvent.setup();
-  render(<App />);
-  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
-  await user.click(screen.getByRole("button", { name: zh.save }));
-  await waitFor(() => expect(file.saved).toHaveLength(1));
-  expect(JSON.parse(file.saved[0]).luxcavation).toEqual(s.luxcavation);
 });
 
 describe("the team options file (#780)", () => {
@@ -189,6 +175,24 @@ describe("the team options file (#780)", () => {
     await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked"));
     expect(file.teamWrites).toEqual([]); // not at the start either: the checks refuse the file's teams
   });
+});
+
+test("a save writes the file's daily options back as they were, though no tab shows them (#780, #781)", async () => {
+  // #782 drops them from the file; until then nothing reads them, nothing loses them. A team id the teams lack saves too:
+  // the team is the client's dropdown now, and the agent stops that task at its start
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta")];
+  s.luxcavation.exp = { ...s.luxcavation.exp, mode: "count", count: 7, team: "gone", retries: 4, consecutive: false };
+  s.luxcavation.thread = { ...s.luxcavation.thread, count: 9, team: s.teams[0].id, retries: 2 };
+  s.charge_enkephalin.count = 5;
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  await user.click(screen.getByRole("button", { name: zh.save }));
+  await waitFor(() => expect(file.saved).toHaveLength(1));
+  const saved = JSON.parse(file.saved[0]);
+  expect([saved.luxcavation, saved.charge_enkephalin]).toEqual([s.luxcavation, s.charge_enkephalin]);
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

@@ -1,7 +1,6 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
-import { DailyTab } from "./Daily";
 import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
@@ -16,7 +15,6 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["daily", "tab.daily", DailyTab, ["luxcavation", "charge_enkephalin"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -28,9 +26,10 @@ export const TABS = [
 
 type TabId = (typeof TABS)[number][0];
 
-/** The tabs in groups (what the bot runs: the daily tasks; the team and its gift list; the plans; the overrides): the tabs
- * that start a group. The Mirror Dungeon task's options and the global ones are the client's (MXU, MFAAvalonia; #779). */
-const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
+/** The tabs in groups (the team and its gift list; the plans; the overrides): the tabs that start a group after the first.
+ * How each task runs is the client's (MXU, MFAAvalonia): the Mirror Dungeon task's options and the global ones (#779), the
+ * daily tasks' (#781) and the Luxcavation teams (#780), so there is no Run options or Daily tab. */
+const GROUP_STARTS = new Set<TabId>(["deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */

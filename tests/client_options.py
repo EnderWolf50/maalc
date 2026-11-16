@@ -21,6 +21,8 @@ import client_override
 # (gui/src/teamOptions.test.ts checks the GUI writes this).
 TEAM_OPTIONS = ROOT / "tests" / "team_options.json"
 TEAM_PICK = {"ExpLuxcavation": "ExpTeam", "ThreadLuxcavation": "ThreadTeam"}  # each Luxcavation task's team option
+# The global options at their defaults, as the options line at a task's start shows them (task_options.line, #779).
+GLOBAL_DEFAULTS = "webhook_url (not set), auto_accept_terms=true, auto_download=true, keep_dismissed_screens=true"
 
 
 def interface(teams=TEAM_OPTIONS):

@@ -17,15 +17,16 @@ the list. A line per task says the values it used, `(default)` after one no `--o
 interface.json lacks stops it, exit 1, before the device is touched.
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and, when the source has them, the team options file
-`config/team_options.json` the settings GUI writes (#780: `run --option ExpTeam=<team id>` picks from its cases) and
-`state/` from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation
-cursor into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to
-VALUE (JSON, else a string): `--set luxcavation.exp.count=2`; a list's item goes by its id, `--set teams.t3.heal=revive`.
-A key it cannot set stops it before DIR is touched, and so does a key that is a client's option now, set with
-`run --option`: a `run.*` key, the Mirror Dungeon task's options and the global ones (#779; `--set run.runs=1` names
-`--option MirrorRunsLimit=Yes --option MirrorRuns=1`), and a Luxcavation task's team (#780;
-`--set luxcavation.exp.team=t3` names `--option ExpTeam=t3`). DIR comes from `tools/install.py` (a worktree's install/)
-or a copy of one under `.local/scratch/<task>/`.
+`config/team_options.json` the settings GUI writes (#780: `run --option ExpTeam=<team id>` picks from its cases; one
+the source lacks goes from DIR too) and `state/` from `--source` (default the main checkout's install/) into DIR; the
+bot's first start turns the old rotation cursor into the team queue's head and removes the state files with `state/`
+(#501). Then it sets each dotted KEY to VALUE (JSON, else a string): `--set language=en_us`; a list's item goes by its
+id, `--set teams.t3.heal=revive`. A key it cannot set stops it before DIR is touched, and so does a key the client's
+options took over: `run.*`, the Mirror Dungeon task's options and the global ones (#779), and a daily task's own,
+`luxcavation.<task>.*` (#781; its team, #780) and `charge_enkephalin.*` (#781), a whole section too
+(`--set luxcavation={...}`). They are set with `run --option`, which the line names (`--set run.runs=1`:
+`--option MirrorRunsLimit=Yes --option MirrorRuns=1`; `--set luxcavation.exp.team=t3`: `--option ExpTeam=t3`). DIR
+comes from `tools/install.py` (a worktree's install/) or a copy of one under `.local/scratch/<task>/`.
 
 **awake** keeps the display and the machine on for that many minutes: a recording needs the screen awake
 (screen-record). Windows only.
@@ -185,32 +186,35 @@ def tasker(root: Path, tasks: list[str], port: int, options: list[str]) -> int:
 
 
 AGENT_OPTIONS = TOOLS.parent / "agent" / "task_options.schema.json"
-LUX_NODES = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}  # luxcavation.<key>'s task, whose options node it is
+INTERFACE = TOOLS.parent / "assets" / "interface.json"
+# The settings sections whose keys the client's options took over, and the nodes whose attach the agent reads them from
+# now (agent/task_options.schema.json): run (#779), a daily task's own (#781), a Luxcavation task's team too (#780).
+MOVED = {"run": ("MirrorDungeon", "GlobalOptions"), "luxcavation.exp": ("ExpLuxcavation",),
+         "luxcavation.thread": ("ThreadLuxcavation",), "charge_enkephalin": ("ChargeEnkephalin",)}
 
 
 def moved(key: str, value: str) -> str | None:
-    """Where settings key went (#779, #780): the --option of bot.py run that sets it now, for a run.<key> the client's
-    options took over and a luxcavation.<task>.<key> its task's options did (the schema's title names the option);
-    None for a key still in the settings file."""
-    nodes = json.loads(AGENT_OPTIONS.read_text(encoding="utf-8"))["$defs"]
-    section, _, name = key.partition(".")
-    if section == "luxcavation":
-        task, _, name = name.partition(".")
-        props = nodes.get(LUX_NODES.get(task), {}).get("properties", {})
-        if name not in props:
-            return None
-        case = "none" if value == "null" else value  # a team's 「未選擇」
-        return f"bot.py run --option {props[name]['title']}={case}"
-    if section != "run":
-        return None
-    option = next((d["properties"][name]["title"] for d in nodes.values() if name in d["properties"]), None)
-    if option is None:
-        return "the settings' run section is no longer read: set its options with bot.py run --option"
-    if name == "runs":
-        return ("bot.py run --option MirrorRunsLimit=No" if value == "null"
-                else f"bot.py run --option MirrorRunsLimit=Yes --option MirrorRuns={value}")
-    case = {"true": "Yes", "false": "No"}.get(value, value)  # a switch's case names
-    return f"bot.py run --option {option}={case}"
+    """Where settings key went (#779, #780, #781): the --option pairs of bot.py run that set it now, for a key the
+    client's options took over; None for a key the agent still reads from the settings file. A whole moved section, one
+    that holds one (luxcavation), and a key under a moved section that is no option get a line too. An input nested
+    under a case comes after the case that sends it (luxcavation.exp.count=2: ExpMode=count, then ExpCount=2); a
+    switch's true or false is its Yes or No, a team's null its 「未選擇」, none."""
+    for section, nodes in MOVED.items():
+        if key == section or section.startswith(key + "."):
+            return f"the agent reads {section}'s keys from the client's options: set them with bot.py run --option"
+        if not key.startswith(section + "."):
+            continue
+        name = key.removeprefix(section + ".")
+        schema = json.loads(AGENT_OPTIONS.read_text(encoding="utf-8"))["$defs"]
+        option = next((schema[n]["properties"][name]["title"] for n in nodes if name in schema[n]["properties"]), None)
+        if option is None:
+            return f"the settings' {section} section is no longer read: set its options with bot.py run --option"
+        if key == "run.runs" and value == "null":  # no run cap
+            return "bot.py run --option MirrorRunsLimit=No"
+        case = {"true": "Yes", "false": "No", "null": "none"}.get(value, value)
+        pairs = [*client_override.shown_by(client_override.load_interface(INTERFACE), option), (option, case)]
+        return "bot.py run " + " ".join(f"--option {o}={c}" for o, c in pairs)
+    return None
 
 
 def prep(install: Path, source: Path, sets: list[str]) -> dict:
@@ -219,7 +223,7 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
     for item in sets:
         key, _, value = item.partition("=")
         if where := moved(key, value):
-            raise SystemExit(f"prep: {key} is a task or global option of the client now (#776): {where}")
+            raise SystemExit(f"prep: {key} is a task or global option of the client now: {where}")
     settings = json.loads((source / "config/settings.json").read_text(encoding="utf-8"))
     for item in sets:
         key, value = item.split("=", 1)

@@ -89,7 +89,8 @@
 | `teams` | 陣列 | 隊伍，順序就是隊伍佇列，見第 9 節 | #9、#501 |
 | `event_overrides` | 陣列 | 事件覆寫，見第 10 節 | #11 |
 | `trial_risk_overrides` | 陣列 | 試煉分數覆寫，見第 11 節 | #17、#381 |
-| `luxcavation` | 物件 | 日常的 Luxcavation 任務，見第 12 節；其中的 `team` Agent 不再讀，改成任務選項（#780） | #366、#780 |
+| `luxcavation` | 物件 | 舊的經驗本與紐本選項，Agent 不再讀：改成第 12 節的任務選項（隊伍也是，#780）；GUI 原封不動寫回，版本 21 移除（#782） | #366、#780、#781 |
+| `charge_enkephalin` | 物件 | 舊的狂氣換腦啡肽次數，Agent 不再讀：改成第 12 節的任務選項 `ChargeCount`；GUI 原封不動寫回，版本 21 移除（#782） | #373、#781 |
 
 - 鍵名用 snake_case。（#19）
 - 新的設定檔：各陣列都是空的，`run` 用 `settings.schema.json` 的預設值（Agent 不讀它，#782 移除）。沒有隊伍，所以 Agent 會報「先設定隊伍」。（#19）
@@ -119,7 +120,7 @@
 
 - 每個 case（或輸入值）只寫一個鍵，寫進入口節點 `MirrorDungeon` 的 `attach`；全域選項寫進 `GlobalOptions` 節點（`pipeline/options.json`，沒有 `next` 指到它）。兩個 client 都把各選項的 `pipeline_override` 收成陣列送出，MaaFramework 依序套用，`attach` 逐鍵合併，所以各選項的鍵不會互相蓋掉；用 `context.run_task` 開的子任務（GoHome、RecoverL3）也看得到。（#776）
 - 選擇型與開關的預設 case 放第一個，`default_case` 也指它：MFAAvalonia 的任務選項一律從第 0 個 case 開始。之後加 case 只加在最後，MFAAvalonia 存的是索引（ADR 0013）。開關的 case 叫 `Yes`／`No`：MFAAvalonia 看名字畫開關。輸入用 `pipeline_type: "int"` 送整數，`verify` 只用 JavaScript 與 .NET 都認得的簡單正則；MXU 不擋 `verify` 不過的值，打錯的整數讓那一筆整個不送，Agent 不信任 `verify`。巢狀的 `MirrorRuns` 只列在 `Yes` 底下，不另外列進任務的選項。`tests/test_interface_options.py` 檢查這些規則，以及每個 case 與預設經 `tools/client_override.py` 產生的值都通過 Agent 的 schema。
-- 每個任務的入口動作（`TaskStart`，以及繼承它的 `LuxStart`、`ChargeStart`）在點任何東西之前讀一次 `GlobalOptions` 的 `attach`，鏡牢任務再加 `MirrorDungeon` 的，依 `agent/task_options.schema.json` 檢查型別、範圍和必填；之後所有讀這些值的地方都從那裡拿（`agent/task_options.py`），沒有「讀不到就用設定檔」的退路。任務開始時記一行 `options: ...`，列出讀到的值，webhook 只寫 `(set)`／`(not set)`。（#777、#779）
+- 每個任務的入口動作（`TaskStart`，以及繼承它的 `LuxStart`、`ChargeStart`）在點任何東西之前讀一次 `GlobalOptions` 的 `attach`，鏡牢任務再加 `MirrorDungeon` 的，日常任務加自己入口節點的（第 12 節），依 `agent/task_options.schema.json` 檢查型別、範圍和必填；之後所有讀這些值的地方都從那裡拿（`agent/task_options.py`），沒有「讀不到就用設定檔」的退路。任務開始時記一行 `options: ...`，列出讀到的值，webhook 只寫 `(set)`／`(not set)`。（#777、#779）
 - 少一個值、型別或範圍不對：任務在點任何東西之前結束，記一行 `stop: Invalid task options:`，每項寫選項名稱與鍵、收到的值（沒送就是 `not sent`）和要去哪裡改。鏡牢任務失敗結束；日常任務走停止程序。（#779）
 - 目標層數大於 5 時（第 6 層起要求這一局每一層都是困難）：難度不能是 `normal`，每一支啟用的隊伍（輪替只用啟用的隊伍）的 `hard_from_floor` 必須是 1（關閉也不行），`usage` 不能是 `normal_only`。鏡牢任務開始時對設定檔的隊伍檢查，不符就在點任何東西之前失敗，訊息指出選項或隊伍（`MirrorDifficulty`、`teams/<i>/usage`、`teams/<i>/hard_from_floor`）；每局開始前 `PlanRun` 再對當下的隊伍檢查一次，存檔可能改了它們。GUI 看不到目標層數，不在存檔時檢查；隊伍頁在用途旁放一行固定說明。（#385、#777、#779）
 
@@ -309,52 +310,56 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 - 同一個試煉在設定檔與資料檔都有時，以設定檔為準。（#19）名稱不在試煉表裡的覆寫不起作用。（#381）
 - 欄位名仍是 `trial_risk_overrides`／`risk`：版本 16 只改了值的意思與範圍，沒有改鍵名。（#381）
 
-## 12. 日常的 Luxcavation（`luxcavation`）
+## 12. 日常的任務選項與 Luxcavation 的隊伍
 
-GUI 的「日常」分頁編輯，隊伍除外：隊伍是 client 的任務選項（見下面的「隊伍：任務選項與隊伍選項檔」）。要跑哪些日常、依什麼順序，由 MXU／MFAAvalonia 的任務清單決定（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)），分頁上方寫明這點和建議順序。（#362、#366、#780）
+經驗本（PI 任務 `ExpLuxcavation`）、紐本（`ThreadLuxcavation`，#368）與狂氣換腦啡肽（`ChargeEnkephalin`，#373）怎麼跑，是 MXU／MFAAvalonia 的任務選項，在任務清單裡、各任務旁邊設定（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#781）。送法、讀法與值不對時的停法同第 5 節：每個選項寫進任務入口節點的 `attach`，入口動作（`LuxStart`、`ChargeStart`）在點任何東西之前依 `agent/task_options.schema.json` 檢查、記一行 `options: ...`；少值或值不對時走停止程序。要跑哪些日常、依什麼順序，由任務清單決定（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）。（#362、#366）
 
-`exp` 是經驗本（PI 任務 `ExpLuxcavation`），`thread` 是紐本（`ThreadLuxcavation`，#368），兩個的欄位一樣：
+經驗本與紐本的選項相同，名稱分別以 `Exp`、`Thread` 開頭；隊伍見下面的「經驗本與紐本的隊伍」：
 
-| 欄位 | 鍵 | 類型 | 值 | 來源 |
-|---|---|---|---|---|
-| 模式 | `mode` | `daily`／`count` | `daily`（每日模式，預設）：打今天還沒打的，當天已贏的（手動打的也算）不再打；經驗本看通行證 Daily 的 `Clear EXP Luxcavation` 那一列，進行中打 1 場、完成不打；紐本看 Daily Bonuses，剩 n 次打 n 場；讀不到就不打；不用 `count`。`count`（自訂次數）：這次打贏 `count` 場，不讀今天打過幾場（經驗本不走通行證頁）（[spec 03 第 15 節](03-decisions.md)） | #429、#431 |
-| 次數 | `count` | 整數 ≥ 1 | 只有自訂次數模式用：這次要打贏的場數。新檔與遷移的預設：經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定）。GUI 在每日模式把這格停用 | #366、#431 |
-| 隊伍 | `team` | 字串或 `null` | Agent 不再讀，GUI 原封不動寫回，版本 21 移除（#782）。隊伍改由任務選項 `ExpTeam`／`ThreadTeam` 送（見下面）；設定視窗第一次產生隊伍選項檔時，用這裡的 id 當 `default_case` | #366、#780 |
-| 戰敗重打 | `retries` | 整數 ≥ 0 | 每一場輸掉後重打的次數（打贏就重算，同鏡牢的全滅重打），預設 0 | #366 |
-| 連戰 | `consecutive` | 布林 | 開（預設）：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431） | #375、#429 |
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 模式 | `ExpMode`／`ThreadMode`，`count` 底下巢狀 `ExpCount`／`ThreadCount` | `mode` | 選擇：`daily` 每日模式：打今天還沒打的，當天已贏的（手動打的也算）不再打；經驗本看通行證 Daily 的 `Clear EXP Luxcavation` 那一列，進行中打 1 場、完成不打；紐本看 Daily Bonuses，剩 n 次打 n 場；讀不到就不打；不送 `count`。`count` 自訂次數：這次打贏 `count` 場，不讀今天打過幾場（經驗本不走通行證頁）（[spec 03 第 15 節](03-decisions.md)） | `daily` | #429、#431 |
+| 次數 | `ExpCount`／`ThreadCount` | `count` | 整數輸入 ≥ 1，只在模式是 `count` 時送：這次要打贏的場數 | 經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定） | #366、#431 |
+| 戰敗重打 | `ExpRetries`／`ThreadRetries` | `retries` | 整數輸入 ≥ 0：每一場輸掉後重打的次數（打贏就重算，同鏡牢的全滅重打） | 0 | #366 |
+| 連戰 | `ExpConsecutive`／`ThreadConsecutive` | `consecutive` | 開關。開：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431） | 開 | #375、#429 |
 
-- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3。（#366、#368）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
-- 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
+狂氣換腦啡肽花 Lunacy（先扣免費的，再扣付費的），所以預設不做：
 
-### 隊伍：任務選項與隊伍選項檔
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 次數 | `ChargeCount` | `count` | 整數輸入 0–10：當天的目標 Daily Count：畫面上的 Daily Count（手動換的也算）已到就不換，否則換到 Daily Count = `count`；讀不到就不換（[spec 03 第 16 節](03-decisions.md)）。0 時任務一開始就成功結束，不開視窗、不碰 Use Lunacy 頁。遊戲一天最多 10 次（`chance` 9999） | 0 | #373、#429 |
 
-經驗本與紐本的隊伍是 client 的任務選項 `ExpTeam`、`ThreadTeam`，一個下拉選單，選項是設定視窗裡的隊伍（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#780）。
+- `verify` 與 Agent 的範圍相同：次數 `^[1-9][0-9]*$`，戰敗重打 `^(0|[1-9][0-9]*)$`，`ChargeCount` `^([0-9]|10)$`。MXU 只把不符的欄位標紅、照樣送出，所以 `ChargeCount` 填 11 時，任務在入口記 `ChargeCount (count): 11 is greater than the maximum of 10` 並走停止程序。（#781）
+- 狂氣換腦啡肽不讀設定檔：設定檔讀不到時照常跑，和沒有自己選項的日常任務一樣。經驗本與紐本要讀 `teams`（選的隊伍要在裡面），讀不到就走停止程序。（#781、#780）
+- 價格怎麼核對：[spec 03 第 16 節](03-decisions.md)。
 
-- **送法**：選了隊伍的 case 把隊伍 id 寫進入口節點（`ExpLuxcavation`、`ThreadLuxcavation`）`attach` 的 `team`，不動 `custom_action_param`。`LuxStart` 在任務開始時和其他選項一起讀（`agent/task_options.schema.json`），用那支隊伍的遊戲內隊伍欄位（`game_team`）、出戰順序和 `guard_turns`，隊伍不必啟用；選項那一行寫 `team=<id>`。
-- **檢查**：在點任何東西之前，不符就走停止程序，記一行 `stop: Invalid task options:`：
+### 經驗本與紐本的隊伍：任務選項與隊伍選項檔
+
+經驗本與紐本的隊伍是任務選項 `ExpTeam`、`ThreadTeam`，一個下拉選單，選項是設定視窗裡的隊伍（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#780）。
+
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 隊伍 | `ExpTeam`／`ThreadTeam` | `team` | 選擇，case 由隊伍選項檔提供（見下）：`teams[]` 的 id，用它的遊戲內隊伍欄位（`game_team`）、出戰順序和 `guard_turns`，不必啟用；「未選擇」不送值 | 「未選擇」；MXU 上第一次產生的檔案用設定檔原本選的隊伍 | #366、#780 |
+
+- **檢查**：`LuxStart` 在任務開始時和其他選項一起讀，點任何東西之前不符就走停止程序，記一行 `stop: Invalid task options:`：
   - 沒送值（選了「未選擇」，或選單是空的）：`ExpTeam (team): no team picked; pick one in the options of the ExpLuxcavation task in the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)`。
   - 送來的 id 不在設定檔的 `teams` 裡（隊伍已刪除）：`ExpTeam (team): team '<id>' was deleted in the settings GUI; pick another in the options of the ExpLuxcavation task in the client's task list`。紐本相同，選項是 `ThreadTeam`。
   - GUI 看不到 client 選的隊伍，存檔時不檢查。
 - **佔位定義**：`interface.json` 的 `ExpTeam`、`ThreadTeam` 有標題和說明（說明寫「先在設定視窗建立隊伍，存檔後重開 client」），`cases` 是空的。頂層的 `import` 引入 `config/team_options.json`。檔案不存在時兩個 client 都只記一行警告、照常載入，下拉選單是空的，任務什麼都不送。
 - **隊伍選項檔** `config/team_options.json`：設定視窗寫（`gui/src/teamOptions.ts`）。兩個選項各一份完整定義，和佔位定義相同，只換 `cases` 與 `default_case`：MXU 的引入是整個選項取代，MFAAvalonia 只換 `cases`。
-  - 第 0 個 case 是「未選擇」（名稱 `none`，標籤 `$ExpTeam_none`／`$ThreadTeam_none`），不送值。
+  - 第 0 個 case 是「未選擇」（名稱 `none`，標籤 `$LuxTeam_none`），不送值。
   - 之後每支隊伍一個 case：名稱是隊伍 id，標籤是隊伍名稱加 `TEAMS #N`（`隊伍 A（TEAMS #3）`，英文介面 `Team A (TEAMS #3)`），override 寫 `team: <id>`。
-  - **只往後加**：MFAAvalonia 存的是 case 的索引，MXU 存名稱，插入、重排或刪除會讓選好的值悄悄變成別隊或「未選擇」。新隊伍加在最後；順序是這個檔原本的順序，不跟隊伍佇列走（Agent 每次領獎都改佇列，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。刪掉的隊伍保留它的 case，標籤後面加「（已刪除）」（英文 ` (deleted)`），override 仍送它的 id，Agent 就停下。改名、改 `TEAMS #N` 只改標籤。
+  - **只往後加**：MFAAvalonia 存的是 case 的索引，MXU 存名稱，插入、重排或刪除會讓選好的值悄悄變成別隊或「未選擇」。新隊伍加在最後；順序是這個檔原本的順序，不跟隊伍佇列走（Agent 每次領獎都改佇列，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。刪掉的隊伍保留它的 case，標籤後面加「（已刪除）」（英文 ` (deleted)`），override 仍送它的 id，Agent 就停下。改名、改 `TEAMS #N` 只改標籤。標籤用設定視窗當下的語言。
   - 第一次產生時（檔案不存在，或讀不懂），`default_case` 是設定檔裡那個任務的 `luxcavation.<task>.team`，它不在 `teams` 裡或沒選就是「未選擇」；之後沿用檔案裡的。MXU 對還沒存過值的任務用 `default_case`；MFAAvalonia 的任務選項一律從第 0 個 case 開始，停在「未選擇」。
   - 存檔成功後與啟動時（設定檔通過檢查時）產生，內容有變才寫，寫法和設定檔一樣：先寫暫存檔再改名（`save_team_options`）。沒有檔案也沒有隊伍時不寫。內容變了，狀態列說一次：「隊伍清單已更新：重新開啟 MXU／MFAAvalonia 後，任務選項的隊伍下拉選單才會更新。」存檔時是「已儲存。」接著這句。
   - 不做重新整理按鈕：兩個 client 執行中都不重讀 `interface.json`，改了隊伍要重開 client。
-- `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔，`bot.py run --option ExpTeam=<隊伍 id>` 從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
+- `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔（來源沒有就刪掉目的地的），`bot.py run --option ExpTeam=<隊伍 id>` 從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
 
-### 狂氣換腦啡肽（`charge_enkephalin`）
+### 設定檔的 `luxcavation` 與 `charge_enkephalin`
 
-PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy（先扣免費的，再扣付費的），所以預設不做。（#373）
-
-| 欄位 | 鍵 | 類型 | 值 | 來源 |
-|---|---|---|---|---|
-| 次數 | `count` | 整數 0–10 | 當天的目標 Daily Count：畫面上的 Daily Count（手動換的也算）已到就不換，否則換到 Daily Count = `count`；讀不到就不換（[spec 03 第 16 節](03-decisions.md)）。預設 0，0 時任務一開始就成功結束，不開視窗、不碰 Use Lunacy 頁。遊戲一天最多 10 次（`chance` 9999） | #373、#429 |
-
-- 版本 11 遷移到 12 時加上 `{"count": 0}`。（#373）
-- 價格怎麼核對：[spec 03 第 16 節](03-decisions.md)。
+- 設定檔 `luxcavation` 的 `mode`、`count`、`team`、`retries`、`consecutive` 與 `charge_enkephalin.count`，Agent 不再讀，改讀上面的任務選項；GUI 不顯示它們、原封不動寫回，版本 21 移除（#780、#781、#782）。設定視窗第一次產生隊伍選項檔時，用 `luxcavation.<task>.team` 當 `default_case`。
+- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3，以及 `charge_enkephalin` `{"count": 0}`。（#366、#368、#373）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
+- 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 
 ## 13. 其他檔案
 

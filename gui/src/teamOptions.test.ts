@@ -6,7 +6,7 @@ import cases from "../../tests/settings_cases.json";
 import fixture from "../../tests/team_options.json";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import { newSettings, newTeam, type Settings, type Team } from "./model";
-import { NONE, PI, TEAM_OPTIONS, teamOptionsText } from "./teamOptions";
+import { NONE, NONE_LABEL, PI, TEAM_OPTIONS, teamOptionsText } from "./teamOptions";
 
 const team = (id: string, name: string, slot: number): Team => ({ ...newTeam(slot, name), id });
 const A = team("a", "Alpha", 1), B = team("b", "Beta", 2), C = team("c", "Gamma", 3);
@@ -78,7 +78,7 @@ test("a file that does not read as one the GUI wrote starts over", () => {
 test("case 0 is 「未選擇」, which sends nothing, named by a text key of interface.json's languages", () => {
   const text = teamOptionsText(null, settings([A]))!;
   for (const key of Object.keys(TEAM_OPTIONS) as (keyof typeof TEAM_OPTIONS)[]) {
-    expect(option(text, key).cases[0]).toEqual({ name: NONE, label: `$${key}_none` });
+    expect(option(text, key).cases[0]).toEqual({ name: NONE, label: NONE_LABEL });
   }
 });
 
