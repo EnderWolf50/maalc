@@ -12,8 +12,9 @@ task list, and runs them in turn (#364). It exits 0 when every task succeeded. S
 (`tools/live/queue.py detach`), as the maalc-live-test skill says.
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
-from `--source` (default the main checkout's install/) into DIR; the bot's first start migrates the old state files
-into the team queue and removes `state/` (#501). Then it sets each dotted KEY to VALUE (JSON, else a string):
+from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
+into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to VALUE
+(JSON, else a string):
 `--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`; a list's item goes by its id,
 `--set teams.t3.heal=revive`. A key it cannot set stops it before DIR is touched. DIR comes from `tools/install.py`
 (a worktree's install/) or a copy of one under `.local/scratch/<task>/`.
