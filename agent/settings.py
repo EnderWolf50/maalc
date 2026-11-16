@@ -1,6 +1,7 @@
 """Read <root>/config/settings.json and check it (docs/spec/04-settings.md section 2).
 
-An older version is migrated in memory only, one older than OLDEST_VERSION refused. The one write the agent makes is the order of `teams` (team_queue.py).
+An older version is migrated in memory only, one older than OLDEST_VERSION refused. The one write the agent makes is the team
+queue (team_queue.py).
 """
 
 import json
@@ -18,15 +19,25 @@ CURRENT_VERSION = SCHEMA["properties"]["version"]["const"]
 OLDEST_VERSION = 20
 # Version 21's: the sections whose 25 values the client's task and global options hold since #779, #780 and #781 (#782).
 MOVED = ("run", "luxcavation", "charge_enkephalin")
+
+
+def _queue_in_list_order(data):
+    """21 -> 22 (#803): team_queue, the order of teams so far. A teams list broken by hand gives what ids it has: the schema
+    check names what is wrong."""
+    teams = data.get("teams")
+    ids = [t["id"] for t in teams if isinstance(t, dict) and "id" in t] if isinstance(teams, list) else []
+    return {**data, "team_queue": ids}
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
 # gui/src/model.ts.
-MIGRATIONS = {20: lambda data: {k: v for k, v in data.items() if k not in MOVED}}
+MIGRATIONS = {20: lambda data: {k: v for k, v in data.items() if k not in MOVED}, 21: _queue_in_list_order}
 # NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is still at version n, until the GUI writes it
 # back: what its migration took away and where it went.
 NOTES = {
     20: "settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task "
-        "and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists the values "
-        "to set in the client",
+        f"and global options now (#782); open the settings GUI once: it writes the file as version {CURRENT_VERSION} and "
+        "lists the values to set in the client",
 }
 
 
@@ -224,6 +235,11 @@ def cross_check(data):
         dupes(key, [p["name"] for p in data[key]], "name")
     teams = data["teams"]
     dupes("teams", [t["id"] for t in teams], "id")
+    # the team queue (#803): each team's id once, in any order
+    queue, ids = data["team_queue"], {t["id"] for t in teams}
+    dupes("team_queue", queue, "id")
+    errors.extend(f"team_queue: id {i!r} names no team" for i in dict.fromkeys(queue) if i not in ids)
+    errors.extend(f"team_queue: team {t['name']!r} (id {t['id']!r}) is missing" for t in teams if t["id"] not in queue)
 
     enabled = [t for t in teams if t["enabled"]]
     for slot, n in Counter(t["game_team"] for t in enabled).items():

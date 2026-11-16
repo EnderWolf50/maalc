@@ -21,7 +21,8 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     patch_all(monkeypatch, "ROOT", tmp_path)
     teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
     (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "settings.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
+    (tmp_path / "config" / "settings.json").write_text(json.dumps({"version": 22, "teams": teams, "team_queue": ["a", "b"]}),
+                                                       encoding="utf-8")
     actions.RUN.update(settings={"teams": teams}, team=teams[0], planned=True, difficulty="hard")
     taps = []
 
@@ -36,7 +37,7 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
 
     settle_actions.Settle().run(context, None)
     assert taps == [settle_actions.GIVE_UP, actions.DIALOG_CONFIRM]
-    assert [t["id"] for t in json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["teams"]] == ["a", "b"]
+    assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["team_queue"] == ["a", "b"]
     line = json.loads((tmp_path / "logs" / "runs.jsonl").read_text(encoding="utf-8"))
     assert line["result"] == "giveup" and line["team"] == "a"
 

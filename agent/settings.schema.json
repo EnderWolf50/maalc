@@ -13,11 +13,12 @@
     "theme_pack_plans",
     "gift_lists",
     "teams",
+    "team_queue",
     "event_overrides",
     "trial_risk_overrides"
   ],
   "properties": {
-    "version": { "const": 21 },
+    "version": { "const": 22 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "deployment_order_plans": {
       "type": "array",
@@ -87,7 +88,7 @@
     },
     "teams": {
       "type": "array",
-      "description": "Order is rotation order.",
+      "description": "Order is the team list's, for display only; team_queue is the rotation order.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -253,6 +254,12 @@
           }
         }
       }
+    },
+    "team_queue": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" },
+      "default": [],
+      "description": "The team queue: the rotation order, each teams[] id once (agent/settings.py cross_check; ADR 0014)."
     },
     "event_overrides": {
       "type": "array",

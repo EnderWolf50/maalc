@@ -229,12 +229,13 @@ def test_an_interrupted_run_does_not_reach_another_task(context, monkeypatch):
 ENTRY_OPTIONS = ("MirrorRunsLimit=No", "MirrorAfterRetries=stop", "WebhookUrl=http://hook.invalid/")
 
 
-def entry_page(context, *options, teams=lambda teams: None):
-    """settings.json under the agent's ROOT (settings_cases' valid file, its teams edited), MirrorDungeon started on it
-    with ENTRY_OPTIONS and options (NAME=VALUE) as a client sends them; the entry page reads no weekly bonus; GoHome
-    ends on the main window."""
+def entry_page(context, *options, teams=lambda teams: None, settings=lambda data: None):
+    """settings.json under the agent's ROOT (settings_cases' valid file, its teams edited, then the whole file),
+    MirrorDungeon started on it with ENTRY_OPTIONS and options (NAME=VALUE) as a client sends them; the entry page reads no
+    weekly bonus; GoHome ends on the main window."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     teams(data["teams"])
+    settings(data)
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     send(context, "MirrorDungeon", *ENTRY_OPTIONS, *options)

@@ -54,7 +54,7 @@ def custom_skills():
 
 
 VALID = {
-    "version": 21,
+    "version": 22,
     "language": "zh_tw",
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -65,6 +65,7 @@ VALID = {
         team("a", 1, deployment_order={"plan": "d1"}, starlight={"plan": "s1"}, theme_pack_plan="p1", gift_list="g1"),
         team("b", 2, skill_replacement=custom_skills()),
     ],
+    "team_queue": ["a", "b"],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
 }
@@ -171,7 +172,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 22})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": settings.CURRENT_VERSION + 1})[0]
 
 
 def test_skill_swaps_are_game_data_the_gui_shares():
@@ -199,18 +200,24 @@ def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
 
 
 V20_NOTE = ("settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's "
-            "task and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists "
+            "task and global options now (#782); open the settings GUI once: it writes the file as version 22 and lists "
             "the values to set in the client")
 
 
+def before_queue(version, edits=()):
+    """settings_cases' valid file at an older version, without the team_queue version 22 added (#803), these edits made;
+    version 20's with the three sections version 21 dropped (#782)."""
+    old = {k: v for k, v in CASES["valid"].items() if k != "team_queue"}
+    return apply_edits({**old, "version": version, **(CASES["v20"] if version == 20 else {})}, list(edits))
+
+
 def v20(edits=()):
-    """settings_cases' valid file at version 20 with the three sections version 21 dropped (#782), these edits made."""
-    return apply_edits({**CASES["valid"], "version": 20, **CASES["v20"]}, list(edits))
+    return before_queue(20, edits)
 
 
-def test_a_version_20_file_is_read_as_version_21_in_memory_and_says_where_its_values_went(tmp_path):
+def test_a_version_20_file_is_read_as_the_current_version_in_memory_and_says_where_its_values_went(tmp_path):
     # #782: the three sections go, the file on disk stays as it was, and a task's start logs the line (TaskStart) until
-    # the GUI writes the file back.
+    # the GUI writes the file back. #803: on to version 22 in the same read, the queue in the order of teams.
     old = v20()
     notes = []
     got = load(tmp_path, old, notes=notes)
@@ -219,9 +226,11 @@ def test_a_version_20_file_is_read_as_version_21_in_memory_and_says_where_its_va
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 
 
-def test_a_version_21_file_says_nothing(tmp_path):
+@pytest.mark.parametrize("version", [22, 21])
+def test_a_version_21_or_22_file_says_nothing(tmp_path, version):
+    # #803: 21 -> 22 takes no value away, so it has no line
     notes = []
-    load(tmp_path, VALID, notes=notes)
+    load(tmp_path, VALID if version == 22 else before_queue(21), notes=notes)
     assert notes == []
 
 
@@ -262,7 +271,7 @@ def test_cross_checks(tmp_path, fn, expected):
     assert any(expected in e for e in errors(tmp_path, edited(fn)))
 
 
-@pytest.mark.parametrize("fn", [lambda d: [t.update(enabled=False) for t in d["teams"]], lambda d: d.update(teams=[])])
+@pytest.mark.parametrize("fn", [lambda d: [t.update(enabled=False) for t in d["teams"]], lambda d: d.update(teams=[], team_queue=[])])
 def test_only_the_mirror_dungeon_wants_an_enabled_team(tmp_path, fn):
     # #364: a file with no enabled team loads (the dailies need none); MirrorDungeon asks with need_team.
     data = edited(fn)
@@ -276,6 +285,7 @@ def test_cross_check_allows_what_the_spec_allows(tmp_path):
     def fn(d):
         d["teams"][1].update(game_team=1, enabled=False)  # disabled teams may share a slot
         d["teams"].append(team("c", 3, name="Team a"))  # team names are not checked
+        d["team_queue"] = ["c", "b", "a"]  # the queue in an order of its own
         d["theme_pack_plans"][0]["weights"] = {}  # empty plan = every pack unlisted
         d["starlight_plans"].append({**d["starlight_plans"][0], "id": "s2", "name": "Bleed order"})  # names per kind
         d["gift_lists"].append({**d["gift_lists"][0], "id": "g2", "name": "Cheap", "want": [1, 2, 3], "gorder": {}})  # ids are not looked up
@@ -334,6 +344,16 @@ def test_shared_v20_migration(tmp_path, case):
     migrates the same cases to the same file (gui/src/validate.test.ts)."""
     loaded = load(tmp_path, v20(case["edits"]))
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
+
+
+@pytest.mark.parametrize("case", CASES["migrate_v21"], ids=lambda c: c["name"])
+def test_shared_v21_migration(tmp_path, case):
+    """#803: a version 21 file reads as version 22 with team_queue, the queue in the order of teams; the file on disk stays
+    as it was. The GUI migrates the same cases to the same file (gui/src/validate.test.ts)."""
+    old = before_queue(21, case["edits"])
+    loaded = load(tmp_path, old)
+    assert {**loaded, "gift_lists": None} == {**old, "version": 22, "team_queue": case["team_queue"], "gift_lists": None}
+    assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 
 
 @pytest.mark.parametrize("case", CASES["too_old"], ids=lambda c: str(c["version"]))
