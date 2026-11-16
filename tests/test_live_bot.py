@@ -196,17 +196,19 @@ def test_plan_posts_every_task_of_the_interface_with_the_global_options_and_its_
     assert ", ExpTeam=(no case) (default), " in lines[1 + tasks.index("ExpLuxcavation")]
 
 
-def test_run_option_picks_a_team_of_the_team_options_file_the_install_has(tmp_path):
-    # #780: --option ExpTeam=<team id> sends the case of that team, which writes its id into the entry's attach
+@pytest.mark.parametrize("task, option, key", [("ExpLuxcavation", "ExpTeam", "team"),
+                                               ("MirrorDungeon", "MirrorStartTeam", "start_team")])
+def test_run_option_picks_a_team_of_the_team_options_file_the_install_has(tmp_path, task, option, key):
+    # #780, #805: --option <option>=<team id> sends the case of that team, which writes its id into the entry's attach
     shutil.copy(REPO / "assets/interface.json", tmp_path / "interface.json")
     (tmp_path / "config").mkdir()
     shutil.copy(TEAM_OPTIONS, tmp_path / "config/team_options.json")
     lines = []
-    ((_, entry, array),) = bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=b"], lines.append)
-    assert entry == "ExpLuxcavation" and {"ExpLuxcavation": {"attach": {"team": "b"}}} in array
-    assert ", ExpTeam=b, " in lines[0]
-    with pytest.raises(SystemExit, match="ExpTeam has no case t9"):
-        bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=t9"], lines.append)
+    ((_, entry, array),) = bot.plan(tmp_path, [task], [f"{option}=b"], lines.append)
+    assert entry == task and {task: {"attach": {key: "b"}}} in array
+    assert f", {option}=b" in lines[0]
+    with pytest.raises(SystemExit, match=f"{option} has no case t9"):
+        bot.plan(tmp_path, [task], [f"{option}=t9"], lines.append)
 
 
 @pytest.mark.parametrize("tasks, option, says", [

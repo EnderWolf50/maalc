@@ -21,7 +21,7 @@ from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, T
                      text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
-from team_queue import pick_team
+from team_queue import pick_team, to_head
 
 
 WEEKLY_SLOTS = (922, 960, 998)  # x of the 3 Weekly Bonuses slots on the entry page, y 285-297
@@ -57,9 +57,15 @@ class PlanRun(CustomAction):
     Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
     the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False), and
     so do settings that forfeit run after run (the stop procedure, settlement.forfeits_stop).
+
+    The task's first new run moves its start team (the client's MirrorStartTeam, TaskStart) to the head of the queue
+    before anything is read (team_queue.to_head, #805); a start team whose usage does not fit the run is passed over as
+    the queue passes over any team, and the log says so.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        if start := TASK.pop("start_team", None):
+            log(to_head(ROOT, start))
         try:
             settings = load_settings(ROOT)
             run = options()
@@ -82,6 +88,11 @@ class PlanRun(CustomAction):
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
         team = pick_team(settings, difficulty)
+        passed = next((t for t in settings["teams"] if t["id"] == start), None) if start else None
+        if passed and (team is None or team["id"] != start):  # a team deleted since the start: to_head said so
+            why = passed["usage"] if passed["enabled"] else "disabled"
+            log(f"start team {passed['name']!r} (MirrorStartTeam) is {why}: a {difficulty} run passes over it, and it "
+                "keeps its place in the team queue")
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:

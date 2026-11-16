@@ -1,8 +1,8 @@
 """assets/interface.json's task and global options against what the agent reads (#776, #779, ADR 0013): every value a
 client can send passes the agent's option schema (agent/task_options.schema.json), and every key the agent needs has an
 option that sends it. Each value goes through tools/client_override.py, the override builder that follows MXU v2.7.1.
-ExpTeam's and ThreadTeam's cases are those of the team options file the settings GUI writes (#780): tests/team_options.json
-in place of the file interface.json imports (client_options)."""
+ExpTeam's, ThreadTeam's and MirrorStartTeam's cases are those of the team options file the settings GUI writes (#780,
+#805): tests/team_options.json in place of the file interface.json imports (client_options)."""
 
 import itertools
 import json
@@ -19,7 +19,8 @@ from test_settings import CASES as SETTINGS_CASES, v20
 
 PI = client_interface()
 BARE = client_interface(teams=None)  # what a client loads before the settings GUI wrote the team options file
-TEAM_KEYS = tuple(TEAM_PICK.values())  # the team options: their cases come from that file
+TEAM_KEYS = tuple(TEAM_PICK.values())  # the Luxcavation tasks' team options
+FILE_KEYS = (*TEAM_KEYS, "MirrorStartTeam")  # the options whose cases come from that file, one per team
 OPTIONS = PI["option"]
 TASKS = {t["name"]: t for t in PI["task"]}
 SCHEMA = task_options.SCHEMA["$defs"]
@@ -80,8 +81,11 @@ def test_every_case_and_default_of_every_option_passes_the_agents_schema(task, k
 
 @pytest.mark.parametrize("task", TASKS)
 def test_every_combination_of_the_cases_passes_the_agents_schema(task):
-    # the selects and switches of a task together (MirrorDungeon: 3 * 3 * 2 * 3 * 3 * 2 * 2 * 2 * 2 cases, 2592)
-    chosen = [k for k in task_keys(task) if client_override.kind(OPTIONS[k]) in CHOSEN]
+    # the selects and switches of a task together (MirrorDungeon: 3 * 3 * 2 * 3 * 3 * 2 * 2 * 2 * 2 cases, 2592). Not
+    # the options of the team options file: a team's case writes only its own key, and each one passes on its own
+    # (test_every_case_and_default_of_every_option_passes_the_agents_schema); the product would multiply the rest by
+    # the teams.
+    chosen = [k for k in task_keys(task) if client_override.kind(OPTIONS[k]) in CHOSEN and k not in FILE_KEYS]
     for combo in itertools.product(*[[f"{k}={v}" for v in values(k)] for k in chosen]):
         assert errors(task, *combo) == [], combo
 
@@ -224,6 +228,21 @@ def test_a_team_option_is_a_placeholder_the_team_options_file_fills_with_its_cas
     assert errors(next(t for t in TASKS if key in TASKS[t].get("option", [])), f"{key}=none") == []
 
 
+def test_the_start_team_is_a_placeholder_holding_follow_the_queue_the_team_options_file_fills_with_the_teams():
+    # #805: before the settings GUI wrote the file the dropdown has only 「照隊伍佇列」, which sends nothing and is the
+    # default in both clients (case 0, default_case); the file adds a case per team, which sends its id as start_team
+    placeholder, filled = BARE["option"]["MirrorStartTeam"], OPTIONS["MirrorStartTeam"]
+    queue = {"name": "queue", "label": "$MirrorStartTeam_queue"}
+    assert placeholder["cases"] == [queue] and placeholder["default_case"] == "queue"
+    assert {k: v for k, v in filled.items() if k != "cases"} == {k: v for k, v in placeholder.items() if k != "cases"}
+    assert filled["cases"][0] == queue and filled["default_case"] == "queue"
+    assert {c["name"]: c["pipeline_override"] for c in filled["cases"][1:]} == {
+        i: {"MirrorDungeon": {"attach": {"start_team": i}}} for i in ("a", "b", "gone")}
+    for pi in (PI, BARE):
+        nodes = attach(client_override.build(pi, "MirrorDungeon", {})[1])
+        assert "start_team" not in nodes["MirrorDungeon"]
+
+
 def test_interface_json_imports_the_team_options_file_from_the_config_folder(tmp_path):
     # #780: a client reads interface.json's imports from its folder; the settings GUI writes config/team_options.json
     # (gui/src/teamOptions.test.ts checks the GUI's path), which install.py and both clients' updates leave alone
@@ -232,7 +251,7 @@ def test_interface_json_imports_the_team_options_file_from_the_config_folder(tmp
     (tmp_path / "config").mkdir()
     shutil.copy(TEAM_OPTIONS, tmp_path / "config" / "team_options.json")
     loaded = client_override.load_interface(tmp_path / "interface.json")
-    assert {k: loaded["option"][k] for k in TEAM_KEYS} == {k: OPTIONS[k] for k in TEAM_KEYS}
+    assert {k: loaded["option"][k] for k in FILE_KEYS} == {k: OPTIONS[k] for k in FILE_KEYS}
 
 
 def test_global_options_is_a_node_no_next_names():
