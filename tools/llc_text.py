@@ -7,9 +7,11 @@ Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusC
 `mirror_dungeon_5_buffs_title_<id>`; effects: the `DungeonStartBuffs_MD7.json` templates filled with the effect values of
 `.local/unpack/` static data mirrordungeon-start-buffs-08, each line as runs that say which text the game prints yellow; the
 English effects the same from the client's `EN_DungeonStartBuffs_MD7.json`). It writes gui/src/gift_effects.json too: the effect text of each
-gift of gift_search.json, English from the client's `EN_EGOgift_*.json` and Chinese from `LLC_zh-CN/EGOgift_*.json` (`desc`),
-a keyword tag named by the `Bufs*.json` and `BattleKeywords*.json` of each. Simplified to Traditional with OpenCC s2twp. Fails
-on a gift or grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
+gift the settings GUI shows (catalog_ids), English from the client's `EN_EGOgift_*.json` and Chinese from
+`LLC_zh-CN/EGOgift_*.json` (`desc`), as runs that keep the game's markup (effect_runs: a keyword tag, flavour text), and the
+keywords they name: their names in the `Bufs*.json` and `BattleKeywords*.json` of each, their colour and icon from the client's
+static buff data (#764; tools/buf_icons.py draws the icons). Simplified to Traditional with OpenCC s2twp. Fails on a gift or
+grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
 """
 
 import argparse
@@ -30,10 +32,19 @@ EFFECTS = REPO / "gui/src/gift_effects.json"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
+BUFFS = "static/Assets/Resources_moved/StaticData/static-data/buff"  # the client's buff records, under .local/unpack/
 _S2TWP = opencc.OpenCC("s2twp")
 FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉"}  # where s2twp's Taiwan wording is wrong for the game text
 YELLOW = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
 BLUE = "#627eff"  # the game's blue of a keyword in a grace's effect text; the GUI shows it plain
+# The colours of a gift's effect text by their names in the game's ColorCode table (static data ui/ColorCode.json, client
+# 1.118.1): a keyword in its buff's buffType colour, flavour text in Neutral. The GUI keeps a shade of each for its themes.
+COLOURS = {YELLOW: "Positive", "#e30000": "Negative", "#a16a3b": "Neutral"}
+# TextMeshPro's rich text tags: any other <word> in a text (<Bloodfiend>) is printed as written, as the game does.
+TMP_TAGS = {"align", "allcaps", "alpha", "b", "br", "color", "cspace", "font", "font-weight", "gradient", "i", "indent",
+            "line-height", "line-indent", "link", "lowercase", "margin", "mark", "mspace", "nobr", "noparse", "page", "pos",
+            "rotate", "s", "size", "smallcaps", "space", "sprite", "strikethrough", "style", "sub", "sup", "u", "uppercase",
+            "voffset", "width"}
 
 
 def to_traditional(text):
@@ -57,11 +68,16 @@ def note_graces(client):
 
 
 def note_effects(client):
-    return ("The effect text of each gift of gift_search.json, as the settings GUI shows it. English: the game client "
-            f"{client}'s EN_EGOgift_*.json desc; Chinese: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json desc "
-            "(Simplified Chinese), by gift id. A [tag] that names a keyword (Bufs*.json, BattleKeywords*.json of each) is replaced "
-            "by its name, other bracketed notes stay, markup is dropped. The Chinese converted with OpenCC s2twp, then "
-            + FIXES_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.")
+    return ("The effect text of each gift the settings GUI shows (gift_search.json's, then gift_recipes.json's fusion gifts, "
+            f"materials, extra gifts and vestiges), as the game's gift panel prints it. English: the game client {client}'s "
+            "EN_EGOgift_*.json desc; Chinese: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json desc (Simplified "
+            "Chinese), by gift id. Each text is a list of runs: a string is plain text; {\"kw\": id} a [tag] that names a keyword, "
+            "drawn as its icon and its name in its colour; {\"text\", \"i\", \"colour\"} italic or coloured text (flavour text). "
+            "keywords: each keyword the texts name: its name in each language (Bufs*.json, BattleKeywords*.json of each), its "
+            "colour as the client's ColorCode table names it (its buff's buffType in the static data buff/*.json) and its icon "
+            "(gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). A bracketed note that names no keyword stays as written. The "
+            "Chinese converted with OpenCC s2twp run by run, then " + FIXES_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see "
+            "NOTICE.md). Written by tools/llc_text.py.")
 
 
 def current_release():
@@ -105,11 +121,62 @@ def keyword_names(z):
     return names
 
 
-def effect_text(text, names):
-    """A gift's effect text as the GUI shows it: markup (`<noparse>`, colours) dropped, a `[tag]` that names a keyword replaced
-    by the keyword's name (`[Combustion]` -> Burn); a bracketed note that names none (`[Cannot Stack]`) stays as it is."""
-    text = re.sub(r"<[^>]+>", "", text)
-    return re.sub(r"\[([^\]]+)\]", lambda m: names.get(m[1], m[0]), text).strip()
+def effect_runs(text, names, convert=lambda t: t):
+    """A gift's effect text as runs: a plain run is a string, a `[tag]` that names a keyword of `names` (id -> name) is
+    {"kw": id}; a bracketed note that names none (`[Cannot Stack]`) stays in the text as the game prints it. Text in `<i>` or
+    a `<color=...>` is {"text", "i": True, "colour": <the colour's name in the game's ColorCode table, COLOURS>}, each key
+    only when it holds (a gift's flavour text). `<noparse>` text is printed as written, and so is a `<word>` TextMeshPro has
+    no tag for (`<Bloodfiend>`); any other tag is an error, since the GUI would not draw it. Each run's text goes through
+    `convert` on its own (LLC's Simplified to Traditional), and with the keywords' names converted the same way the text
+    must read as the whole text converted at once."""
+    runs = _runs(text, names)
+    out = [r if "kw" in r else convert(r) if isinstance(r, str) else {**r, "text": convert(r["text"])} for r in runs]
+    def shown(rs, name):
+        return "".join(r if isinstance(r, str) else name(r["kw"]) if "kw" in r else r["text"] for r in rs)
+    whole = convert(shown(runs, names.get))
+    if shown(out, lambda k: convert(names[k])) != whole:
+        raise ValueError(f"converted run by run, the text reads otherwise than whole: {whole}")
+    return out
+
+
+def _runs(text, names):
+    """effect_runs before conversion."""
+    runs, italic, colours = [], 0, []
+
+    def add(piece):
+        style = {k: v for k, v in (("i", italic > 0), ("colour", colours[-1] if colours else None)) if v}
+        last = runs[-1] if runs else None
+        if not style:
+            if isinstance(last, str):
+                runs[-1] += piece
+            else:
+                runs.append(piece)
+        elif isinstance(last, dict) and "text" in last and {k: v for k, v in last.items() if k != "text"} == style:
+            last["text"] += piece
+        else:
+            runs.append({"text": piece, **style})
+
+    # TextMeshPro reads its tags in any case: each is matched lower-cased
+    for piece in re.split(r"(<noparse>.*?</noparse>|<[^>]+>|\[[^\]<]+\])", text, flags=re.S | re.I):
+        low = piece.lower() if piece.startswith("<") else ""
+        tag = re.match(r"</?([a-z-]+)\b", low)
+        if low.startswith("<noparse>"):
+            add(piece[len("<noparse>"):-len("</noparse>")])
+        elif low == "<i>":
+            italic += 1
+        elif low == "</i>" and italic:
+            italic -= 1
+        elif low.startswith("<color=") and low[len("<color="):-1] in COLOURS:
+            colours.append(COLOURS[low[len("<color="):-1]])
+        elif low == "</color>" and colours:
+            colours.pop()
+        elif tag and tag[1] in TMP_TAGS:  # a new mark, or a closing tag with nothing open
+            raise ValueError(f"markup the GUI does not draw: {piece} in {text}")
+        elif piece.startswith("[") and piece[1:-1] in names:
+            runs.append({"kw": piece[1:-1]})
+        elif piece:
+            add(piece)
+    return runs
 
 
 def _en_list(unpack, pattern):
@@ -127,8 +194,37 @@ def en_keyword_names(unpack):
     return {k: x["name"] for p in ("EN_Bufs*.json", "EN_BattleKeywords*.json") for k, x in _en_list(unpack, p).items() if x.get("name")}
 
 
+def buff_records(unpack):
+    """buff id -> its record in the client's static data `buff/*.json` (its buffType and iconId); the first file (sorted)
+    that lists the id."""
+    out = {}
+    for f in sorted((unpack / BUFFS).glob("*.json")):
+        for x in json.loads(f.read_text(encoding="utf-8-sig")).get("list", []):
+            out.setdefault(x["id"], x)
+    return out
+
+
+def keyword_entry(buff, en, zh):
+    """A keyword as gift_effects.json gives it: the ColorCode name of its buff's buffType (the colour the game prints its name
+    in), its icon (the buff's iconId, else its id: the sprite Assets/Resources_moved/Buf/<icon>.png, tools/buf_icons.py) and
+    its name in each language."""
+    if buff["buffType"] not in COLOURS.values():
+        raise ValueError(f"buff {buff['id']}: buffType {buff['buffType']} is none of the game's keyword colours {sorted(COLOURS.values())}")
+    return {"colour": buff["buffType"], "icon": buff.get("iconId") or buff["id"], "en": en, "zh": zh}
+
+
+def catalog_ids():
+    """Every gift the settings GUI shows, in its catalog's order (gui/src/giftCatalog.ts CATALOG): gift_search.json's, then
+    gift_recipes.json's fusion gifts, materials, extra gifts and vestiges."""
+    recipes = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
+    return [g["id"] for g in json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]] + [
+        g["id"] for k in ("gifts", "materials", "extra_gifts", "vestiges") for g in recipes[k]]
+
+
 def gift_effects(z, unpack, ids):
-    """str(gift id) -> {"en", "zh"}: the effect text of each gift, in the order of `ids`."""
+    """(keywords, effects): effects str(gift id) -> {"en", "zh"}, each gift's effect text as runs (effect_runs), in the order
+    of `ids`; keywords keyword id -> keyword_entry, every keyword the effects name, by id. A keyword that names no buff of the
+    static data stops the tool: the GUI would have no colour and no icon for it."""
     en = _en_list(unpack, "EN_EGOgift_*.json")
     en_names = en_keyword_names(unpack)
     zh = {}
@@ -136,14 +232,23 @@ def gift_effects(z, unpack, ids):
         for x in read(z, f):
             zh.setdefault(x["id"], x)
     zh_names = keyword_names(z)
-    return {str(i): {"en": effect_text(en[i]["desc"], en_names), "zh": to_traditional(effect_text(zh[i]["desc"], zh_names))} for i in ids}
+    effects = {str(i): {"en": effect_runs(en[i]["desc"].strip(), en_names),
+                        "zh": effect_runs(zh[i]["desc"].strip(), zh_names, to_traditional)} for i in ids}
+    used = sorted({r["kw"] for e in effects.values() for runs in e.values() for r in runs if isinstance(r, dict) and "kw" in r})
+    buffs = buff_records(unpack)
+    missing = [k for k in used if k not in buffs or k not in en_names or k not in zh_names]
+    if missing:
+        raise ValueError(f"keywords with no buff record or no name in a language: {missing}")
+    return {k: keyword_entry(buffs[k], en_names[k], to_traditional(zh_names[k])) for k in used}, effects
 
 
 def dump_effects(data):
-    """gift_effects.json's layout: one line per header key and per gift."""
-    head = [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data.items() if k != "effects"]
-    rows = ",\n".join(f"    {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data["effects"].items())
-    return "{\n" + ",\n".join(head) + ',\n  "effects": {\n' + rows + "\n  }\n}\n"
+    """gift_effects.json's layout: one line per header key, per keyword and per gift."""
+    def block(key):
+        rows = ",\n".join(f"    {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data[key].items())
+        return f'  "{key}": {{\n' + rows + "\n  }"
+    head = [f"  {json.dumps(k)}: {json.dumps(v, ensure_ascii=False)}" for k, v in data.items() if k not in ("keywords", "effects")]
+    return "{\n" + ",\n".join(head + [block("keywords"), block("effects")]) + "\n}\n"
 
 
 def needed(value, template):
@@ -284,10 +389,9 @@ def main():
         i = base_ids[g["en"]]
         g["zh"], g["effects"] = zh_titles[i], {"en": en_effects[i], "zh": zh_effects[i]}
     GRACES.write_text(dump_graces(retitled(graces, args.release, note_graces(unpack_client(unpack)))), encoding="utf-8")
-    ids = [g["id"] for g in json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]]
-    effects = gift_effects(z, unpack, ids)
-    EFFECTS.write_text(dump_effects({"note": note_effects(unpack_client(unpack)), **credit(args.release), "effects": effects}),
-                       encoding="utf-8")
+    keywords, effects = gift_effects(z, unpack, catalog_ids())
+    EFFECTS.write_text(dump_effects({"note": note_effects(unpack_client(unpack)), **credit(args.release), "keywords": keywords,
+                                     "effects": effects}), encoding="utf-8")
     print(f"release {args.release}: {len(names)} gift names, {len(zh_titles)} graces, {len(effects)} gift effects")
 
 

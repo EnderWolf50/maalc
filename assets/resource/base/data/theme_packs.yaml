@@ -2,8 +2,9 @@
 # Developer-maintained, replaced every season; users build their own plans in the settings GUI.
 #
 # Source: the Limbus Company client 1.117.0's static data (mirrordungeon-theme-floor, 121 packs; © Project Moon,
-# see NOTICE.md), unpacked 2026-10-18; 1.118.1 (unpacked 2026-11-11) has the same packs and floors. Listed: every pack on a floor of some mode (120; Pilgrimage of Compassion is on
-# none). Names as the data gives them, except one read live:
+# see NOTICE.md), unpacked 2026-10-18; 1.118.1 (unpacked 2026-11-11) has the same packs and floors; 1.119.0 (unpacked
+# 2026-11-16) adds one, 1129 The Wedge in the Wake of Dawnbreak (122 packs). Listed: every pack on a floor of some mode
+# (121; Pilgrimage of Compassion is on none). Names as the data gives them, except one read live:
 # 1119 shows "Walpurgis Night: Hatred and Despair". Each pack maps to its floors: N (NORMAL) and H (HARD) are lists of
 # floor numbers 1-15, I (INFINITY) and X (EXTREME) are true where the pack shows on every floor of that mode ({N: [1, 2],
 # H: [1]} is NORMAL floors 1-2 and HARD floor 1); the agent and the settings GUI take floors 6-10 as INFINITY's and
@@ -106,6 +107,9 @@ packs:
   The Dusk of Amber: {N: [4, 5], H: [4, 5], I: true}
   Twining Threads: {N: [5], H: [5], I: true}
   Mnestic Experience: {N: [5], H: [5], I: true}
+  # The running event's pack (Walpurgis Night 10, 1.119.0): its data has no unlockCondition (unlockcode-subchapter already
+  # holds 9129, likely its code once the event ends); floor 5's leftmost card while the event runs. Its card tops the title with the "Walpurgis Night" art (live 2026-11-13).
+  The Wedge in the Wake of Dawnbreak: {N: [5], H: [5], I: true}
   # Re-run copies of event packs (bokgak in the data): the original's title with a small "BokGak" line under it and
   # their own boss picture (1113 also the Long Battle overlay). Not event packs. A card reads as one by that line
   # (run_start.rerun_copy) or by its own cover.
@@ -236,6 +240,7 @@ pack_ids:
   The Dusk of Amber: 1124
   Twining Threads: 1126
   Mnestic Experience: 1128
+  The Wedge in the Wake of Dawnbreak: 1129
   Miracle in District 20 BokGak: 1113
   Yield My Flesh to Claim Their Bones BokGak: 1116
   Timekilling Time BokGak: 1120
@@ -279,6 +284,7 @@ event_packs:
   - The Dusk of Amber
   - Twining Threads
   - Mnestic Experience
+  - The Wedge in the Wake of Dawnbreak
 
 # What OCR reads off a card whose title art does not spell its pack's name -> that pack (#246). Matched like a name
 # (spec 05 section 2). Read off the 2026-10-22 recordings: S.E.A.'s art says "The Magic Hello Bus" (live reads
@@ -301,7 +307,7 @@ title_art:
 # Experience), b·e (The B.E.), xte (Crushing External Force), unch (The Unchanging). Not taken: compassion
 # (Pilgrimage of Compassion has no NORMAL or HARD floor in 1.117.0) and unknown -5 (unlisted stays 0, #240).
 # No AALC fragment, so unlisted (0): Storefront Campout, An Anarchy of Colors, Creed of Preservation,
-# Readvent of Gluttony.
+# Readvent of Gluttony, The Wedge in the Wake of Dawnbreak (1.119.0; AALC's list had none on 2026-11-16).
 default_plan:
   threshold: 0
   unlisted: 0

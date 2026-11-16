@@ -10,7 +10,8 @@ BASE = Path(__file__).resolve().parent.parent / "assets" / "resource" / "base"
 
 def test_every_searchable_gift_has_its_icon_template():
     gifts = json.loads((BASE / "data" / "gift_search.json").read_text(encoding="utf-8"))["gifts"]
-    assert len(gifts) == 321  # 1.118.1 added 9302 The Measure of Frost
+    # 1.118.1 added 9302 The Measure of Frost; 1.119.0 the six of pack 1129's own pool (9292, 9293, 9297-9300)
+    assert len(gifts) == 327
     missing = [x["id"] for x in gifts if not (BASE / "image" / "GiftSearch" / f"{x['id']}.png").is_file()]
     assert not missing
 

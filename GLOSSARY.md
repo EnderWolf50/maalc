@@ -185,8 +185,12 @@ _Avoid_: 刷新時間、日界
 _Avoid_: 遊戲資源
 
 **遊戲圖像**：
-從遊戲客戶端切出、或照遊戲的排版合成的圖：飾品圖、飾品格底板、體系圖示、罪孽圖示、罪人卡面、主題包縮圖。辨識畫面用的模板圖不算。
+從遊戲客戶端切出、或照遊戲的排版合成的圖：飾品圖、飾品格底板、體系圖示、狀態圖示（效果文字裡狀態詞前的小圖）、罪孽圖示、罪人卡面、主題包縮圖。辨識畫面用的模板圖不算。
 _Avoid_: 遊戲資源（指圖時）
+
+**狀態詞**：
+效果文字裡遊戲用 `[代號]` 標出的狀態，例如 `[Sinking]`、`[Combustion]`；遊戲把它畫成狀態圖示加上名稱，名稱加底線，依狀態是增益、減益或中性上色（#764）。和飾品的體系不同：體系是飾品的分類，狀態詞是效果作用的狀態，名稱可能相同（體系 Burn，狀態詞 Burn 的代號是 `Combustion`）。程式裡寫 status word；`gift_effects.json` 照遊戲叫它 `keywords`。
+_Avoid_: 狀態關鍵字（和體系的 keyword 混淆）
 
 **資源包**：
 maalc 發佈到 maalc-resource（公開 repo）、讓已安裝的 maalc 與 lc-helper 不必換 zip 就能更新的一份檔案：maalc `assets/resource/base/` 的 `data/`、`image/` 與 `pipeline/`，不含 OCR 模型所在的 `model/`。遊戲客戶端裡裝圖的 Unity 包叫 AssetBundle，不叫資源包。

@@ -35,6 +35,15 @@ export const pickInList = (user: UserEvent, name: string) => user.click(sideList
 /** A grace effect line's text, its runs joined. */
 export const textOf = (runs: TextRun[]) => runs.map((r) => r.text).join("");
 
+/** An sRGB channel (0-1) made linear, as WCAG 2 and the sRGB curve define it. */
+export const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const relativeLuminance = (rgb: number[]) => rgb.map(linear).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+/** WCAG 2's contrast ratio of two sRGB colours (channels 0-1). */
+export const contrast = (a: number[], b: number[]) => {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
 /** The stylesheet's plain rules, `selector { body }`, enough to read what a selector sets (`import css from "./index.css?raw"`). */
 export function cssRules(text: string) {
   return [...text.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));

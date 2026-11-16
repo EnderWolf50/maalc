@@ -12,7 +12,7 @@ PPtr<Sprite>}; these are the last list's, resolved through the scene's externals
 SCARLET AMBER SHAMROCK AZURE INDIGO VIOLET, Wrath Lust Sloth Gluttony Gloom Pride Envy (raw/Localize/en/EN_AttributeText.json,
 which spells Gluttony `Glut.`): the tool stops when that file's order differs, or when a sprite's name does not end in its
 key's colour. Each sprite is written over its whole rect (tools/unity_files.py sprite_image) as PNG. Written against client
-1.118.1; rerun it after a client update (docs/spec/05-game-data.md section 8).
+1.118.1 (the same output on 1.119.0); rerun it after a client update (docs/spec/05-game-data.md section 8).
 """
 
 import json

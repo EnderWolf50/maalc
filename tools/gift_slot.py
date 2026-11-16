@@ -15,7 +15,7 @@ player data file PREFAB_FILE. Its children, by their RectTransforms:
   TextMeshPro text in the top-left corner.
 The tool stops when the sizes and places of the slot, img_Icon and img_keywordIcon1 differ from SLOT, the layout lc-helper
 draws a gift in (its icons.SLOT), or when the anchor of a child (tmp_Tier's too) moved. Written
-against client 1.118.1; rerun it after a client update (docs/spec/05-game-data.md section 8).
+against client 1.118.1 (the same output on 1.119.0); rerun it after a client update (docs/spec/05-game-data.md section 8).
 """
 
 import re

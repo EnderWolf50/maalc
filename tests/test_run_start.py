@@ -372,13 +372,16 @@ def test_theme_pack_data_file():
     assert plan["weights"]["The B.E."] == 10 and plan["weights"]["Hell's Chicken"] == 1
     # #89: the 1.117.0 client's packs with a NORMAL or HARD floor; #387: and the EXTREME-only ones (1501-1520). The 1.117.0
     # static data flags 49 packs INFINITY (every one a HARD pack too) and 24 EXTREME: the 20 EXTREME-only and Line 3 to 5.
+    # #773: 1.119.0 adds the running event's pack, 1129, on NORMAL and HARD floor 5 and every INFINITY floor.
     assert len(floor_names := rs.floor_packs(packs, 1)) >= 90
     extreme_only = [p for p in packs if p not in floor_names]
     assert sorted(data["pack_ids"][p] for p in extreme_only) == list(range(1501, 1521))
     assert all(packs[p] == {"X": True} for p in extreme_only)
-    assert sum("I" in f for f in packs.values()) == 49 and all("H" in f for f in packs.values() if "I" in f)
+    assert sum("I" in f for f in packs.values()) == 50 and all("H" in f for f in packs.values() if "I" in f)
     assert sorted(data["pack_ids"][p] for p, f in packs.items() if "X" in f and p not in extreme_only) == [1110, 1111, 1112, 1118]
-    assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 15
+    assert set(data["event_packs"]) <= set(packs) and len(data["event_packs"]) == 16
+    wedge = "The Wedge in the Wake of Dawnbreak"
+    assert (packs[wedge], data["pack_ids"][wedge]) == ({"N": [5], "H": [5], "I": True}, 1129) and wedge in data["event_packs"]
     # #246: each title art read names a pack of the season.
     assert data["title_art"] and set(data["title_art"].values()) <= set(packs)
 

@@ -60,6 +60,12 @@ PAGES = {
                           ("LCB Regular Check-up", "name"), ("Nocturnal Sweeping BokGak", "name")],
     # cards swinging in: tilted and overlapping, no cover stands clear (the agent waits for them to stop, #246)
     "ThemePack": [("To be Crushed", "name"), ("Nagel und Hammer", "name"), ("To be Cleaved", "name")],
+    # HARD floor 5 of the 1.119.0 client (#773, frames of the 2026-11-13 run's recording): the running event's pack leftmost,
+    # its title under the "Walpurgis Night" art. Before 1.119.0's data the first page read it as The Noon of Violet (keyword,
+    # -5, so the agent refreshed) and the page after the refresh left it unread
+    "ThemePackWedge": [("The Wedge in the Wake of Dawnbreak", "name"), ("Spring Cultivation", "name"), ("Line 2", "name")],
+    "ThemePackWedgeRefreshed": [("The Wedge in the Wake of Dawnbreak", "name"), ("The Heartbreaking", "name"),
+                                ("Murder on the WARP Express BokGak", "name")],
 }
 # page, card whose title read is lost to the logo's noise ("WOPIS"): [(pack, how)] left to right
 BLANKED = {
@@ -213,10 +219,10 @@ def test_every_pack_of_floors_6_to_15_is_read_off_its_composed_card(read, floor)
 
 def test_no_extreme_only_pack_takes_a_card_of_a_floor_1_to_5_page_but_line_1s_capitals(read):
     # #387: the same pages read against every pack of the file, as if floors 1-5 kept the EXTREME-only packs. The one card of
-    # the 57 a new name takes is Line 1's where OCR reads its title art "LINE 1 MADNESS" whole (#266): it spells
+    # the 63 a new name takes is Line 1's where OCR reads its title art "LINE 1 MADNESS" whole (#266): it spells
     # "Line 1 : MADNESS". So floors 1-5 leave them out (run_start.floor_packs) and read every card as the tests above
     pages = list(PAGES) + list(BLANKED)
-    assert sum(len(read[f"floor:{key}"]) for key in pages) == 57
+    assert sum(len(read[f"floor:{key}"]) for key in pages) == 63
     changed = sorted((key, i, got, want) for key in pages
                      for i, (got, want) in enumerate(zip(read[f"every:{key}"], read[f"floor:{key}"])) if got != want)
     assert changed == [("ThemePackHardLineCover", 2, ["Line 1 : MADNESS", "name"], ["Line 1", "title_art"])]
