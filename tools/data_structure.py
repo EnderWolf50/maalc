@@ -11,6 +11,8 @@ rows are left out; a field's name, its type and its nesting are in. A field rena
 new. A field whose meaning changes under the same name shows nothing, so a change of meaning gets a new field name (ADR 0012).
 
 - A dict whose keys are all snake_case words is an `object`: its keys are fields and each is listed.
+  So a new key in such a dict (a new effect name in trials.yaml) is a structure change, which is intended: the program
+  reads those keys by name.
 - A dict with any other key (an id, a number, a name such as `Yi Sang`) is a `map`: its keys are data and stand as `*`.
 - A list's rows are one `[]` path; a field present in some rows only is listed once. `null` is listed only for a field
   that is never anything else.
@@ -121,9 +123,9 @@ def regenerate(data: Path, out: Path, format_version: int) -> str | None:
     files = snapshot_files(data)
     if Path(out).exists():
         old = load_snapshot(out)
-        if old["format"] == format_version and old["files"] != files:
-            return ("the structure changed but FORMAT in agent/resource_package.py did not go up: raise FORMAT first, then run "
-                    f"`{REGEN}` again.\n" + "\n".join(f"  {line}" for line in _differences(old["files"], files)))
+        problem = check(old, files, format_version)
+        if problem and old["format"] == format_version:  # a changed structure at the same FORMAT: not written
+            return problem
     Path(out).write_text(json.dumps({"note": NOTE, "format": format_version, "files": files}, indent=1, ensure_ascii=False) + "\n",
                          encoding="utf-8")
     return None
