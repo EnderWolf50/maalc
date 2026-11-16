@@ -1,9 +1,12 @@
 //! File access for the settings GUI (docs/spec/04-settings.md sections 1, 2 and 12).
 //! Validation lives in the frontend; this side only reads and writes files under <root>.
 
+use serde::Serialize;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
+use tauri::Manager;
 
 /// <root> is the folder holding this executable (spec 04 section 1), so the user never picks it.
 /// Debug builds honour MAALC_ROOT, because `tauri dev` runs the exe from target/debug.
@@ -36,17 +39,63 @@ fn load_settings() -> Result<Option<String>, String> {
     }
 }
 
-/// The season's theme pack data file text (spec 05 section 2). resource/ sits under <root> in a
-/// release and under assets/ in the repo: the same lookup as agent/actions.py.
-#[tauri::command]
-fn load_theme_packs() -> Result<String, String> {
+/// <root>/resource/base/data: resource/ sits under <root> in a release and under assets/ in the repo, the same lookup as
+/// agent/actions.py.
+fn data_dir() -> Result<PathBuf, String> {
     let root = root()?;
     let resource = [root.join("resource"), root.join("assets").join("resource")]
         .into_iter()
         .find(|p| p.is_dir())
-        .ok_or("no resource folder under <root>")?;
-    let path = resource.join("base").join("data").join("theme_packs.yaml");
-    fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
+        .ok_or_else(|| format!("no resource folder under {}", root.display()))?;
+    let dir = resource.join("base").join("data");
+    if dir.is_dir() { Ok(dir) } else { Err(format!("{}: no such folder", dir.display())) }
+}
+
+/// `rel` (a path under data/, "/" between its parts) inside `dir`; a path that climbs out of it or is absolute is refused.
+fn inside(dir: &Path, rel: &str) -> Result<PathBuf, String> {
+    let rel_path = Path::new(rel);
+    let plain = rel_path.components().count() > 0 && rel_path.components().all(|c| matches!(c, Component::Normal(_)));
+    if plain { Ok(dir.join(rel_path)) } else { Err(format!("{rel}: not a path under data/")) }
+}
+
+/// The game data the window shows (api.ts GameFiles): read from the install's resource/base/data at run time, so what the
+/// Agent downloaded shows without a new build. `dir` is where the page loads images from, through the asset protocol.
+#[derive(Serialize)]
+struct GameData {
+    dir: String,
+    texts: BTreeMap<String, String>,
+    folders: BTreeMap<String, Vec<String>>,
+}
+
+/// `texts` by path and the file names of each of `folders` under `dir` (a folder the data does not have lists nothing). A text
+/// that cannot be read fails with its path and the reason.
+fn read_data(dir: &Path, texts: &[String], folders: &[String]) -> Result<GameData, String> {
+    let mut data = GameData { dir: dir.display().to_string(), texts: BTreeMap::new(), folders: BTreeMap::new() };
+    for name in texts {
+        let path = inside(dir, name)?;
+        let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        data.texts.insert(name.clone(), text);
+    }
+    for name in folders {
+        let path = inside(dir, name)?;
+        let mut files = match fs::read_dir(&path) {
+            Ok(entries) => entries
+                .filter_map(Result::ok)
+                .filter(|e| e.path().is_file())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect::<Vec<_>>(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        files.sort();
+        data.folders.insert(name.clone(), files);
+    }
+    Ok(data)
+}
+
+#[tauri::command]
+fn load_game_data(texts: Vec<String>, folders: Vec<String>) -> Result<GameData, String> {
+    read_data(&data_dir()?, &texts, &folders)
 }
 
 /// Error text of a save refused because the file is no longer `expected` (api.ts CHANGED).
@@ -102,13 +151,72 @@ fn append_runs_log(line: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            // The page loads the game's images from the data folder through the asset protocol, whose static scope
+            // (tauri.conf.json) is empty: that folder alone is opened to it, found the way load_game_data finds it. Without
+            // one, load_game_data fails and the window says why.
+            if let Ok(dir) = data_dir() {
+                let _ = app.asset_protocol_scope().allow_directory(dir, true);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             root_dir,
             load_settings,
-            load_theme_packs,
+            load_game_data,
             save_settings,
             append_runs_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh folder under the temp dir for one test.
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("maalc-gui-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn reads_the_texts_and_lists_the_folders_sorted() {
+        let dir = scratch("read");
+        fs::create_dir_all(dir.join("gift_icons").join("nested")).unwrap();
+        fs::create_dir_all(dir.join("sinner_cards")).unwrap();
+        fs::write(dir.join("gift_search.json"), "{}").unwrap();
+        fs::write(dir.join("sinner_cards").join("index.json"), "[1]").unwrap();
+        fs::write(dir.join("gift_icons").join("2.webp"), "x").unwrap();
+        fs::write(dir.join("gift_icons").join("1.webp"), "x").unwrap();
+        let data = read_data(&dir, &names(&["gift_search.json", "sinner_cards/index.json"]), &names(&["gift_icons", "grace_icons"])).unwrap();
+        assert_eq!(data.texts["gift_search.json"], "{}");
+        assert_eq!(data.texts["sinner_cards/index.json"], "[1]");
+        assert_eq!(data.folders["gift_icons"], names(&["1.webp", "2.webp"]));
+        assert!(data.folders["grace_icons"].is_empty());
+        assert_eq!(data.dir, dir.display().to_string());
+    }
+
+    #[test]
+    fn a_missing_text_fails_with_its_path() {
+        let dir = scratch("missing");
+        let err = read_data(&dir, &names(&["graces.json"]), &[]).err().unwrap();
+        assert!(err.contains("graces.json"), "{err}");
+    }
+
+    #[test]
+    fn a_path_outside_the_data_folder_is_refused() {
+        let dir = scratch("outside");
+        for bad in ["../config/settings.json", "/etc/passwd", "a/../../b", "", "C:/Windows/win.ini"] {
+            assert!(read_data(&dir, &names(&[bad]), &[]).is_err(), "{bad}");
+            assert!(read_data(&dir, &[], &names(&[bad])).is_err(), "{bad}");
+        }
+    }
 }

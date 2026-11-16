@@ -1,11 +1,8 @@
 // Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons
 // (and, for the Gift Search page's, their effect text).
-import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import packsYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
-import effects from "./gift_effects.json";
+import { effects, recipes, webpFolder } from "./gameData";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { GIFT_SOURCES, SHOP_GIFTS, parseThemePacks, type DataGift } from "./model";
-import { webpFolder } from "./webpFolder";
+import { GIFT_SOURCES, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
 
 /** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
  * fusion: made by fusing, so wantable but never bought; material: a recipe's material no shop sells; other: no shop sells it
@@ -39,11 +36,11 @@ const EFFECTS: Record<string, { en: string; zh: string }> = effects.effects;
  * for the others. */
 export const giftEffect = (id: number, zh: boolean): string | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
 
-/** The icon's URL (assets/.../gift_icons/<id>.webp). */
-export const iconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/gift_icons/*.webp", { eager: true, query: "?url", import: "default" }));
+/** The icon's URL (data/gift_icons/<id>.webp). */
+export const iconUrl = webpFolder("gift_icons");
 
-/** The keyword's game icon URL (assets/.../keyword_icons/<keyword>.webp); Keywordless has none. */
-export const keywordIconUrl = webpFolder(import.meta.glob<string>("../../assets/resource/base/data/keyword_icons/*.webp", { eager: true, query: "?url", import: "default" }));
+/** The keyword's game icon URL (data/keyword_icons/<keyword>.webp); Keywordless has none. */
+export const keywordIconUrl = webpFolder("keyword_icons");
 
 /** A keyword's gifts by tier, highest tier first: the list's own order (`gorder`) for what the shop sells, then the rest in data order. */
 export function tiersOf(gorder: Record<string, number[]>, keyword: string): { tier: number; ids: number[] }[] {
@@ -60,7 +57,7 @@ export const FUSION_BY_ID = new Map(FUSIONS.map((f) => [f.id, f]));
 /** The fusion gifts that have this gift among their materials, in data order. */
 export const usedIn = (id: number): Fusion[] => FUSIONS.filter((f) => materialsOf(f).includes(id));
 
-const PACK_NAMES = new Map(Object.entries(parseThemePacks(packsYaml).pack_ids).map(([name, id]): [number, string] => [id, name]));
+const PACK_NAMES = new Map(Object.entries(THEME_PACKS.pack_ids).map(([name, id]): [number, string] => [id, name]));
 /** A theme pack's name in the season's file (its `pack_ids`); its id as "#1234" for a pack the file does not know. */
 export const packName = (id: number): string => PACK_NAMES.get(id) ?? `#${id}`;
 
