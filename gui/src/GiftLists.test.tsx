@@ -286,10 +286,10 @@ describe("read-only default", () => {
     const r = await open([mine()], "zh_tw", "default");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default");
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
-    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the fusion gifts and the 54 of the packs' own pools a shop
+    // The user, 2026-10-30: it holds the Keywordless gifts only, wanting the fusion gifts and the 55 of the packs' own pools a shop
     // sells (#626); 2026-11-11: not Lunar Memory, whose 10 materials it keeps.
     expect(DEFAULT_LIST.want.slice(0, 3)).toEqual([9249, 9764, 9780]);
-    expect(DEFAULT_LIST.want).toHaveLength(57);
+    expect(DEFAULT_LIST.want).toHaveLength(58);
     expect(DEFAULT_LIST.keep).toEqual(expect.arrayContaining([9083, 9105, 9152]));
     const kept = DEFAULT_LIST.keep.find((id) => GIFT_BY_ID.get(id)!.kind === "buyable")!;
     expect(await tile(r, kept)).toHaveAccessibleName(new RegExp(zh["state.keep"]));

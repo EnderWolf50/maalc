@@ -385,7 +385,7 @@ def test_pick_gifts_repicks_a_card_the_tap_dropped():
 def test_data_files():
     assert yaml.safe_load((DATA / "events.yaml").read_text(encoding="utf-8")) == {}
     events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))
-    assert events["client"] == "1.118.1" and "Project Moon" in events["note"]
+    assert events["client"] == "1.119.0" and "Project Moon" in events["note"]
     nails = next(e for e in events["events"] if e["id"] == 901008)["options"][0]  # Grimy Iron Stake is a Bleed gift
     assert (nails["text"], nails["kind"], nails["gifts"]) == ("Remove the nails.", "check", [["Bleed", "check_pass"]])
 
@@ -402,7 +402,7 @@ def test_event_table_keeps_each_gift_id_with_how_it_is_given():
 
 def test_event_table_gift_ids_are_gifts_and_match_the_keyword_pairs():
     events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))["events"]
-    assert len(events) == 197
+    assert len(events) == 203  # 1.119.0 added the six of pack 1129 (971121-971125, 97112302)
     for e in events:
         for o in e["options"]:
             assert ("gifts" in o) == ("gift_ids" in o)
