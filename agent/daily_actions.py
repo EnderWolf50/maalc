@@ -8,7 +8,6 @@ from maa.custom_action import CustomAction
 
 import lunacy
 import pass_missions
-import task_options
 from actions import (TASK, TaskStart, back, done, finish, log, node_results, ocr_texts, screen, seen, stop, tap,
                      tap_then)
 from ocrtext import fractions as text_fractions
@@ -208,20 +207,22 @@ CHARGE_TRIES = 3  # reads of the prompt and price, and Cancels over a decided ta
 
 @AgentServer.custom_action("ChargeStart")
 class ChargeStart(TaskStart):
-    """ChargeEnkephalin's entry: TaskStart, then its option count, charge_enkephalin.count, the day's target Daily Count
-    (#429, #777). 0, the default, ends the task at once, a success, before GoHome or any tap: the window is never opened,
-    so the Use Lunacy tab is never touched. Settings that do not load: the stop procedure, before any tap."""
+    """ChargeEnkephalin's entry: TaskStart, then its option count, the client's ChargeCount (#781), the day's target
+    Daily Count (#429). 0, the default, ends the task at once, a success, before GoHome or any tap: the window is never
+    opened, so the Use Lunacy tab is never touched. It reads nothing from the settings file, so one that does not load
+    leaves it to go on, as a task with no options there does."""
 
     def unread(self, context, error):
-        return stop(context, str(error))
-
-    def settings_options(self, argv, settings):
-        return task_options.charge(settings)
+        log(f"settings not read, ChargeEnkephalin needs none of them: {error}")
+        return self.charge()
 
     def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
+        return self.charge()
+
+    def charge(self):
         count = TASK["options"]["count"]
         TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
-        return done("charge_enkephalin.count is 0: Lunacy left alone") if count == 0 else True
+        return done("ChargeCount is 0: Lunacy left alone") if count == 0 else True
 
 
 @AgentServer.custom_action("ChargeMain")

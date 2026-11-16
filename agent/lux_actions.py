@@ -37,10 +37,11 @@ LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxc
 
 @AgentServer.custom_action("LuxStart")
 class LuxStart(TaskStart):
-    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, its options
-    luxcavation.<key> (#777) beside the global ones, then the team they name, whose guard turns the battle plays (spec 03
-    section 8), its mode (#431), count and retries (#367). No team picked, a team that is gone, or settings that do not
-    load: the stop procedure, before any tap."""
+    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, its options the
+    client sent (#781: mode, count in count mode alone, retries, consecutive) beside the global ones and its team from
+    the settings file (luxcavation.<key>.team, #777), then that team, whose guard turns the battle plays (spec 03 section
+    8), its mode (#431), count and retries (#367). No team picked, a team that is gone, or settings that do not load: the
+    stop procedure, before any tap."""
 
     def unread(self, context, error):
         return stop(context, str(error))

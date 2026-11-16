@@ -37,8 +37,9 @@ def test_a_different_count_is_never_inherited_from_an_earlier_brief(tmp_path):
     run(tmp_path, [*with_values(LIVE, task="t2", difficulty="hard", exp_count="2", thread_mode="count", thread_count="5",
                                 runs="2", weekly_bonus="hard", recording="no"), "--force"])
     text = (tmp_path / "t2" / "brief.md").read_text(encoding="utf-8")
-    assert "luxcavation.exp.count=2" in text and "| EXP Luxcavation count | 2, not used:" in text
-    assert "| Thread Luxcavation count | 5 |" in text and "--set luxcavation.thread.mode=count --set luxcavation.thread.count=5" in text
+    assert "--option ExpMode=daily" in text and "| EXP Luxcavation count | 2, not used:" in text and "ExpCount" not in text
+    assert "| Thread Luxcavation count | 5 |" in text and "--option ThreadMode=count --option ThreadCount=5" in text
+    assert "--set luxcavation" not in text  # #781: the client's options
     assert "| runs | 2 |" in text and "--option MirrorRunsLimit=Yes --option MirrorRuns=2" in text
     assert "| weekly bonus use | hard |" in text and "--option MirrorWeeklyBonusUse=hard" in text
     assert "--option MirrorDifficulty=hard" in text and "--set run." not in text  # #779: the client's options
@@ -55,7 +56,7 @@ def settings_of(tmp_path, *extra):
 def test_count_mode_states_its_count_and_sets_mode_and_count(tmp_path):
     text = settings_of(tmp_path, "--exp-mode", "count", "--exp-count", "2")
     assert "| EXP Luxcavation mode | count |" in text and "| EXP Luxcavation count | 2 |" in text
-    assert "--set luxcavation.exp.mode=count --set luxcavation.exp.count=2" in text
+    assert "--option ExpMode=count --option ExpCount=2" in text
 
 
 def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
@@ -65,7 +66,8 @@ def test_daily_mode_marks_its_count_unused_and_says_what_it_fights(tmp_path):
     exp = next(line for line in text.splitlines() if line.startswith("| EXP Luxcavation count |"))
     assert thread.startswith("| Thread Luxcavation count | 3, not used: daily mode") and "Daily Bonuses" in thread
     assert exp.startswith("| EXP Luxcavation count | 1, not used: daily mode") and "Clear EXP Luxcavation" in exp
-    assert "--set luxcavation.thread.mode=daily --set luxcavation.thread.count=3" in text
+    # the client sends the count only in count mode: the brief sets the mode alone
+    assert "--option ThreadMode=daily" in text and "ThreadCount" not in text
 
 
 @pytest.mark.parametrize("flag", ["--exp-mode", "--thread-mode", "--runs"])

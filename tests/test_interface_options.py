@@ -78,6 +78,19 @@ def test_every_combination_of_the_cases_passes_the_agents_schema(task):
         assert errors(task, *combo) == [], combo
 
 
+@pytest.mark.parametrize("task, pairs, sent", [
+    # #781: what a new settings file had: daily mode, no count sent (count mode's is 1 for EXP, 3 for Thread, the day's
+    # Daily Bonuses), no retries, Consecutive Battle on; ChargeEnkephalin 0, no Lunacy spent
+    ("ExpLuxcavation", (), {"mode": "daily", "retries": 0, "consecutive": True}),
+    ("ExpLuxcavation", ("ExpMode=count",), {"mode": "count", "count": 1, "retries": 0, "consecutive": True}),
+    ("ThreadLuxcavation", (), {"mode": "daily", "retries": 0, "consecutive": True}),
+    ("ThreadLuxcavation", ("ThreadMode=count",), {"mode": "count", "count": 3, "retries": 0, "consecutive": True}),
+    ("ChargeEnkephalin", (), {"count": 0}),
+])
+def test_a_daily_tasks_options_start_where_a_new_settings_file_had_them(task, pairs, sent):
+    assert attach(client_override.build(PI, task, client_override.parse_options(PI, list(pairs)))[1])[task] == sent
+
+
 def test_every_attach_key_an_option_writes_is_the_agents_and_named_after_it():
     # the schema's title is what the agent's stop line names: the option that writes the key
     for key, opt in OPTIONS.items():

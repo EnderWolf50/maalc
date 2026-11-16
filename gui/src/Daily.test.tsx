@@ -1,52 +1,36 @@
-// The Daily tab's Luxcavation modes (#431): daily fights what the day still needs, count fights the number set.
-import { fireEvent, screen } from "@testing-library/react";
+// The Daily tab: each Luxcavation task's team (#366). Their mode, count, retries and Consecutive Battle, and Charge
+// Enkephalin's Daily Count, are the client's task options since #781.
+import { screen } from "@testing-library/react";
 import { expect, test } from "vitest";
 import { TABS } from "./App";
 import { TEXT } from "./i18n";
-import { newSettings } from "./model";
+import { newSettings, newTeam } from "./model";
 import { expectLines, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 const DailyTab = TABS.find((tab) => tab[0] === "daily")![2];
 
-test("each Luxcavation task opens in daily mode, its count disabled and marked unused", () => {
+test("the tab shows each Luxcavation task's team alone: the rest are the client's task options (#781)", () => {
   renderEditor(<DailyTab />, newSettings());
-  const modes = screen.getAllByRole("combobox", { name: zh["lux.mode"] });
-  expect(modes.map((m) => (m as HTMLSelectElement).value)).toEqual(["daily", "daily"]);
-  expect(screen.getAllByRole("option", { name: zh["lux_mode.daily"] })).toHaveLength(2);
-  const counts = screen.getAllByRole("spinbutton", { name: new RegExp(zh["lux.count"]) });
-  expect(counts).toHaveLength(2);
-  for (const c of counts) expect(c).toBeDisabled();
-  expect(screen.getAllByText(zh["lux.count_unused"])).toHaveLength(2);
+  expect(screen.getAllByRole("combobox")).toEqual(screen.getAllByRole("combobox", { name: new RegExp(zh["lux.team"]) }));
+  expect(screen.getAllByRole("combobox")).toHaveLength(2);
+  expect(screen.queryAllByRole("spinbutton")).toEqual([]);
+  expect(screen.queryAllByRole("checkbox")).toEqual([]);
+  expect(screen.queryByText(/Lunacy|Daily Count/)).toBeNull();
 });
 
-test("count mode enables that task's count alone, and the number typed is saved", async () => {
-  const { user, settings } = renderEditor(<DailyTab />, newSettings());
-  const [, thread] = screen.getAllByRole("combobox", { name: zh["lux.mode"] });
-  await user.selectOptions(thread, "count");
-  expect(settings().luxcavation.thread.mode).toBe("count");
-  expect(settings().luxcavation.exp.mode).toBe("daily");
-  const [exp, threadCount] = screen.getAllByRole("spinbutton", { name: new RegExp(zh["lux.count"]) });
-  expect(exp).toBeDisabled();
-  expect(threadCount).toBeEnabled();
-  fireEvent.change(threadCount, { target: { value: "5" } });
-  expect(settings().luxcavation.thread.count).toBe(5);
-  expect(screen.getAllByText(zh["lux.count_unused"])).toHaveLength(1);
+test("a team picked is saved for that task alone", async () => {
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta"), newTeam(3, "Tb")];
+  const { user, settings } = renderEditor(<DailyTab />, s);
+  const [, thread] = screen.getAllByRole("combobox", { name: new RegExp(zh["lux.team"]) });
+  await user.selectOptions(thread, s.teams[1].id);
+  expect(settings().luxcavation.thread.team).toBe(s.teams[1].id);
+  expect(settings().luxcavation.exp.team).toBeNull();
 });
 
-test("連戰 is a switch as on the other tabs: the box in its label, its note under them, not a field's label (#721)", () => {
+test("the tab's note shows one topic to a line and says where the rest went", () => {
   renderEditor(<DailyTab />, newSettings());
-  const boxes = screen.getAllByRole("checkbox", { name: zh["lux.consecutive"] });
-  expect(boxes).toHaveLength(2);
-  for (const box of boxes) {
-    expect(box.closest("label")).toHaveClass("check");
-    expect(box.closest(".field")).toBeNull();
-    expect(box.closest(".toggle")!.querySelector(":scope > small")).toHaveTextContent(zh["lux.consecutive_note"].split("\n")[0]);
-  }
-});
-
-test("the tab's notes show one topic to a line, Lunacy's cost on the first", () => {
-  renderEditor(<DailyTab />, newSettings());
-  for (const key of ["daily.note", "lux.exp_note", "lux.thread_note", "lux.consecutive_note", "charge.note"] as const) expectLines(zh[key]);
-  expect(zh["charge.note"].split("\n")[0]).toContain("Lunacy");
+  expectLines(zh["daily.note"]);
+  expect(zh["daily.note"]).toContain("MXU");
 });

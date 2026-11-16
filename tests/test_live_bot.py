@@ -55,15 +55,15 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     src, dst = tmp_path / "main", tmp_path / "test"
     (src / "config").mkdir(parents=True)
     (src / "state").mkdir()
-    (src / "config/settings.json").write_text(json.dumps({"luxcavation": {"exp": {"mode": "daily", "count": 1}}}))
+    # a Luxcavation task's team is still the settings file's (#781 moved the task's other keys to the client)
+    (src / "config/settings.json").write_text(json.dumps({"language": "zh_tw", "luxcavation": {"exp": {"team": None}}}))
     (src / "config/maa_option.json").write_text("{}")
     (src / "state/progress.json").write_text("{}")
-    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "luxcavation.exp.mode=count",
-              "--set", "luxcavation.exp.count=2"])
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "language=en_us", "--set", "luxcavation.exp.team=t3"])
     s = json.loads((dst / "config/settings.json").read_text())
-    assert s["luxcavation"] == {"exp": {"mode": "count", "count": 2}}
+    assert s == {"language": "en_us", "luxcavation": {"exp": {"team": "t3"}}}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
-    assert json.loads((src / "config/settings.json").read_text())["luxcavation"]["exp"]["count"] == 1  # the source stays
+    assert json.loads((src / "config/settings.json").read_text())["language"] == "zh_tw"  # the source stays
 
 
 @pytest.mark.parametrize("key, says", [
@@ -74,21 +74,41 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     ("run.auto_download=false", "bot.py run --option AutoDownload=No"),
     ("run.stop_when_weekly_bonus_out=true", "bot.py run --option MirrorStopWhenBonusOut=Yes"),
     ("run.nope=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+    # #781: a daily task's own, a nested count after the case that sends it
+    ("luxcavation.exp.mode=count", "bot.py run --option ExpMode=count"),
+    ("luxcavation.thread.count=5", "bot.py run --option ThreadMode=count --option ThreadCount=5"),
+    ("luxcavation.exp.retries=2", "bot.py run --option ExpRetries=2"),
+    ("luxcavation.thread.consecutive=false", "bot.py run --option ThreadConsecutive=No"),
+    ("charge_enkephalin.count=3", "bot.py run --option ChargeCount=3"),
+    # a key under a moved section that is not an option, and a whole section, or one that holds one: all stop
+    ("run.x.y=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+    ("charge_enkephalin.nope=1", "the settings' charge_enkephalin section is no longer read: set its options with bot.py run --option"),
+    ("luxcavation.exp.nope=1",
+     "the settings' luxcavation.exp section is no longer read but its team: set its options with bot.py run --option"),
+    ("run={}", "the agent reads run's keys from the client's options: set them with bot.py run --option"),
+    ("luxcavation.thread={}", "the agent reads luxcavation.thread's keys from the client's options: set them with bot.py "
+     "run --option, its team with --set luxcavation.thread.team"),
+    ("luxcavation={}", "the agent reads luxcavation.exp's keys from the client's options: set them with bot.py run --option, "
+     "its team with --set luxcavation.exp.team"),
 ])
-def test_prep_stops_on_a_run_key_and_names_the_client_option_that_took_it_over(tmp_path, key, says):
-    # #779: the agent no longer reads the settings' run section; a run set there would not happen
+def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
+    # #779, #781: the agent no longer reads these keys of the settings file; a value set there would not happen
     src, dst = prep_source(tmp_path), tmp_path / "test"
     with pytest.raises(SystemExit) as e:
         bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", key])
-    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now (#779): {says}"
+    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now: {says}"
     assert not dst.exists()
 
 
-def test_every_run_key_prep_refuses_names_an_option_of_the_interface():
+def test_every_key_prep_refuses_names_an_option_of_the_interface():
     # the option names come from the agent's schema titles: each is an option assets/interface.json has
     options = client_override.load_interface(REPO / "assets/interface.json")["option"]
-    for key in json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))["properties"]["run"]["properties"]:
-        where = bot.moved(f"run.{key}", "1")
+    schema = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))
+    keys = [*(f"run.{k}" for k in schema["properties"]["run"]["properties"]),
+            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in schema["$defs"]["luxcavation"]["properties"] if k != "team"),
+            *(f"charge_enkephalin.{k}" for k in schema["properties"]["charge_enkephalin"]["properties"])]
+    for key in keys:
+        where = bot.moved(key, "1")
         named = [w.split("=")[0] for w in where.split("--option ")[1:]]
         assert named and all(n in options for n in named), (key, where)
 

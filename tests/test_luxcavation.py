@@ -13,6 +13,7 @@ import lux_actions
 import luxcavation
 from luxcavation import EXP_COST, FIGHT, FINISH, RETRY, SKIP, STOP, batch, decide, needed, parse_consecutive, presses
 from agent_patch import patch_all
+from client_options import send
 
 if __name__ != "__main__":  # as test_task_chain.py: the fixtures are test_actions's
     from test_actions import Choices, clock, context  # noqa: F401 (the fake Maa context the in-process tests use)
@@ -219,10 +220,11 @@ def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monke
 # The task's steps in lux_actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
 # and test_thread_luxcavation.py once ran in MaaFramework, test_actions.py's fake context around them.
 
-def lux_start(context, monkeypatch, key, **opts):
-    """LuxStart on the settings luxcavation.<key> = opts over a daily task of count 2 and team "b"; its return, the stops."""
+def lux_start(context, monkeypatch, key, *options, team="b"):
+    """LuxStart posted by a client with these NAME=VALUE options (#781; every other at its default: daily mode, no
+    retries, Consecutive Battle on), on the settings file's team for it (luxcavation.<key>.team); its return, the stops."""
     settings = json.loads((SCREENS.parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
-    settings["luxcavation"][key] = {"mode": "daily", "count": 2, "team": "b", "retries": 0, "consecutive": False, **opts}
+    settings["luxcavation"][key]["team"] = team
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
     stops = []
@@ -231,17 +233,28 @@ def lux_start(context, monkeypatch, key, **opts):
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # as at launch: no task before it
     patch_all(monkeypatch, "STUCK", dict(actions.STUCK))
     entry = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}[key]
+    send(context, entry, *options)
     return lux_actions.LuxStart().run(context, SimpleNamespace(node_name=entry, custom_action_param=json.dumps(key))), stops
 
 
 @pytest.mark.parametrize("key, mode, target, cost", [
-    ("exp", "daily", 1, 3), ("thread", "daily", 3, 2),  # #431: daily mode fights to the day's battles, count 2 unused
+    ("exp", "daily", 1, 3), ("thread", "daily", 3, 2),  # #431: daily mode fights to the day's battles, count 2 not sent
     ("exp", "count", 2, 3), ("thread", "count", 2, 2),
 ])
 def test_a_luxcavation_task_aims_at_the_days_battles_in_daily_mode_and_at_count_in_count_mode(context, monkeypatch, key, mode, target, cost):
-    ok, stops = lux_start(context, monkeypatch, key, mode=mode)
+    task = key.capitalize()
+    ok, stops = lux_start(context, monkeypatch, key, f"{task}Mode={mode}", f"{task}Count=2")
     lux = actions.RUN["lux"]
     assert ok is True and stops == [] and (lux["mode"], lux["target"], lux["cost"], lux["fights"]) == (mode, target, cost, None)
+
+
+@pytest.mark.parametrize("key", ["exp", "thread"])
+def test_a_luxcavation_task_plays_by_the_retries_and_consecutive_the_client_sent(context, monkeypatch, key):
+    # #781: the settings file's luxcavation.<key> (retries 0, consecutive on) is not read
+    task = key.capitalize()
+    ok, stops = lux_start(context, monkeypatch, key, f"{task}Retries=4", f"{task}Consecutive=No")
+    lux = actions.RUN["lux"]
+    assert ok is True and stops == [] and (lux["retries"], lux["consecutive"]) == (4, False)
 
 
 @pytest.mark.parametrize("key, name", [("exp", "EXP Luxcavation"), ("thread", "Thread Luxcavation")])

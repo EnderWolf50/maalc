@@ -565,8 +565,8 @@ class TaskStart(CustomAction):
         return True
 
     def settings_options(self, argv, settings):
-        """The task's options the settings file still holds (a Luxcavation task's, ChargeEnkephalin's, until #781):
-        none, for a task whose options all come from the client."""
+        """The task's options the settings file still holds (a Luxcavation task's team, until #780): none, for a task
+        whose options all come from the client."""
         return {}
 
     def begin(self, context, argv, settings):
