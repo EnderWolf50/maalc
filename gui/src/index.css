@@ -41,6 +41,9 @@
    * Negative #e30000, Neutral #a16a3b (flavour text too). Each is the game's where it holds 4.5:1 on the card's panel, else the
    * nearest shade of its hue that does (4.8:1): red and brown lighter here, all three darker in the light theme. */
   --kw-pos: #f8c200; --kw-neg: #ff2929; --kw-neu: #b47642;
+  /* A status icon in the text: the game draws them for its dark panel, so on the light one a thin dark edge keeps the pale
+   * ones (Trauma Shield, Aggro) in sight. */
+  --icon-edge: none;
   /* A sinner tile is the game's formation card (#718, #732): the identity's art in the card's frame, the game's plates and its
    * glow (gui/src/sinner_card/, tools/sinner_cards.py). It stays the game's in both themes, as Grace of the Star does, so
    * what sits on it keeps the game's ink. The colours are sampled from the game's captures: the deployed number #ffb904
@@ -100,6 +103,7 @@
     --fusion-soft: #e9e2f7;
     --hazard-2: #1e1813;
     --kw-pos: #856800; --kw-neg: #db0000; --kw-neu: #946136;
+    --icon-edge: drop-shadow(0 0 0.6px #000d) drop-shadow(0 0 0.6px #000d);
     --fl-n: #987e06; --fl-n-ink: #100d03; --fl-n-mark: #987e06;
     --fl-h: #bb3602; --fl-h-ink: #ffdcd3; --fl-h-mark: #bb3602;
     --fl-i: #6a40c4;
