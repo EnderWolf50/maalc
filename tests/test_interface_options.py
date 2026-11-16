@@ -142,9 +142,7 @@ def as_mfaavalonia_reads(path):
     key names a member whatever its case, and of two keys that name the same member the later one wins
     (JsonPropertyCollection.GetClosestMatchProperty tries the exact name, then one in another case). Every key comes
     back in lower case, so it holds for class members only, not for a dictionary's keys (the option table's names)."""
-    lines = path.read_text(encoding="utf-8").splitlines()
-    text = "\n".join(ln for ln in lines if not ln.strip().startswith("//"))
-    return json.loads(text, object_pairs_hook=lambda pairs: {key.lower(): value for key, value in pairs})
+    return client_override.read_jsonc(path, object_pairs_hook=lambda pairs: {key.lower(): value for key, value in pairs})
 
 
 def test_mxu_shows_every_global_option_in_a_setting_section():

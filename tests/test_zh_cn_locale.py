@@ -4,9 +4,8 @@ tests fail until it ran after a change to zh_tw.json."""
 import json
 
 import zh_cn_locale
-from client_options import ROOT, client_interface
-
-LOCALES = ROOT / "assets" / "locales"
+from client_options import client_interface
+from zh_cn_locale import LOCALES
 
 
 def test_the_committed_zh_cn_file_is_the_one_the_tool_writes_from_zh_tw():

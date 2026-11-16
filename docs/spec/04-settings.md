@@ -78,7 +78,7 @@
 
 ## 3. 介面語言
 
-- GUI 與 PI 都提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`。GUI 的語言存在設定檔的 `language`。`interface.json` 手寫，任務與任務選項的標題、說明和 case 名稱用 `$` 開頭的鍵，翻譯放 `assets/locales/zh_tw.json` 與 `en_us.json`；選項的說明沿用設定視窗原本的文字（#779）。（#18、#19）
+- GUI 提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`，存在設定檔的 `language`。`interface.json` 手寫，任務與任務選項的標題、說明和 case 名稱用 `$` 開頭的鍵，翻譯放 `assets/locales/zh_tw.json` 與 `en_us.json`；選項的說明沿用設定視窗原本的文字（#779）。PI 的語言由 client 的介面語言決定。（#18、#19）
 - PI 另有 `zh_cn`：MFAAvalonia 預設簡體中文，且只從介面語言的翻譯檔取字，沒有這個檔就顯示原始鍵。`assets/locales/zh_cn.json` 由 `tools/zh_cn_locale.py` 以 OpenCC t2s 從 `zh_tw.json` 轉出，用詞跟著繁中，不手改；`tests/test_zh_cn_locale.py` 在兩個檔不一致時失敗。（#799）
 - 遊戲名詞保留英文原文，兩種語言都一樣：罪人名、體系、主題包、飾品、獎勵卡種類、試煉。只翻譯 bot 自己的說明文字。（#18）
 - 例外是體系：`zh_tw` 的介面一律寫中文體系名（燒傷、流血、震顫……，`gui/src/i18n.ts` 的 `kw.*`），`en_us` 寫英文；設定檔仍存英文 id。（使用者 2026-11-14 決定）

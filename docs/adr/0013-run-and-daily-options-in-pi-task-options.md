@@ -42,6 +42,7 @@ status: accepted（修訂 ADR 0006、ADR 0010）
 - 模板版本從 1 升到 2（`agent/resource_package.py` 的 `TEMPLATE`，#782）。這次 pipeline（新增 `pipeline/options.json` 的 `GlobalOptions` 節點）、`interface.json`（選項寫進入口節點與 `GlobalOptions` 的 `attach`）和 Agent（入口動作只從這兩個 `attach` 讀）一起改。版本 1 的程式拿到新的 pipeline，它的 `interface.json` 不送這些選項、Agent 也不讀；新的程式拿到版本 1 的 pipeline，就少了全域選項要寫進去的 `GlobalOptions` 節點。兩邊各自只套用和自己模板版本相同的資源包（ADR 0012），所以要加一。
 - 實機測試工具像 client 一樣送任務選項（`tools/client_override.py`、`bot.py run --option`）；`bot.py prep --set` 遇到搬走的鍵（`run.*`、`luxcavation.<任務>.*`（隊伍也算）、`charge_enkephalin.*`，以及這些段整段的 `--set`，例如 `--set luxcavation={...}`）停下並指向 `--option`。
 - MFAAvalonia 記錄任務送出的選項值時，只要有任何 `password` 輸入就整行遮掉；webhook 是 `password` 輸入，所以除錯時要看 Agent 自己記的 `options:` 那一行（webhook 只寫有沒有設定）。
+- 空的 `Option` 是繞路。根本的修正在 MFAAvalonia：在畫面的執行緒建 `setting` 的項目，或開始任務時沿用已有的項目、不再重建（`TaskLoader.CreateSettingItem`）。這在 maalc 裡改不到。
 - 空的 `Option` 靠的是 MFAAvalonia 的 JSON 讀法。MFAAvalonia 改成分大小寫的讀法、又還沒修好執行緒問題時，#799 會再出現；換 MFAAvalonia 或 MXU 的版本時，要在兩個 client 上實際開始一個任務。
 - MFAAvalonia 預設簡體中文，且只從介面語言的翻譯檔取字，所以 `interface.json` 另有 `zh_cn` 語系：`tools/zh_cn_locale.py` 以 OpenCC t2s 從 `zh_tw.json` 轉出，不手改（#799）。
 - 兩個 client 的行為原本都是讀原始碼得來的（#776「其他說明」）；2026-11-16 在 MXU v2.7.1 與 MFAAvalonia v2.16.4 實機驗收（#776、#799）。
