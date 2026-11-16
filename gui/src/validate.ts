@@ -58,12 +58,13 @@ export function pyRepr(s: string) {
 export function crossCheck(data: Settings): Problem[] {
   const errors: Problem[] = [];
 
-  const dupes = (path: string, values: string[], what: string, field: string, say: (v: string, n: number) => Say) => {
+  /** field: the key under each item that holds the value; null for a list of the values themselves (team_queue). */
+  const dupes = (path: string, values: string[], what: string, field: string | null, say: (v: string, n: number) => Say) => {
     const counts = new Map<string, number>();
     for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
     for (const [v, n] of counts) {
       if (n < 2) continue;
-      const paths = values.flatMap((x, i) => (x === v ? [`${path}/${i}/${field}`] : []));
+      const paths = values.flatMap((x, i) => (x === v ? [field === null ? `${path}/${i}` : `${path}/${i}/${field}`] : []));
       errors.push({ paths, text: `${path}: ${what} ${pyRepr(v)} appears ${n} times`, say: say(v, n) });
     }
   };
@@ -82,23 +83,16 @@ export function crossCheck(data: Settings): Problem[] {
 
   // the team queue (#803): each team's id once, in any order; only a hand edit breaks it, so the way out is the file's
   const queue = data.team_queue, ids = new Set(teams.map((t) => t.id));
-  const counts = new Map<string, number[]>();
-  queue.forEach((id, i) => counts.set(id, [...(counts.get(id) ?? []), i]));
-  for (const [id, at] of counts) {
-    if (at.length < 2) continue;
-    errors.push({
-      paths: at.map((i) => `team_queue/${i}`), text: `team_queue: id ${pyRepr(id)} appears ${at.length} times`,
-      say: { key: "problem.queueDupe", vars: { name: id, n: at.length } },
-    });
-  }
-  for (const [id, at] of counts) {
+  dupes("team_queue", queue, "id", null, twice("problem.queueDupe"));
+  for (const id of new Set(queue)) {
     if (ids.has(id)) continue;
     errors.push({
-      paths: [`team_queue/${at[0]}`], text: `team_queue: id ${pyRepr(id)} names no team`, say: { key: "problem.queueExtra", vars: { name: id } },
+      paths: [`team_queue/${queue.indexOf(id)}`], text: `team_queue: id ${pyRepr(id)} names no team`,
+      say: { key: "problem.queueExtra", vars: { name: id } },
     });
   }
   teams.forEach((t, i) => {
-    if (counts.has(t.id)) return;
+    if (queue.includes(t.id)) return;
     errors.push({
       paths: [`teams/${i}`], text: `team_queue: team ${pyRepr(t.name)} (id ${pyRepr(t.id)}) is missing`,
       say: { key: "problem.queueMissing", vars: { team: named(t.name), id: t.id } },

@@ -25,7 +25,7 @@ def t(id, usage="any", enabled=True):
 TEAMS = [t("a"), t("b", "hard_only"), t("c", enabled=False), t("d", "normal_only")]
 
 
-def queued(teams, order):
+def settings_of(teams, order):
     """Settings with these teams, the list in the order given, and the queue in order (ids)."""
     return {"teams": teams, "team_queue": list(order)}
 
@@ -41,12 +41,12 @@ REVERSED = TEAMS[::-1]
     ("cadb", "normal", "a"),  # skips the disabled c
 ])
 def test_a_run_plays_the_first_enabled_team_of_the_queue_that_fits_its_difficulty(order, difficulty, expected):
-    assert pick_team(queued(REVERSED, order), difficulty)["id"] == expected
+    assert pick_team(settings_of(REVERSED, order), difficulty)["id"] == expected
 
 
 def test_no_team_fits():
-    assert pick_team(queued([t("b", "hard_only"), t("x", enabled=False)], "xb"), "normal") is None
-    assert pick_team(queued([], ""), "hard") is None
+    assert pick_team(settings_of([t("b", "hard_only"), t("x", enabled=False)], "xb"), "normal") is None
+    assert pick_team(settings_of([], ""), "hard") is None
 
 
 @pytest.mark.parametrize("difficulty, expected", [
@@ -55,12 +55,12 @@ def test_no_team_fits():
     (None, ("b", False)),  # auto: hard picks b, normal d; the run is counted as hard's b, not known
 ])
 def test_a_resumed_run_is_the_queue_heads_for_its_difficulty(difficulty, expected):
-    team, known = resumed_team(queued(REVERSED, "bcda"), difficulty)
+    team, known = resumed_team(settings_of(REVERSED, "bcda"), difficulty)
     assert (team["id"], known) == expected
 
 
 def test_a_resumed_run_with_no_team_that_fits_is_the_first_enabled_teams():
-    team, known = resumed_team(queued([t("d", "hard_only"), t("c", enabled=False), t("b", "hard_only")], "cbd"), "normal")
+    team, known = resumed_team(settings_of([t("d", "hard_only"), t("c", enabled=False), t("b", "hard_only")], "cbd"), "normal")
     assert (team["id"], known) == ("b", False)
 
 

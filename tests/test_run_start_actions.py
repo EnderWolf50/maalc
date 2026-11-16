@@ -33,7 +33,7 @@ def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", run)
-    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "pick_team", lambda settings, difficulty: team)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -52,7 +52,7 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
     patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", run)
-    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "pick_team", lambda settings, difficulty: team)
     monkeypatch.setattr(run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -666,7 +666,7 @@ def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
     patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", run)
-    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "pick_team", lambda settings, difficulty: team)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)

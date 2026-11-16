@@ -21,13 +21,18 @@ export function TeamsTab() {
   const { s, update, t, tv, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const [undoNote, removeAt] = useUndo();
-  // A team deleted leaves the queue too; its Undo puts it back in its place there as well (#803).
+  // A team deleted leaves the queue too (#803). useUndo runs this edit for the delete and again for its Undo, which puts the
+  // team back in the queue as useUndo does in the list: before the team that followed it, as the Agent may have moved the
+  // queue meanwhile; last when none did, or at its old place when that team is gone too.
   const remove = () => {
-    const id = s.teams[i].id, at = s.team_queue.indexOf(id);
+    const id = s.teams[i].id, at = s.team_queue.indexOf(id), next = at < 0 ? undefined : s.team_queue[at + 1];
     removeAt(s.teams, i, (fn) => update((d) => {
       fn(d.teams);
       const queue = d.team_queue.filter((x) => x !== id);
-      if (d.teams.some((x) => x.id === id)) queue.splice(at < 0 ? queue.length : Math.min(at, queue.length), 0, id);
+      if (d.teams.some((x) => x.id === id)) {
+        const before = next === undefined ? queue.length : queue.indexOf(next);
+        queue.splice(before < 0 ? Math.min(at, queue.length) : before, 0, id);
+      }
       d.team_queue = queue;
     }), setSel);
   };

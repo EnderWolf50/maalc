@@ -8,7 +8,7 @@ import { bufIconUrl, iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
-import { contrast, cssRules, cssValueOf, expectLines, filterEffect, linear, pickInList, renderEditor, sideList } from "./testing";
+import { contrast, cssRules, cssValueOf, expectLines, filterEffect, linear, pickInList, queuedTeams, renderEditor, sideList } from "./testing";
 import css from "./index.css?raw";
 import mainTsx from "./main.tsx?raw";
 import { TeamsTab } from "./Teams";
@@ -175,7 +175,7 @@ describe("in the whole editor", () => {
 describe("deleting a team", () => {
   test("can be undone: the team comes back in its place, in the editor", async () => {
     const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
-    const r = renderEditor(<TeamsTab />, { ...newSettings(), language: "zh_tw", teams });
+    const r = renderEditor(<TeamsTab />, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
     await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
     expect(r.settings().teams.map((x) => x.id)).toEqual(["a", "c"]);
@@ -186,19 +186,33 @@ describe("deleting a team", () => {
     expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
   });
 
-  test("undone after the Agent moved a team, it goes back before the team that followed it, not to its old index", async () => {
+  test("undone after the Agent moved the queue, it goes back there before the team that followed it, not to its old index", async () => {
     const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
-    function AgentClaimsA() { // what the editor holds once the Agent's requeue of a is read (#501)
+    function AgentClaimsA() { // what the editor holds once the Agent's requeue of a is read (#501, #803)
       const { update } = useEditor();
-      return <button onClick={() => update((s) => { s.teams.push(...s.teams.splice(0, 1)); })}>claim a</button>;
+      return <button onClick={() => update((s) => { s.team_queue.push(...s.team_queue.splice(0, 1)); })}>claim a</button>;
     }
-    const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", teams });
+    const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
     await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
     await r.user.click(screen.getByRole("button", { name: "claim a" }));
-    expect(r.settings().teams.map((x) => x.id)).toEqual(["c", "a"]);
+    expect(r.settings().team_queue).toEqual(["c", "a"]);
     await r.user.click(screen.getByRole("button", { name: zh.undo }));
-    expect(r.settings().teams.map((x) => x.id)).toEqual(["b", "c", "a"]);
+    expect([r.settings().teams.map((x) => x.id), r.settings().team_queue]).toEqual([["a", "b", "c"], ["b", "c", "a"]]);
+  });
+
+  test("the last team of the queue, undone after the Agent moved the queue, goes back last", async () => {
+    const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
+    function AgentClaimsA() {
+      const { update } = useEditor();
+      return <button onClick={() => update((s) => { s.team_queue.push(...s.team_queue.splice(0, 1)); })}>claim a</button>;
+    }
+    const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
+    await pickInList(r.user, "Tc");
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    await r.user.click(screen.getByRole("button", { name: "claim a" }));
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["b", "a", "c"]);
   });
 });
 
