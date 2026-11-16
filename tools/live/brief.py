@@ -65,7 +65,7 @@ LIVE_QUEUE = """- The emulator only through the `maalc-live-test` skill's steps 
 
 SETTINGS = """## Run settings
 
-These are the settings of this run. Set each with `bot.py prep --set`; nothing is inherited from an earlier run or brief.
+These are the settings of this run. Set the Mirror Dungeon ones as the client does, with `bot.py run --option`, the Luxcavation ones with `bot.py prep --set`; nothing is inherited from an earlier run or brief.
 
 | setting | value |
 | --- | --- |
@@ -76,7 +76,7 @@ These are the settings of this run. Set each with `bot.py prep --set`; nothing i
 | recording | {recording} |
 
 {recording_text}
-`bot.py prep --set run.difficulty={difficulty} --set run.runs={runs} --set run.weekly_bonus_use={bonus} {lux_sets}`; check the keys against `agent/settings.schema.json` and confirm the effective values in `run.log` before the bot starts the run.
+`bot.py run {mirror_options}` (the options of `assets/interface.json`) and `bot.py prep {lux_sets}` (the keys of `agent/settings.schema.json`); confirm the effective values in `run.log` before the bot starts the run: the `[run] MirrorDungeon options:` line and the agent's `options:` line at the task's start.
 """
 
 RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5), one recording kept on from the start of "
@@ -105,6 +105,12 @@ def lux_sets(a: argparse.Namespace) -> str:
     return " ".join(f"--set luxcavation.{key}.mode={mode} --set luxcavation.{key}.count={count}" for key, _, _, mode, count in lux(a))
 
 
+def mirror_options(a: argparse.Namespace) -> str:
+    """The Mirror Dungeon task options of the run (#779), as bot.py run takes them: the client's option names."""
+    return (f"--option MirrorDifficulty={a.difficulty} --option MirrorRunsLimit=Yes --option MirrorRuns={a.runs} "
+            f"--option MirrorWeeklyBonusUse={a.weekly_bonus}")
+
+
 GOAL = "\n## Goal\n\n(The agent that creates this task writes the goal here: what to prove, the segment each check needs, the acceptance numbers.)\n"
 
 
@@ -114,6 +120,7 @@ def build(kind: str, a: argparse.Namespace, rules: str | None) -> str:
                          live_queue=LIVE_QUEUE.format(task=a.task) if live else "")
     if live:
         text += "\n" + SETTINGS.format(difficulty=a.difficulty, runs=a.runs, lux_rows=lux_rows(a), lux_sets=lux_sets(a),
+                                       mirror_options=mirror_options(a),
                                        bonus=a.weekly_bonus, recording=a.recording,
                                        recording_text=RECORD_YES if a.recording == "yes" else RECORD_NO)
     text += GOAL

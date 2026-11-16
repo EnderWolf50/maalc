@@ -8,7 +8,7 @@ import math
 import threading
 
 import numpy as np
-from daily_child import GAME, bind, game_class, inside, live_frame, load, result, run_child, run_task, screen
+from daily_child import GAME, bind, game_class, inside, live_frame, load, posted, result, run_child, run_task, screen
 from recovery import L3_FAILED_IN_A_ROW, L3_PER_TASK, Restarts, focused_package
 from test_pass_task import BANNER, MISSIONS_TAB, SCREENS as PASS_SCREENS, SEASONAL_TAB, WEEKLY_TAB
 from agent_patch import rebind
@@ -109,7 +109,7 @@ def child():
         stopped = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         timer = threading.Timer(LIMIT, tasker.post_stop)
         timer.start()
-        detail = run_task(tasker, scenario, "ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}})
+        detail = run_task(tasker, scenario, "ClaimPassMissions", posted("ClaimPassMissions", {"PassHub": {"timeout": HUB_TIMEOUT}}))
         timer.cancel()
         out[scenario] = {**result(detail, game, actions), "starts": game.starts, "stops": game.stops,
                          "tapped_frozen": game.tapped_frozen, "in_a_row": actions.STUCK["restarts"].in_a_row,

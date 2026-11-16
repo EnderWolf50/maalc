@@ -19,10 +19,11 @@ interface.json lacks stops it, exit 1, before the device is touched.
 **prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
 from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
 into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to VALUE
-(JSON, else a string):
-`--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`; a list's item goes by its id,
-`--set teams.t3.heal=revive`. A key it cannot set stops it before DIR is touched. DIR comes from `tools/install.py`
-(a worktree's install/) or a copy of one under `.local/scratch/<task>/`.
+(JSON, else a string): `--set luxcavation.exp.count=2`; a list's item goes by its id, `--set teams.t3.heal=revive`. A
+key it cannot set stops it before DIR is touched, and so does a `run.*` key: the Mirror Dungeon task's options and the
+global ones are the client's now (#779), set with `run --option` (`--set run.runs=1` names `--option MirrorRunsLimit=Yes
+--option MirrorRuns=1`). DIR comes from `tools/install.py` (a worktree's install/) or a copy of one under
+`.local/scratch/<task>/`.
 
 **awake** keeps the display and the machine on for that many minutes: a recording needs the screen awake
 (screen-record). Windows only.
@@ -181,7 +182,33 @@ def tasker(root: Path, tasks: list[str], port: int, options: list[str]) -> int:
     return 0 if set(states) == {"succeeded"} else 1
 
 
+AGENT_OPTIONS = TOOLS.parent / "agent" / "task_options.schema.json"
+
+
+def moved(key: str, value: str) -> str | None:
+    """Where settings key went (#779): the --option of bot.py run that sets it now, for a run.<key> the client's options
+    took over; None for a key still in the settings file."""
+    section, _, name = key.partition(".")
+    if section != "run":
+        return None
+    nodes = json.loads(AGENT_OPTIONS.read_text(encoding="utf-8"))["$defs"]
+    option = next((d["properties"][name]["title"] for d in nodes.values() if name in d["properties"]), None)
+    if option is None:
+        return "the settings' run section is no longer read: set its options with bot.py run --option"
+    if name == "runs":
+        return ("bot.py run --option MirrorRunsLimit=No" if value == "null"
+                else f"bot.py run --option MirrorRunsLimit=Yes --option MirrorRuns={value}")
+    case = {"true": "Yes", "false": "No"}.get(value, value)  # a switch's case names
+    return f"bot.py run --option {option}={case}"
+
+
 def prep(install: Path, source: Path, sets: list[str]) -> dict:
+    """Copy source's config (and state/) into install, with each KEY=VALUE of sets set; SystemExit before install is
+    touched on a key it cannot set, or one that is a client's option now (moved)."""
+    for item in sets:
+        key, _, value = item.partition("=")
+        if where := moved(key, value):
+            raise SystemExit(f"prep: {key} is a task or global option of the client now (#779): {where}")
     settings = json.loads((source / "config/settings.json").read_text(encoding="utf-8"))
     for item in sets:
         key, value = item.split("=", 1)
@@ -247,7 +274,8 @@ def main(argv=None) -> int:
     if a.command == "tasker":
         return tasker(a.install, a.task.split(","), a.port, a.option)
     if a.command == "prep":
-        print(prep(a.install, a.source or main_checkout() / "install", a.set).get("run"))
+        prep(a.install, a.source or main_checkout() / "install", a.set)
+        print(f"prep: {a.install / 'config/settings.json'} written, {len(a.set)} key(s) set", flush=True)
     elif a.command == "awake":
         print(f"awake for {a.minutes:g} min", flush=True)
         awake(a.minutes)

@@ -403,10 +403,9 @@ def run_team(settings, team):
 
 
 def options():
-    """This task's options (task_options), as its start read them (TaskStart, #777): SettingsError when it read none,
-    the settings not loading then."""
+    """This task's options (task_options), as its start read them (TaskStart, #777): SettingsError when it read none."""
     if "options" not in TASK:
-        raise SettingsError(["the task's options were not read at its start: the settings did not load then"])
+        raise SettingsError(["the task's options were not read at its start"])
     return TASK["options"]
 
 
@@ -521,8 +520,8 @@ class TaskStart(CustomAction):
     an account-level stop this launch the task fails here, before any tap, evidence or webhook (#362 D8): it would meet
     the same screen.
 
-    Then, before any tap, it reads the task's options (TASK["options"], #777): what options() gives every reader. A
-    subclass's own start goes on from begin()."""
+    Then, before any tap, it reads the task's options the client sent (TASK["options"], #777, #779): what options() gives
+    every reader. One missing or wrong ends the task there (unsent). A subclass's own start goes on from begin()."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if STUCK["halted"]:
@@ -540,27 +539,41 @@ class TaskStart(CustomAction):
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
         try:
+            values = task_options.read(context, argv.node_name)
+        except task_options.OptionsError as e:
+            return self.unsent(context, argv, e)
+        log(task_options.line(values))
+        TASK["options"] = task_options.options(argv.node_name, values)  # the stop procedure's webhook from here on
+        try:
             settings = load_settings(ROOT)
         except SettingsError as e:
             return self.unread(context, e)
-        TASK["options"] = self.options(argv, settings)
+        TASK["options"].update(self.settings_options(argv, settings))
         return self.begin(context, argv, settings)
 
+    def unsent(self, context, argv, error):
+        """An option the client did not send, or sent wrong: the task ends before any tap, as on settings it cannot run
+        on. MirrorDungeon fails (PlanRun's way); a daily task takes the stop procedure (LuxStart's)."""
+        if argv.node_name == "MirrorDungeon":
+            log(f"stop: {error}")
+            return False
+        return stop(context, str(error))
+
     def unread(self, context, error):
-        """The settings did not load, so the task has no options; it goes on, as before it read them: MirrorDungeon's
-        PlanRun fails it when it loads the settings itself, and the other tasks take the defaults (allowed, no
-        webhook)."""
+        """The settings did not load; the task goes on on the options it read: MirrorDungeon's PlanRun fails it when it
+        loads the settings itself, and a task with no options in the settings needs none of them."""
         return True
 
-    def options(self, argv, settings):
-        """The task's options from settings: MirrorDungeon's, else the ones every task has."""
-        return task_options.mirror(settings) if argv.node_name == "MirrorDungeon" else task_options.global_options(settings)
+    def settings_options(self, argv, settings):
+        """The task's options the settings file still holds (a Luxcavation task's, ChargeEnkephalin's, until #781):
+        none, for a task whose options all come from the client."""
+        return {}
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
-        play (task_options.target_floor_errors), in the words PlanRun gave it when the settings' load checked it."""
+        play (task_options.target_floor_errors), as PlanRun fails it on bad settings."""
         if argv.node_name == "MirrorDungeon" and (errors := task_options.target_floor_errors(TASK["options"], settings["teams"])):
-            log(f"stop: {SettingsError(errors)}")
+            log(f"stop: {task_options.OptionsError(errors)}")
             return False
         return True
 
@@ -890,7 +903,7 @@ def popup_button(detail):
 
 @AgentServer.custom_action("DismissShot")
 class DismissShot(CustomAction):
-    """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key with
+    """Keep the screen in logs/dismissed/ (the global option KeepDismissedScreens), then close it (#244): the back key with
     {"back": true}, else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
     RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
     "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); every 0.2 s, at
@@ -940,7 +953,7 @@ class ConfirmDownload(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game asks to download data: run.auto_download is off", whole_list=True)
+            return stop(context, "the game asks to download data: the global option AutoDownload is off", whole_list=True)
         context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
         restart_floor_clock()  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
@@ -958,7 +971,7 @@ class AcceptUpdate(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game has an update: run.auto_download is off", whole_list=True)
+            return stop(context, "the game has an update: the global option AutoDownload is off", whole_list=True)
         if STUCK["updates"] >= UPDATE_RESTARTS:
             return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started", whole_list=True)
         STUCK["updates"] += 1
@@ -987,11 +1000,11 @@ def agree_ticked(image, x, y):
 
 @AgentServer.custom_action("AcceptTerms")
 class AcceptTerms(CustomAction):
-    """Tick both boxes of the title's User Agreement, then Confirm once both read ticked (run.auto_accept_terms)."""
+    """Tick both boxes of the title's User Agreement, then Confirm once both read ticked (the global option AutoAcceptTerms)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_accept_terms"):
-            return stop(context, "User Agreement: run.auto_accept_terms is off", whole_list=True)
+            return stop(context, "User Agreement: the global option AutoAcceptTerms is off", whole_list=True)
         image = screen(context)
         for x, y in AGREE_BOXES:
             if not agree_ticked(image, x, y):

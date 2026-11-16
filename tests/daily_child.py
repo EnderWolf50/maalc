@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 from agent_patch import rebind
+from client_options import override as client_override
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
@@ -149,6 +150,12 @@ def bind(resource, game):
     tasker = Tasker()
     tasker.bind(resource, game)
     return tasker
+
+
+def posted(task, own=None):
+    """What a client posts task with (client_options, every option at its default), then the test's own override: a
+    task's entry action ends it on an option the client did not send (#779)."""
+    return [*client_override(task), *([own] if own else [])]
 
 
 def run_task(tasker, scenario, entry, override=None):

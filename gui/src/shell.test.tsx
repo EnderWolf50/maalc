@@ -34,7 +34,7 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   render(<App />);
   const teams = await screen.findByRole("tab", { name: zh["tab.teams"] });
   expect(teams).toHaveAttribute("tabindex", "0");
-  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("tabindex", "-1");
+  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("tabindex", "-1");
   teams.focus();
   await user.keyboard("{ArrowRight}");
   const gifts = screen.getByRole("tab", { name: zh["tab.gifts"] });
@@ -45,19 +45,45 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   await user.keyboard("{End}");
   expect(screen.getByRole("tab", { name: zh["tab.trials"] })).toHaveAttribute("aria-selected", "true");
   await user.keyboard("{Home}");
-  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("aria-selected", "true");
-  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.run"] }).id);
+  expect(screen.getByRole("tab", { name: zh["tab.daily"] })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", screen.getByRole("tab", { name: zh["tab.daily"] }).id);
 });
 
-test("the tabs come in four groups: what the bot runs (the run, the daily tasks), the team, the plans, the overrides (#721)", async () => {
+test("the tabs come in four groups: what the bot runs (the daily tasks), the team, the plans, the overrides (#721)", async () => {
   render(<App />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   // a separator between two groups shows as "|"
   const row = [...screen.getByRole("tablist").children].map((x) => (x.getAttribute("role") === "tab" ? x.textContent : "|"));
   expect(row).toEqual([
-    zh["tab.run"], zh["tab.daily"], "|", zh["tab.teams"], zh["tab.gifts"], "|",
+    zh["tab.daily"], "|", zh["tab.teams"], zh["tab.gifts"], "|",
     zh["tab.deployment"], zh["tab.starlight"], zh["tab.themepacks"], "|", zh["tab.events"], zh["tab.trials"],
   ]);
+});
+
+test("the Run options tab is gone: the Mirror Dungeon task options and the global ones are the client's (#779)", async () => {
+  render(<App />);
+  await screen.findByRole("tab", { name: zh["tab.teams"] });
+  const tabs = screen.getAllByRole("tab").map((x) => x.textContent);
+  expect(tabs).not.toContain("執行選項");
+  expect(tabs).toHaveLength(8);
+});
+
+test("a save writes the file's run section back as it was, though no tab shows it (#779)", async () => {
+  // #782 drops it from the file; until then nothing reads it but nothing loses it either. A target floor of 15 with a
+  // team that never plays HARD saves: that rule is the agent's, at the Mirror Dungeon task's start.
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta")];
+  s.run = { ...s.run, difficulty: "normal", target_floor: 15, runs: null, wipe_retries: 7, webhook_url: "http://hook.invalid/",
+    auto_download: false, keep_dismissed_screens: false };
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  await user.click(screen.getByRole("button", { name: zh.save }));
+  await waitFor(() => expect(file.saved).toHaveLength(1));
+  const saved = JSON.parse(file.saved[0]);
+  expect(saved.teams[0].name).toBe("Ta!");
+  expect(saved.run).toEqual(s.run);
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

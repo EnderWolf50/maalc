@@ -1,50 +1,109 @@
-"""A task's options (#776, #777): the values its entry action (TaskStart, and LuxStart and ChargeStart built on it) reads
-once, before any tap, and keeps in actions.TASK["options"]; every reader takes them from there, none from the settings
-file.
+"""A task's options (#776, #777, #779): the values its entry action (TaskStart, and LuxStart and ChargeStart built on it)
+reads once, before any tap, and keeps in actions.TASK["options"]; every reader takes them from there.
 
-They still come from the settings file: its run, luxcavation.<task> and charge_enkephalin sections. The two rules that
-cross them with the teams are checked here, at the task's start, not when the file loads (settings.cross_check)."""
+The client sends them (MXU, MFAAvalonia; ADR 0013). Each option of interface.json writes its key into attach of the
+task's entry node, a global option into attach of GlobalOptions, a node no next names; MaaFramework applies the client's
+override array entry by entry and merges attach key by key, so the entry action reads them with context.get_node_data.
+read checks both against task_options.schema.json; a value missing or wrong ends the task before any tap, with a line
+that names the option. There is no settings-file fallback. A Luxcavation task's and ChargeEnkephalin's own options still
+come from the settings file (luxcavation, charge), until #781 and #780 move them.
 
-# The settings' run keys every task reads: the stop procedure's webhook, the title's two dialogs, the kept screens.
-GLOBAL = ("webhook_url", "auto_accept_terms", "auto_download", "keep_dismissed_screens")
-# The rest of run: MirrorDungeon's own.
-MIRROR = ("difficulty", "target_floor", "runs", "theme_pack_refresh", "weekly_bonus_use", "weekly_bonus_amount",
-          "stop_when_weekly_bonus_out", "starlight_unaffordable", "wipe_retries", "after_retries")
+The rule that crosses MirrorDungeon's target floor with the teams is checked here too, at the task's start: the teams
+stay in the settings file."""
+
+import json
+from pathlib import Path
+
+from jsonschema import Draft202012Validator
+
+from settings import SettingsError
+
+SCHEMA = json.loads((Path(__file__).parent / "task_options.schema.json").read_text(encoding="utf-8"))
+GLOBAL_NODE = "GlobalOptions"  # assets/resource/base/pipeline/options.json
+GLOBAL = tuple(SCHEMA["$defs"][GLOBAL_NODE]["properties"])  # what every task reads: the webhook, the title's dialogs, the kept screens
+# Where the user changes a node's options, for the line that names one.
+WHERE = {GLOBAL_NODE: "the client's global options (MXU: Settings; MFAAvalonia: the global options item of the task list)"}
+SECRET = {"webhook_url"}  # the options line says only whether it is set
 
 
-def global_options(settings):
-    """GLOBAL's options, every task's; the only ones of a task with none of its own (AssembleModules, ClaimMail,
-    ClaimPassMissions)."""
-    return {key: settings["run"][key] for key in GLOBAL}
+class OptionsError(SettingsError):
+    """What the task cannot run on among its options: a SettingsError, which every reader already stops on."""
+    WHAT = "task options"
 
 
-def mirror(settings):
-    """MirrorDungeon's options: GLOBAL and MIRROR."""
-    return {**global_options(settings), **{key: settings["run"][key] for key in MIRROR}}
+def nodes(task):
+    """The nodes whose attach task (its entry node's name) reads: GlobalOptions, and its own when the schema has it."""
+    return [GLOBAL_NODE, *([task] if task in SCHEMA["$defs"] else [])]
+
+
+def check(node, values):
+    """The errors of values, node's attach, against the schema's node, in its properties' order: each names the option
+    (its title), what came and where to change it."""
+    schema = SCHEMA["$defs"][node]
+    where = WHERE.get(node, f"the options of the {node} task in the client's task list")
+    found = {}
+    for e in Draft202012Validator(schema).iter_errors(values):
+        if not e.absolute_path and e.validator != "required":  # the attach itself, not one of its keys
+            return [f"{node}'s attach: {e.message}; {where}"]
+        if e.validator == "required":  # one error per missing key, all naming the whole list
+            found.update({k: "not sent" for k in e.validator_value if k not in e.instance})
+        else:
+            found.setdefault(e.absolute_path[0], e.message)
+    return [f"{schema['properties'][k]['title']} ({k}): {found[k]}; set it in {where}"
+            for k in schema["properties"] if k in found]
+
+
+def read(context, task):
+    """task's options as the client sent them: the attach of nodes(task) as MaaFramework's context has them, the
+    schema's keys only. OptionsError names each option that is missing or wrong."""
+    values, errors = {}, []
+    for node in nodes(task):
+        got = (context.get_node_data(node) or {}).get("attach") or {}
+        errors += check(node, got)
+        values.update({k: got[k] for k in SCHEMA["$defs"][node]["properties"] if k in got})
+    if errors:
+        raise OptionsError(errors)
+    return values
+
+
+def line(values):
+    """The options line a task's start logs: each value read, in the schema's order; a secret only set or not set."""
+    shown = [f"{k} ({'set' if values[k] else 'not set'})" if k in SECRET
+             else f"{k}={v if isinstance(v := values[k], str) else json.dumps(v)}" for k in values]
+    return "options: " + ", ".join(shown)
+
+
+def options(task, values):
+    """The options of task as its readers take them, from read's values: MirrorDungeon's runs is the run cap, None for
+    no limit (runs_limited false), as settlement.runs_done takes it."""
+    if task != "MirrorDungeon":
+        return dict(values)
+    out = {k: v for k, v in values.items() if k not in ("runs_limited", "runs")}
+    return {**out, "runs": values["runs"] if values["runs_limited"] else None}
 
 
 def luxcavation(settings, key):
-    """A Luxcavation task's options (key "exp" or "thread"): GLOBAL and luxcavation.<key>'s mode, count, team, retries
-    and consecutive."""
-    return {**global_options(settings), **settings["luxcavation"][key]}
+    """A Luxcavation task's options the settings file still holds (key "exp" or "thread"): luxcavation.<key>'s mode,
+    count, team, retries and consecutive."""
+    return dict(settings["luxcavation"][key])
 
 
 def charge(settings):
-    """ChargeEnkephalin's options: GLOBAL and count, charge_enkephalin.count."""
-    return {**global_options(settings), "count": settings["charge_enkephalin"]["count"]}
+    """ChargeEnkephalin's option the settings file still holds: count, charge_enkephalin.count."""
+    return {"count": settings["charge_enkephalin"]["count"]}
 
 
 def target_floor_errors(options, teams):
     """MirrorDungeon's rule (#385): a target floor past 5 needs the whole run HARD, so the difficulty is not normal and
     every enabled team (the rotation picks from them) plays HARD from floor 1 and is not normal_only. Floors 6+ open only
-    when every floor of the run was HARD. The errors in the words and settings paths the file's load gave them."""
+    when every floor of the run was HARD. The errors name the option or the team's settings path to change."""
     target_floor = options["target_floor"]
     if target_floor <= 5:
         return []
     errors = []
-    need = f"but target_floor {target_floor} needs the whole run HARD"
+    need = f"but MirrorTargetFloor {target_floor} needs the whole run HARD"
     if options["difficulty"] == "normal":
-        errors.append(f"run/difficulty: difficulty is 'normal', {need}")
+        errors.append(f"MirrorDifficulty (difficulty): 'normal', {need}")
     for i, t in enumerate(teams):
         if not t["enabled"]:
             continue

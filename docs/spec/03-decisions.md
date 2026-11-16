@@ -4,7 +4,7 @@
 
 所有判斷都以當下畫面為準。Agent 沒有狀態檔：隊伍輪到誰就是設定裡隊伍清單的順序（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)），其他數值每次都從畫面重新讀取（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。需要判斷的選擇寫成 Agent 的 custom action 或 custom recognition，畫面之間的流程留在 `MirrorHub`（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）。
 
-本章用「每隊」標示設定檔裡每支隊伍的欄位，用「全域」標示設定檔的執行選項（`run`），用「資料檔」標示遊戲資料（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)、[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。
+本章用「每隊」標示設定檔裡每支隊伍的欄位，用「全域」標示鏡牢任務選項與全域選項（client 的任務選項，[04](04-settings.md) 第 5 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)），用「資料檔」標示遊戲資料（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)、[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。
 
 ## 1. 選隊與輪替
 

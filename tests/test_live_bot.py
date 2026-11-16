@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 import client_override
+from client_options import override
 from live import bot
 
 
@@ -54,15 +55,42 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     src, dst = tmp_path / "main", tmp_path / "test"
     (src / "config").mkdir(parents=True)
     (src / "state").mkdir()
-    (src / "config/settings.json").write_text(json.dumps({"run": {"runs": 5, "difficulty": "hard"}}))
+    (src / "config/settings.json").write_text(json.dumps({"luxcavation": {"exp": {"mode": "daily", "count": 1}}}))
     (src / "config/maa_option.json").write_text("{}")
     (src / "state/progress.json").write_text("{}")
-    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1", "--set", "run.difficulty=normal",
-              "--set", "run.weekly_bonus_use=none"])
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "luxcavation.exp.mode=count",
+              "--set", "luxcavation.exp.count=2"])
     s = json.loads((dst / "config/settings.json").read_text())
-    assert s["run"] == {"runs": 1, "difficulty": "normal", "weekly_bonus_use": "none"}
+    assert s["luxcavation"] == {"exp": {"mode": "count", "count": 2}}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
-    assert json.loads((src / "config/settings.json").read_text())["run"]["runs"] == 5  # the source stays
+    assert json.loads((src / "config/settings.json").read_text())["luxcavation"]["exp"]["count"] == 1  # the source stays
+
+
+@pytest.mark.parametrize("key, says", [
+    ("run.runs=1", "bot.py run --option MirrorRunsLimit=Yes --option MirrorRuns=1"),
+    ("run.runs=null", "bot.py run --option MirrorRunsLimit=No"),
+    ("run.difficulty=normal", "bot.py run --option MirrorDifficulty=normal"),
+    ("run.target_floor=10", "bot.py run --option MirrorTargetFloor=10"),
+    ("run.auto_download=false", "bot.py run --option AutoDownload=No"),
+    ("run.stop_when_weekly_bonus_out=true", "bot.py run --option MirrorStopWhenBonusOut=Yes"),
+    ("run.nope=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+])
+def test_prep_stops_on_a_run_key_and_names_the_client_option_that_took_it_over(tmp_path, key, says):
+    # #779: the agent no longer reads the settings' run section; a run set there would not happen
+    src, dst = prep_source(tmp_path), tmp_path / "test"
+    with pytest.raises(SystemExit) as e:
+        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", key])
+    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now (#779): {says}"
+    assert not dst.exists()
+
+
+def test_every_run_key_prep_refuses_names_an_option_of_the_interface():
+    # the option names come from the agent's schema titles: each is an option assets/interface.json has
+    options = client_override.load_interface(REPO / "assets/interface.json")["option"]
+    for key in json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))["properties"]["run"]["properties"]:
+        where = bot.moved(f"run.{key}", "1")
+        named = [w.split("=")[0] for w in where.split("--option ")[1:]]
+        assert named and all(n in options for n in named), (key, where)
 
 
 def prep_source(tmp_path):
@@ -93,7 +121,7 @@ def test_prep_sets_a_list_item_by_its_id(tmp_path):
 def test_prep_stops_on_a_key_it_cannot_set_before_the_install_is_touched(tmp_path, key, says):
     src, dst = prep_source(tmp_path), tmp_path / "test"
     with pytest.raises(SystemExit, match=says):
-        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1", "--set", f"{key}=1"])
+        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t1.heal=revive", "--set", f"{key}=1"])
     assert not dst.exists()
 
 
@@ -123,13 +151,15 @@ def test_plan_posts_each_task_with_the_override_mxu_would_send_and_says_the_valu
     assert lines == ["[run] Mirror options: Difficulty=hard"] * 2
 
 
-def test_plan_sends_no_override_for_the_interface_as_it_is_without_options():
-    # #778 lands before interface.json has options: every task posts as it did before, with nothing to override
+def test_plan_posts_every_task_of_the_interface_with_the_global_options_and_its_own():
+    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too
     tasks = [t["name"] for t in client_override.load_interface(REPO / "assets/interface.json")["task"]]
     lines = []
-    jobs = bot.plan(REPO / "assets", tasks, [], lines.append)
-    assert tasks and jobs == [(name, name, []) for name in tasks]
-    assert lines == [f"[run] {name} options: none" for name in tasks]
+    jobs = bot.plan(REPO / "assets", tasks, ["MirrorRuns=2"], lines.append)
+    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2")) for name in tasks]
+    assert all(line.startswith(f"[run] {name} options: WebhookUrl=(not set) (default), AutoAcceptTerms=Yes (default)")
+               for name, line in zip(tasks, lines))
+    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[tasks.index("MirrorDungeon")]
 
 
 @pytest.mark.parametrize("tasks, option, says", [
