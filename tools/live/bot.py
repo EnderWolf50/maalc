@@ -18,8 +18,8 @@ interface.json lacks stops it, exit 1, before the device is touched.
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and, when the source has them, the team options file
 `config/team_options.json` the settings GUI writes (#780: `run --option ExpTeam=<team id>` picks from its cases, and
-so does `--option MirrorStartTeam=<team id>`, #805; one the source lacks goes from DIR too) and `state/` from `--source` (default the main checkout's install/) into DIR; the
-bot's first start turns the old rotation cursor into the team queue's head and removes the state files with `state/`
+so does `--option MirrorStartTeam=<team id>`, #805; one the source lacks goes from DIR too) and `state/` from
+`--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor into the team queue's head and removes the state files with `state/`
 (#501). Then it sets each dotted KEY to VALUE (JSON, else a string): `--set language=en_us`; a list's item goes by its
 id, `--set teams.t3.heal=revive`. A key it cannot set stops it before DIR is touched, and so does a key the client's
 options took over: `run.*`, the Mirror Dungeon task's options and the global ones (#779), and a daily task's own,

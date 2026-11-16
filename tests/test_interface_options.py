@@ -82,10 +82,10 @@ def test_every_case_and_default_of_every_option_passes_the_agents_schema(task, k
 @pytest.mark.parametrize("task", TASKS)
 def test_every_combination_of_the_cases_passes_the_agents_schema(task):
     # the selects and switches of a task together (MirrorDungeon: 3 * 3 * 2 * 3 * 3 * 2 * 2 * 2 * 2 cases, 2592). Not
-    # the options of the team options file: a team's case writes only its own key, and each one passes on its own
-    # (test_every_case_and_default_of_every_option_passes_the_agents_schema); the product would multiply the rest by
+    # MirrorStartTeam (#805): a team's case writes only start_team, and each one passes on its own
+    # (test_every_case_and_default_of_every_option_passes_the_agents_schema); the product would multiply the 2592 by
     # the teams.
-    chosen = [k for k in task_keys(task) if client_override.kind(OPTIONS[k]) in CHOSEN and k not in FILE_KEYS]
+    chosen = [k for k in task_keys(task) if client_override.kind(OPTIONS[k]) in CHOSEN and k != "MirrorStartTeam"]
     for combo in itertools.product(*[[f"{k}={v}" for v in values(k)] for k in chosen]):
         assert errors(task, *combo) == [], combo
 

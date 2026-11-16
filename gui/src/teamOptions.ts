@@ -36,9 +36,9 @@ export const QUEUE_LABEL = "$MirrorStartTeam_queue";
 /** Each option of the file: its case 0, which sends nothing, and the attach key a team's case writes the team's id to
  * (agent/task_options.schema.json). The file holds them in this order. */
 export const FILE_OPTIONS = {
-  ExpTeam: { first: { name: NONE, label: NONE_LABEL }, key: "team" },
-  ThreadTeam: { first: { name: NONE, label: NONE_LABEL }, key: "team" },
-  MirrorStartTeam: { first: { name: QUEUE, label: QUEUE_LABEL }, key: "start_team" },
+  ExpTeam: { first: { name: NONE, label: NONE_LABEL }, attach: "team" },
+  ThreadTeam: { first: { name: NONE, label: NONE_LABEL }, attach: "team" },
+  MirrorStartTeam: { first: { name: QUEUE, label: QUEUE_LABEL }, attach: "start_team" },
 } as const;
 export type FileOption = keyof typeof FILE_OPTIONS;
 /** What a deleted team's label ends with, in each language of the GUI: its case stays and still sends its id, which
@@ -92,9 +92,9 @@ export function teamOptionsText(previous: string | null, s: Settings, picks: Tea
   const ids = new Set(s.teams.map((t) => t.id));
   const option: Record<string, Record<string, unknown>> = {};
   for (const key of Object.keys(FILE_OPTIONS) as FileOption[]) {
-    const { first, key: attachKey } = FILE_OPTIONS[key];
+    const { first, attach } = FILE_OPTIONS[key];
     const node = entryOf(key);
-    const send = (id: string) => ({ [node]: { attach: { [attachKey]: id } } });
+    const send = (id: string) => ({ [node]: { attach: { [attach]: id } } });
     const teamCase = (t: Team): Case => ({ name: t.id, label: teamLabel(t, s.language), pipeline_override: send(t.id) });
     const gone = (c: Case): Case => {
       const base = Object.values(DELETED).reduce((l, mark) => (l.endsWith(mark) ? l.slice(0, -mark.length) : l), c.label);

@@ -1,9 +1,9 @@
 """MirrorDungeon's start team (#805, ADR 0014): the client's MirrorStartTeam, the team this task starts from. Its case 0
 「照隊伍佇列」 (queue) sends nothing; a team's case sends the team's id as start_team in the entry node's attach, the cases
 coming from the team options file the settings GUI writes (tests/team_options.json, as for ExpTeam). The task's start
-stops before any tap on a team deleted or disabled; its first new run moves the team to the head of team_queue before
-it picks its team, as a claim moves one to the end; a run under way at the task's start plays the team of the queue as
-it was before the move.
+stops before any tap on a team deleted or disabled; its first new run picks its team with that team at the head of
+team_queue and writes it there once the run opens, as a claim moves one to the end; a run under way at the task's
+start plays the team of the queue as it was before the move.
 
 Every task here is posted with the override tools/client_override.py builds from interface.json and that file, as MXU
 does (client_options), on settings_cases' valid file: team a (any) then team b (hard_only), the list and the queue in
@@ -50,6 +50,13 @@ def start_lines():
     return [line for line in said() if "start team" in line]
 
 
+def before_new_run(*lines):
+    """Whether the log has these lines in a row, the last before the new run's line."""
+    log = said()
+    i = next(i for i, line in enumerate(log) if line.startswith("new run: ") and " team " in line)
+    return log[i - len(lines):i] == list(lines)
+
+
 def plan_run(context):
     """PlanRun on the entry page, the Modules read on the way in: the run it plans."""
     actions.TASK.update(modules=20)
@@ -64,7 +71,7 @@ def test_the_first_new_run_moves_the_start_team_to_the_head_of_the_queue_and_pla
     run = plan_run(context)
     assert queue() == ["b", "a"]
     assert run["team"]["id"] == "b" and run["planned"]
-    assert said()[0] == "team queue: start team 'Team b' (MirrorStartTeam) to the head"
+    assert before_new_run("team queue: start team 'Team b' (MirrorStartTeam) to the head")
     assert [line for line in said() if line.startswith("new run: hard, team 'Team b' (TEAMS #2)")]
 
 
@@ -75,7 +82,7 @@ def test_a_start_team_already_at_the_head_is_logged_and_the_file_stays(context):
     actions.LOG.clear()
     assert plan_run(context)["team"]["id"] == "a"
     assert path.read_bytes() == before
-    assert said()[0] == "team queue: start team 'Team a' (MirrorStartTeam) is already at the head"
+    assert before_new_run("team queue: start team 'Team a' (MirrorStartTeam) is already at the head")
 
 
 def start(context, monkeypatch, *options, settings=lambda data: None):
@@ -130,11 +137,31 @@ def test_a_start_team_whose_usage_does_not_fit_the_run_is_passed_over_and_keeps_
     actions.LOG.clear()
     run = plan_run(context)
     assert run["team"]["id"] == "a" and queue() == ["b", "a"]  # the next team of the queue that fits
-    assert said()[:2] == ["team queue: start team 'Team b' (MirrorStartTeam) to the head",
+    assert before_new_run("team queue: start team 'Team b' (MirrorStartTeam) to the head",
                           "start team 'Team b' (MirrorStartTeam) is hard_only: a normal run passes over it, and it "
-                          "keeps its place in the team queue"]
+                          "keeps its place in the team queue")
     claim(context, monkeypatch)
     assert queue() == ["b", "a"]  # only the team that played goes to the end, and a is last already
+
+
+def test_a_task_that_opens_no_run_leaves_the_queue_alone(context):
+    # spec #802: the move is the first new run's; a task with nothing left to do opens none
+    entry_page(context, "MirrorDifficulty=hard", "MirrorStopWhenBonusOut=Yes", "MirrorStartTeam=b")  # none left
+    path = actions.ROOT / "config" / "settings.json"
+    before = path.read_bytes()
+    actions.LOG.clear()
+    plan_run(context)
+    assert actions.TASK["done"] == "weekly bonuses used up"
+    assert path.read_bytes() == before and start_lines() == []
+
+
+def test_a_back_out_to_read_the_modules_moves_nothing_until_the_run_opens(context):
+    # #369: PlanRun goes back to the Drive page when this trip did not read the Modules, and comes back here
+    entry_page(context, "MirrorDifficulty=hard", "MirrorStartTeam=b")
+    del actions.TASK["modules"]
+    assert run_start_actions.PlanRun().run(context, None) is True and "settings" not in actions.RUN
+    assert queue() == ["a", "b"]
+    assert plan_run(context)["team"]["id"] == "b" and queue() == ["b", "a"]
 
 
 def test_the_start_team_moves_only_before_the_tasks_first_new_run(context, monkeypatch):

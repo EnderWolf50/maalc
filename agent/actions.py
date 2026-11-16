@@ -48,7 +48,7 @@ RUN = {}
 # "forfeits" (the forfeit reasons of the runs given up since the last claim: too many in a row stop the task, #560),
 # "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps), "l3"
 # (restart_game's restarts that went through, #520), "start_team" (a Mirror Dungeon task's start team, until its first new
-# run moved it to the head of the queue, #805). "options": the task's options as its start read them (options()).
+# run opened with it at the head of the queue, #805). "options": the task's options as its start read them (options()).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
