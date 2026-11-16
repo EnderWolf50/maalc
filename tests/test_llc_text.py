@@ -6,8 +6,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {"gift_search": ROOT / "assets/resource/base/data/gift_search.json",
-         "gift_recipes": ROOT / "assets/resource/base/data/gift_recipes.json", "graces": ROOT / "gui/src/graces.json",
-         "gift_effects": ROOT / "gui/src/gift_effects.json"}
+         "gift_recipes": ROOT / "assets/resource/base/data/gift_recipes.json", "graces": ROOT / "assets/resource/base/data/graces.json",
+         "gift_effects": ROOT / "assets/resource/base/data/gift_effects.json"}
 DATA = {k: json.loads(p.read_text(encoding="utf-8")) for k, p in FILES.items()}
 
 

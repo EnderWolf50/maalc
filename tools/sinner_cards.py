@@ -1,5 +1,5 @@
 """Write the settings GUI's sinner cards: assets/resource/base/data/sinner_cards/<identity id>.webp and index.json (#718), and
-the formation card's frame they sit in, gui/src/sinner_card/<part>.webp (#732).
+the formation card's frame they sit in, data/sinner_frame/<part>.webp (#732).
 
 Usage: uv run --group unpack python tools/sinner_cards.py [--width 240]
 Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"). A sinner's default identity (LCB Sinner) is the personality
@@ -28,7 +28,7 @@ from unity_files import PLAYER_DATA, bundle_sprites, player_sprites, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "assets/resource/base/data/sinner_cards"
-FRAME_OUT = REPO / "gui/src/sinner_card"
+FRAME_OUT = REPO / "assets/resource/base/data/sinner_frame"
 SCHEMA = REPO / "agent/settings.schema.json"
 PERSONALITY = "static/Assets/Resources_moved/StaticData/static-data/personality"
 CHARACTERS = "raw/Localize/en/EN_Characters.json"
