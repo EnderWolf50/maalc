@@ -184,3 +184,69 @@ def test_a_removed_name_a_commit_marks_ok_is_not_stale(tmp_path, monkeypatch):
     removed = {"a.py": ["BATTLE = 1", "OLD_LIMIT = 3"]}
     assert review_lint.stale_references(removed, {}, review_lint.removed_name_oks("main")) == [
         "a.py: `OLD_LIMIT` was removed but is still named at README.md:1"]
+
+
+# 模板版本 (#769): a branch that changes the templates or the pipeline together with the agent or the interface has to bump
+# TEMPLATE in agent/resource_package.py, or one commit says why not.
+PIPELINE = "assets/resource/base/pipeline/a.json"
+IMAGE = "assets/resource/base/image/a.png"  # a binary file: the diff has no lines for it, only a path
+BUMP = ({"agent/resource_package.py": [(14, "TEMPLATE = 2  # 模板版本")]}, {"agent/resource_package.py": ["TEMPLATE = 1  # 模板版本"]})
+
+
+def test_pipeline_and_agent_changed_without_a_template_bump_is_a_problem():
+    paths = {PIPELINE, "agent/actions.py"}
+    problem = review_lint.template_version_problem(paths, lines("agent/actions.py", "x = 1"), {})
+    assert problem and "TEMPLATE" in problem and "Template-version-ok" in problem
+    assert review_lint.template_version_problem({IMAGE, "assets/interface.json"}, {}, {})  # image and interface: same rule
+
+
+def test_a_template_bump_in_the_same_branch_passes():
+    paths = {PIPELINE, "agent/actions.py", "agent/resource_package.py"}
+    assert review_lint.template_version_problem(paths, *BUMP) is None
+
+
+def test_a_template_line_that_did_not_go_up_is_not_a_bump():
+    same = ({"agent/resource_package.py": [(14, "TEMPLATE = 1  # reworded")]}, {"agent/resource_package.py": ["TEMPLATE = 1"]})
+    down = ({"agent/resource_package.py": [(14, "TEMPLATE = 1")]}, {"agent/resource_package.py": ["TEMPLATE = 2"]})
+    for added, removed in (same, down):
+        assert review_lint.template_version_problem({PIPELINE, "agent/actions.py", "agent/resource_package.py"}, added, removed)
+
+
+def test_a_format_bump_alone_is_not_agent_code():
+    paths = {PIPELINE, "agent/resource_package.py"}
+    added = {"agent/resource_package.py": [(13, "FORMAT = 2")]}
+    assert review_lint.template_version_problem(paths, added, {"agent/resource_package.py": ["FORMAT = 1"]}) is None
+
+
+def test_only_the_pipeline_or_only_the_agent_changed_passes():
+    assert review_lint.template_version_problem({PIPELINE, IMAGE}, {}, {}) is None
+    assert review_lint.template_version_problem({"agent/actions.py", "assets/interface.json", "tests/test_x.py"}, {}, {}) is None
+    assert review_lint.template_version_problem({PIPELINE, "tests/test_x.py", "docs/x.md"}, {}, {}) is None
+
+
+def test_changed_image_and_agent_in_a_branch_need_a_bump_unless_a_commit_gives_a_reason(tmp_path, monkeypatch):
+    def run(*args):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@example.test", *args], check=True,
+                       capture_output=True)
+    for rel, data in (("agent/actions.py", b"x = 1\n"), (IMAGE, b"\x89PNG\x00-1"), ("agent/resource_package.py", b"TEMPLATE = 1\n")):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_bytes(data)
+    run("init", "-q", "-b", "main")
+    run("add", ".")
+    run("commit", "-qm", "base")
+    run("checkout", "-qb", "feat")
+    (tmp_path / IMAGE).write_bytes(b"\x89PNG\x00-2")
+    (tmp_path / "agent/actions.py").write_text("x = 2\n")
+    run("commit", "-qam", "change a template and the agent")
+    monkeypatch.setattr(review_lint, "ROOT", Path(tmp_path))
+    assert review_lint.changed_paths("main") == {IMAGE, "agent/actions.py"}
+    assert review_lint.template_version_problems("main")
+    (tmp_path / "agent/resource_package.py").write_text("TEMPLATE = 2\n")
+    run("commit", "-qam", "bump")
+    assert review_lint.template_version_problems("main") == []
+    (tmp_path / "agent/resource_package.py").write_text("TEMPLATE = 1\n")
+    run("commit", "-qam", "unbump\n\nTemplate-version-ok:\nTemplate-version-ok:   \n")  # no reason: not ok
+    assert review_lint.template_version_problems("main")
+    (tmp_path / "agent/actions.py").write_text("x = 3\n")
+    run("commit", "-qam", "reword\n\nTemplate-version-ok: the template is byte-identical, only its file mode changed")
+    assert review_lint.template_version_problems("main") == []
