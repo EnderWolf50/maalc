@@ -13,7 +13,7 @@ status: accepted（修訂 ADR 0005）
 - **格式版本**管資料：欄位結構改變才加一。欄位的意義改變時改欄位名，讓欄位結構的檢查抓到，格式版本跟著加一。
 - **模板版本**管模板與 pipeline：要配新的 Agent 程式或 `assets/interface.json` 時才加一。CI 檢查：一個 PR 同時改了 `image/` 或 `pipeline/`，又改了 `agent/` 或 `assets/interface.json`，模板版本卻沒變，就失敗；commit 寫一行理由可以略過，和 `tools/review_lint.py` 的 `Removed-name-ok:` 一樣。
 - 程式只套用自己認得的格式版本與模板版本，兩者各自判斷：格式版本比它新的資料、模板版本比它新的模板與 pipeline，留給帶著對應程式的下一個 zip。在那之前，舊 zip 的資料與模板各自停在最後一份認得的，所以模板版本加一不會擋住新的事件表。
-- 包內附下載來源清單。以後加鏡像站，舊 zip 下次更新成功就會知道。
+- 包內附下載來源清單。以後加鏡像站，舊 zip 下次更新成功就會知道：更新成功後，本機 manifest 的來源清單換成遠端那份（遠端清單是空的就留原本的）。來源清單是空的（`tools/install.py` 的開發安裝、`tools/build_resource_package.py` 不給 `--out` 時）就永遠不更新，遠端也改不了這一點。
 
 ## 發佈
 
@@ -23,8 +23,10 @@ status: accepted（修訂 ADR 0005）
 
 ## 套用
 
-- **maalc**：Agent 在任務開始（`TaskStart`）時檢查，最多等 10 秒。逾時或失敗就用上次下載的那份，沒有就用 zip 內附的，記一行 log，任務照常跑。下載完驗 sha256 才換檔。換檔後清掉資料檔的快取（`agent/settings.py` 的 `@cache`；MFAAvalonia 的 Agent 會跨任務存活），再用 `resource.clear()` 與 `post_bundle()` 重新載入，等載入完成才往下走，同一次任務就用新的模板與 pipeline。要重新載入，是因為 MXU 只在選資源時、MFAAvalonia 只在連線時載入一次：pipeline 在載入時就解析進記憶體，模板第一次比對時讀檔後快取（MaaFramework v5.14.3 `PipelineResMgr.cpp`、`TemplateResMgr.cpp`）。MaaFramework 對任務中途重新載入沒有保護（※ 原始碼裡沒看到），實作時先實機驗證；不行就改成任務結束時換檔並重新載入，下一次任務生效。
-- **設定 GUI**：遊戲資料與圖改成執行時從 `resource/base/data/` 讀，像現在的 `load_theme_packs`，顯示 Agent 下載好的那份。換季後第一次任務跑完之前，GUI 顯示的是舊的。
+- **maalc**：Agent 在任務開始（`TaskStart`）時檢查：取遠端 manifest 整個檢查最多等 10 秒（`resource_update.CHECK_SECONDS`，連線或讀取各自不另計），下載有變動的檔另外給 60 秒（`DOWNLOAD_SECONDS`，所有檔合計）。逾時或失敗就用上次下載的那份，沒有就用 zip 內附的，記一行 log，任務照常跑。下載完驗 sha256 才換檔。換檔後清掉資料檔的快取（`agent/settings.py` 的 `@cache`；MFAAvalonia 的 Agent 會跨任務存活），再用 `resource.clear()` 與 `post_bundle()` 重新載入，等載入完成才往下走，同一次任務就用新的模板與 pipeline。要重新載入，是因為 MXU 只在選資源時、MFAAvalonia 只在連線時載入一次：pipeline 在載入時就解析進記憶體，模板第一次比對時讀檔後快取（MaaFramework v5.14.3 `PipelineResMgr.cpp`、`TemplateResMgr.cpp`）。MaaFramework 對任務中途重新載入沒有保護（※ 原始碼裡沒看到），實作時先實機驗證；不行就改成任務結束時換檔並重新載入，下一次任務生效。
+  - 驗證結果（#772）：單機行程裡任務中途重新載入可行，先採「同一次任務生效」這條路，實機（MXU）驗證通過前仍是暫定。`tests/test_task_chain.py` 用真的 MaaFramework 5.14.3、黑畫面控制器與真的 agent 程式跑：`TaskStart` 裡呼叫 `resource.clear()` 與 `post_bundle(<bundle>).wait()` 後，同一個任務走到假 maalc-resource 的 pipeline 才有的節點；`clear()` 之前註冊的自訂動作與自訂辨識（`TaskStart` 自己、`StuckFlag`、`DoneFlag`、`HubText`、新節點的動作）重新載入後仍然認得；`clear()` 不會因為任務正在跑而失敗。重新載入失敗（新 pipeline 不是合法 JSON）時，換過的檔（`data/` 也一起）退回原樣，舊的 bundle 再載一次，任務照常跑完，log 一行寫明。這個測試的資源由測試自己建（單機行程）；MXU 或 MFAAvalonia 以 AgentServer 模式連進來時，`context.tasker.resource` 是否走同一條路，要看實機（#772 的最後一項驗收）。
+  - 模板版本不是程式認得的：`image/` 與 `pipeline/` 的檔、manifest 的 `template` 與這兩個資料夾的項目都留舊的，`data/` 照換，log 寫明（`resource update: image/ and pipeline/: template N is not the one this program knows`）。
+- **設定 GUI**：遊戲資料與圖在執行時從安裝目錄的 `resource/base/data/` 讀（Tauri 的 `load_game_data` 讀文字與資料夾清單，圖用 `convertFileSrc` 取），顯示 Agent 下載好的那份；開發時（`pnpm dev`、測試）由 `gui/src/api.ts` 直接讀 repo 的 `assets/resource/base/data/`。檔案在 `data/` 之下：`gift_effects.json`、`graces.json`、`grace_icons/`、`grace_card/` 等，不在 `gui/src/`。換季後第一次任務跑完之前，GUI 顯示的是舊的。
 - **lc-helper**：已公開，發佈 dist zip；zip 內附一份資源包，啟動時檢查。從 maalc 複製的 8 張模板改從資源包取，lc-helper 自己的模板留在 lc-helper。OCR 模型不在資源包裡，由 lc-helper 自己抓。數字用的 Barlow Condensed 字型不是遊戲素材，也留在 lc-helper。lc-helper 改讀資源包之前，LLC 中文與遊戲素材的授權寫在它自己的 `NOTICE.md`；改讀之後，這兩段改為指向資源包附的 `NOTICE.md`。開發時用 lock 檔記資源包的版本，由工具抓到 gitignore 的資料夾，測試與 build 都用它。lc-helper 的測試截圖仍是 maalc 的 `tests/screens`，CI 只抓指定 commit 的那個資料夾。
 
 ## Considered Options

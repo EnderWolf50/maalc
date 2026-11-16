@@ -5,7 +5,7 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "root_dir",
             "load_settings",
-            "load_theme_packs",
+            "load_game_data",
             "save_settings",
             "load_team_options",
             "save_team_options",

@@ -12,7 +12,7 @@
     "core:window:allow-close",
     "allow-root-dir",
     "allow-load-settings",
-    "allow-load-theme-packs",
+    "allow-load-game-data",
     "allow-save-settings",
     "allow-load-team-options",
     "allow-save-team-options",

@@ -10,7 +10,7 @@ Usage: uv run --group unpack python tools/game_data.py <command> [--serial 127.0
   dump     dumps `.local/unpack/`'s static data again from its bundles, into static/.
   install  moves the pulled files into place; what they replace, and the bundles gone from the device, go to
            `.local/unpack/prev/<old version>/`, and `.local/unpack/client.json` names the version.
-  regen    runs every generator (GENERATORS) against `.local/unpack/`; `--release` names the Localize Limbus Company
+  regen    writes data/client.json (the client `.local/unpack/` holds), then runs every generator (GENERATORS) against `.local/unpack/`; `--release` names the Localize Limbus Company
            release (default: the newest).
   diff     the per-file summary of what regen changed against git HEAD (`--ref`), and of the static data against prev/.
   update   pull and install (unless `.local/unpack/` holds the emulator's version already), then regen and diff.
@@ -48,17 +48,16 @@ LLC_LATEST = "https://api.github.com/repos/LocalizeLimbusCompany/LocalizeLimbusC
 PIECES = {"localize": "raw/Localize", "catalog": "raw/addressables", "metadata": "raw/Metadata", "apk": "raw/apk",
           "player": "apk-data", "static": "static"}
 # The generators in order (theme packs before their covers, gift_search before gift_recipes, both before the icons, llc_text
-# before buf_icons, which draws the keywords it names, and before gift_plates, which has a plate for each sin it gives a gift):
+# before buf_icons, which draws the keywords it names, and before gift_plates, which has a plate for each sin it gives a gift, every table before text_tables, which joins their ids to the text):
 # (script, whether it takes --release, the Localize Limbus Company release of the Chinese names).
 GENERATORS = [("tools/theme_pack_floors.py", False), ("tools/trial_table.py", False), ("tools/events_md8.py", False),
               ("tools/event_table.py", False), ("tools/gift_search_table.py", True), ("tools/gift_recipes.py", True), ("tools/default_gift_list.py", False),
-              ("tools/llc_text.py", True), ("tools/buf_icons.py", False), ("tools/gift_plates.py", False), ("tools/gift_icons.py", False), ("tools/grace_icons.py", False),
-              ("tools/theme_pack_covers.py", False), ("tools/theme_pack_signatures.py", False), ("tools/sinner_cards.py", False),
+              ("tools/llc_text.py", True), ("tools/buf_icons.py", False), ("tools/gift_plates.py", False), ("tools/text_tables.py", True), ("tools/gift_icons.py", False),
+              ("tools/grace_icons.py", False), ("tools/theme_pack_covers.py", False),
+              ("tools/theme_pack_signatures.py", False), ("tools/sinner_cards.py", False),
               ("tools/sin_icons.py", False), ("tools/gift_slot.py", False)]
 # What regen writes, for diff.
-OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe",
-           "gui/src/graces.json", "gui/src/gift_effects.json", "gui/src/buf_icons", "gui/src/gift_plates", "gui/src/grace_icons", "gui/src/grace_card",
-           "gui/src/sinner_card"]
+OUTPUTS = ["assets/resource/base/data", "assets/resource/base/image/GiftSearch", "assets/resource/base/image/GiftRecipe"]
 
 
 def parse_cache_listing(text: str) -> dict[str, str]:
@@ -303,8 +302,14 @@ def latest_release() -> str:
         return json.load(r)["tag_name"]
 
 
+def write_data_client(unpack: Path, data: Path = DATA) -> None:
+    """data/client.json: the client `unpack` holds. The resource package's manifest names it, and CI has no `.local/` (#766)."""
+    (data / "client.json").write_text(json.dumps({"client": unpack_client(unpack)}) + "\n", encoding="utf-8")
+
+
 def cmd_regen(args):
     release = args.release or latest_release()
+    write_data_client(local_dir("unpack"))
     for script, takes_release in GENERATORS:
         command = [script, *(["--release", release] if takes_release else [])]
         print("==", " ".join(command), flush=True)

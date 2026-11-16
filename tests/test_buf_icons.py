@@ -7,9 +7,9 @@ from PIL import Image
 
 import buf_icons as bi
 
-GUI = Path(__file__).resolve().parent.parent / "gui/src"
-OUT = GUI / "buf_icons"
-KEYWORDS = json.loads((GUI / "gift_effects.json").read_text(encoding="utf-8"))["keywords"]
+DATA = Path(__file__).resolve().parent.parent / "assets/resource/base/data"
+OUT = DATA / "buf_icons"
+KEYWORDS = json.loads((DATA / "gift_effects.json").read_text(encoding="utf-8"))["keywords"]
 MAX_BYTES = 200_000  # every status icon the gifts' effect texts draw, together (#764)
 
 

@@ -23,6 +23,8 @@ from maa.define import Rect
 import gift_cells
 import hub_text
 import recovery
+import resource_package
+import resource_update
 import run_start
 import settlement
 import task_options
@@ -511,6 +513,15 @@ def stop(context, reason, line=None, whole_list=False):
     return False
 
 
+def rebuild_entry(context, entry):
+    """The task's entry node again, from the bundle the update just loaded (#772), with the attach the client sent
+    (#779). The client posts its options as an override of the entry node, and MaaFramework builds that node, next
+    included, from the bundle loaded at the post: after a reload the task would go on from the old pipeline's next."""
+    node = context.tasker.resource.get_node_data(entry)
+    if node:  # none: the reload failed and left no bundle, and the task fails at its next node anyway
+        context.override_pipeline({entry: {**node, "attach": {**node.get("attach", {}), **task_options.sent(context, entry)}}})
+
+
 @AgentServer.custom_action("TaskStart")
 class TaskStart(CustomAction):
     """A task's entry node (#364, ADR 0010): a task list runs its tasks on one agent, so what the last task left in
@@ -521,7 +532,8 @@ class TaskStart(CustomAction):
     the same screen.
 
     Then, before any tap, it reads the task's options the client sent (TASK["options"], #777, #779): what options() gives
-    every reader. One missing or wrong ends the task there (unsent). A subclass's own start goes on from begin()."""
+    every reader. One missing or wrong ends the task there (unsent). A subclass's own start goes on from begin(). An
+    update before them that reloaded the bundle (#772) hands the task its entry node from the new one (rebuild_entry)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if STUCK["halted"]:
@@ -536,6 +548,10 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
+        # before the line below: it names the package this task runs on
+        if resource_update.update(data_dir().parent, log, context.tasker):
+            rebuild_entry(context, argv.node_name)
+        log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
         try:
@@ -1084,9 +1100,25 @@ def finish(context, reason):
 BACK_KEY = 4  # Android's back key (L1's too): closes the node panel
 GET_TITLE, GET_CONFIRM = [520, 160, 240, 40], (640, 532)
 GET_NAME = [320, 405, 180, 80]  # the red plate under the gift's icon
-GIFTS = gift_cells.load()  # every gift a cell may show (#297)
-GIFT_NAMES = {e["id"]: e["en"] for e in GIFTS}
-GIFT_IDS = {e["en"]: e["id"] for e in GIFTS}  # an English name plate's gift (#329)
+GIFTS = []  # every gift a cell may show (#297)
+GIFT_NAMES = {}
+GIFT_IDS = {}  # an English name plate's gift (#329)
+
+
+def reload_gifts():
+    """Fill the three above from data/, at import and again after an update of data/ (resource_update.clear_data_caches).
+    In place, not as an accessor behind a cache: shop_actions and event_actions imported the three by name, in many
+    places that read them as plain tables, and each holds the same objects."""
+    GIFTS[:] = gift_cells.load()
+    GIFT_NAMES.clear()
+    GIFT_NAMES.update({e["id"]: e["en"] for e in GIFTS})
+    GIFT_IDS.clear()
+    GIFT_IDS.update({e["en"]: e["id"] for e in GIFTS})
+
+
+reload_gifts()
+
+
 DIALOG_TEXT = [360, 280, 560, 140]
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 

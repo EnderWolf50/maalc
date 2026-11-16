@@ -1,8 +1,7 @@
 // What a gift list (spec 04 section 13) makes of a gift: its state, what locks it, the buy queue, the fusion to make.
 // The same rules as agent/gifts.py, which tests/gift_list_cases.json pins on both sides.
 import { parse as parseYaml } from "yaml";
-import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import listsYaml from "../../assets/resource/base/data/gift_lists.yaml?raw";
+import { giftListsYaml as listsYaml, recipes } from "./gameData";
 import { SHOP_GIFTS, type GiftList } from "./model";
 
 /** The part of a gift list these rules read. */

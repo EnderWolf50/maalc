@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import resource_package as rp
 from install import fixed_framework_dll
 from install import install as TREE
 
@@ -39,3 +40,18 @@ def test_bundled_python_loads_the_agent_server_from_maafw():
     r = subprocess.run([str(PYTHON), "-B", "-c", code], cwd=TREE, capture_output=True, text=True, timeout=120)
     assert r.returncode == 0, r.stderr
     assert Path(r.stdout.strip()).resolve() == (TREE / "maafw" / "MaaAgentServer.dll").resolve()
+
+
+def test_resource_base_holds_the_package_and_its_manifest():
+    """The zip works on first use and offline (#766): data/, image/ and pipeline/ with a manifest that lists each file by
+    sha256, the real sources, and no OCR model."""
+    base = TREE / "resource" / "base"
+    manifest = rp.read_manifest(base)
+    assert manifest is not None
+    assert (manifest["format"], manifest["template"]) == (rp.FORMAT, rp.TEMPLATE) and manifest["sources"] == rp.SOURCES
+    assert manifest["client"] and manifest["version"]
+    on_disk = {p.relative_to(base).as_posix() for part in rp.PARTS for p in (base / part).rglob("*") if p.is_file()}
+    assert set(manifest["files"]) == on_disk and on_disk
+    assert not any(name.startswith("model/") for name in manifest["files"])
+    for name, entry in manifest["files"].items():
+        assert (entry["size"], entry["sha256"]) == ((base / name).stat().st_size, rp.sha256_file(base / name)), name
