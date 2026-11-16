@@ -185,7 +185,10 @@ def merged_manifest(local, remote, plans):
     applied = {p.part + "/" for p in plans}
     files = {p: e for p, e in local["files"].items() if not p.startswith(tuple(applied))}
     files.update({p: e for p, e in remote["files"].items() if p.startswith(tuple(applied))})
-    manifest = {**remote, "sources": local["sources"], "files": dict(sorted(files.items()))}
+    # an install that updates (it has a source) takes the remote's list, so a mirror added later reaches an old zip (ADR 0012);
+    # a remote that lists none leaves the install's own
+    sources = ([x for x in remote["sources"] if isinstance(x, str)] or local["sources"]) if local["sources"] else []
+    manifest = {**remote, "sources": sources, "files": dict(sorted(files.items()))}
     for part, name, _ in APPLIED:
         if part + "/" not in applied:
             manifest[name] = local[name]

@@ -87,7 +87,7 @@
    "$.zh_source: str"
   ],
   "events.yaml": [
-   "$: object"
+   "$: ?"
   ],
   "gift_effects.json": [
    "$: object",

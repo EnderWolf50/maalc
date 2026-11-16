@@ -17,6 +17,8 @@ new. A field whose meaning changes under the same name shows nothing, so a chang
 - A list's rows are one `[]` path; a field present in some rows only is listed once. `null` is listed only for a field
   that is never anything else.
 - `int` and `float` are both `number`.
+- An empty dict or list says nothing about its rows: it is written `?` (`$: ?`, `$[]: ?`), and the lines under such a path
+  never count as a difference, so the first row of an empty `events.yaml` is not a structure change.
 
 The snapshot is rewritten only when its structure is unchanged or FORMAT went up, so a regenerated file cannot hide a change
 that was not announced by the bump.
@@ -52,13 +54,17 @@ def _type(value) -> str:
 
 
 def _walk(value, path: str, out: dict[str, set[str]]) -> None:
-    if isinstance(value, dict):
+    if isinstance(value, dict) and not value:
+        out.setdefault(path, set()).add("?")
+    elif isinstance(value, dict):
         is_map = any(not (isinstance(k, str) and FIELD.match(k)) for k in value)
         out.setdefault(path, set()).add("map" if is_map else "object")
         for key, item in value.items():
             _walk(item, f"{path}.*" if is_map else f"{path}.{key}", out)
     elif isinstance(value, list):
         out.setdefault(path, set()).add("list")
+        if not value:
+            out.setdefault(f"{path}[]", set()).add("?")
         for item in value:
             _walk(item, f"{path}[]", out)
     else:
@@ -71,7 +77,7 @@ def structure(value) -> list[str]:
     _walk(value, "$", found)
     lines = []
     for path in sorted(found):
-        types = found[path] - {"null"} or found[path]
+        types = found[path] - {"null", "?"} or found[path]
         lines.append(f"{path}: {'|'.join(sorted(types))}")
     return lines
 
@@ -91,8 +97,20 @@ def load_snapshot(path: Path) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
+def _undecided(lines: list[str]) -> list[str]:
+    return [line.rpartition(": ")[0] for line in lines if line.endswith(": ?")]
+
+
+def _under(line: str, path: str) -> bool:
+    here = line.rpartition(": ")[0]
+    return here == path or here.startswith((path + ".", path + "["))
+
+
 def _differences(old: dict[str, list[str]], new: dict[str, list[str]]) -> list[str]:
     out = []
+    skip = {name: _undecided(old.get(name, [])) + _undecided(new.get(name, [])) for name in old.keys() | new.keys()}
+    old = {n: [l for l in lines if not any(_under(l, p) for p in skip[n])] for n, lines in old.items()}
+    new = {n: [l for l in lines if not any(_under(l, p) for p in skip[n])] for n, lines in new.items()}
     for name in sorted(old.keys() | new.keys()):
         if name not in new:
             out.append(f"{name}: removed")

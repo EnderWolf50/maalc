@@ -72,3 +72,14 @@ def test_sha256_matches_hashlib_on_a_file_bigger_than_one_read(tmp_path):
     f = tmp_path / "big.bin"
     f.write_bytes(b"x" * (3 * 1024 * 1024 + 5))
     assert rp.sha256_file(f) == hashlib.sha256(f.read_bytes()).hexdigest()
+
+
+def test_package_text_files_are_checked_out_with_lf_so_every_runner_hashes_the_same_bytes():
+    # the release zip is built on Windows and the publish on Linux; manifest.json holds each file's sha256
+    import subprocess
+    from pathlib import Path
+    repo = Path(__file__).resolve().parent.parent
+    for name in ("data/shop.yaml", "data/event_table.json", "pipeline/mail.json"):
+        out = subprocess.run(["git", "check-attr", "eol", "--", f"assets/resource/base/{name}"], cwd=repo, capture_output=True,
+                             text=True, check=True).stdout
+        assert out.strip().endswith("eol: lf"), out

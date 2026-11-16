@@ -1,5 +1,6 @@
 """tools/build_resource_package.py (#766): the manifest and the package built from assets/resource/base."""
 
+import datetime
 import hashlib
 import json
 
@@ -85,3 +86,16 @@ def test_the_repos_own_resource_builds_a_manifest_that_matches_its_files():
     assert not any(path.startswith("model/") for path in manifest["files"])
     for path, entry in manifest["files"].items():
         assert entry["size"] == (base / path).stat().st_size
+
+
+def test_the_version_date_is_the_utc_calendar_day_as_the_publish_has_it():
+    late_in_new_york = datetime.datetime(2026, 11, 16, 23, 30, tzinfo=datetime.timezone(datetime.timedelta(hours=-5)))
+    assert brp.today(late_in_new_york) == "2026.11.17"  # 04:30 UTC the next day
+
+
+def test_a_manifest_written_into_the_base_lists_no_source_unless_one_is_given():
+    # without --out the manifest lands in a checkout's own base: a source there would let TaskStart overwrite the branch's files
+    assert brp.choose_sources(brp.parse_args([])) == []
+    assert brp.choose_sources(brp.parse_args(["--source", "https://example.test/r"])) == ["https://example.test/r"]
+    assert brp.choose_sources(brp.parse_args(["--out", "pkg"])) == rp.SOURCES  # a package for the release zip or the publish
+    assert brp.choose_sources(brp.parse_args(["--out", "pkg", "--no-sources"])) == []

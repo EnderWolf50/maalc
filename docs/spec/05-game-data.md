@@ -265,3 +265,14 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 - 其餘是 `drop`。9706（Tremor）被想要的 9249 鎖住，合成品到手後解鎖。`gorder`：每個體系商店可能賣的飾品，IV、III、II、I 階，階內照 `gift_search.json`、再照 `gift_recipes.json` 的順序（#626）。`want`、`keep`、`gorder` 由 `tools/default_gift_list.py` 照上面的規則寫入。`fusion_condition`：`any`。
 
 **圖示**：`resource/base/data/gift_icons/<id>.webp` 與 `index.json`（`{id: 檔名}`），由 `tools/gift_icons.py` 產生。涵蓋 `gift_search.json` 的 327 個、`gift_recipes.json` 的 61 個合成品、13 個材料與 69 個 `extra_gifts`、5 個殘影，共 475 個，GUI 清單全部列出（`extra_gifts` 只能保留或不要）。圖示取自遊戲的 EgoGiftIcon 精靈圖，保留透明，縮成 112 px（最長邊）、WebP quality 72；整批 1,596,800 位元組（1.119.0），平均約 3.4 KB。GUI 的飾品格把圖示畫成 52 CSS px，2 倍縮放的螢幕上是 104 px：原本的 56 px 在那裡放大後發糊，所以改成 112 px（#721）。`image/GiftSearch/`、`image/GiftRecipe/` 的綠底模板是 Agent 比對用，不動。`tests/test_gift_lists.py` 檢查預設清單的 id 與內容、圖示齊全與總量。（#293）
+
+## 10. 資源包的更新
+
+`assets/resource/base/` 的 `data/`、`image/`、`pipeline/` 是資源包（ADR 0012、#759）。已安裝的 bot 在 `TaskStart`（`agent/resource_update.py`）照 `manifest.json` 向 maalc-resource 更新：
+
+- 本機 manifest 的 `sources` 是空的（`tools/install.py` 的開發安裝）就不更新；release zip 附的 manifest 帶 `resource_package.SOURCES`。
+- 取遠端 manifest（`<來源>/main/manifest.json`）整個檢查最多 10 秒（`CHECK_SECONDS`）；下載有變動的檔另外最多 60 秒（`DOWNLOAD_SECONDS`，所有檔合計）。逾時或失敗就沿用手上的檔，記一行 log，任務照跑。
+- 版本號是 UTC 的發佈日期（`2026.11.16`，同一天第二次 `.2`）：`tools/build_resource_package.py`（release zip）與 `tools/publish_resource.py`（發佈）都用 UTC 日，兩者的版本才比得起來。
+- 程式只套用自己認得的格式版本（`FORMAT`，欄位結構，`tests/data_structure.json` 記錄）與模板版本（`TEMPLATE`）；空的 dict 或 list 在結構快照裡寫成 `?`，第一筆資料不算結構改變。
+- manifest 記每個檔的 sha256，所以 `assets/resource/base/data/`、`pipeline/` 的文字檔在 `.gitattributes` 固定 LF，Windows 與 Linux 的 runner 算出同一個雜湊。
+- 設定 GUI 在執行時從 `resource/base/data/` 讀遊戲資料與圖（`gui/src/api.ts`、`gui/src/gameData.ts`），不再在 build 時打包。
