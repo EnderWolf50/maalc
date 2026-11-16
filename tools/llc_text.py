@@ -3,10 +3,10 @@
 Usage: uv run --group unpack python tools/llc_text.py [--release <tag>]  (default: the release the data files carry)
 Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases
 (cached under `.local/llc/`) and rewrites the `zh` of assets/resource/base/data/gift_search.json and gift_recipes.json
-(from `LLC_zh-CN/EGOgift_*.json`, by gift id) and gui/src/graces.json (names: `MirrorDungeonUI_5.json`
+(from `LLC_zh-CN/EGOgift_*.json`, by gift id) and data/graces.json (names: `MirrorDungeonUI_5.json`
 `mirror_dungeon_5_buffs_title_<id>`; effects: the `DungeonStartBuffs_MD7.json` templates filled with the effect values of
 `.local/unpack/` static data mirrordungeon-start-buffs-08, each line as runs that say which text the game prints yellow; the
-English effects the same from the client's `EN_DungeonStartBuffs_MD7.json`). It writes gui/src/gift_effects.json too: the effect text of each
+English effects the same from the client's `EN_DungeonStartBuffs_MD7.json`). It writes data/gift_effects.json too: the effect text of each
 gift the settings GUI shows (catalog_ids), English from the client's `EN_EGOgift_*.json` and Chinese from
 `LLC_zh-CN/EGOgift_*.json` (`desc`), as runs that keep the game's markup (effect_runs: a keyword tag, flavour text), and the
 keywords they name: their names in the `Bufs*.json` and `BattleKeywords*.json` of each, their colour and icon from the client's
@@ -28,8 +28,8 @@ from sin_icons import COLOURS as ATTRIBUTE_TYPES  # ATTRIBUTE_TYPE 0..6, CRIMSON
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
-GRACES = REPO / "gui/src/graces.json"
-EFFECTS = REPO / "gui/src/gift_effects.json"
+GRACES = DATA / "graces.json"
+EFFECTS = DATA / "gift_effects.json"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
@@ -82,7 +82,7 @@ def note_effects(client):
             "drawn as its icon and its name in its colour; {\"text\", \"i\", \"colour\"} italic or coloured text (flavour text). "
             "keywords: each keyword the texts name: its name in each language (Bufs*.json, BattleKeywords*.json of each), its "
             "colour as the client's ColorCode table names it (its buff's buffType in the static data buff/*.json) and its icon "
-            "(gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). A bracketed note that names no keyword stays as written. The "
+            "(data/buf_icons/<icon>.webp, tools/buf_icons.py). A bracketed note that names no keyword stays as written. The "
             "Chinese converted with OpenCC s2twp run by run, then " + FIXES_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see "
             "NOTICE.md). Written by tools/llc_text.py.")
 

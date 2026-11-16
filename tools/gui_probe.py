@@ -5,7 +5,7 @@
 
 The GUI reads and writes `<folder of its exe>/config/settings.json` (gui/src-tauri/src/lib.rs `root`), so the
 probe copies the exe into `--root`, writes the demo settings there (the `valid` case of tests/settings_cases.json
-unless `--settings` names a file) and links `assets/` beside it, which `load_theme_packs` looks for. The real
+unless `--settings` names a file) and links `assets/` beside it, which `data_dir` (lib.rs) looks for. The real
 `install/` is never touched. The app stays running: stop it by the pid printed.
 
 Prints one JSON line `{"pid", "hwnd", "title", "rect": [left, top, right, bottom], "width", "height", "root"}` when the

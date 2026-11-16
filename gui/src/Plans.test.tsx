@@ -592,7 +592,7 @@ describe("a grace card at each level", () => {
   test("each state draws the game's own texture for it, and the page draws every texture the tool writes", () => {
     const rules = cssRules(css);
     const drawn = (selector: string) => rules.filter((r) => r.selector.split(",").map((x) => x.trim()).includes(selector))
-      .flatMap((r) => [...r.body.matchAll(/grace_card\/([\w-]+)\.webp/g)].map((m) => m[1]));
+      .flatMap((r) => [...r.body.matchAll(/var\(--sprite-grace-card-([\w-]+)\)/g)].map((m) => m[1]));
     const states: [string, string][] = [
       [".starlight", "page"], [".grace::before", "face"], [".grace:not(.none)::before", "face-picked"], [".grace::after", "hover"],
       [".grace .enhance button", "button"], ['.grace .enhance button[aria-pressed="true"]', "button-lit"],
@@ -601,7 +601,7 @@ describe("a grace card at each level", () => {
       [".starlight .star", "star"], [".grace-side", "side"],
     ];
     for (const [selector, file] of states) expect(drawn(selector), selector).toEqual([file]);
-    const written = Object.keys(import.meta.glob("./grace_card/*.webp")).map((f) => f.replace(/^.*\/|\.webp$/g, ""));
+    const written = Object.keys(import.meta.glob("../../assets/resource/base/data/grace_card/*.webp")).map((f) => f.replace(/^.*\/|\.webp$/g, ""));
     expect(written.sort()).toEqual([...new Set(states.map(([, file]) => file))].sort());
   });
 

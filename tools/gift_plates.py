@@ -1,7 +1,7 @@
-"""Write the settings GUI's gift name plates (#786): gui/src/gift_plates/<sin>.webp and plates.json.
+"""Write the settings GUI's gift name plates (#786): assets/resource/base/data/gift_plates/<sin>.webp and plates.json.
 
 Usage: uv run --group unpack python tools/gift_plates.py
-Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"); gui/src/gift_effects.json gives each gift its sin
+Reads `.local/unpack/` (see docs/agents/local-dev.md "Game data"); assets/resource/base/data/gift_effects.json gives each gift its sin
 (tools/llc_text.py gift_sins).
 
 The game's gift panels (EgoGiftInfomationUI and EgoGiftInformationUIWithCombineExplain, scene level7 of the APK's player
@@ -37,8 +37,8 @@ from sin_icons import ATTRIBUTES, COLOURS as ATTRIBUTE_TYPES, check_sin_order, l
 from unity_files import PLAYER_DATA, sprite_image, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
-OUT = REPO / "gui/src/gift_plates"
-EFFECTS = REPO / "gui/src/gift_effects.json"
+OUT = REPO / "assets/resource/base/data/gift_plates"
+EFFECTS = REPO / "assets/resource/base/data/gift_effects.json"
 PANEL_SCENE, PLATE, PANEL = "level7", "img_namePlate", "NamePanel"  # the plate's GameObject and its parent's name
 COLOUR_SCENE, MANAGER = "level1", "UIColorManager"
 COLOURS_BEFORE = 17  # UIColorManager's Colors before its two keyed lists

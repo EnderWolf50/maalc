@@ -89,6 +89,12 @@ MXU 失敗後是否繼續下一個：unverified，沒有確認。
 
 ## 自行組裝
 
+repo 的歷史裡有很多截圖，完整 clone 很大。開發用 partial clone，第一次只下載當前檔案，其餘的 blob 用到才取（歷史不會被改寫，見 ADR 0012）：
+
+```powershell
+git clone --filter=blob:none https://github.com/EnderWolf50/maalc.git
+```
+
 ```powershell
 uv run python tools/fetch_ocr.py
 pnpm -C gui install; pnpm -C gui tauri build --no-bundle   # 可略過，略過就沒有 maalc-gui.exe

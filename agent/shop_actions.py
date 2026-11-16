@@ -71,8 +71,22 @@ BADGES = tuple(k for k in GIFT_KEYWORDS if k != "Keywordless")
 # On scaled cells (CCOEFF): its own badge 0.54-0.99, another keyword's up to 0.60 (the cell's best wins), a keywordless
 # cell's best 0.41; 160 cells of 60 live captures.
 BADGE_MIN = 0.5
-FUSION_IDS = {g["id"] for g in gift_tables()[1]}
-GIFT_TIERS = {e["id"]: e["tier"] for e in GIFTS}
+FUSION_IDS = set()
+GIFT_TIERS = {}
+
+
+def reload_gifts():
+    """Fill the two above from data/, at import and again after an update of data/ (once actions.reload_gifts ran); in
+    place, as actions.reload_gifts."""
+    FUSION_IDS.clear()
+    FUSION_IDS.update(g["id"] for g in gift_tables()[1])
+    GIFT_TIERS.clear()
+    GIFT_TIERS.update({e["id"]: e["tier"] for e in GIFTS})
+
+
+reload_gifts()
+
+
 CELL_ICON_ROI = 70  # px square around a cell's centre on the scaled grid where its icon is looked for: the biggest icon (54 px) +-8
 # An EX gift's tier in the game data (TIER_5 beside TIER_EX: 9799 A Certain Philosophy, 9800 Wealth); its cell shows "EX"
 # where the numerals go, so a cell with no numeral read and that "EX" (#449) or the Unselectable tag (#378) is matched

@@ -8,9 +8,9 @@ from PIL import Image
 import gift_plates as gp
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "gui/src/gift_plates"
+OUT = ROOT / "assets/resource/base/data/gift_plates"
 PLATES = json.loads((OUT / "plates.json").read_text(encoding="utf-8"))
-EFFECTS = json.loads((ROOT / "gui/src/gift_effects.json").read_text(encoding="utf-8"))["effects"]
+EFFECTS = json.loads((ROOT / "assets/resource/base/data/gift_effects.json").read_text(encoding="utf-8"))["effects"]
 SCREENS = ROOT / "tests/screens"
 MAX_BYTES = 48_000  # the seven plates together, lossless (#786; 37,020 bytes for client 1.119.0)
 
