@@ -17,7 +17,7 @@ SOLD = set(RECIPES["shop"]["sells"])  # what a shop may sell (#626)
 KEYWORD_GIFTS = SEARCH + RECIPES["gifts"] + RECIPES["materials"] + RECIPES["extra_gifts"]
 KNOWN = {g["id"] for g in KEYWORD_GIFTS} | VESTIGES  # what a list may name
 ICON_IDS = KNOWN
-MAX_BYTES = 2_000_000  # 466 icons of 112 px weigh 1,572 KB (3.4 KB each; 677 KB at 56 px, soft on a 2x screen, #721)
+MAX_BYTES = 2_000_000  # 475 icons of 112 px weigh 1,597 KB (3.4 KB each; 677 KB at 56 px, soft on a 2x screen, #721)
 
 
 def test_default_list_ids_all_exist():
@@ -28,8 +28,8 @@ def test_default_list_ids_all_exist():
 
 
 # The Keywordless gifts the shop sells that a theme pack's own pool holds (specificEgoGiftPool of the game's
-# mirrordungeon-theme-floor-* data, 1.118.1; the unpacked game data is in neither the repo nor CI, so the ids are listed here).
-PACK_POOL = [9219, 9225, 9266, 9273, 9276, 9284, 9285, 9302, 9414, 9419, 9420, 9423, 9427, 9431, 9433, 9435, 9439, 9703, 9705, 9707,
+# mirrordungeon-theme-floor-* data, 1.119.0; the unpacked game data is in neither the repo nor CI, so the ids are listed here).
+PACK_POOL = [9219, 9225, 9266, 9273, 9276, 9284, 9285, 9292, 9302, 9414, 9419, 9420, 9423, 9427, 9431, 9433, 9435, 9439, 9703, 9705, 9707,
              9711, 9712, 9723, 9727, 9732, 9733, 9748, 9749, 9751, 9753, 9755, 9757, 9760, 9762, 9763, 9766, 9769, 9778, 9779,
              9781, 9794, 9801, 9805, 9810, 9811, 9813, 9826]
 PACK_POOL_EXTRA = [9208, 9209, 9246, 9752, 9754, 9758, 9797]  # the pools' Keywordless extra_gifts: sold, so wanted since #626
@@ -43,7 +43,7 @@ def test_default_list_wants_the_keywordless_fusions_and_the_pack_pools_keywordle
     fusions = [g["id"] for g in RECIPES["gifts"] if g["keyword"] == "Keywordless"]
     assert fusions == [9083, 9249, 9764, 9780]
     assert LIST["want"] == [9249, 9764, 9780] + sorted(PACK_POOL + PACK_POOL_EXTRA)
-    assert len(LIST["want"]) == 57
+    assert len(LIST["want"]) == 58  # 1.119.0: 9292 Role Model, of pack 1129's own pool
     assert set(PACK_POOL) <= {g["id"] for g in SEARCH} and set(PACK_POOL + PACK_POOL_EXTRA) <= SOLD
     assert set(PACK_POOL_EXTRA) <= {g["id"] for g in RECIPES["extra_gifts"]}
     pooled = {i for pool in RECIPES["pack_gifts"].values() for i in pool}  # #417: the committed pools, the unpack is not in CI
@@ -51,7 +51,8 @@ def test_default_list_wants_the_keywordless_fusions_and_the_pack_pools_keywordle
     keywordless = {g["id"] for g in KEYWORD_GIFTS if g["keyword"] == "Keywordless"}  # extra_gifts' too (#310's live run)
     # vestiges I-IV (9991-9994) are fusion materials, so `drop`; Lunar Vestige (V, 9995) is never a material, so `keep`
     assert set(LIST["keep"]) == keywordless - set(LIST["want"]) | {max(VESTIGES)} | set(LUNAR_MATERIALS)
-    assert len(LIST["keep"]) == 70  # 59 Keywordless gifts (Lunar Memory among them), the Lunar Vestige, its 10 materials
+    # 61 Keywordless gifts (Lunar Memory among them; 1.119.0's extra_gifts 9294 and 9295), the Lunar Vestige, its 10 materials
+    assert len(LIST["keep"]) == 72
     assert LIST["order"] == KEYWORDS
     assert LIST["fusion_condition"] == "any"
 

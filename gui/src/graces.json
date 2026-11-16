@@ -1,7 +1,7 @@
 {
-  "note": "Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. English names and effect text: the game client 1.118.1's EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the template colours the game's yellow (#f8c200), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.",
+  "note": "Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉. English names and effect text: the game client 1.119.0's EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the template colours the game's yellow (#f8c200), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.",
   "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
-  "zh_release": "2026110501",
+  "zh_release": "2026111401",
   "license": "CC BY-NC-SA 4.0",
   "license_url": "https://creativecommons.org/licenses/by-nc-sa/4.0/",
   "graces": [
