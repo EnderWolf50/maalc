@@ -80,3 +80,10 @@ test("the error page has a way to close the window: the window has no title bar 
   expect(destroy).toHaveBeenCalled();
   vi.doUnmock("@tauri-apps/api/window");
 });
+
+test("a data file that is there but cut off or mistyped fails with its name", async () => {
+  await underTauri((texts) => { texts["graces.json"] = texts["graces.json"].slice(0, 100); });
+  await expect(import("./gameData")).rejects.toThrow(/^graces\.json: /);
+  await underTauri((texts) => { texts["shop.yaml"] = "a: [1, 2"; });
+  await expect(import("./gameData")).rejects.toThrow(/^shop\.yaml: /);
+});

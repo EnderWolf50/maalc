@@ -38,14 +38,14 @@
   --season-plate: #4e61ba;
   --gold: #ffd34d; /* the starlight's gold: a pick's place, a lit + or ++ */
   /* A sinner tile is the game's formation card (#718, #732): the identity's art in the card's frame, the game's plates and its
-   * glow (gui/src/sinner_card/, tools/sinner_cards.py). It stays the game's in both themes, as Grace of the Star does, so
+   * glow (data/sinner_frame/, tools/sinner_cards.py). It stays the game's in both themes, as Grace of the Star does, so
    * what sits on it keeps the game's ink. The colours are sampled from the game's captures: the deployed number #ffb904
    * and the backup one #22fde3 (the formation screen), the name #fbc500 (the identity list). The deployed plate's word is
    * lighter than the game's (it reads 4.6:1 on the plate's brightest line, #bc4512), the backup's 4.8:1 on its (#0d687a). */
   --art-shade: #0b0806; --art-top: #2c2219; --art-dep: #ffb904; --art-bak: #22fde3; --art-name: #fbc500;
   --dep-ink: #fff0cc; --dep-rim: #9f441f; --bak-ink: #81f1ff; --bak-rim: #18675a;
   /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
-   * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the
+   * price icon, the Enhance All panel and the page (data/grace_card/, tools/grace_icons.py). What sits on them is the
    * game's light ink, the same in both themes, as the game's page is: each holds 5:1 and more over the face's lightest
    * pixels where it sits (the 99th percentile of the price strip, the title band, the English name's line and the effects,
    * unselected and selected). */

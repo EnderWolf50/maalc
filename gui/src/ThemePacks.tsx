@@ -24,8 +24,8 @@ export function ThemePackTab() {
   );
 }
 
-// #241's cards (theme_pack_covers/index.json: pack name -> file); a pack without one, or a build before they exist, shows
-// its name on a blank card. The title is printed on the card, so the name is the tooltip.
+// #241's cards (theme_pack_covers/index.json: pack name -> file); a pack without one shows its name on a
+// blank card. The title is printed on the card, so the name is the tooltip.
 const coverOf = webpFolder("theme_pack_covers", "theme_pack_covers/index.json");
 
 const UNLISTED = "\u0000unlisted"; // what the "unlisted packs" chip drags: no pack name starts with NUL

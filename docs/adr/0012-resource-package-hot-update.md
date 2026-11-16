@@ -24,7 +24,7 @@ status: accepted（修訂 ADR 0005）
 ## 套用
 
 - **maalc**：Agent 在任務開始（`TaskStart`）時檢查，最多等 10 秒。逾時或失敗就用上次下載的那份，沒有就用 zip 內附的，記一行 log，任務照常跑。下載完驗 sha256 才換檔。換檔後清掉資料檔的快取（`agent/settings.py` 的 `@cache`；MFAAvalonia 的 Agent 會跨任務存活），再用 `resource.clear()` 與 `post_bundle()` 重新載入，等載入完成才往下走，同一次任務就用新的模板與 pipeline。要重新載入，是因為 MXU 只在選資源時、MFAAvalonia 只在連線時載入一次：pipeline 在載入時就解析進記憶體，模板第一次比對時讀檔後快取（MaaFramework v5.14.3 `PipelineResMgr.cpp`、`TemplateResMgr.cpp`）。MaaFramework 對任務中途重新載入沒有保護（※ 原始碼裡沒看到），實作時先實機驗證；不行就改成任務結束時換檔並重新載入，下一次任務生效。
-- **設定 GUI**：遊戲資料與圖改成執行時從 `resource/base/data/` 讀，像現在的 `load_theme_packs`，顯示 Agent 下載好的那份。換季後第一次任務跑完之前，GUI 顯示的是舊的。
+- **設定 GUI**：遊戲資料與圖改成執行時從 `resource/base/data/` 讀，像 `load_game_data`，顯示 Agent 下載好的那份。換季後第一次任務跑完之前，GUI 顯示的是舊的。
 - **lc-helper**：已公開，發佈 dist zip；zip 內附一份資源包，啟動時檢查。從 maalc 複製的 8 張模板改從資源包取，lc-helper 自己的模板留在 lc-helper。OCR 模型不在資源包裡，由 lc-helper 自己抓。數字用的 Barlow Condensed 字型不是遊戲素材，也留在 lc-helper。lc-helper 改讀資源包之前，LLC 中文與遊戲素材的授權寫在它自己的 `NOTICE.md`；改讀之後，這兩段改為指向資源包附的 `NOTICE.md`。開發時用 lock 檔記資源包的版本，由工具抓到 gitignore 的資料夾，測試與 build 都用它。lc-helper 的測試截圖仍是 maalc 的 `tests/screens`，CI 只抓指定 commit 的那個資料夾。
 
 ## Considered Options

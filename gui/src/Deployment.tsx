@@ -4,8 +4,8 @@ import { PlanTab } from "./Plans";
 import { useEditor } from "./ui";
 import { webpFolder } from "./gameData";
 
-// #718's cards (sinner_cards/index.json: sinner -> file, each sinner's default identity); a sinner without one, or a build
-// before they exist, shows its frame alone. The name is printed on the tile, so the art is decoration.
+// #718's cards (sinner_cards/index.json: sinner -> file, each sinner's default identity); a sinner without one shows its frame
+// alone. The name is printed on the tile, so the art is decoration.
 const cardOf = webpFolder("sinner_cards", "sinner_cards/index.json");
 
 /** The 12 sinners in the game's grid, each on its default identity's card; clicking adds one at the end of the order or

@@ -156,7 +156,9 @@ pub fn run() {
             // (tauri.conf.json) is empty: that folder alone is opened to it, found the way load_game_data finds it. Without
             // one, load_game_data fails and the window says why.
             if let Ok(dir) = data_dir() {
-                let _ = app.asset_protocol_scope().allow_directory(dir, true);
+                if let Err(e) = app.asset_protocol_scope().allow_directory(&dir, true) {
+                    eprintln!("asset protocol: cannot open {}: {e}", dir.display());
+                }
             }
             Ok(())
         })
