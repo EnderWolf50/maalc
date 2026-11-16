@@ -10,6 +10,7 @@ import { EffectText, place, usedText } from "./GiftPopover";
 import { queue } from "./gifts";
 import { TEXT } from "./i18n";
 import indexCss from "./index.css?raw";
+import plates from "./gift_plates/plates.json";
 import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, newSettings, type GiftList, type Settings } from "./model";
 import { contrast, cssValueOf, renderEditor } from "./testing";
 
@@ -397,6 +398,16 @@ describe("hover card: the gift's name on its sin's plate, as the game's gift pan
     expect(plate.style.color).toBe("rgb(0, 0, 0)");
     expect(plate).toHaveAttribute("data-ink", "dark");
     expect(plate.nextElementSibling).toBeNull();
+  });
+
+  test("the card slices the plate by the border the tool read off the game's sprite, at 0.4 of its size", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9125);
+    const plate = plateOfCard();
+    const [top, right, bottom, left] = plates.border;
+    const widths = [top, right, bottom, left].map((v) => `${+(v * 0.4).toFixed(1)}px`).join(" ");
+    expect(cssValueOf(giftCss, plate, "border-image", false, "::before")).toBe(`var(--plate) ${top} ${right} ${bottom} ${left} fill / ${widths}`);
+    expect(cssValueOf(giftCss, plate, "border-width", false, "::before")).toBe(widths);
   });
 
   test("every gift the tab shows has its sin and that sin its plate", () => {

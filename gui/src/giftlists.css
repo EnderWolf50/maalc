@@ -129,8 +129,9 @@
 .gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; gap: 3px; flex: 1; min-width: 0; line-height: 1.35; }
 .gl-tip-head > div > small { padding-left: 2px; }
 /* The name on the plate the game's gift panel draws it on (#786): the game's white plate tinted by the gift's sin
- * (gift_plates/<sin>.webp, tools/gift_plates.py), sliced as the game slices it by the sprite's border (plates.json: 19.5 137 61
- * 79.5 px) at 0.4 of its size, in the ink plates.json gives the sin (set on the element). The padding keeps the name inside
+ * (gift_plates/<sin>.webp, tools/gift_plates.py), sliced as the game slices it by the sprite's border (plates.json `border`, top
+ * right bottom left; GiftPopover.test.tsx holds the two together) at 0.4 of its size, in the ink plates.json gives the sin (set
+ * on the element). The padding keeps the name inside
  * the band the tool measured that ink on, 4.5:1 or more against every pixel: the plate's middle half in height, 8 % in at
  * each end. The light ink takes the game's dark drop shadow. Neither theme changes a plate. */
 .gl-plate {

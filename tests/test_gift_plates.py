@@ -28,8 +28,8 @@ def manager(colours_before, pairs, extra_list=((11, 360.0, 1.0, 1.0),)):
 def test_the_sin_colours_are_read_from_ui_colour_manager_s_list_by_attribute_type():
     # client 1.118.1's list, WHITE (7), BLACK (8) and NEUTRAL (11) after the seven sins
     game = ["#ff0000", "#fd6600", "#fecc2b", "#9eff00", "#15c3ee", "#004bd5", "#9400dc", "#ffffff", "#464646", "#a16a3b"]
-    pairs = [(k, tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)) + (1.0,)) for k, h in zip([*range(9), 11], game)]
-    assert gp.sin_colours(manager(gp.COLOURS_BEFORE, pairs)) == dict(zip(gp.SINS, game))
+    pairs = [(k, tuple(v / 255 for v in gp.rgb(h)) + (1.0,)) for k, h in zip([*range(9), 11], game)]
+    assert gp.sin_colours(manager(gp.COLOURS_BEFORE, pairs)) == dict(zip(gp.ATTRIBUTE_TYPES, game))
 
 
 @pytest.mark.parametrize("raw", [
@@ -77,13 +77,13 @@ def test_the_halftone_under_the_name_counts_and_the_edge_does_not():
 
 def test_each_sin_the_gifts_carry_has_its_plate_and_its_name_holds_4_5_to_1_on_it():
     # measured on the committed pixels: the ink against every pixel of the band the name can cover, halftone included
-    assert {e["sin"] for e in EFFECTS.values()} == set(PLATES["plates"]) == set(gp.SINS)
+    assert {e["sin"] for e in EFFECTS.values()} == set(PLATES["plates"]) == set(gp.ATTRIBUTE_TYPES)
     for sin, p in PLATES["plates"].items():
         im = Image.open(OUT / f"{sin}.webp")
         assert im.mode == "RGBA" and im.size == tuple(PLATES["size"]), sin
         assert gp.contrast(im, PLATES["inks"][p["ink"]]) == p["contrast"] >= 4.5, sin
     assert sum(f.stat().st_size for f in OUT.glob("*.webp")) < MAX_BYTES
-    assert {f.stem for f in OUT.glob("*.webp")} == set(gp.SINS)
+    assert {f.stem for f in OUT.glob("*.webp")} == set(gp.ATTRIBUTE_TYPES)
 
 
 def most_common(image, box, keep=lambda c: True):
@@ -103,4 +103,4 @@ def test_the_game_colours_the_names_of_its_gifts_by_the_colours_the_tool_read(im
     # moves them a little: SCARLET's #fd6600 shows as #fe6b00)
     seen = most_common(image, box, keep=lambda c: max(c) > 128)
     game = PLATES["plates"][sin]["colour"]
-    assert all(abs(a - int(game[i:i + 2], 16)) <= 6 for a, i in zip(seen, (1, 3, 5))), (seen, game)
+    assert all(abs(a - b) <= 6 for a, b in zip(seen, gp.rgb(game))), (seen, game)

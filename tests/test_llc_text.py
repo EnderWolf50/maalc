@@ -73,7 +73,7 @@ def test_every_gift_the_gui_shows_has_its_effect_in_english_and_chinese_as_runs(
     effects, keywords = DATA["gift_effects"]["effects"], DATA["gift_effects"]["keywords"]
     assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 475  # 1.119.0 added 9292-9300
     for gid, e in effects.items():
-        assert set(e) == {"sin", "en", "zh"} and e["sin"] in llc_text.SINS, gid
+        assert set(e) == {"sin", "en", "zh"} and e["sin"] in llc_text.ATTRIBUTE_TYPES, gid
         for lang, runs in ((k, v) for k, v in e.items() if k != "sin"):
             assert runs, (gid, lang)
             for r in runs:  # plain text, a keyword the table names, or styled text

@@ -33,7 +33,7 @@ import numpy as np
 from PIL import Image
 
 from local_dir import local_dir
-from sin_icons import ATTRIBUTES, COLOURS as SINS, check_sin_order, load, obj
+from sin_icons import ATTRIBUTES, COLOURS as ATTRIBUTE_TYPES, check_sin_order, load, obj  # ATTRIBUTE_TYPES: a gift's sin as the data names it
 from unity_files import PLAYER_DATA, sprite_image, write_webps
 
 REPO = Path(__file__).resolve().parent.parent
@@ -96,7 +96,7 @@ def plate(sprite: Image.Image, colour: str) -> Plate:
     game = rgb(colour)
     image = tint(sprite, game)
     if (c := contrast(image, INKS["dark"])) >= TARGET:
-        return Plate(image, 1, "dark", c)
+        return Plate(image, 1.0, "dark", c)
     shade = 1.0
     while shade > 0:
         image = tint(sprite, tuple(v * shade for v in game))
@@ -119,12 +119,11 @@ def sin_colours(raw: bytes) -> dict[str, str]:
     """sin -> its colour (#rrggbb) in UIColorManager's raw bytes: past the MonoBehaviour header, the name, COLOURS_BEFORE
     Colors and the list of {key, 3 floats}, the list of {ATTRIBUTE_TYPE, Color}. A sin missing, or a colour that is not an
     opaque one, stops the tool."""
-    name_len = struct.unpack_from("<i", raw, 28)[0]
-    _, off = keyed(raw, 32 + (name_len + 3) // 4 * 4 + 16 * COLOURS_BEFORE, "<i3f")
+    _, off = keyed(raw, after_name(raw) + 16 * COLOURS_BEFORE, "<i3f")
     pairs, _ = keyed(raw, off, "<i4f")
     colours = {key: rgba for key, *rgba in pairs}
     out = {}
-    for key, sin in enumerate(SINS):
+    for key, sin in enumerate(ATTRIBUTE_TYPES):
         c = colours.get(key)
         if c is None or not all(0 <= v <= 1 for v in c) or c[3] != 1:
             raise SystemExit(f"{MANAGER}: ATTRIBUTE_TYPE {key} ({sin}) has no opaque colour: {c}")
@@ -132,30 +131,33 @@ def sin_colours(raw: bytes) -> dict[str, str]:
     return out
 
 
-def script_name(data: Path, scene: str, raw: bytes) -> str:
-    """The class of a MonoBehaviour of `scene`, from its m_Script pointer."""
-    file_id, path_id = struct.unpack_from("<iq", raw, 16)
-    externals = [e.path for e in next(iter(load(data, scene).files.values())).externals]
-    return obj(load(data, scene if file_id == 0 else externals[file_id - 1]), path_id).read().m_ClassName
+def after_name(raw: bytes) -> int:
+    """The offset of a MonoBehaviour's first own field: past m_GameObject, m_Enabled, m_Script and m_Name (padded to 4)."""
+    return 32 + (struct.unpack_from("<i", raw, 28)[0] + 3) // 4 * 4
 
 
 def resolve(data: Path, scene: str, pointer):
+    """The object a PPtr of `scene` points at (a PPtr read by UnityPy, or (fileID, pathID)), through the scene's externals."""
     externals = [e.path for e in next(iter(load(data, scene).files.values())).externals]
     file_id, path_id = (pointer.m_FileID, pointer.m_PathID) if hasattr(pointer, "m_FileID") else pointer
-    name = scene if file_id == 0 else externals[file_id - 1]
-    return name, obj(load(data, name), path_id)
+    return obj(load(data, scene if file_id == 0 else externals[file_id - 1]), path_id)
+
+
+def script_name(data: Path, scene: str, raw: bytes) -> str:
+    """The class of a MonoBehaviour of `scene`, from its m_Script pointer."""
+    return resolve(data, scene, struct.unpack_from("<iq", raw, 16)).read().m_ClassName
 
 
 def image_sprite(data: Path, scene: str, raw: bytes):
     """The Sprite a UI Image draws, from its raw bytes: past the header and name, m_Material, m_Color (white, or the tool
     stops: the game tints the plate itself), m_RaycastTarget, m_RaycastPadding, m_Maskable and an empty
     m_OnCullStateChanged, m_Sprite."""
-    off = 32 + (struct.unpack_from("<i", raw, 28)[0] + 3) // 4 * 4 + 12
+    off = after_name(raw) + 12
     colour = struct.unpack_from("<4f", raw, off)
     calls = struct.unpack_from("<i", raw, off + 16 + 4 + 16 + 4)[0]
     if colour != (1, 1, 1, 1) or calls != 0:
         raise SystemExit(f"{PLATE}: colour {colour}, {calls} cull callbacks: the Image's layout or colour changed")
-    _, sprite = resolve(data, scene, struct.unpack_from("<iq", raw, off + 16 + 4 + 16 + 4 + 4))
+    sprite = resolve(data, scene, struct.unpack_from("<iq", raw, off + 16 + 4 + 16 + 4 + 4))
     if sprite.type.name != "Sprite":
         raise SystemExit(f"{PLATE}: draws a {sprite.type.name}, not a Sprite")
     return sprite.read()
@@ -168,10 +170,10 @@ def plate_sprite(data: Path):
         if o.type.name != "GameObject" or o.peek_name() != PLATE:
             continue
         go = o.read()
-        parts = [resolve(data, PANEL_SCENE, c.component if hasattr(c, "component") else c)[1] for c in go.m_Component]
+        parts = [resolve(data, PANEL_SCENE, c.component if hasattr(c, "component") else c) for c in go.m_Component]
         transform = next(p for p in parts if p.type.name in ("RectTransform", "Transform")).read()
-        _, father = resolve(data, PANEL_SCENE, transform.m_Father)
-        if resolve(data, PANEL_SCENE, father.read().m_GameObject)[1].read().m_Name != PANEL:
+        father = resolve(data, PANEL_SCENE, transform.m_Father)
+        if resolve(data, PANEL_SCENE, father.read().m_GameObject).read().m_Name != PANEL:
             continue
         images = [p for p in parts if p.type.name == "MonoBehaviour" and script_name(data, PANEL_SCENE, p.get_raw_data()) == "Image"]
         for image in images:

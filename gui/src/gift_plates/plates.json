@@ -30,13 +30,13 @@
   },
   "AMBER": {
    "colour": "#fecc2b",
-   "shade": 1,
+   "shade": 1.0,
    "ink": "dark",
    "contrast": 4.76
   },
   "SHAMROCK": {
    "colour": "#9eff00",
-   "shade": 1,
+   "shade": 1.0,
    "ink": "dark",
    "contrast": 5.54
   },

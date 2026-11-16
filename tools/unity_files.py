@@ -3,7 +3,7 @@ UnityCache bundles' container entries, the sprites the bundles hold, the named s
 folder of WebP files the art tools write.
 
 tools/game_data.py dumps the static data through it; the art tools (gift_recipes, gift_icons, grace_icons, sinner_cards,
-theme_pack_covers) find their sprites through it. The first read of a new client's bundles takes all ~12 GB: run those tools
+theme_pack_covers, buf_icons, gift_plates) find or write their sprites through it. The first read of a new client's bundles takes all ~12 GB: run those tools
 as a `bench` ticket (tools/live/queue.py).
 """
 

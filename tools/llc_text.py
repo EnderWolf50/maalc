@@ -24,7 +24,7 @@ from pathlib import Path
 import opencc
 
 from local_dir import local_dir
-from sin_icons import COLOURS as SINS  # ATTRIBUTE_TYPE 0..6, CRIMSON..VIOLET
+from sin_icons import COLOURS as ATTRIBUTE_TYPES  # ATTRIBUTE_TYPE 0..6, CRIMSON..VIOLET: a gift's sin as the data names it
 
 REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "assets/resource/base/data"
@@ -223,7 +223,7 @@ def keyword_entry(buff, en, zh):
 def gift_sins(unpack, ids):
     """gift id -> its sin, for each of `ids`: the attributeType of its record in the client's static data, the mirror
     dungeon's tables (GIFT_TABLES) first. The game draws the gift's name on a plate of that sin's colour (#786). Two records
-    of one table folder that disagree, or a gift with no sin of SINS, stop the tool: the GUI would have no plate for it."""
+    of one table folder that disagree, or a gift with no sin of ATTRIBUTE_TYPES, stop the tool: the GUI would have no plate for it."""
     sins = {}
     for folder in GIFT_TABLES:
         found = {}
@@ -234,9 +234,9 @@ def gift_sins(unpack, ids):
                         raise ValueError(f"gift {g['id']}: {folder} gives it both {found[g['id']]} and {g['attributeType']}")
         for i, sin in found.items():
             sins.setdefault(i, sin)
-    missing = [i for i in ids if sins.get(i) not in SINS]
+    missing = [i for i in ids if sins.get(i) not in ATTRIBUTE_TYPES]
     if missing:
-        raise ValueError(f"gifts with no sin of {SINS}: {[(i, sins.get(i)) for i in missing]}")
+        raise ValueError(f"gifts with no sin of {ATTRIBUTE_TYPES}: {[(i, sins.get(i)) for i in missing]}")
     return {i: sins[i] for i in ids}
 
 
