@@ -4,11 +4,11 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import { iconUrl } from "./giftCatalog";
+import { bufIconUrl, iconUrl } from "./giftCatalog";
 import { DEFAULT_LIST, mainKeyword } from "./gifts";
 import { TEXT, fill } from "./i18n";
 import { GIFT_KEYWORDS, GRACES, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultGorder, newSettings, newTeam, starlightCost, type GiftList, type Settings } from "./model";
-import { cssRules, cssValueOf, expectLines, filterEffect, pickInList, renderEditor, sideList } from "./testing";
+import { contrast, cssRules, cssValueOf, expectLines, filterEffect, linear, pickInList, renderEditor, sideList } from "./testing";
 import css from "./index.css?raw";
 import mainTsx from "./main.tsx?raw";
 import { TeamsTab } from "./Teams";
@@ -319,6 +319,9 @@ describe("the E.G.O Gift Search gifts: icon first, details on hover (#721)", () 
     expect(card()).toHaveClass("gl-tip");
     expect(within(card()!).getByText(DUST.en)).toBeInTheDocument();
     expect(card()).toHaveTextContent(DUST.zhEffect);
+    // as on the gift list tab's card (#764): each Burn its status icon, then its name
+    expect(within(card()!).getAllByText("燒傷").map((x) => x.previousElementSibling?.getAttribute("src"))).toEqual([
+      bufIconUrl("Combustion"), bufIconUrl("Combustion"), bufIconUrl("Combustion"), bufIconUrl("Combustion")]);
     await r.user.unhover(t);
     await waitFor(() => expect(card()).toBeNull());
   });
@@ -407,7 +410,6 @@ describe("the deployment order tiles (#718)", () => {
   // #756: the glow is its ring alone (tools/sinner_cards.py ring_only), nothing over the art, so the art's filter alone sets its
   // light. The formation screen draws a white pixel of a selected card at R 0.47-0.50, G 0.46-0.49, B 0.44-0.46 (#754's fit),
   // relative luminance 0.179-0.200.
-  const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); // an sRGB channel 0-1, linear
   test("a white pixel of a card in the order comes out at the game's light", () => {
     renderEditor(<TeamsTab />, ordered());
     for (const s of order) {
@@ -443,11 +445,6 @@ describe("the deployment order tiles (#718)", () => {
   const hex = (name: string) => {
     expect(css.match(new RegExp(`${name}:`, "g"))).toHaveLength(1);
     return css.match(new RegExp(`${name}:\\s*#([0-9a-f]{6})`, "i"))![1].match(/../g)!.map((c) => parseInt(c, 16) / 255);
-  };
-  const relativeLuminance = (rgb: number[]) => rgb.map(linear).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
-  const contrast = (a: number[], b: number[]) => {
-    const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
   };
   test("the name of a card in the order dims with its frame, as far as it keeps 4.5:1 over white art; one left out's stays", () => {
     renderEditor(<TeamsTab />, ordered());

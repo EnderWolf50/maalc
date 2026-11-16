@@ -1,8 +1,9 @@
-// The hover card of a gift tile (#291 GUI, #307): the gift's icon and name, and under them what the page has to say about it. The
-// gift list tab's says "set to" and what the list and the recipes make of it; the team page's Gift Search says its effect (#721).
-// One card for a page: a tile shows it for itself (a GiftTip), the page renders it.
+// The hover card of a gift tile (#291 GUI, #307): the gift's icon and name, its effect as the game's gift panel prints it (#721,
+// #764), and under them what the page has to say about it. The gift list tab's says "set to" and what the list and the recipes
+// make of it; the team page's Gift Search says why a gift cannot be picked. One card for a page: a tile shows it for itself (a
+// GiftTip), the page renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { FUSION_BY_ID, GIFT_BY_ID, giftEffect, iconUrl, packName, packsOf, usedIn } from "./giftCatalog";
+import { bufIconUrl, FUSION_BY_ID, GIFT_BY_ID, giftEffect, iconUrl, keywordIconUrl, packName, packsOf, STATUS_WORDS, usedIn, type Colour, type EffectRun } from "./giftCatalog";
 import { plan, STATES, useGiftEdit, type GiftTip } from "./giftEdit";
 import { lockers, materialsOf, purchases, queue, type GiftState } from "./gifts";
 import { fill, localName, TEXT, type Key } from "./i18n";
@@ -81,12 +82,39 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="gl-tip-row"><span className="k">{label}</span><div className="v">{children}</div></div>;
 }
 
-/** The card's frame: the gift's icon, its name and, in Chinese, its English name, then `children`. Placed against its tile
- * (`place`) and kept open while the pointer is on it; focus going anywhere but its tile or itself closes it. */
-export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children: ReactNode }) {
+/** The class of a colour of the effect text: its theme's shade of the game's colour (index.css --kw-pos, --kw-neg, --kw-neu). */
+const COLOUR_CLASS: Record<Colour, string> = { Positive: "gl-pos", Negative: "gl-neg", Neutral: "gl-neu" };
+
+/** A gift's effect text as the game's gift panel prints it (#764): a status word as its status icon, then its name underlined in
+ * its buff's colour; flavour text italic, in its colour when the text gives one; the rest, a bracketed note too, as written. */
+export function EffectText({ runs, zh }: { runs: EffectRun[]; zh: boolean }) {
+  return (
+    <p className="gl-tip-effect">
+      {runs.map((r, i) => {
+        if (typeof r === "string") return r;
+        if ("kw" in r) {
+          const word = STATUS_WORDS[r.kw];
+          return (
+            <span key={i} className="gl-kw">
+              <img src={bufIconUrl(word.icon)} alt="" /><span className={"gl-kw-name " + COLOUR_CLASS[word.colour]}>{zh ? word.zh : word.en}</span>
+            </span>
+          );
+        }
+        const colour = r.colour ? COLOUR_CLASS[r.colour] : "";
+        return r.i ? <i key={i} className={("gl-fl " + colour).trim()}>{r.text}</i> : <span key={i} className={colour}>{r.text}</span>;
+      })}
+    </p>
+  );
+}
+
+/** The card's frame: the gift's icon with its tier at the top left and the icon of its keyword (its 體系) at the bottom right,
+ * as the game's panel draws it; its name and, in Chinese, its English name; its effect; then `children` (on the Gift Search,
+ * why it cannot be picked). Placed against its tile (`place`) and kept open while the pointer is on it; focus going anywhere
+ * but its tile or itself closes it. */
+export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children?: ReactNode }) {
   const { zh } = useEditor();
   const box = useRef<HTMLDivElement>(null);
-  const g = GIFT_BY_ID.get(id)!, name = localName(g, zh);
+  const g = GIFT_BY_ID.get(id)!, name = localName(g, zh), effect = giftEffect(id, zh), categoryIcon = keywordIconUrl(g.keyword);
 
   // After every render (its height changes with the content): place it against the tile.
   useLayoutEffect(() => {
@@ -104,24 +132,16 @@ export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HT
     <div ref={box} className="gl-tip" role="dialog" aria-label={name} tabIndex={-1} onMouseEnter={tip.keep} onMouseLeave={tip.leave}
       onBlur={(e) => { const to = e.relatedTarget as Element | null; if (to !== anchor && !to?.closest(".gl-tip")) tip.hide(); }}>
       <div className="gl-tip-head">
-        <img src={iconUrl(id)} alt="" />
+        <span className="gl-tip-icon">
+          <img src={iconUrl(id)} alt="" />
+          <b className="gl-tip-tier">{TIERS[g.tier]}</b>
+          {categoryIcon && <img className="gl-tip-kwi" src={categoryIcon} alt="" />}
+        </span>
         <div><b>{name}</b>{zh && <small>{g.en}</small>}</div>
       </div>
+      {effect && <EffectText runs={effect} zh={zh} />}
       {children}
     </div>
-  );
-}
-
-/** The Gift Search's card (#721): the gift's effect, as the game words it, in the GUI's language; `note` under it (why it cannot
- * be picked). */
-export function GiftEffectCard({ id, anchor, tip, note }: { id: number; anchor: HTMLElement; tip: GiftTip; note?: string }) {
-  const { zh } = useEditor();
-  const effect = giftEffect(id, zh);
-  return (
-    <GiftCard id={id} anchor={anchor} tip={tip}>
-      {effect && <p className="gl-tip-effect">{effect}</p>}
-      {note && <p className="gl-tip-note">{note}</p>}
-    </GiftCard>
   );
 }
 

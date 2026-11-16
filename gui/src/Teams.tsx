@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
 import { iconUrl } from "./giftCatalog";
-import { GiftEffectCard, useGiftTip } from "./GiftPopover";
+import { GiftCard, useGiftTip } from "./GiftPopover";
 import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill, localName } from "./i18n";
@@ -356,7 +356,11 @@ function GiftGrid({ gifts, start, full, mark, onToggle }: {
           </div>
         </div>
       ))}
-      {open && <GiftEffectCard id={open.id} anchor={open.anchor} tip={tip} note={blocked(SEARCH_GIFTS.find((g) => g.id === open.id)!) ? t("gift.full") : undefined} />}
+      {open && (
+        <GiftCard id={open.id} anchor={open.anchor} tip={tip}>
+          {blocked(SEARCH_GIFTS.find((g) => g.id === open.id)!) && <p className="gl-tip-note">{t("gift.full")}</p>}
+        </GiftCard>
+      )}
     </div>
   );
 }
