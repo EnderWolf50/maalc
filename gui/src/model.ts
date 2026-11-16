@@ -425,7 +425,7 @@ const USAGE_FITS: Record<string, string[]> = { any: ["hard", "normal"], hard_onl
 
 /** Where in team_queue the team of the next hard and the next normal run is: the first enabled team whose usage fits that
  * difficulty (agent/team_queue.py pick_team); -1 when no team does. */
-export function nextRuns(s: Settings): { hard: number; normal: number } {
+export function nextRunPlaces(s: Settings): { hard: number; normal: number } {
   const plays = (d: string) => s.team_queue.findIndex((id) => {
     const team = s.teams.find((t) => t.id === id);
     return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(d);

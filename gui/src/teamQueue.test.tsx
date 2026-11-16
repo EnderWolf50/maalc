@@ -2,7 +2,7 @@
 // that team to its end. The team list is the user's to arrange: its drag and its ↑↓ leave the queue alone. A team added goes
 // last in both, a team deleted leaves both. The editor takes the queue on disk, keeps the user's unsaved edits on top of it,
 // and never saves its own stale queue over the Agent's.
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
@@ -11,7 +11,7 @@ import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from
 import { cases } from "./settingsCases";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
-import { cssValueOf, pickInList, renderEditor, sideList } from "./testing";
+import { cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
 const file = vi.hoisted(() => ({ text: "" as string | null, saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
@@ -52,6 +52,8 @@ const claimedOld = (s: Settings, id: string): Settings => {
   return { ...s, teams: [...s.teams.slice(0, at), ...s.teams.slice(at + 1), s.teams[at]] };
 };
 const text = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** The rows of the team queue block (#804). */
+const queueRows = () => within(screen.getByRole("group", { name: zh["queue.title"] })).getAllByRole("listitem");
 
 describe("movedToEnd: the teams another writer moved to the end of the queue", () => {
   test.each([
@@ -144,18 +146,20 @@ describe("the team list and the queue in the teams tab", () => {
 });
 
 describe("the team queue block above the list and the editor (#804)", () => {
-  const block = () => within(screen.getByRole("group", { name: zh["queue.title"] }));
-  const rows = () => block().getAllByRole("listitem");
+  const rows = queueRows;
   /** Each row's text, as the user reads it. */
   const shown = () => rows().map((li) => li.querySelector(".item")!.textContent);
 
-  test("lists every team in the queue's order, each with its place, name and in-game slot", () => {
+  test("lists every team in the queue's order, each with its place, name, in-game slot and usage", () => {
     const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
     s.teams[1].game_team = 7;
+    s.teams[1].usage = "normal_only";
     renderEditor(<TeamsTab />, s);
     expect(shown()).toEqual([
       expect.stringMatching(/^1\. Tc TEAMS #3/), expect.stringMatching(/^2\. Ta TEAMS #1/), expect.stringMatching(/^3\. Tb TEAMS #7/),
     ]);
+    expect(rows().map((li) => [zh["usage.any"], zh["usage.normal_only"]].filter((u) => within(li).queryByText(u))))
+      .toEqual([[zh["usage.any"]], [zh["usage.any"]], [zh["usage.normal_only"]]]); // 都可 too: the list shows only a kept one
   });
 
   test("a team that is off stays in its place, dimmed and tagged off", () => {
@@ -215,11 +219,7 @@ describe("in the editor", () => {
     render(<App />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
     const rows = () => sideList().getAllByRole("listitem");
-    const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
-    fireEvent.dragStart(rows()[2], { dataTransfer: dt() });
-    fireEvent.dragOver(rows()[0], { dataTransfer: dt() });
-    fireEvent.drop(rows()[0], { dataTransfer: dt() });
-    fireEvent.dragEnd(rows()[2], { dataTransfer: dt() });
+    dragOnto(rows()[2], rows()[0]);
     expect(shown()).toEqual(["Tc", "Ta", "Tb"]);
     expect(document.querySelector(".status")).toHaveTextContent(zh.unsaved);
     await user.click(screen.getByRole("button", { name: zh.save }));
@@ -229,18 +229,14 @@ describe("in the editor", () => {
   });
 
   describe("the queue block", () => {
-    const rows = () => within(screen.getByRole("group", { name: zh["queue.title"] })).getAllByRole("listitem");
+    const rows = queueRows;
     const inBlock = () => rows().map((li) => li.textContent!.match(/T\w/)![0]);
 
     test("a drag and an ↑ in it save the queue in their order, and the team list as it was", async () => {
       const user = userEvent.setup();
       render(<App />);
       await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
-      const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
-      fireEvent.dragStart(rows()[2], { dataTransfer: dt() });
-      fireEvent.dragOver(rows()[0], { dataTransfer: dt() });
-      fireEvent.drop(rows()[0], { dataTransfer: dt() });
-      fireEvent.dragEnd(rows()[2], { dataTransfer: dt() });
+      dragOnto(rows()[2], rows()[0]);
       expect(inBlock()).toEqual(["Tc", "Ta", "Tb"]);
       await user.click(within(rows()[2]).getByRole("button", { name: zh.up }));
       expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]);
