@@ -69,6 +69,14 @@ def test_build_package_copies_the_three_folders_and_the_manifest_but_not_the_mod
     assert json.loads((out / "manifest.json").read_text(encoding="utf-8"))["version"] == "2026.11.16"
 
 
+def test_an_out_folder_that_holds_the_base_is_refused_before_anything_is_deleted(tmp_path):
+    base = make_base(tmp_path)
+    for out in (base, base / "sub"):
+        with pytest.raises(SystemExit, match="--out"):
+            brp.build_package(base, out, version="2026.11.16", client="1.118.1", sources=[])
+    assert (base / "data" / "a.json").is_file()
+
+
 def test_the_repos_own_resource_builds_a_manifest_that_matches_its_files():
     base = repo / "assets" / "resource" / "base"
     manifest = brp.build_manifest(base, version="2026.11.16", sources=[])

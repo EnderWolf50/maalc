@@ -75,8 +75,11 @@ def build_package(base: Path, out: Path, version: str, sources: list[str], clien
     """The package in `out`: each of data/, image/ and pipeline/ replaced by `base`'s, then manifest.json."""
     manifest = build_manifest(base, version, sources, client)
     out = Path(out)
+    if out.resolve() == Path(base).resolve() or Path(base).resolve() in out.resolve().parents:
+        raise SystemExit(f"--out {out} is --base or inside it: building there would delete the files it copies")
     for part in rp.PARTS:
-        shutil.rmtree(out / part, ignore_errors=True)
+        if (out / part).exists():
+            shutil.rmtree(out / part)  # a file Windows holds fails here, not later in a package that still has it
     (out / rp.MANIFEST).unlink(missing_ok=True)
     for name, path in package_files(base).items():
         (out / name).parent.mkdir(parents=True, exist_ok=True)

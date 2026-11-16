@@ -1,5 +1,5 @@
 """The resource package the program runs on (ADR 0012, spec #759): the versions it knows and the manifest helpers the
-agent and tools/resource_package.py share. Stdlib only: the release's bundled Python imports it.
+agent and tools/build_resource_package.py share. Stdlib only: the release's bundled Python imports it.
 
 The package is `data/`, `image/` and `pipeline/` of `resource/base/` and a `manifest.json` at its root. FORMAT covers
 `data/`, TEMPLATE `image/` and `pipeline/`; the program applies a package part only when its version is the one it knows.
@@ -60,11 +60,10 @@ def read_manifest(base: Path) -> dict | None:
     if not path.is_file():
         return None
     try:
-        return check_manifest(json.loads(path.read_text(encoding="utf-8")))
+        manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as e:
-        if isinstance(e, ManifestError):
-            raise
         raise ManifestError(f"{MANIFEST} cannot be read: {e}") from None
+    return check_manifest(manifest)
 
 
 def log_line(base: Path) -> str:
