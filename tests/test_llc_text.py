@@ -71,16 +71,16 @@ def test_every_gift_the_gui_shows_has_its_effect_in_english_and_chinese_as_runs(
     # every gift of the GUI's catalog, in its order; gui/src/GiftPopover.test.tsx checks the catalog itself has each one
     import llc_text
     effects, keywords = DATA["gift_effects"]["effects"], DATA["gift_effects"]["keywords"]
-    assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 466
+    assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 475  # 1.119.0 added 9292-9300
     for gid, e in effects.items():
-        assert set(e) == {"en", "zh"}, gid
-        for lang, runs in e.items():
+        assert set(e) == {"sin", "en", "zh"} and e["sin"] in llc_text.ATTRIBUTE_TYPES, gid
+        for lang, runs in ((k, v) for k, v in e.items() if k != "sin"):
             assert runs, (gid, lang)
             for r in runs:  # plain text, a keyword the table names, or styled text
                 assert isinstance(r, str) and r or set(r) == {"kw"} and r["kw"] in keywords or r["text"] and set(r) <= {"text", "i", "colour"}, (gid, lang, r)
             # no tag the game parses left in the text: [Combustion] is a keyword run, markup a run's style
             assert "[Combustion]" not in str(runs) and "noparse" not in str(runs), (gid, lang)
-    used = {r["kw"] for e in effects.values() for runs in e.values() for r in runs if isinstance(r, dict) and "kw" in r}
+    used = {r["kw"] for e in effects.values() for runs in (e["en"], e["zh"]) for r in runs if isinstance(r, dict) and "kw" in r}
     assert set(keywords) == used
     for k, v in keywords.items():  # each with the game's name in both languages, its buff's colour and its icon
         assert v["en"] and v["zh"] and v["colour"] in ("Positive", "Negative", "Neutral") and v["icon"], k
@@ -97,6 +97,52 @@ def test_distant_star_reads_as_the_game_s_gift_panel():
     assert DATA["gift_effects"]["keywords"]["Sinking"] == {"colour": "Negative", "icon": "Sinking", "en": "Sinking", "zh": "沉淪"}
     assert DATA["gift_effects"]["keywords"]["Breath"]["colour"] == "Positive"  # Poise: a Positive buff, the game's yellow
     assert "燒傷" == DATA["gift_effects"]["keywords"]["Combustion"]["zh"]
+
+
+def test_each_gift_carries_the_sin_the_game_colours_its_name_by():
+    # #786, as the game shows them: the plate of Distant Star (#764's still) and of UPS System (tests/screens/ShopPurchase.png)
+    # and Wound Clerid (GiftGet.png), the names on the Gift Search (GiftSearchSelected.png: Smokes and Wires, Rusted Cutting
+    # Knife, White Gossypium), each in its sin's colour
+    effects = DATA["gift_effects"]["effects"]
+    shown = {9125: "VIOLET", 9132: "CRIMSON", 9005: "CRIMSON", 9042: "CRIMSON", 9048: "SCARLET", 9020: "SHAMROCK"}
+    assert {i: effects[str(i)]["sin"] for i in shown} == shown
+
+
+def ego_gift_tables(root, tables):
+    """A static data folder of ego-gift tables under `root`: {"<folder>/<file>": [records]}."""
+    import llc_text
+    for name, records in tables.items():
+        path = root / llc_text.STATIC / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"list": records}), encoding="utf-8")
+    return root
+
+
+def test_a_gift_s_sin_is_its_mirror_dungeon_record_s_attribute_type(tmp_path):
+    # three gifts carry another attributeType in the plain ego-gift tables (9038, 9111, 9195): the mirror dungeon's record wins
+    import llc_text
+    unpack = ego_gift_tables(tmp_path, {
+        "ego-gift-mirrordungeon/ego-gift-mirrordungeon.json": [{"id": 9038, "attributeType": "AZURE", "tag": ["TIER_3"]}],
+        "ego-gift/ego-gift.json": [{"id": 9038, "attributeType": "VIOLET"}, {"id": 9006, "attributeType": "AMBER"}],
+        "ego-gift-mirrordungeon/hidden-ego-gift-mirrordungeon.json": [{"id": 990001}]})
+    assert llc_text.gift_sins(unpack, [9038, 9006]) == {9038: "AZURE", 9006: "AMBER"}
+
+
+@pytest.mark.parametrize("record", [{"id": 9500}, {"id": 9500, "attributeType": "NEUTRAL"}])
+def test_a_gift_the_gui_shows_with_no_sin_stops_the_tool(tmp_path, record):
+    # every gift of client 1.118.1 and 1.119.0 has one; the GUI would have no plate for one that has not
+    import llc_text
+    unpack = ego_gift_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}, record]})
+    with pytest.raises(ValueError, match="9500"):
+        llc_text.gift_sins(unpack, [9001, 9500])
+
+
+def test_two_mirror_dungeon_records_of_a_gift_that_disagree_stop_the_tool(tmp_path):
+    import llc_text
+    unpack = ego_gift_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
+                                        "ego-gift-mirrordungeon/b.json": [{"id": 9001, "attributeType": "AZURE"}]})
+    with pytest.raises(ValueError, match="9001"):
+        llc_text.gift_sins(unpack, [9001])
 
 
 def test_an_effect_is_runs_a_keyword_tag_its_own_run_and_a_bracketed_note_kept_as_text():

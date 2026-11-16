@@ -5,6 +5,7 @@ import type recipesFile from "../../assets/resource/base/data/gift_recipes.json"
 import type searchFile from "../../assets/resource/base/data/gift_search.json";
 import type effectsFile from "../../assets/resource/base/data/gift_effects.json";
 import type gracesFile from "../../assets/resource/base/data/graces.json";
+import type platesFile from "../../assets/resource/base/data/gift_plates/plates.json";
 import { parse as parseYaml } from "yaml";
 import { loadGameFiles } from "./api";
 
@@ -21,6 +22,7 @@ export const recipes = json<typeof recipesFile>("gift_recipes.json");
 export const search = json<typeof searchFile>("gift_search.json");
 export const effects = json<typeof effectsFile>("gift_effects.json");
 export const graces = json<typeof gracesFile>("graces.json");
+export const plates = json<typeof platesFile>("gift_plates/plates.json");
 /** data/shop.yaml, gift_lists.yaml and theme_packs.yaml as text: the callers parse them. */
 export const shopYaml = yamlText("shop.yaml");
 export const giftListsYaml = yamlText("gift_lists.yaml");

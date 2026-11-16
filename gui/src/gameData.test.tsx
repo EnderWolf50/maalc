@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import css from "./index.css?raw";
 import { StartError } from "./StartError";
 
-const REPO = import.meta.glob<string>(["../../assets/resource/base/data/*.{json,yaml}", "../../assets/resource/base/data/*/index.json"],
+const REPO = import.meta.glob<string>(["../../assets/resource/base/data/*.{json,yaml}", "../../assets/resource/base/data/*/{index,plates}.json"],
   { query: "?raw", import: "default", eager: true });
 const repoText = (name: string) => REPO["../../assets/resource/base/data/" + name];
 

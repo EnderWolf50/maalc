@@ -1,6 +1,6 @@
 // Every gift the gift list tab shows: the Gift Search page's, the fusion gifts, the recipe materials, the other gifts and the vestiges, with their icons
 // and their effect text.
-import { effects, recipes, webpFolder } from "./gameData";
+import { effects, plates, recipes, webpFolder } from "./gameData";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
 import { GIFT_SOURCES, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
 
@@ -41,11 +41,22 @@ export type EffectRun = string | { kw: string } | { text: string; i?: boolean; c
  * printed in, its status icon (data/buf_icons/<icon>.webp) and its names. */
 export interface StatusWord { colour: Colour; icon: string; en: string; zh: string }
 export const STATUS_WORDS = effects.keywords as Record<string, StatusWord>;
-const EFFECTS = effects.effects as Record<string, { en: EffectRun[]; zh: EffectRun[] }>;
+/** A gift's sin, its attributeType in the game's data (ATTRIBUTE_TYPE 0..6). */
+export type Sin = keyof typeof plates.plates;
+const EFFECTS = effects.effects as Record<string, { sin: Sin; en: EffectRun[]; zh: EffectRun[] }>;
 /** The gift's effect text in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764). */
 export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** The gift's sin (gift_effects.json, tools/llc_text.py gift_sins): the colour of the plate the game draws its name on (#786). */
+export const giftSin = (id: number): Sin | undefined => EFFECTS[id]?.sin;
 /** A status word's icon URL (data/buf_icons/<icon>.webp, tools/buf_icons.py). */
 export const bufIconUrl = webpFolder("buf_icons");
+const plateUrl = webpFolder("gift_plates");
+/** A sin's name plate (data/gift_plates/, tools/gift_plates.py): the game's plate sprite tinted by the sin's colour, and
+ * the ink the name holds 4.5:1 in on it, dark on a bright plate, light on the others. */
+export const plateOf = (sin: Sin) => {
+  const { ink } = plates.plates[sin] as { ink: keyof typeof plates.inks };
+  return { url: plateUrl(sin)!, ink, colour: plates.inks[ink] };
+};
 
 /** The icon's URL (data/gift_icons/<id>.webp). */
 export const iconUrl = webpFolder("gift_icons");

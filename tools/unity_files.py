@@ -3,7 +3,7 @@ UnityCache bundles' container entries, the sprites the bundles hold, the named s
 folder of WebP files the art tools write.
 
 tools/game_data.py dumps the static data through it; the art tools (gift_recipes, gift_icons, grace_icons, sinner_cards,
-theme_pack_covers) find their sprites through it. The first read of a new client's bundles takes all ~12 GB: run those tools
+theme_pack_covers, buf_icons, gift_plates) find or write their sprites through it. The first read of a new client's bundles takes all ~12 GB: run those tools
 as a `bench` ticket (tools/live/queue.py).
 """
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:  # Pillow is imported where an image is made: tools/game_data.
 BUNDLES = "raw/UnityCache"  # the bundles under .local/unpack/: <hash of the bundle name>/<content hash>/__data
 PLAYER_DATA = "apk-data/assets/bin/Data"  # the APK's player data under .local/unpack/
 INDEX = "out/sprite-index.tsv"  # every bundle's container entries (bundle_index)
-UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 and 1.118.1); the files carry a stripped version
+UNITY_VERSION = "6000.3.12f1"  # the engine in libunity.so (1.117.0 to 1.119.0); the files carry a stripped version
 K = TypeVar("K")  # what a caller names a wanted sprite by
 
 
@@ -100,12 +100,12 @@ def player_sprites(data: Path, parts: dict[str, dict[str, tuple[str, tuple[int, 
     return out
 
 
-def write_webps(images: dict[str, "Image.Image"], out: Path, quality: int) -> int:
-    """Each image as `<name>.webp` in out, alpha kept; files of other names removed: a folder of the GUI's game art, as the art
-    tools write it. The bytes written."""
+def write_webps(images: dict[str, "Image.Image"], out: Path, quality: int, lossless: bool = False) -> int:
+    """Each image as `<name>.webp` in out, alpha kept (`lossless`: every pixel kept); files of other names removed: a folder
+    of the GUI's game art, as the art tools write it. The bytes written."""
     out.mkdir(exist_ok=True)
     for name, im in images.items():
-        im.save(out / f"{name}.webp", "WEBP", quality=quality, method=6)
+        im.save(out / f"{name}.webp", "WEBP", quality=quality, method=6, lossless=lossless)
     for stale in set(out.glob("*.webp")) - {out / f"{n}.webp" for n in images}:
         stale.unlink()
     return sum((out / f"{n}.webp").stat().st_size for n in images)
