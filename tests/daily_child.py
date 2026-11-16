@@ -172,6 +172,11 @@ def run_task(tasker, scenario, entry, override=None):
     return detail
 
 
+def said(actions, marker):
+    """The agent's log lines that hold marker (" stop: ", " options: "), each without its time."""
+    return [line.split(" ", 1)[1] for line in actions.LOG if marker in line]
+
+
 def result(detail, game, actions):
     """A task's outcome for the test: its status, the nodes it went through, what the model was pressed, the done reason."""
     return {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes], "clicks": game.clicks,

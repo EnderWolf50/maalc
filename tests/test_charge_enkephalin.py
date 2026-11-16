@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from daily_child import ROOT, bind, game_class, interface as interface_json, load, posted, result, run_child, screen
+from daily_child import ROOT, bind, game_class, interface as interface_json, load, posted, result, run_child, said, screen
 from test_settings import VALID
 from agent_patch import patch_all, rebind
 
@@ -102,7 +102,7 @@ def child():
         actions.LOG.clear()
         array = posted("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}}, [f"ChargeCount={count}"])
         out[scenario] = {**result(tasker.post_task("ChargeEnkephalin", array).wait().get(), game, actions),
-                         "stops": [line.split(" ", 1)[1] for line in actions.LOG if " stop: " in line]}
+                         "stops": said(actions, " stop: ")}
     for shown in ("modules", "lunacy0"):  # the prompt: the Modules tab's own line is not it
         game.set()
         game.screen = shown

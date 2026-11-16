@@ -272,10 +272,12 @@ def test_a_task_whose_settings_do_not_load_at_its_start_goes_on_or_stops_as_befo
     # No settings file: MirrorDungeon goes on to PlanRun, which fails it and says why (test_settings.py); a task with no
     # options in the settings goes on with the client's, ChargeEnkephalin too since its count is the client's (#781); a
     # Luxcavation task, whose team the file holds, stops before any tap.
-    ok, stops, _ = start(context, monkeypatch, task, "AutoDownload=No")
+    ok, stops, said = start(context, monkeypatch, task, "AutoDownload=No")
+    unread = f"Invalid settings:\n- {actions.ROOT / 'config' / 'settings.json'} not found. {NO_TEAM}"
     assert ok is not stopped
-    assert stops == ([f"Invalid settings:\n- {actions.ROOT / 'config' / 'settings.json'} not found. {NO_TEAM}"]
-                     if stopped else [])
+    assert stops == ([unread] if stopped else [])
+    if task == "ChargeEnkephalin":  # a task that spends Lunacy says so when it goes on without the file
+        assert f"settings not read, ChargeEnkephalin needs none of them: {unread}" in said
     context.tasker.controller.post_click.assert_not_called()
     assert actions.allowed("auto_download") is False  # the client's, the stop procedure's webhook too
 

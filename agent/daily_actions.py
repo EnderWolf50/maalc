@@ -213,6 +213,7 @@ class ChargeStart(TaskStart):
     leaves it to go on, as a task with no options there does."""
 
     def unread(self, context, error):
+        log(f"settings not read, ChargeEnkephalin needs none of them: {error}")
         return self.charge()
 
     def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:

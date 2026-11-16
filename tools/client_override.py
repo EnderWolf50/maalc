@@ -106,6 +106,14 @@ def build(interface: dict, task: str, values: dict) -> tuple[str, list[dict], li
     return t["entry"], override, used
 
 
+def shown_by(interface: dict, option: str) -> list[tuple[str, str]]:
+    """The (option, case) pairs a client must pick for option to be sent, outermost first: an option nested under a case
+    is sent only while that case is chosen (collect). None for an option of a task's own list or a global one."""
+    options = interface.get("option", {})
+    parent = next(((k, c["name"]) for k, o in options.items() for c in o.get("cases", []) if option in c.get("option", [])), None)
+    return [] if parent is None else [*shown_by(interface, parent[0]), parent]
+
+
 def collect(key: str, options: dict, values: dict, override: list, used: list) -> None:
     """Append option key's overrides and its used line, then those of the options nested under its chosen case."""
     opt = options.get(key)

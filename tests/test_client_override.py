@@ -119,6 +119,13 @@ def test_an_option_nested_under_the_case_not_chosen_is_not_sent(install):
     assert not any(u.startswith("Runs=") for u in used)
 
 
+def test_an_option_is_shown_by_the_case_it_sits_under_and_one_of_a_tasks_list_by_none(install):
+    # what a client must pick for an option to be sent (#781: bot.py prep names it before the option)
+    interface = client_override.load_interface(install / "interface.json")
+    assert client_override.shown_by(interface, "Runs") == [("RunsLimit", "Yes")]
+    assert client_override.shown_by(interface, "Difficulty") == []
+
+
 def test_a_task_with_no_options_of_its_own_sends_the_global_options(install):
     entry, override, used = built(install, "Mail")
     assert (entry, override) == ("MailEntry", [global_opt("webhook_url", ""), global_opt("auto_download", True)])

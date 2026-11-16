@@ -318,7 +318,6 @@ export interface Settings {
  * (count wins this run), a teams[] id (null: none picked), the defeats fought again. */
 export interface Luxcavation { mode: LuxMode; count: number; team: string | null; retries: number; consecutive: boolean }
 export type LuxMode = "daily" | "count";
-export const LUX_MODES = schema.$defs.luxcavation.properties.mode.enum as LuxMode[];
 // count: EXP 1, Thread 3 (its 3 Daily Bonuses a day; the schema's default is EXP's)
 const newLuxcavation = (count = 1): Luxcavation =>
   ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;

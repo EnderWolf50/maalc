@@ -80,6 +80,16 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     ("luxcavation.exp.retries=2", "bot.py run --option ExpRetries=2"),
     ("luxcavation.thread.consecutive=false", "bot.py run --option ThreadConsecutive=No"),
     ("charge_enkephalin.count=3", "bot.py run --option ChargeCount=3"),
+    # a key under a moved section that is not an option, and a whole section, or one that holds one: all stop
+    ("run.x.y=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+    ("charge_enkephalin.nope=1", "the settings' charge_enkephalin section is no longer read: set its options with bot.py run --option"),
+    ("luxcavation.exp.nope=1",
+     "the settings' luxcavation.exp section is no longer read but its team: set its options with bot.py run --option"),
+    ("run={}", "the agent reads run's keys from the client's options: set them with bot.py run --option"),
+    ("luxcavation.thread={}", "the agent reads luxcavation.thread's keys from the client's options: set them with bot.py "
+     "run --option, its team with --set luxcavation.thread.team"),
+    ("luxcavation={}", "the agent reads luxcavation.exp's keys from the client's options: set them with bot.py run --option, "
+     "its team with --set luxcavation.exp.team"),
 ])
 def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
     # #779, #781: the agent no longer reads these keys of the settings file; a value set there would not happen

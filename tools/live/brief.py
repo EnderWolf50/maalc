@@ -85,13 +85,15 @@ RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5
 RECORD_NO = ("Do not record this run: the user asked for a run without a recording. Step 8's route and pack "
              "stills come from device screenshots.")
 
-LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation is under way"),
-       "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left")}
-LUX_OPTIONS = {"exp": "Exp", "thread": "Thread"}  # the prefix of each task's option names (ExpMode, ExpCount)
+# Each Luxcavation task: its name, what daily mode fights, the prefix of its option names (ExpMode, ExpCount).
+LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation is under way", "Exp"),
+       "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left", "Thread")}
 
 
 def lux(a: argparse.Namespace) -> list[tuple[str, str, str, str, int]]:
-    return [(key, name, daily, getattr(a, f"{key}_mode"), getattr(a, f"{key}_count")) for key, (name, daily) in LUX.items()]
+    """Each Luxcavation task's (option prefix, name, what daily mode fights, mode, count) for this run."""
+    return [(prefix, name, daily, getattr(a, f"{key}_mode"), getattr(a, f"{key}_count"))
+            for key, (name, daily, prefix) in LUX.items()]
 
 
 def lux_rows(a: argparse.Namespace) -> str:
@@ -106,8 +108,8 @@ def options(a: argparse.Namespace) -> str:
     """The task options of the run, as bot.py run takes them: the client's option names, the Mirror Dungeon ones (#779)
     and the Luxcavation ones (#781), whose count the client sends in count mode alone."""
     mirror = [f"MirrorDifficulty={a.difficulty}", "MirrorRunsLimit=Yes", f"MirrorRuns={a.runs}", f"MirrorWeeklyBonusUse={a.weekly_bonus}"]
-    daily = [pair for key, _, _, mode, count in lux(a)
-             for pair in [f"{LUX_OPTIONS[key]}Mode={mode}", *([f"{LUX_OPTIONS[key]}Count={count}"] if mode == "count" else [])]]
+    daily = [pair for prefix, _, _, mode, count in lux(a)
+             for pair in [f"{prefix}Mode={mode}", *([f"{prefix}Count={count}"] if mode == "count" else [])]]
     return " ".join(f"--option {pair}" for pair in [*mirror, *daily])
 
 
