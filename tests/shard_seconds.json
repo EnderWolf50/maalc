@@ -87,6 +87,7 @@
 "test_pipeline.py": 0,
 "test_popups.py": 0,
 "test_public_text_guard.py": 22,
+"test_publish_resource.py": 14,
 "test_recipe_fusion.py": 21,
 "test_recovery.py": 7,
 "test_red_check.py": 6,
