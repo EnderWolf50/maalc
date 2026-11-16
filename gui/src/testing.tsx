@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { useState, type ReactElement } from "react";
 import { expect } from "vitest";
-import { newSettings, type Settings, type TextRun } from "./model";
+import { newSettings, type Settings, type Team, type TextRun } from "./model";
 import { EditorContext, makeCtx, type Picked } from "./ui";
 
 /** Render `ui` over `initial` settings; `settings()` is what the editor holds now, `opened()` the lists something asked the
@@ -26,7 +26,11 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
   return { user: userEvent.setup(), settings: () => current, opened: () => opened, ...render(<Host />) };
 }
 
-/** The side list of a tab that shows one item at a time (the team queue, a plan tab's plans): queries inside its <aside>. */
+/** A team list and its queue in the same order, as adding the teams one by one in the editor makes them (#803): to spread
+ * into a test's settings. */
+export const queuedTeams = (teams: Team[]) => ({ teams, team_queue: teams.map((t) => t.id) });
+
+/** The side list of a tab that shows one item at a time (the team list, a plan tab's plans): queries inside its <aside>. */
 export const sideList = () => within(document.querySelector("aside")!);
 
 /** Pick the team or plan named `name` in the side list, as the user clicks it. */

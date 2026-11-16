@@ -7,7 +7,7 @@ import {
 } from "./model";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT } from "./i18n";
-import { applyEdits, cases, v20File, type Edit } from "./settingsCases";
+import { applyEdits, cases, v20File, v21File, type Edit } from "./settingsCases";
 import { pyRepr, sayProblem, validate } from "./validate";
 
 describe("tests/settings_cases.json", () => {
@@ -34,6 +34,7 @@ function everyProblem(): Settings {
   const s = structuredClone(cases.valid) as unknown as Settings;
   const team = (id: string, name: string, slot: number) => ({ ...newTeam(slot, name), id });
   s.teams = [team("a", "Ta", 1), team("b", "Tb", 1), team("a", "Tc", 3), team("d", "Td", 4), team("e", "Te", 5)];
+  s.team_queue = ["a", "b", "b", "x", "d"]; // b twice, x no team, e missing (#803)
   s.teams[0].deployment_order = { plan: "gone" };
   s.teams[0].skill_replacement.sinners = [
     { sinner: "Yi Sang", target: { s1: 4, s2: 1, s3: 1 }, s1_s3_first: true },
@@ -69,6 +70,16 @@ describe("what the editor says of a problem", () => {
     expect(sayProblem(p, "en_us")).toBe('Teams "Ta", "Tb" are all enabled and all use TEAMS #1. Give one another slot, or disable one.');
   });
 
+  test("the team queue's problems name the team or the id, and send the user to the file", () => {
+    const said = (key: string) => problems.filter((x) => x.say.key === key).map((p) => [sayProblem(p, "zh_tw"), sayProblem(p, "en_us")]);
+    expect(said("problem.queueDupe")).toEqual([["隊伍佇列列了 2 次 id「b」：到設定檔的 team_queue 刪掉多的那幾個。",
+      'The team queue lists the id "b" 2 times. In the file\'s team_queue, remove the extra ones.']]);
+    expect(said("problem.queueExtra")).toEqual([["隊伍佇列裡的 id「x」不是任何一支隊伍的：到設定檔的 team_queue 刪掉它。",
+      'The team queue lists the id "x", which no team has. In the file\'s team_queue, remove it.']]);
+    expect(said("problem.queueMissing")).toEqual([["隊伍「Te」不在隊伍佇列裡：到設定檔的 team_queue 加上它的 id「e」。",
+      'Team "Te" is not in the team queue. In the file\'s team_queue, add its id "e".']]);
+  });
+
   test("a gift is said by its name", () => {
     const p = problems.find((x) => x.say.key === "problem.wantKeep")!;
     expect(sayProblem(p, "en_us")).toContain(GIFT_BY_ID.get(9780)!.en);
@@ -86,12 +97,13 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
   const s = newSettings();
   expect(validate(s)).toEqual([]);
   s.teams.push(newTeam(1, "隊伍 1"), newTeam(2, "隊伍 2"));
+  s.team_queue.push(...s.teams.map((x) => x.id));
   expect(validate(s)).toEqual([]);
   expect(s.teams.map((x) => x.game_team)).toEqual([1, 2]);
 });
 
 test("parseSettings refuses a newer version", () => {
-  expect(() => parseSettings('{"version": 22}')).toThrow("newer");
+  expect(() => parseSettings(JSON.stringify({ version: VERSION + 1 }))).toThrow("newer");
 });
 
 describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the valid file, its moved sections gone (#782)", () => {
@@ -105,9 +117,21 @@ describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the 
     });
   }
 
-  test("a version 21 file needs no migration and has no old file", () => {
+  test("a version 22 file needs no migration and has no old file", () => {
     expect(parseSettings(JSON.stringify(cases.valid)).old).toBeNull();
   });
+});
+
+describe("tests/settings_cases.json migrate_v21: a version 21 file reads as version 22, the queue in the order of teams (#803)", () => {
+  for (const c of cases.migrate_v21 as { name: string; edits: Edit[]; team_queue: string[] }[]) {
+    test(c.name, () => {
+      const old = v21File(c.edits);
+      const { data, old: read } = parseSettings(JSON.stringify(old));
+      const { gift_lists: _, ...rest } = data;
+      const { gift_lists: __, ...was } = old;
+      expect([rest, read]).toEqual([{ ...was, version: 22, team_queue: c.team_queue }, { version: 21, data: old }]);
+    });
+  }
 });
 
 test.each(cases.too_old)("parseSettings refuses version $version as too old, in the agent's words (tests/settings_cases.json too_old)", ({ version, error }) => {

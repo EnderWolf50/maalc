@@ -80,6 +80,31 @@ export function crossCheck(data: Settings): Problem[] {
   const teams = data.teams;
   dupes("teams", teams.map((t) => t.id), "id", "id", twice("problem.dupeId", "teams"));
 
+  // the team queue (#803): each team's id once, in any order; only a hand edit breaks it, so the way out is the file's
+  const queue = data.team_queue, ids = new Set(teams.map((t) => t.id));
+  const counts = new Map<string, number[]>();
+  queue.forEach((id, i) => counts.set(id, [...(counts.get(id) ?? []), i]));
+  for (const [id, at] of counts) {
+    if (at.length < 2) continue;
+    errors.push({
+      paths: at.map((i) => `team_queue/${i}`), text: `team_queue: id ${pyRepr(id)} appears ${at.length} times`,
+      say: { key: "problem.queueDupe", vars: { name: id, n: at.length } },
+    });
+  }
+  for (const [id, at] of counts) {
+    if (ids.has(id)) continue;
+    errors.push({
+      paths: [`team_queue/${at[0]}`], text: `team_queue: id ${pyRepr(id)} names no team`, say: { key: "problem.queueExtra", vars: { name: id } },
+    });
+  }
+  teams.forEach((t, i) => {
+    if (counts.has(t.id)) return;
+    errors.push({
+      paths: [`teams/${i}`], text: `team_queue: team ${pyRepr(t.name)} (id ${pyRepr(t.id)}) is missing`,
+      say: { key: "problem.queueMissing", vars: { team: named(t.name), id: t.id } },
+    });
+  });
+
   const enabled = teams.filter((t) => t.enabled);
   const slots = [...new Set(enabled.map((t) => t.game_team))];
   for (const slot of slots) {

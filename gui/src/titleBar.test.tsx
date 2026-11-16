@@ -8,7 +8,7 @@ import App from "./App";
 import { TEXT } from "./i18n";
 import css from "./index.css?raw";
 import { newSettings, newTeam } from "./model";
-import { cssRules } from "./testing";
+import { cssRules, queuedTeams } from "./testing";
 import { FIT_STEPS } from "./WindowControls";
 
 const zh = TEXT.zh_tw;
@@ -33,7 +33,7 @@ vi.mock("./api", async (original) => ({
 
 beforeEach(() => {
   const s = newSettings();
-  s.teams = [newTeam(1, "Ta")];
+  Object.assign(s, queuedTeams([newTeam(1, "Ta")]));
   win.text = JSON.stringify(s, null, 2) + "\n";
   Object.assign(win, { keepOpen: undefined, maximized: undefined, closed: 0, minimized: 0, toggled: 0 });
 });
@@ -135,7 +135,7 @@ describe("a title bar with less room than its parts ask for (#746)", () => {
   beforeEach(() => {
     const s = newSettings();
     s.language = "en_us";
-    s.teams = [newTeam(1, "Ta")];
+    Object.assign(s, queuedTeams([newTeam(1, "Ta")]));
     win.text = JSON.stringify(s, null, 2) + "\n";
     vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
       return this.tagName === "HEADER" ? room : 0;

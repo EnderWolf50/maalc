@@ -20,5 +20,11 @@ export function applyEdits(data: unknown, edits: Edit[]) {
   return out;
 }
 
-/** The valid file at version 20 with the three sections version 21 dropped (#782), these edits made to it. */
-export const v20File = (edits: Edit[] = []) => applyEdits({ ...cases.valid, version: 20, ...cases.v20 }, edits);
+/** The valid file at an older version, without the team_queue version 22 added (#803), these edits made to it; version 20's
+ * with the three sections version 21 dropped (#782). */
+function beforeQueue(version: 20 | 21, edits: Edit[]) {
+  const { team_queue: _, ...old } = cases.valid;
+  return applyEdits({ ...old, version, ...(version === 20 ? cases.v20 : {}) }, edits);
+}
+export const v20File = (edits: Edit[] = []) => beforeQueue(20, edits);
+export const v21File = (edits: Edit[] = []) => beforeQueue(21, edits);

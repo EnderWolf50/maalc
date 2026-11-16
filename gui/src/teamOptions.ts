@@ -67,7 +67,7 @@ function readPrevious(text: string | null): Partial<Record<TeamOption, Option>> 
  * already says it, or when there is neither a file nor a team (nothing to write). A file that does not read as one this
  * GUI wrote starts over, as a new one. Each option keeps the file's cases in
  * their order: a team there gets its name and slot of now (a rename changes only the label), a team gone stays,
- * marked deleted, and each new team goes last, in the team queue's order. A new file's default_case is the team picks
+ * marked deleted, and each new team goes last, in the team list's order. A new file's default_case is the team picks
  * gives that option, the one a version 20 file picked (teamPicks; MXU starts a task it has no value for on it,
  * MFAAvalonia starts on case 0), else 「未選擇」; an existing file's stays. */
 export function teamOptionsText(previous: string | null, s: Settings, picks: TeamPicks = NO_PICKS): string | null {

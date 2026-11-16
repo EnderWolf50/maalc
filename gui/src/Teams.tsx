@@ -1,4 +1,4 @@
-// Teams (spec 04 section 9): the list order is the team queue (#501).
+// Teams (spec 04 section 9): the team list, in the order the user arranges it; the team queue is team_queue (#803).
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { resetTeamTimes } from "./api";
 import { iconUrl } from "./giftCatalog";
@@ -7,7 +7,7 @@ import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill, localName } from "./i18n";
 import {
-  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
+  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, addTeam, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
   type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid } from "./Deployment";
@@ -21,11 +21,19 @@ export function TeamsTab() {
   const { s, update, t, tv, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const [undoNote, removeAt] = useUndo();
-  const remove = () => removeAt(s.teams, i, (fn) => update((d) => fn(d.teams)), setSel);
+  // A team deleted leaves the queue too; its Undo puts it back in its place there as well (#803).
+  const remove = () => {
+    const id = s.teams[i].id, at = s.team_queue.indexOf(id);
+    removeAt(s.teams, i, (fn) => update((d) => {
+      fn(d.teams);
+      const queue = d.team_queue.filter((x) => x !== id);
+      if (d.teams.some((x) => x.id === id)) queue.splice(at < 0 ? queue.length : Math.min(at, queue.length), 0, id);
+      d.team_queue = queue;
+    }), setSel);
+  };
   return (
     <div className="split">
-      <aside className="queue">
-        <p className="muted">{t("teams.queue")}</p>
+      <aside className="team-list">
         {s.teams.length ? (
           <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
             badAt={(j) => bad(`teams/${j}`)}
@@ -41,7 +49,7 @@ export function TeamsTab() {
         <button type="button" onClick={() => {
           const n = s.teams.length + 1;
           const team = newTeam(n, `${t("teamName")} ${n}`);
-          update((d) => { d.teams.push(team); });
+          update((d) => { addTeam(d, team); });
           setSel(team.id);
         }}>+ {t("add")}</button>
       </aside>

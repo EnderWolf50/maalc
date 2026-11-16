@@ -1,7 +1,7 @@
 // The click rules of the team page's sinner grid and starlight cards.
 import { expect, test } from "vitest";
 import {
-  FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
+  FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, addTeam, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
   importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
   weightOf, type GiftList, type StarlightValues,
 } from "./model";
@@ -193,7 +193,7 @@ test("a gift list exports without its id and imports as a new list that passes t
   expect(list.gorder.Bleed).toEqual(defaultGorder().Bleed);
   const s = newSettings();
   s.gift_lists.push(list);
-  s.teams.push({ ...newTeam(1, "T"), gift_list: list.id });
+  addTeam(s, { ...newTeam(1, "T"), gift_list: list.id });
   expect(validate(s)).toEqual([]);
 });
 
