@@ -35,6 +35,14 @@
   - 版本 18（#431）：`luxcavation.exp`、`luxcavation.thread` 新增 `mode`（`daily` 每日模式／`count` 自訂次數），從版本 17 遷移時兩個都填 `daily`（使用者 2026-11-05 決定：預設每日模式，遷移的檔也是），`count` 保留給自訂次數用。舊版 Agent 讀到版本 18 會報「比自己新」。
   - 版本 19（#454）：隊伍新增 `skill_replacement`（商店技能替換，見第 9 節），從版本 18 遷移時每支隊伍填預設值：`sinners` 是空的（沒列的罪人維持遊戲原本的 3／2／1），ID Skill Search 關、付 Cost，所以行為和以前完全一樣；每支隊伍各有一份自己的複本。版本 19 還沒發布前改過一次形狀（使用者 2026-11-06 定案）：原本 12 位全列、每位帶 `options`，改成只列要換的罪人、每位帶 `s1_s3_first`；沒有檔案帶著舊形狀，所以版本號不變、直接改遷移。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 19 會報「比自己新」。
   - 版本 20（#385）：執行選項新增 `target_floor`（整局目標層數，5／10／15），從版本 19 遷移時填 5，行為和以前完全一樣。Agent 目前只用它決定自動難度（見第 5 節）；入口與提示的行為之後再接。舊版 Agent 讀到版本 20 會報「比自己新」。
+  - 版本 21（#782）：移除 `run`、`luxcavation`、`charge_enkephalin` 三段，其他不變。這三段的 25 個值改成 MXU／MFAAvalonia 的任務選項與全域選項（第 5、12 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)），Agent 從 #779、#780、#781 起就只從 client 讀。從版本 20 遷移就是刪掉這三段，三段裡的值不檢查（手改壞的也照樣刪掉）。
+    - Agent 在記憶體裡遷移，不寫回。檔案還是版本 20 時，每個任務開始時（讀任務選項之前，選項有錯也記）記一行 `settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists the values to set in the client`，GUI 寫回之前每次都記。
+    - GUI 讀到版本 20 時，在寫回之前依序：
+      1. 舊檔原樣另存成 `config/settings.v20.json`（已有就蓋掉；存不了就顯示讀取失敗，設定檔不動）。
+      2. 用舊檔的 `luxcavation.exp.team`、`luxcavation.thread.team` 產生第一份隊伍選項檔的 `default_case`（第 12 節；隊伍選項檔已經存在時沿用它的）。
+      3. 寫回版本 21（設定檔通過檢查時；沒通過就等使用者改好存檔）。
+      4. 在分頁上方列出一次搬走的值裡和 client 預設不同的：每項是 client 裡的任務、選項名稱與原本的值（選擇型用 case 的名稱，開關說開或關），webhook 只說「有設定」。巢狀的輸入只在舊值選了它所屬的 case 時才比，例如自訂次數的場數只在模式是自訂次數時列。client 不接受的舊值（手改壞的）不列。全部是預設值時不顯示。使用者按「知道了」收起；寫回之後再打開就不會再列。client 的預設取自 `interface.json`（`gui/src/movedOptions.ts`）。
+    - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `v20`、`migrate_v20`）。舊版 Agent 讀到版本 21 會報「比自己新」。
   - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
@@ -81,7 +89,6 @@
 |---|---|---|---|
 | `version` | 整數 | 設定檔格式的版本 | #19 |
 | `language` | 字串 | `zh_tw`／`en_us`，預設 `zh_tw` | #18 |
-| `run` | 物件 | 舊的執行選項，Agent 不再讀：它的值改成第 5 節的任務選項；GUI 原封不動寫回，版本 21 移除（#782） | #8、#9、#14、#16、#779 |
 | `deployment_order_plans` | 陣列 | 出戰順序方案，見第 6 節 | #9 |
 | `starlight_plans` | 陣列 | 星光方案，見第 7 節 | #9 |
 | `theme_pack_plans` | 陣列 | 使用者的主題包方案，見第 8 節 | #11 |
@@ -89,15 +96,14 @@
 | `teams` | 陣列 | 隊伍，順序就是隊伍佇列，見第 9 節 | #9、#501 |
 | `event_overrides` | 陣列 | 事件覆寫，見第 10 節 | #11 |
 | `trial_risk_overrides` | 陣列 | 試煉分數覆寫，見第 11 節 | #17、#381 |
-| `luxcavation` | 物件 | 舊的經驗本與紐本選項，Agent 不再讀：改成第 12 節的任務選項（隊伍也是，#780）；GUI 原封不動寫回，版本 21 移除（#782） | #366、#780、#781 |
-| `charge_enkephalin` | 物件 | 舊的狂氣換腦啡肽次數，Agent 不再讀：改成第 12 節的任務選項 `ChargeCount`；GUI 原封不動寫回，版本 21 移除（#782） | #373、#781 |
 
 - 鍵名用 snake_case。（#19）
-- 新的設定檔：各陣列都是空的，`run` 用 `settings.schema.json` 的預設值（Agent 不讀它，#782 移除）。沒有隊伍，所以 Agent 會報「先設定隊伍」。（#19）
+- 版本 20 的 `run`、`luxcavation`、`charge_enkephalin` 在版本 21 移除：它們的值是第 5、12 節的任務選項（#782）。
+- 新的設定檔：各陣列都是空的。沒有隊伍，所以 Agent 會報「先設定隊伍」。（#19）
 
 ## 5. 鏡牢任務選項與全域選項
 
-這組值不在設定檔，是 MXU／MFAAvalonia 的任務選項（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#776、#779）：鏡牢任務的 10 個在任務清單裡、鏡牢任務旁邊設定；4 個全域選項每個任務都會用到，MXU 在設定頁的「全域選項」區塊設定、所有實例共用一份，MFAAvalonia 在任務清單的全域選項項目設定、每個實例各一份。03 與 06 章說的「全域」設定就是這一組。舊設定檔的 `run` 有同名的鍵，Agent 不再讀。（#19）
+這組值不在設定檔，是 MXU／MFAAvalonia 的任務選項（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#776、#779）：鏡牢任務的 10 個在任務清單裡、鏡牢任務旁邊設定；4 個全域選項每個任務都會用到，MXU 在設定頁的「全域選項」區塊設定、所有實例共用一份，MFAAvalonia 在任務清單的全域選項項目設定、每個實例各一份。03 與 06 章說的「全域」設定就是這一組。版本 20 的設定檔的 `run` 有同名的鍵，版本 21 移除（#782）。（#19）
 
 | 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
 |---|---|---|---|---|---|
@@ -237,7 +243,7 @@
 | 一般刷新次數 | `shop_refresh_normal` | 整數 ≥ 0 | 每家商店最多用幾次一般刷新；體系刷新次數用完或錢不夠時才用 | 0 | #10、#19、#310 |
 | 治療方式 | `heal` | 字串 | `none` 不治療／`full` 錢 ≥ 100 + 預留時全體治療／`revive` 有罪人陣亡時才治療 | `revive` | #10 |
 | 預留金額 | `reserve_cost` | 整數 ≥ 0 | 所有花費（治療、購買、刷新）後至少留下的錢；全體治療的門檻是錢 ≥ 100 + 預留金額 | 0 | #10、#19 |
-| 存活少於 K 人時結束這局 | `min_alive` | 整數 0–12 | 戰前編隊讀到出戰順序裡沒有灰卡的罪人少於 K 人時，照「重打用完後」（`run.after_retries`）處理；不在出戰順序裡的罪人不算；0 = 不檢查 | 0 | #16、#137、#616 |
+| 存活少於 K 人時結束這局 | `min_alive` | 整數 0–12 | 戰前編隊讀到出戰順序裡沒有灰卡的罪人少於 K 人時，照鏡牢任務選項的「重打用完後」（`MirrorAfterRetries`）處理；不在出戰順序裡的罪人不算；0 = 不檢查 | 0 | #16、#137、#616 |
 | 開局連續防禦回合數 | `guard_turns` | 整數 0–5 | 鏡牢每局最前面 N 個戰鬥回合（跨場累計）全員防禦，經驗本和紐本則是每場戰鬥的前 N 回合；焦點戰不防禦、不扣回合數；0 = 不用 | 0 | #52 |
 | 可以持有 White Gossypium | `allow_white_gossypium` | 布林 | 關：選飾品時排在最後（只剩它才選，不拿隨機試煉）、商店不買，已持有的優先當合成／出售材料（[03](03-decisions.md) 第 12、13 節） | 開 | #90 |
 | 出售的最高階級 | `sell_max_tier` | 整數 1–5 | 比它高階的飾品不出售；4 = V 階永遠不賣 | 4 | #161 |
@@ -350,14 +356,14 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
   - 第 0 個 case 是「未選擇」（名稱 `none`，標籤 `$LuxTeam_none`），不送值。
   - 之後每支隊伍一個 case：名稱是隊伍 id，標籤是隊伍名稱加 `TEAMS #N`（`隊伍 A（TEAMS #3）`，英文介面 `Team A (TEAMS #3)`），override 寫 `team: <id>`。
   - **只往後加**：MFAAvalonia 存的是 case 的索引，MXU 存名稱，插入、重排或刪除會讓選好的值悄悄變成別隊或「未選擇」。新隊伍加在最後；順序是這個檔原本的順序，不跟隊伍佇列走（Agent 每次領獎都改佇列，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。刪掉的隊伍保留它的 case，標籤後面加「（已刪除）」（英文 ` (deleted)`），override 仍送它的 id，Agent 就停下。改名、改 `TEAMS #N` 只改標籤。標籤用設定視窗當下的語言。
-  - 第一次產生時（檔案不存在，或讀不懂），`default_case` 是設定檔裡那個任務的 `luxcavation.<task>.team`，它不在 `teams` 裡或沒選就是「未選擇」；之後沿用檔案裡的。MXU 對還沒存過值的任務用 `default_case`；MFAAvalonia 的任務選項一律從第 0 個 case 開始，停在「未選擇」。
+  - 第一次產生時（檔案不存在，或讀不懂），`default_case` 是遷移前的版本 20 設定檔裡那個任務的 `luxcavation.<task>.team`（同一次開啟裡遷移過的才有；版本 21 的檔沒有，就是「未選擇」），它不在 `teams` 裡或沒選也是「未選擇」；之後沿用檔案裡的。MXU 對還沒存過值的任務用 `default_case`；MFAAvalonia 的任務選項一律從第 0 個 case 開始，停在「未選擇」。
   - 存檔成功後與啟動時（設定檔通過檢查時）產生，內容有變才寫，寫法和設定檔一樣：先寫暫存檔再改名（`save_team_options`）。沒有檔案也沒有隊伍時不寫。內容變了，狀態列說一次：「隊伍清單已更新：重新開啟 MXU／MFAAvalonia 後，任務選項的隊伍下拉選單才會更新。」存檔時是「已儲存。」接著這句。
   - 不做重新整理按鈕：兩個 client 執行中都不重讀 `interface.json`，改了隊伍要重開 client。
 - `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔（來源沒有就刪掉目的地的），`bot.py run --option ExpTeam=<隊伍 id>` 從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
 
-### 設定檔的 `luxcavation` 與 `charge_enkephalin`
+### 版本 20 的 `luxcavation` 與 `charge_enkephalin`
 
-- 設定檔 `luxcavation` 的 `mode`、`count`、`team`、`retries`、`consecutive` 與 `charge_enkephalin.count`，Agent 不再讀，改讀上面的任務選項；GUI 不顯示它們、原封不動寫回，版本 21 移除（#780、#781、#782）。設定視窗第一次產生隊伍選項檔時，用 `luxcavation.<task>.team` 當 `default_case`。
+- 版本 20 的設定檔 `luxcavation` 的 `mode`、`count`、`team`、`retries`、`consecutive` 與 `charge_enkephalin.count`，Agent 從 #780、#781 起不再讀，改讀上面的任務選項；版本 21 移除這兩段（#782）。設定視窗遷移版本 20 的檔時，用舊檔的 `luxcavation.<task>.team` 當第一份隊伍選項檔的 `default_case`，並列出和 client 預設不同的值（第 2 節的版本 21）。
 - 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3，以及 `charge_enkephalin` `{"count": 0}`。（#366、#368、#373）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
 - 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 

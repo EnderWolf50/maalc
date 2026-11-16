@@ -8,8 +8,9 @@ import pytest
 import resource_package as rp
 
 
-def test_the_program_knows_format_1_and_template_1():
-    assert (rp.FORMAT, rp.TEMPLATE) == (1, 1)
+def test_the_program_knows_format_1_and_template_2():
+    # template 2 (#782, ADR 0013): the entry nodes' attach and GlobalOptions, the contract with interface.json's options
+    assert (rp.FORMAT, rp.TEMPLATE) == (1, 2)
 
 
 def test_versions_compare_as_tuples_of_ints():

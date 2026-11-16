@@ -532,7 +532,8 @@ class TaskStart(CustomAction):
     the same screen.
 
     Then, before any tap, it reads the task's options the client sent (TASK["options"], #777, #779): what options() gives
-    every reader. One missing or wrong ends the task there (unsent). A subclass's own start goes on from begin(). An
+    every reader. One missing or wrong ends the task there (unsent); settings that do not load, unread. A file still at
+    an older version logs its migration's note first (settings.NOTES). A subclass's own start goes on from begin(). An
     update before them that reloaded the bundle (#772) hands the task its entry node from the new one (rebuild_entry)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -554,16 +555,23 @@ class TaskStart(CustomAction):
         log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
+        # Read before the options: a file still at version 20 says where its values went (#782), also when the client
+        # sent an option wrong.
+        notes, unread = [], None
+        try:
+            settings = load_settings(ROOT, notes=notes)
+        except SettingsError as e:
+            unread = e
+        for note in notes:
+            log(note)
         try:
             values = task_options.read(context, argv.node_name)
         except task_options.OptionsError as e:
             return self.unsent(context, argv, e)
         log(task_options.line(values))
         TASK["options"] = task_options.options(argv.node_name, values)  # the stop procedure's webhook from here on
-        try:
-            settings = load_settings(ROOT)
-        except SettingsError as e:
-            return self.unread(context, e)
+        if unread:
+            return self.unread(context, unread)
         return self.begin(context, argv, settings)
 
     def unsent(self, context, argv, error):

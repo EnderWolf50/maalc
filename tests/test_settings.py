@@ -54,14 +54,8 @@ def custom_skills():
 
 
 VALID = {
-    "version": 20,
+    "version": 21,
     "language": "zh_tw",
-    "run": {
-        "difficulty": "auto", "target_floor": 5, "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
-        "stop_when_weekly_bonus_out": False, "starlight_unaffordable": "skip", "wipe_retries": 2,
-        "after_retries": "stop", "webhook_url": "", "theme_pack_refresh": "all",
-        "auto_accept_terms": True, "auto_download": True, "keep_dismissed_screens": True,
-    },
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
     "theme_pack_plans": [{"id": "p1", "name": "Mine", "weights": {"Automated Factory": -5}, "threshold": 0, "unlisted": 0, "event_packs": "weight"}],
@@ -73,16 +67,13 @@ VALID = {
     ],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
-    "luxcavation": {"exp": {"mode": "daily", "count": 1, "team": None, "retries": 0, "consecutive": True},
-                    "thread": {"mode": "daily", "count": 3, "team": None, "retries": 0, "consecutive": True}},
-    "charge_enkephalin": {"count": 0},
 }
 
 
-def load(tmp_path, data):
+def load(tmp_path, data, **kw):
     (tmp_path / "config").mkdir(exist_ok=True)
     (tmp_path / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
-    return load_settings(tmp_path)
+    return load_settings(tmp_path, **kw)
 
 
 def errors(tmp_path, data):
@@ -127,13 +118,11 @@ def test_broken_json(tmp_path):
 
 
 @pytest.mark.parametrize("fn, where", [
-    (lambda d: d["run"].update(difficulty="extreme"), "run/difficulty"),
-    (lambda d: d["run"].update(runs=-1), "run/runs"),
+    (lambda d: d["teams"][0].update(usage="extreme"), "teams/0/usage"),
     (lambda d: d["teams"][0].update(game_team=41), "teams/0/game_team"),
     (lambda d: d["teams"][0].update(min_alive=13), "teams/0/min_alive"),
     (lambda d: d["teams"][0].update(min_alive=None), "teams/0/min_alive"),  # a number; 0 is no check (#137)
     (lambda d: d["teams"][0].update(hard_from_floor=0), "teams/0/hard_from_floor"),
-    (lambda d: d["run"].update(runs=0), "run/runs"),
     (lambda d: d["deployment_order_plans"][0]["order"].__setitem__(1, "Yi Sang"), "deployment_order_plans/0/order"),
     (lambda d: d["teams"][1].update(reward_cards=["Cost"] * 5), "teams/1/reward_cards"),
     (lambda d: d["starlight_plans"][0]["priority"].__setitem__(0, 2), "starlight_plans/0/priority"),
@@ -182,7 +171,7 @@ def test_schema_errors_name_the_field(tmp_path, fn, where):
 
 
 def test_newer_version_is_refused(tmp_path):
-    assert "newer" in errors(tmp_path, {**VALID, "version": 21})[0]
+    assert "newer" in errors(tmp_path, {**VALID, "version": 22})[0]
 
 
 def test_skill_swaps_are_game_data_the_gui_shares():
@@ -209,17 +198,26 @@ def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
         assert [e.split(":")[0] for e in errors(tmp_path, data)] == ["trial_risk_overrides/0/risk"]
 
 
-def test_an_older_version_is_migrated_in_memory(tmp_path, monkeypatch):
-    # The frame a later version's migration plugs into: MIGRATIONS[n] takes version n to n + 1, the file on disk stays as it was.
-    def v19_to_v20(d):
-        d["run"]["target_floor"] = d["run"].pop("floors")
-        return d
+V20_NOTE = ("settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's "
+            "task and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists "
+            "the values to set in the client")
 
-    monkeypatch.setattr(settings, "MIGRATIONS", {19: v19_to_v20})
-    old = edited(lambda d: [d.update(version=19), d["run"].update(floors=d["run"].pop("target_floor"))])
-    got = load(tmp_path, old)
-    assert (got["version"], got["run"]) == (20, VALID["run"])
-    assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8"))["version"] == 19
+
+def test_a_version_20_file_is_read_as_version_21_in_memory_and_says_where_its_values_went(tmp_path):
+    # #782: the three sections go, the file on disk stays as it was, and a task's start logs the line (TaskStart) until
+    # the GUI writes the file back.
+    old = {**VALID, "version": 20, **copy.deepcopy(CASES["v20"])}
+    notes = []
+    got = load(tmp_path, old, notes=notes)
+    assert {**got, "gift_lists": None} == {**VALID, "gift_lists": None}
+    assert notes == [V20_NOTE]
+    assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
+
+
+def test_a_version_21_file_says_nothing(tmp_path):
+    notes = []
+    load(tmp_path, VALID, notes=notes)
+    assert notes == []
 
 
 def test_every_version_from_the_oldest_has_its_migration():
@@ -323,6 +321,15 @@ def test_shared_cases(tmp_path, case):
 def test_shared_valid_loads(tmp_path):
     loaded = load(tmp_path, CASES["valid"])
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}  # the list is cleaned on load
+
+
+@pytest.mark.parametrize("case", CASES["migrate_v20"], ids=lambda c: c["name"])
+def test_shared_v20_migration(tmp_path, case):
+    """#782: a version 20 file, its moved sections at any value (broken by hand too), reads as the valid file: the GUI
+    migrates the same cases to the same file (gui/src/validate.test.ts)."""
+    old = apply_edits({**CASES["valid"], "version": 20, **CASES["v20"]}, case["edits"])
+    loaded = load(tmp_path, old)
+    assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
 
 
 @pytest.mark.parametrize("case", CASES["too_old"], ids=lambda c: str(c["version"]))
