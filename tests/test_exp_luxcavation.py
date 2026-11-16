@@ -293,7 +293,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
     prefix = {"ExpLuxcavation": "Exp", "ThreadLuxcavation": "Thread"}[task]
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
         # the count set in daily mode too, as a user who switched back leaves it: the client does not send it there; the
-        # team is the client's dropdown (#780), the settings file's (none picked) not read
+        # team is the client's dropdown (#780)
         options = [f"{prefix}Mode={'daily' if scenario in daily else 'count'}", f"{prefix}Count={count}",
                    f"{prefix}Team={team}", f"{prefix}Retries={retries}",
                    f"{prefix}Consecutive={'Yes' if scenario in consecutive else 'No'}"]

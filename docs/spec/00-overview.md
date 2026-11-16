@@ -13,7 +13,7 @@
 | 項目 | 內容 | 來源 |
 |---|---|---|
 | 鏡牢 | 普通與困難，第 1–5 層；難度可以逐層切換。v1 每局打到第 5 層；目標層數見下一列，第 6–15 層在 Deferred | #1、#8、#9 |
-| 目標層數 | 鏡牢的任務選項 `MirrorTargetFloor`（5／10／15，預設 5）；大於 5 時要求整局困難，不符的隊伍讓鏡牢任務在開始時停下；Agent 目前只用它決定自動難度 | #385、#776 |
+| 目標層數 | 鏡牢的任務選項 `MirrorTargetFloor`（5／10／15，預設 5）；大於 5 時要求整局困難（自動難度也跑困難），不符的隊伍讓鏡牢任務在開始時停下；v1 入口仍關，每局打到第 5 層（#434） | #385、#776 |
 | 隊伍與輪替 | 隊伍數量不限，依清單順序輪替，用途不符就跳過 | #9、#19 |
 | 戰前編隊 | 依出戰順序方案重選出戰順序 | #9、#16 |
 | 開局 | 依星光方案購買星光；依主要體系選初始飾品；依每隊清單觀測飾品，沒開就 Refuse | #9、#19、#54 |
@@ -22,7 +22,7 @@
 | 主題包與事件 | 依主題包方案挑主題包；事件用通用規則加事件覆寫表；依每隊順序選獎勵卡 | #11 |
 | 地圖尋路 | 只看相鄰一欄，依權重貪婪選擇 | #12 |
 | 困難模式 | Boss 後的選擇計入試煉分（1.117.0 實機在普通局也看到，未見官方公告，待確認）；Super Shop | #17、#28 |
-| 結算 | 已通過第 5 層就 Claim，沒過就放棄獎勵；通過層數到達 `target_floor` 的局才依每週獎勵設定切開關 | #8、#17、#19、#384 |
+| 結算 | 已通過第 5 層就 Claim，沒過就放棄獎勵；通過層數到達目標層數的局才依每週獎勵的任務選項切開關 | #8、#17、#19、#384 |
 | 中途接續 | 從任何畫面啟動都能接手，以畫面為準 | #8 |
 | 卡住處理 | 偵測卡住，分三級恢復，必要時重啟遊戲；停止時保存證據並發 webhook | #14 |
 | 日常任務 | 每個日常一個 PI 任務，順序、啟用、排程由 client 管，次數、隊伍、重打與連戰是 client 的任務選項（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)、[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)）：經驗本、紐本（一律打最難的關；每日模式打今天還沒打的，自訂次數模式打設定的場數；腦啡肽模組不夠就跳過）、換腦啡肽模組、通行證任務領取、信箱 Claim All、狂氣換腦啡肽（預設 0 次）。鏡牢開局前也檢查腦啡肽模組 | #362 |
@@ -85,9 +85,9 @@
 | 架構 | 流程寫在 Pipeline 的 `MirrorHub`，決策寫在 Python Agent（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)） | #8 |
 | Agent | Python，由 `interface.json` 的 `agent.child_exec`／`child_args` 啟動 | #1、#4 |
 | 專案骨架 | 以 MaaPracticeBoilerplate（MIT）為起點，手動搬入所需檔案，保留其版權聲明 | #4 |
-| 執行介面 | ProjectInterface V2，只放控制器、資源與各任務（鏡牢、日常），沒有使用者選項；MXU 與 MFAAvalonia 都必須能跑，開發時用 MXU。不依賴只有其中一邊支援的功能 | #1、#6、#19 |
+| 執行介面 | ProjectInterface V2，放控制器、資源與各任務（鏡牢、日常），以及每個任務怎麼跑的任務選項與全域選項（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)）；MXU 與 MFAAvalonia 都必須能跑，開發時用 MXU。不依賴只有其中一邊支援的功能 | #1、#6、#19 |
 | 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。第一階段只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)） | #19 |
-| 設定 | 使用者設定全部放在 `<root>/config/settings.json`，由設定 GUI 寫入、Agent 讀取，格式由 `settings.schema.json` 描述（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11、#19 |
+| 設定 | 隊伍、方案、飾品清單與覆寫表放在 `<root>/config/settings.json`，由設定 GUI 寫入、Agent 讀取，格式由 `settings.schema.json` 描述（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；每個任務怎麼跑的單一的值是 client 的任務選項（ADR 0013）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11、#19 |
 | 辨識 | 文字與數字用 OCR（`ppocr_v6/small`），圖示與按鈕用自製模板；地圖節點先找 Bus 再比對相鄰格位，不用整張地圖的偵測模型 | #3、#13 |
 | 授權 | 程式碼 PolyForm Noncommercial 1.0.0（非商用，[ADR 0008](../adr/0008-noncommercial-license-and-llc-names.md)）；LLC 衍生的資料檔 CC BY-NC-SA 4.0。AGPL 專案（AALC、MaaLimbus、Lix）可以讀、不能抄，程式碼、圖片和模型都不複製；不用 Ultralytics 訓練模型（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)） | #1、#3 |
 

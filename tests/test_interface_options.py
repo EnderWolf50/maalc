@@ -261,7 +261,10 @@ def test_the_values_the_settings_window_lists_set_in_the_client_send_what_the_ol
     # which gui/src/movedOptions.test.ts checks the window lists, NAME=VALUE as bot.py run --option takes them). Each set
     # in the client as listed, every task sends the old file's values; one the list leaves out is the client's default
     # already, and one the agent refuses (a file broken by hand) gets the client's default. A count goes with count mode
-    # alone and the run cap with its switch on, as the schema's if/then say; a null team is none picked.
+    # alone and the run cap with its switch on (the schema's descriptions: sent only while ...); a null team is none
+    # picked. The two pops below are those nestings, the only ones interface.json has: a new one fails the first assert.
+    assert {n for o in OPTIONS.values() for c in o.get("cases", []) for n in c.get("option", [])} == {
+        "MirrorRuns", "ExpCount", "ThreadCount"}
     old = v20(case["edits"])
     pairs = [f"WebhookUrl={old['run']['webhook_url']}" if p == "WebhookUrl=(set)" else p for p in case["moved"]]
     sent, default = sent_by_every_task(client_override.parse_options(PI, pairs)), sent_by_every_task({})
