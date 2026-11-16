@@ -1,8 +1,10 @@
 {
     "$schema": "https://raw.githubusercontent.com/MaaXYZ/MaaFramework/main/tools/interface.schema.json",
     "interface_version": 2,
+    // zh_cn.json is written from zh_tw.json by tools/zh_cn_locale.py, never by hand.
     "languages": {
         "zh_tw": "locales/zh_tw.json",
+        "zh_cn": "locales/zh_cn.json",
         "en_us": "locales/en_us.json"
     },
     "name": "maalc",
@@ -52,7 +54,10 @@
         "AutoDownload",
         "KeepDismissedScreens"
     ],
-    // MXU v2.7.1 shows the global options only in a setting section of its Settings page.
+    // MXU v2.7.1 shows the global options only in a setting section of its Settings page. MFAAvalonia v2.16.4 shows them
+    // from global_option, and a setting section with options stops it from running any task (#799). MXU reads "option"
+    // in this case only; MFAAvalonia reads a key whatever its case and keeps the later one, so it reads "Option", empty,
+    // and skips the section.
     "setting": [
         {
             "name": "GlobalOptions",
@@ -63,7 +68,8 @@
                 "AutoAcceptTerms",
                 "AutoDownload",
                 "KeepDismissedScreens"
-            ]
+            ],
+            "Option": []
         }
     ],
     "task": [

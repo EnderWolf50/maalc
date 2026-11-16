@@ -137,10 +137,30 @@ def test_a_switch_has_the_cases_yes_and_no():
             assert sorted(c["name"] for c in opt["cases"]) == ["No", "Yes"], key
 
 
-def test_every_global_option_is_in_a_setting_section():
-    # MXU v2.7.1 shows a global option only in a setting section of its Settings page
-    shown = [k for section in PI.get("setting", []) for k in section["option"]]
+def as_mfaavalonia_reads(path):
+    """The JSONC file at path as MFAAvalonia v2.16.4 reads it into its classes (Newtonsoft.Json, JsonHelper.cs:103-110): a
+    key names a member whatever its case, and of two keys that name the same member the later one wins
+    (JsonPropertyCollection.GetClosestMatchProperty tries the exact name, then one in another case). Every key comes
+    back in lower case, so it holds for class members only, not for a dictionary's keys (the option table's names)."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    text = "\n".join(ln for ln in lines if not ln.strip().startswith("//"))
+    return json.loads(text, object_pairs_hook=lambda pairs: {key.lower(): value for key, value in pairs})
+
+
+def test_mxu_shows_every_global_option_in_a_setting_section():
+    # MXU v2.7.1 shows a global option only in a setting section of its Settings page (SettingsPage.tsx, section.option:
+    # JSON.parse, so a key in this case only) and sends it as global_option lists it
+    shown = [k for section in PI["setting"] for k in section["option"]]
     assert sorted(shown) == sorted(PI["global_option"])
+
+
+def test_mfaavalonia_reads_every_setting_section_with_no_option():
+    # #799: MFAAvalonia v2.16.4 builds a setting section's item again on its worker thread at each task start, which
+    # throws there (TaskLoader.CreateSettingItem sets EnableSetting, which touches the window) and leaves every later
+    # start ignored; a section with no option it skips. It shows the global options from global_option alone, once.
+    sections = as_mfaavalonia_reads(ROOT / "assets" / "interface.json")["setting"]
+    assert len(sections) == len(PI["setting"])
+    assert all(not section.get("option") for section in sections)
 
 
 def test_a_nested_option_is_only_under_its_case():
@@ -177,8 +197,8 @@ def test_the_webhook_is_a_password_input_with_no_default():
     assert item["password"] is True and "default" not in item
 
 
-@pytest.mark.parametrize("language", ["zh_tw", "en_us"])
-def test_every_text_interface_json_names_is_in_both_languages(language):
+@pytest.mark.parametrize("language", ["zh_tw", "zh_cn", "en_us"])
+def test_every_text_interface_json_names_is_in_every_language(language):
     # a $key in a label, description or pattern_msg is looked up in the language's file
     texts = json.loads((ROOT / "assets" / PI["languages"][language]).read_text(encoding="utf-8"))
 
