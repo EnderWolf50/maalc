@@ -24,10 +24,11 @@ from pathlib import Path
 YES, NO = ("Yes", "yes", "Y", "y"), ("No", "no", "N", "n")  # the case names a switch's on and off take (findSwitchCase)
 
 
-def read_jsonc(path: Path):
-    """A JSON file whose whole-line // comments are dropped first: json.loads fails on them."""
+def read_jsonc(path: Path, object_pairs_hook=None):
+    """A JSON file whose whole-line // comments are dropped first: json.loads fails on them. object_pairs_hook is
+    json.loads' own."""
     lines = path.read_text(encoding="utf-8").splitlines()
-    return json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))
+    return json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")), object_pairs_hook=object_pairs_hook)
 
 
 def load_interface(path: Path, warn=lambda line: None) -> dict:

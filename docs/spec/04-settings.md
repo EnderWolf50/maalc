@@ -78,7 +78,8 @@
 
 ## 3. 介面語言
 
-- GUI 與 PI 都提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`。GUI 的語言存在設定檔的 `language`。`interface.json` 手寫，任務與任務選項的標題、說明和 case 名稱用 `$` 開頭的鍵，翻譯放 `assets/locales/zh_tw.json` 與 `en_us.json`；選項的說明沿用設定視窗原本的文字（#779）。（#18、#19）
+- GUI 提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`，存在設定檔的 `language`。`interface.json` 手寫，任務與任務選項的標題、說明和 case 名稱用 `$` 開頭的鍵，翻譯放 `assets/locales/zh_tw.json` 與 `en_us.json`；選項的說明沿用設定視窗原本的文字（#779）。PI 的語言由 client 的介面語言決定。（#18、#19）
+- PI 另有 `zh_cn`：MFAAvalonia 預設簡體中文，且只從介面語言的翻譯檔取字，沒有這個檔就顯示原始鍵。`assets/locales/zh_cn.json` 由 `tools/zh_cn_locale.py` 以 OpenCC t2s 從 `zh_tw.json` 轉出，用詞跟著繁中，不手改；`tests/test_zh_cn_locale.py` 在兩個檔不一致時失敗。（#799）
 - 遊戲名詞保留英文原文，兩種語言都一樣：罪人名、體系、主題包、飾品、獎勵卡種類、試煉。只翻譯 bot 自己的說明文字。（#18）
 - 例外是體系：`zh_tw` 的介面一律寫中文體系名（燒傷、流血、震顫……，`gui/src/i18n.ts` 的 `kw.*`），`en_us` 寫英文；設定檔仍存英文 id。（使用者 2026-11-14 決定）
 - 例外是星光加成：`zh_tw` 的星光卡片以都市零漢化組（LLC）的中文名稱為主、英文名稱為輔，並列出該等級的效果文字；`en_us` 顯示英文名稱和遊戲客戶端英文文字的效果文字，數值與黃字和中文相同（#751）。資料在 `assets/resource/base/data/graces.json`，來源與授權見 NOTICE.md。設定檔與 Agent 仍只用編號與英文名稱。（#52、#751）
@@ -124,6 +125,7 @@
 
 送法與讀法：
 
+- 全域選項列在 `interface.json` 的 `global_option`。MXU 只在設定頁的 `setting` 區塊顯示它們，所以 `setting` 的 `option` 也列這 4 個；同一區塊最後放一個空的 `Option`，MFAAvalonia 讀到它（欄位名稱不分大小寫、後面的蓋掉前面的）就跳過這個區塊，否則它每次開始任務都在 `setting` 上丟例外、一個任務都跑不了（#799，ADR 0013）。MFAAvalonia 的全域選項只從 `global_option` 顯示一次。
 - 每個 case（或輸入值）只寫一個鍵，寫進入口節點 `MirrorDungeon` 的 `attach`；全域選項寫進 `GlobalOptions` 節點（`pipeline/options.json`，沒有 `next` 指到它）。兩個 client 都把各選項的 `pipeline_override` 收成陣列送出，MaaFramework 依序套用，`attach` 逐鍵合併，所以各選項的鍵不會互相蓋掉；用 `context.run_task` 開的子任務（GoHome、RecoverL3）也看得到。（#776）
 - 選擇型與開關的預設 case 放第一個，`default_case` 也指它：MFAAvalonia 的任務選項一律從第 0 個 case 開始。之後加 case 只加在最後，MFAAvalonia 存的是索引（ADR 0013）。開關的 case 叫 `Yes`／`No`：MFAAvalonia 看名字畫開關。輸入用 `pipeline_type: "int"` 送整數，`verify` 只用 JavaScript 與 .NET 都認得的簡單正則；MXU 不擋 `verify` 不過的值，打錯的整數讓那一筆整個不送，Agent 不信任 `verify`。巢狀的 `MirrorRuns` 只列在 `Yes` 底下，不另外列進任務的選項。`tests/test_interface_options.py` 檢查這些規則，以及每個 case 與預設經 `tools/client_override.py` 產生的值都通過 Agent 的 schema。
 - 每個任務的入口動作（`TaskStart`，以及繼承它的 `LuxStart`、`ChargeStart`）在點任何東西之前讀一次 `GlobalOptions` 的 `attach`，鏡牢任務再加 `MirrorDungeon` 的，日常任務加自己入口節點的（第 12 節），依 `agent/task_options.schema.json` 檢查型別、範圍和必填；之後所有讀這些值的地方都從那裡拿（`agent/task_options.py`），沒有「讀不到就用設定檔」的退路。任務開始時記一行 `options: ...`，列出讀到的值，webhook 只寫 `(set)`／`(not set)`。（#777、#779）
