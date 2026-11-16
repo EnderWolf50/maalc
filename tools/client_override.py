@@ -12,7 +12,9 @@ entry, so a later entry wins a key. The array holds the task's own pipeline_over
 task option; MXU's resource and controller options would come between the last two, and maalc's interface has none.
 An option sends its chosen case's pipeline_override, then the options nested under that case, in turn. An option with no
 value takes its default: a select its default_case, else its first case; a switch the same, as Yes or No; an input
-each input's default.
+each input's default. An input whose value leaves its override not JSON drops that override, as MXU drops it. Where it
+differs from MXU: a checkbox or hotkey option is not sent (its used line says so), and --option sets no input option
+with several inputs; maalc's interface has neither.
 """
 from __future__ import annotations
 
@@ -45,34 +47,35 @@ def load_interface(path: Path, warn=lambda line: None) -> dict:
     return pi
 
 
+def kind(opt: dict) -> str:
+    """An option's type; one with none is a select."""
+    return opt.get("type", "select")
+
+
+SENT = ("select", "switch", "input")  # the types the bot sends; a checkbox or hotkey option is not sent (`build`)
+
+
 def parse_options(interface: dict, pairs: list[str]) -> dict:
     """The --option NAME=VALUE pairs as build takes them: a select's VALUE is one of its cases, a switch's Yes or No, an
-    input's the text it fills in (NAME.INPUT=VALUE when the option has several inputs). ValueError names the first pair
-    whose option, case or input the interface lacks."""
+    input's the text it fills in. ValueError names the first pair whose option or case the interface lacks, or whose
+    option the bot cannot set (a type it does not send, an input option with several inputs)."""
     options = interface.get("option", {})
     values = {}
     for pair in pairs:
-        key, sep, value = pair.partition("=")
-        name, _, field = key.partition(".")
+        name, sep, value = pair.partition("=")
         opt = options.get(name)
-        kind = opt and opt.get("type", "select")
         if not sep:
             problem = "takes NAME=VALUE"
         elif opt is None:
             problem = f"interface.json has no option {name}"
-        elif kind == "input":
-            inputs = [i["name"] for i in opt["inputs"]]
-            field = field or (inputs[0] if len(inputs) == 1 else "")
-            if field in inputs:
-                values.setdefault(name, {})[field] = value
+        elif kind(opt) not in SENT:
+            problem = f"{name} is a {kind(opt)} option, which the bot does not send"
+        elif kind(opt) == "input":
+            if len(opt["inputs"]) == 1:
+                values[name] = value
                 continue
-            shapes = [f"{name}=VALUE"] if len(inputs) == 1 else [f"{name}.{i}=VALUE" for i in inputs]
-            problem = f"{name} takes {' or '.join(shapes)}"
-        elif kind not in ("select", "switch"):
-            problem = f"{name} is a {kind} option, which the bot does not send"
-        elif field:
-            problem = f"{name} is a {kind}: {name}=VALUE"
-        elif kind == "switch":
+            problem = f"{name} has {len(opt['inputs'])} inputs; the bot sets an input option with one"
+        elif kind(opt) == "switch":
             if value in YES + NO:
                 values[name] = value in YES
                 continue
@@ -108,20 +111,21 @@ def collect(key: str, options: dict, values: dict, override: list, used: list) -
     opt = options.get(key)
     if opt is None:
         return  # MXU skips an option name with no definition
-    kind, given = opt.get("type", "select"), key in values
-    if kind == "input":
-        fill(key, opt, values.get(key, {}), override, used)
+    given = key in values
+    if kind(opt) not in SENT:
+        used.append(f"{key}: a {kind(opt)} option, not sent (the bot sends {', '.join(SENT)} options)")
         return
-    if kind not in ("select", "switch"):
-        raise ValueError(f"option {key}: a {kind} option, which the bot does not send")
+    if kind(opt) == "input":
+        fill(key, opt, values.get(key), override, used)
+        return
     cases = opt["cases"]
-    first = opt.get("default_case") or (cases[0]["name"] if cases else "")
-    if kind == "switch":
-        on = values[key] if given else (first or "Yes") in YES
+    default = opt.get("default_case") or (cases[0]["name"] if cases else "")
+    if kind(opt) == "switch":
+        on = values[key] if given else (default or "Yes") in YES
         case = next((c for c in cases if c["name"] in (YES if on else NO)), None)
         shown = case["name"] if case else ("Yes" if on else "No")
     else:
-        name = values[key] if given else first
+        name = values[key] if given else default
         case = next((c for c in cases if c["name"] == name), None)
         shown = name if case else "(no case)"
     used.append(f"{key}={shown}" + ("" if given else " (default)"))
@@ -133,30 +137,35 @@ def collect(key: str, options: dict, values: dict, override: list, used: list) -
         collect(nested, options, values, override, used)
 
 
-def fill(key: str, opt: dict, given: dict, override: list, used: list) -> None:
+def fill(key: str, opt: dict, given: str | None, override: list, used: list) -> None:
     """An input option: each input's value put in place of its "{name}" in the option's pipeline_override (int bare,
-    empty is 0; bool true or false; anything else a JSON string). One that is not JSON once filled in is not sent."""
+    empty is 0; bool true or false; anything else a JSON string). given is the value of an option with one input; one
+    with several takes each input's default. An override that is not JSON once filled in is not sent."""
     text = json.dumps(opt["pipeline_override"], ensure_ascii=False, separators=(",", ":")) if opt.get("pipeline_override") else None
     for item in opt["inputs"]:
-        name, kind = item["name"], item.get("pipeline_type") or "string"
-        value = given.get(name, item.get("default") or "")
+        value = given if given is not None else item.get("default") or ""
         shown = ("(set)" if value else "(not set)") if item.get("password") else value
-        label = key if len(opt["inputs"]) == 1 else f"{key}.{name}"
-        used.append(f"{label}={shown}" + ("" if name in given else " (default)"))
+        used.append(f"{key}={shown}" + ("" if given is not None else " (default)"))
         if text is None:
             continue
-        if kind == "int":
+        pipeline_type = item.get("pipeline_type") or "string"
+        if pipeline_type == "int":
             quoted = bare = value or "0"
-        elif kind == "bool":
+        elif pipeline_type == "bool":
             quoted = bare = "true" if value.lower() in ("true", "1", "yes", "y") else "false"
         else:
             quoted = json.dumps(value, ensure_ascii=False)
             bare = quoted[1:-1]
-        mark = "{" + name + "}"
+        mark = "{" + item["name"] + "}"
         text = text.replace(f'"{mark}"', quoted).replace(mark, bare)
     if text is None:
         return
     try:
-        override.append(json.loads(text))
+        override.append(json.loads(text, parse_constant=not_json))
     except ValueError:
         used[-1] += ": not JSON once filled in, not sent (MXU drops it)"
+
+
+def not_json(constant: str):
+    """json.loads takes NaN and Infinity, which JSON.parse refuses: MXU drops such an override, so it is not JSON here."""
+    raise ValueError(f"{constant} is not JSON")

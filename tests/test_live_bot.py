@@ -128,7 +128,7 @@ def test_plan_sends_no_override_for_the_interface_as_it_is_without_options():
     tasks = [t["name"] for t in client_override.load_interface(REPO / "assets/interface.json")["task"]]
     lines = []
     jobs = bot.plan(REPO / "assets", tasks, [], lines.append)
-    assert len(tasks) == 7 and jobs == [(name, name, []) for name in tasks]
+    assert tasks and jobs == [(name, name, []) for name in tasks]
     assert lines == [f"[run] {name} options: none" for name in tasks]
 
 

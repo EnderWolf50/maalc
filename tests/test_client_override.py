@@ -17,7 +17,7 @@ INTERFACE = r"""{
     "import": ["config/teams.json", "config/gone.json"],
     "task": [
         {"name": "Mirror", "entry": "MirrorEntry", "pipeline_override": {"MirrorEntry": {"attach": {"base": 1}}},
-         "option": ["Difficulty", "RunsLimit", "Strict", "Team"]},
+         "option": ["Difficulty", "RunsLimit", "Strict", "Team", "Days"]},
         {"name": "Mail", "entry": "MailEntry"}
     ],
     "global_option": ["Webhook", "AutoDownload"],
@@ -35,6 +35,11 @@ INTERFACE = r"""{
                    "pipeline_override": {"MirrorEntry": {"attach": {"strict": "{on}"}}}},
         // the placeholder the team options file replaces
         "Team": {"cases": []},
+        // types the bot does not send: a checkbox, an input option with two inputs
+        "Days": {"type": "checkbox", "default_case": ["mon"], "cases": [
+            {"name": "mon", "pipeline_override": {"MirrorEntry": {"attach": {"mon": true}}}}]},
+        "Window": {"type": "input", "inputs": [{"name": "from"}, {"name": "to"}],
+                   "pipeline_override": {"MirrorEntry": {"attach": {"from": "{from}", "to": "{to}"}}}},
         "Webhook": {"type": "input", "inputs": [{"name": "url", "default": "", "password": true}],
                     "pipeline_override": {"GlobalOptions": {"attach": {"webhook_url": "{url}"}}}},
         "AutoDownload": {"type": "switch", "cases": [
@@ -57,7 +62,7 @@ def mirror(key, value):
     return {"MirrorEntry": {"attach": {key: value}}}
 
 
-def glob(key, value):
+def global_opt(key, value):
     return {"GlobalOptions": {"attach": {key: value}}}
 
 
@@ -79,14 +84,16 @@ def test_no_values_sends_every_default_task_override_then_global_then_task_optio
     assert entry == "MirrorEntry"
     assert override == [
         BASE,
-        glob("webhook_url", ""), glob("auto_download", True),  # AutoDownload: no default_case, its first case
+        global_opt("webhook_url", ""), global_opt("auto_download", True),  # AutoDownload: no default_case, its first case
         mirror("difficulty", "hard"),  # default_case, not the first case
         mirror("runs_limited", True), mirror("runs", 1),  # the case's own override, then the input nested under it
         mirror("strict", True),  # bool: "yes" is true
         mirror("team", "t1"),  # the imported definition and its default_case
+        # Days: a checkbox, which MXU would send and the bot does not; its line says so
     ]
     assert used == ["Webhook=(not set) (default)", "AutoDownload=Yes (default)", "Difficulty=hard (default)",
-                    "RunsLimit=Yes (default)", "Runs=1 (default)", "Strict=yes (default)", "Team=t1 (default)"]
+                    "RunsLimit=Yes (default)", "Runs=1 (default)", "Strict=yes (default)", "Team=t1 (default)",
+                    "Days: a checkbox option, not sent (the bot sends select, switch, input options)"]
 
 
 def test_given_values_fill_the_inputs_as_mxu_does(install):
@@ -94,15 +101,15 @@ def test_given_values_fill_the_inputs_as_mxu_does(install):
                               "AutoDownload=No", "Team=none")
     assert override == [
         BASE,
-        glob("webhook_url", r'hook\a "x"'),  # a backslash and quotes go in JSON-escaped and read back as given
-        glob("auto_download", False),
+        global_opt("webhook_url", r'hook\a "x"'),  # a backslash and quotes go in JSON-escaped and read back as given
+        global_opt("auto_download", False),
         mirror("difficulty", "auto"),
         mirror("runs_limited", True), mirror("runs", 0),  # int: an empty value is 0
         mirror("strict", False),  # bool: anything but true, 1, yes, y is false
         # Team=none: a case with no pipeline_override sends nothing
     ]
-    assert used == ["Webhook=(set)", "AutoDownload=No", "Difficulty=auto", "RunsLimit=Yes (default)", "Runs=",
-                    "Strict=0", "Team=none"]
+    assert used[:-1] == ["Webhook=(set)", "AutoDownload=No", "Difficulty=auto", "RunsLimit=Yes (default)", "Runs=",
+                         "Strict=0", "Team=none"]  # then the Days line
 
 
 def test_an_option_nested_under_the_case_not_chosen_is_not_sent(install):
@@ -114,7 +121,7 @@ def test_an_option_nested_under_the_case_not_chosen_is_not_sent(install):
 
 def test_a_task_with_no_options_of_its_own_sends_the_global_options(install):
     entry, override, used = built(install, "Mail")
-    assert (entry, override) == ("MailEntry", [glob("webhook_url", ""), glob("auto_download", True)])
+    assert (entry, override) == ("MailEntry", [global_opt("webhook_url", ""), global_opt("auto_download", True)])
 
 
 def test_a_missing_import_is_skipped_with_a_warning(install):
@@ -125,23 +132,25 @@ def test_a_missing_import_is_skipped_with_a_warning(install):
     assert warnings == ["import config/teams.json not read (FileNotFoundError): skipped",
                         "import config/gone.json not read (FileNotFoundError): skipped"]
     assert not any("team" in o.get("MirrorEntry", {}).get("attach", {}) for o in override)  # cases: [], nothing
-    assert used[-1] == "Team=(no case) (default)"
+    assert "Team=(no case) (default)" in used
 
 
-def test_an_int_input_that_is_not_a_number_drops_that_override_as_mxu_does(install):
+@pytest.mark.parametrize("runs", ["abc", "NaN", "Infinity"])  # Python's json.loads takes NaN and Infinity, JSON.parse not
+def test_an_int_input_that_is_not_a_number_drops_that_override_as_mxu_does(install, runs):
     # MXU: JSON.parse of the filled-in override fails, it logs a warning and sends the rest
-    _, override, used = built(install, "Mirror", "Runs=abc")
+    _, override, used = built(install, "Mirror", f"Runs={runs}")
     assert mirror("runs_limited", True) in override
     assert not any("runs" in o.get("MirrorEntry", {}).get("attach", {}) for o in override)
-    assert "Runs=abc: not JSON once filled in, not sent (MXU drops it)" in used
+    assert f"Runs={runs}: not JSON once filled in, not sent (MXU drops it)" in used
 
 
 @pytest.mark.parametrize("pair, says", [
     ("Nope=1", "interface.json has no option Nope"),
     ("Difficulty=extreme", "Difficulty has no case extreme (cases: auto, hard)"),
     ("AutoDownload=maybe", "AutoDownload is a switch: Yes or No"),
-    ("Runs.count=3", "Runs takes Runs=VALUE"),
     ("Difficulty", "takes NAME=VALUE"),
+    ("Days=mon", "Days is a checkbox option, which the bot does not send"),
+    ("Window=1", "Window has 2 inputs; the bot sets an input option with one"),
 ])
 def test_an_option_or_case_the_interface_lacks_is_refused(install, pair, says):
     interface = client_override.load_interface(install / "interface.json")
