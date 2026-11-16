@@ -436,7 +436,7 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     after each of 4 refreshes; a 5th changes nothing: used up). Returns (refresh taps, log lines); covers collects the
     cover reader each page's ranking is handed (#274). The button reads `0/3` after spent_after refreshes, unread if None
     (#319); the screen is PACK_GREY after grey_after refreshes, PACK_LIT before or if None (#482). shot, a function of
-    no arguments, takes every screenshot instead."""
+    no arguments, takes every screenshot instead, and grey_after then does nothing."""
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot or \
         (lambda: (PACK_GREY if grey_after is not None and len(taps) >= grey_after else PACK_LIT).copy())
     actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
@@ -491,12 +491,13 @@ def test_theme_pack_titles_are_read_once_the_cards_stop_swinging(context, monkey
 
 # #774: the deal's last swings on the 2026-11-10 recording (floor 3, 09:39:45), screenshot by screenshot 0.215 s apart
 # (the live cadence) up to the cards' last move: how many of the card band's 234 blocks of 40x40 moved by more than 8
-# levels against the screenshot before; 7 or fewer (under 3%) is alike. The 5 and the 7 came 0.40 s before that move,
-# the 8 is the last swing, the 1 the cards coming to rest.
-LAST_SWAY = [52, 70, 21, 40, 30, 5, 7, 8, 1]
+# levels against the screenshot before; 7 or fewer (under 3%) is alike. The screenshot that ends the 5 and the 7, two
+# alike pairs in a row, came 0.40 s before that move; the 8 is the last swing, the 1 the cards coming to rest. The test
+# replays one count per 0.2 s step of its fake clock.
+LAST_SWING = [52, 70, 21, 40, 30, 5, 7, 8, 1]
 
 
-def swaying(counts):
+def swinging(counts):
     """A screenshot as a function of the clock: the k-th 0.2 s from the first one shows the card band (PACK_CARDS) with
     counts[k - 1] of its blocks moved by 20 levels against step k - 1, at rest after the last count; k is at [0, 0, 0],
     outside the band."""
@@ -523,15 +524,15 @@ def swaying(counts):
 
 def test_the_theme_pack_is_not_read_in_the_deals_last_swing(context, monkeypatch):
     # #774: two alike pairs in a row took the recorded swing for still and read the cards 0.40 s before they stopped.
-    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = swaying(LAST_SWAY)
+    context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = swinging(LAST_SWING)
     early = actions.still(context, roi=run_start_actions.PACK_CARDS, runs=2)
-    assert early[0, 0, 0] < len(LAST_SWAY)  # the recording's trap: mid-swing
+    assert early[0, 0, 0] < len(LAST_SWING)  # the recording's trap: mid-swing
     read = []
     real = run_start_actions.pack_titles
     patch_all(monkeypatch, "pack_titles", lambda context, image: read.append(int(image[0, 0, 0])) or real(context, image))
-    pack_page(context, monkeypatch, 3, "none", "weight", shot=swaying(LAST_SWAY))
+    pack_page(context, monkeypatch, 3, "none", "weight", shot=swinging(LAST_SWING))
     assert len(read) == 1
-    assert len(LAST_SWAY) <= read[0] < len(LAST_SWAY) + 3  # once the cards rest, within three screenshots
+    assert len(LAST_SWING) <= read[0] < len(LAST_SWING) + 3  # once the cards rest, within three screenshots
 
 
 def test_cards_still_moving_after_the_wait_are_read_anyway_and_logged(context, monkeypatch):
