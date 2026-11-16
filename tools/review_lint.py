@@ -12,6 +12,10 @@
   number (`fix: #387`, `Fixes #12`, `closes owner/repo#5`): merged into main it closes the issue whatever the PR
   body says (docs/agents/pr.md "Language").
 
+- The branch changes `assets/resource/base/image/` or `pipeline/` and also the Agent code (`agent/`) or `assets/interface.json`,
+  and `TEMPLATE` (模板版本) in agent/resource_package.py does not go up (#769, ADR 0012). A branch commit's
+  `Template-version-ok: <why>` line skips it when the old templates still fit the new agent.
+
 Exit code 1 when there is a problem, else 0. CI runs it on every pull request.
 """
 import re
@@ -152,6 +156,43 @@ def stale_references(removed: dict[str, list[str]], added: dict[str, list[tuple[
     return problems
 
 
+TEMPLATE_LINE = re.compile(r"^TEMPLATE\s*=\s*(\d+)")
+TEMPLATE_OK = re.compile(r"^Template-version-ok:[ \t]*(\S.*)", re.M)  # a one-line reason, required
+PACKAGE_MODULE = "agent/resource_package.py"  # where TEMPLATE lives; its own edits (a FORMAT bump) are not agent code
+TEMPLATE_PARTS = ("assets/resource/base/image/", "assets/resource/base/pipeline/")
+
+
+def changed_paths(base: str) -> set[str]:
+    """Every file the diff from the merge base to the working tree touches, binary ones (template images) included."""
+    return {p for p in git("diff", "--name-only", merge_base(base), cwd=ROOT).splitlines() if p}
+
+
+def template_version_problem(paths: set[str], added: dict[str, list[tuple[int, str]]], removed: dict[str, list[str]]) -> str | None:
+    """模板版本 (#769): the images and the pipeline go with the agent and assets/interface.json, so a change to one of them
+    and one of the others has to raise TEMPLATE in agent/resource_package.py (the diff shows `TEMPLATE = N` going up)."""
+    parts = sorted(p for p in paths if p.startswith(TEMPLATE_PARTS))
+    program = sorted(p for p in paths if (p.startswith("agent/") and p != PACKAGE_MODULE) or p == "assets/interface.json")
+    if not parts or not program:
+        return None
+    new = [int(m[1]) for _, t in added.get(PACKAGE_MODULE, []) if (m := TEMPLATE_LINE.match(t))]
+    old = [int(m[1]) for t in removed.get(PACKAGE_MODULE, []) if (m := TEMPLATE_LINE.match(t))]
+    if new and new[-1] > (old[0] if old else 0):
+        return None
+    return (f"{parts[0]} and {program[0]} changed together but TEMPLATE in {PACKAGE_MODULE} did not go up: raise it, or put "
+            f"`Template-version-ok: <why>` in a commit message when the old templates still fit the new agent")
+
+
+def template_version_ok(base: str) -> bool:
+    """A branch commit gives a reason (`Template-version-ok: <why>`) for leaving TEMPLATE where it is."""
+    return any(TEMPLATE_OK.search(message) for _, message in branch_messages(base))
+
+
+def template_version_problems(base: str) -> list[str]:
+    added, removed = diff_lines(base)
+    problem = template_version_problem(changed_paths(base), added, removed)
+    return [problem] if problem and not template_version_ok(base) else []
+
+
 # GitHub's closing keywords, any case, an optional colon, then #N or owner/repo#N:
 # https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue
 CLOSING = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s*((?:[\w.-]+/[\w.-]+)?#\d+)", re.I)
@@ -175,7 +216,7 @@ def main(base: str) -> int:
     added, removed = diff_lines(base)
     glossary = (ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
     problems = [*misplaced_tests(added, feature_files()), *avoid_hits(glossary, added), *stale_references(removed, added, removed_name_oks(base)),
-                *commit_closing_hits(base)]
+                *commit_closing_hits(base), *template_version_problems(base)]
     for p in problems:
         print(p)
     print(f"review_lint: {len(problems)} problem(s)")

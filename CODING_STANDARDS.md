@@ -1,6 +1,6 @@
 # Coding standards
 
-Judgement rules for review; the machine-checkable ones live in ruff (`E9`, `F`), the tests (`tests/test_review_rules.py`), `tools/review_lint.py` (CI job `review-lint`: a test in the wrong file, a `GLOSSARY.md` `_Avoid_` term, a removed name still in use (a branch commit's `Removed-name-ok: <name> (<why>)` line skips one the tree uses for another thing), a closing keyword in a commit message) and `.claude/hooks/public-text-guard.py` (the PR body's test line).
+Judgement rules for review; the machine-checkable ones live in ruff (`E9`, `F`), the tests (`tests/test_review_rules.py`), `tools/review_lint.py` (CI job `review-lint`: a test in the wrong file, a `GLOSSARY.md` `_Avoid_` term, a removed name still in use (a branch commit's `Removed-name-ok: <name> (<why>)` line skips one the tree uses for another thing), a closing keyword in a commit message, and a branch that changes `image/` or `pipeline/` together with `agent/` or `assets/interface.json` without raising `TEMPLATE` (模板版本) in `agent/resource_package.py`: a branch commit's `Template-version-ok: <why>` line skips it when the old templates still fit the new agent), `tests/test_game_data.py` (a data file whose field structure differs from `tests/data_structure.json` while `FORMAT` (格式版本) stayed: raise `FORMAT`, then regenerate the snapshot with `uv run python tools/data_structure.py`; a field whose meaning changes gets a new name, because only names and types are compared, ADR 0012) and `.claude/hooks/public-text-guard.py` (the PR body's test line).
 
 ## Recognition
 
