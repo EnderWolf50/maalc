@@ -864,8 +864,9 @@ def test_an_ex_gift_shows_its_green_ex_where_the_numerals_go():
 
 def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page_but_gregors_replacement_dialog():
     # CODING_STANDARDS' sweep: read_cells looks for the "EX" only on a shop page's cell holding a gift whose numeral it did
-    # not read. No fuse or sell page of tests/screens has one; 14 other screens do (green art, map nodes, banners at a cell's
-    # place; BattleEgoCard, BattleEgoCardsTwo: the green E.G.O card's frame, #468), and so does Gregor's skill replacement
+    # not read. No fuse or sell page of tests/screens has one; 15 other screens do (green art, map nodes, banners at a cell's
+    # place; BattleEgoCard, BattleEgoCardsTwo: the green E.G.O card's frame, #468; ThemePackWedge: the green "Walpurgis Night"
+    # title art of a theme pack card, #773), and so does Gregor's skill replacement
     # dialog (#453), the one with two options dimmed.
     import shop_actions  # noqa: PLC0415  (as above)
     hits = set()
@@ -886,7 +887,7 @@ def test_the_ex_mark_sweep_over_tests_screens_hits_no_shop_page_but_gregors_repl
                      "ShopReplaceSkillDimmed", "ShopReplaceSkillPickedLeft"]
     assert sorted(hits) == ["BattleEgoCard", "BattleEgoCardsTwo", "BattlePause", "BattleTurnEven", "EnkephalinAssembled", "GiftSearchSelected", "HelpPagerSinners",
                             "Mailbox", "MainWindow", "MainWindowFadeIn", "MainWindowLater", "MainWindowLowEnkephalin.synthetic",
-                            "MapHardRest.synthetic", *gregor_dialog, "Victory"]
+                            "MapHardRest.synthetic", *gregor_dialog, "ThemePackWedge", "Victory"]
 
 
 def test_the_get_popup_tells_an_ex_gift_by_its_green_mark():

@@ -34,7 +34,7 @@ QUALITY = 80  # every file the tool writes, icons and card parts
 # The card's sprites: player-data file -> {part: (sprite, size)}. Read from the Image components of the card prefab
 # `[Script]StartBuffCardUIWithLevel_MD7` (Panel, Selected, Hover, the level buttons' plate, Focused, Icon and FocusedIcon, Cost) and
 # of the page prefab `Prefab_MirrorDungeonStartBuffCardUIPanel` (its background Image, ApplyAllCardLevel) in client 1.118.1; the
-# files keep their names from 1.117.0 to 1.118.1. A part missing or of another size: the client renumbered its atlases, find
+# files keep their names from 1.117.0 to 1.119.0. A part missing or of another size: the client renumbered its atlases, find
 # the sprites again from those two prefabs (docs/spec/05-game-data.md section 8).
 CARD_PARTS = {
     "6e4a9190330af674daae57c8cb3b4ef1": {

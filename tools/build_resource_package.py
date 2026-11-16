@@ -10,7 +10,8 @@ manifest is generated, never committed in maalc.
 
 The version is the publish date, YYYY.MM.DD (the second publish of a day is YYYY.MM.DD.2, given with --version); the client
 version is read from data/client.json, which `tools/game_data.py regen` writes. --source defaults to the program's own list,
-`resource_package.SOURCES`; `--no-sources` writes an empty list, which turns updates off (a dev install).
+`resource_package.SOURCES` when building a package with --out; into --base it is the empty list (updates off, a dev install)
+unless --source is given. `--no-sources` writes an empty list either way.
 """
 
 import argparse
@@ -46,8 +47,9 @@ def data_client(base: Path) -> str:
     return json.loads(f.read_text(encoding="utf-8"))["client"]
 
 
-def today() -> str:
-    return datetime.date.today().strftime("%Y.%m.%d")
+def today(now: datetime.datetime | None = None) -> str:
+    """The UTC calendar day, the one tools/publish_resource.py numbers its versions on."""
+    return (now or datetime.datetime.now(datetime.timezone.utc)).astimezone(datetime.timezone.utc).strftime("%Y.%m.%d")
 
 
 def build_manifest(base: Path, version: str, sources: list[str], client: str | None = None) -> dict:
@@ -99,9 +101,19 @@ def parse_args(argv=None) -> argparse.Namespace:
     return ap.parse_args(argv)
 
 
+def choose_sources(args: argparse.Namespace) -> list[str]:
+    """--no-sources, else --source, else the program's own list. A manifest written into --base (no --out) lists none by
+    default: that base is a checkout's, and a source there lets TaskStart replace the branch's files with the published ones."""
+    if args.no_sources:
+        return []
+    if args.sources:
+        return args.sources
+    return rp.SOURCES if args.out else []
+
+
 if __name__ == "__main__":
     args = parse_args()
-    sources = [] if args.no_sources else args.sources or rp.SOURCES
+    sources = choose_sources(args)
     build = build_package if args.out else write_manifest
     manifest = build(args.base, *([args.out] if args.out else []), version=args.version, sources=sources, client=args.client)
     print(f"{manifest['version']}: {len(manifest['files'])} files, client {manifest['client']}, "

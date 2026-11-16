@@ -126,8 +126,23 @@
   text-shadow: 0 0 2px #000, 0 1px 1px #000; /* over the gift's art, as the game's numeral */
 }
 .gl-tip-kwi { position: absolute; right: -7px; bottom: -6px; width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 1px 1px #000a); }
-.gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }
-.gl-tip-head > div > b { font-size: 14.5px; }
+.gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; gap: 3px; flex: 1; min-width: 0; line-height: 1.35; }
+.gl-tip-head > div > small { padding-left: 2px; }
+/* The name on the plate the game's gift panel draws it on (#786): the game's white plate tinted by the gift's sin
+ * (gift_plates/<sin>.webp, tools/gift_plates.py), sliced as the game slices it by the sprite's border (plates.json `border`, top
+ * right bottom left; GiftPopover.test.tsx holds the two together) at 0.4 of its size, in the ink plates.json gives the sin (set
+ * on the element). The padding keeps the name inside
+ * the band the tool measured that ink on, 4.5:1 or more against every pixel: the plate's middle half in height, 8 % in at
+ * each end. The light ink takes the game's dark drop shadow. Neither theme changes a plate. */
+.gl-plate {
+  position: relative; isolation: isolate; display: block; min-height: 36px; padding: 8px 22px 9px; text-align: center; text-wrap: balance;
+  font: 700 15px/1.25 var(--font-display); letter-spacing: 0.02em; overflow-wrap: anywhere;
+}
+.gl-plate::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border: solid transparent; border-width: 7.8px 54.8px 24.4px 31.8px;
+  border-image: var(--plate) 19.5 137 61 79.5 fill / 7.8px 54.8px 24.4px 31.8px;
+}
+.gl-plate[data-ink="light"] { text-shadow: 1px 1px 0 #000a; }
 /* The game's effect text (#764): a blank line between its parts. A keyword is its status icon, then its name underlined in its
  * buff's colour, the two kept on one line; flavour text italic. */
 .gl-tip-effect { margin: 0; padding: 8px 0 2px; white-space: pre-line; line-height: 1.6; }

@@ -87,14 +87,25 @@
    "$.zh_source: str"
   ],
   "events.yaml": [
-   "$: object"
+   "$: ?"
   ],
   "gift_effects.json": [
    "$: object",
    "$.effects: map",
    "$.effects.*: object",
-   "$.effects.*.en: str",
-   "$.effects.*.zh: str",
+   "$.effects.*.en: list",
+   "$.effects.*.en[]: object|str",
+   "$.effects.*.en[].kw: str",
+   "$.effects.*.sin: str",
+   "$.effects.*.zh: list",
+   "$.effects.*.zh[]: object|str",
+   "$.effects.*.zh[].kw: str",
+   "$.keywords: map",
+   "$.keywords.*: object",
+   "$.keywords.*.colour: str",
+   "$.keywords.*.en: str",
+   "$.keywords.*.icon: str",
+   "$.keywords.*.zh: str",
    "$.license: str",
    "$.license_url: str",
    "$.note: str",
@@ -118,6 +129,24 @@
    "$.default_list.order[]: str",
    "$.default_list.want: list",
    "$.default_list.want[]: number"
+  ],
+  "gift_plates/plates.json": [
+   "$: object",
+   "$.border: list",
+   "$.border[]: number",
+   "$.inks: object",
+   "$.inks.dark: str",
+   "$.inks.light: str",
+   "$.note: str",
+   "$.plates: map",
+   "$.plates.*: object",
+   "$.plates.*.colour: str",
+   "$.plates.*.contrast: number",
+   "$.plates.*.ink: str",
+   "$.plates.*.shade: number",
+   "$.size: list",
+   "$.size[]: number",
+   "$.sprite: str"
   ],
   "gift_recipes.json": [
    "$: object",

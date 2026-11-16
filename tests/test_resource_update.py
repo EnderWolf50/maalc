@@ -85,7 +85,7 @@ def test_a_newer_version_replaces_the_changed_files_adds_the_new_and_removes_the
     assert local_files(base) == {**NEW, "image/t.png": OLD["image/t.png"]}
     manifest = rp.read_manifest(base)
     assert (manifest["version"], manifest["client"]) == ("2026.11.16", "1.119.0")
-    assert manifest["sources"] == [str(remote)]  # the remote does not choose where the next update comes from
+    assert manifest["sources"] == [str(remote)]  # a remote that lists none leaves the install's own
     assert "2026.11.01" in said and "2026.11.16" in said
     assert not (base.parent / ".update").exists()
 
@@ -353,7 +353,8 @@ def test_the_files_come_over_https_too(base, remote, network):
     publish(remote, NEW, "2026.11.16")
     run(base)
     assert local_files(base)["data/a.json"] == NEW["data/a.json"]
-    assert network.seen[0][0] == "main/manifest.json" and ("2026.11.16/data/a.json", 60) in network.seen
+    # the timeout is a deadline minus the clock, so it is 60 only up to float rounding
+    assert network.seen[0][0] == "main/manifest.json" and ("2026.11.16/data/a.json", pytest.approx(60)) in network.seen
 
 
 @pytest.mark.parametrize("trouble, reason", [
@@ -397,3 +398,19 @@ def test_every_function_that_rebuilds_a_table_made_at_import_exists():
     for name in ru.DERIVED:
         module, _, function = name.partition(".")
         assert callable(getattr(importlib.import_module(module), function)), name
+
+
+def test_a_remote_that_lists_a_mirror_teaches_it_to_an_install_that_updates(base, remote, tmp_path):
+    mirror = str(tmp_path / "mirror")
+    publish(remote, NEW, "2026.11.16", sources=[str(remote), mirror])  # ADR 0012: an old zip learns a mirror at its next update
+    run(base)
+    assert rp.read_manifest(base)["sources"] == [str(remote), mirror]
+
+
+def test_an_install_with_no_source_stays_off_whatever_the_remote_lists(tmp_path, remote):
+    base = tmp_path / "dev" / "base"
+    install(base, OLD, "2026.11.01", [])
+    publish(remote, NEW, "2026.11.16", sources=[str(remote)])
+    before = tree(base)
+    run(base)
+    assert tree(base) == before

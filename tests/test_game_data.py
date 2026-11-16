@@ -200,3 +200,14 @@ def test_the_snapshot_covers_json_and_yaml_files_of_every_depth():
     assert {"event_table.json", "trials.yaml", "gift_lists.yaml"} <= files.keys()
     assert any("/" in name for name in files)  # index.json of the icon folders
     assert not any(name.endswith((".png", ".webp")) for name in files)
+
+
+def test_an_empty_container_records_no_structure_so_its_first_rows_are_not_a_change():
+    # data/events.yaml is {} until the first override: map or object cannot be told from nothing
+    assert ds.structure({}) == ["$: ?"] and ds.structure([]) == ["$: list", "$[]: ?"]
+    snap = {"format": 1, "files": {"events.yaml": ds.structure({}), "l.json": ds.structure({"rows": []})}}
+    filled = {"events.yaml": ds.structure({"Will you help them?": "Help"}), "l.json": ds.structure({"rows": [{"a": 1}]})}
+    assert ds.check(snap, filled, 1) is None
+    assert ds.check({"format": 1, "files": filled}, {"events.yaml": ds.structure({}), "l.json": ds.structure({"rows": []})}, 1) is None
+    other = {"events.yaml": ds.structure({}), "l.json": ds.structure({"rows": [], "extra": 1})}
+    assert ds.check(snap, other, 1)  # a field beside the empty one is still a change

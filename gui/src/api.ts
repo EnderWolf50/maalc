@@ -17,10 +17,10 @@ export interface GameFiles {
 /** Every text file the window reads (paths under data/). */
 export const GAME_TEXTS = [
   "gift_effects.json", "gift_lists.yaml", "gift_recipes.json", "gift_search.json", "graces.json", "shop.yaml", "theme_packs.yaml",
-  "sinner_cards/index.json", "theme_pack_covers/index.json",
+  "sinner_cards/index.json", "theme_pack_covers/index.json", "gift_plates/plates.json",
 ];
 /** Every image folder the window lists (under data/). */
-export const GAME_FOLDERS = ["gift_icons", "keyword_icons", "buf_icons", "grace_icons", "sinner_cards", "theme_pack_covers"];
+export const GAME_FOLDERS = ["gift_icons", "keyword_icons", "buf_icons", "grace_icons", "sinner_cards", "theme_pack_covers", "gift_plates"];
 
 const DATA = "../../assets/resource/base/data/";
 const under = (key: string) => key.slice(key.indexOf("/data/") + "/data/".length);
@@ -29,7 +29,7 @@ const under = (key: string) => key.slice(key.indexOf("/data/") + "/data/".length
  * build `import.meta.env.DEV` is false, so none of these files reaches the bundle. */
 async function browserFiles(): Promise<GameFiles> {
   if (!import.meta.env.DEV) throw new Error("the game data can be read only by the app (no Tauri here)");
-  const raw = import.meta.glob(["../../assets/resource/base/data/*.{json,yaml}", "../../assets/resource/base/data/*/index.json"], { query: "?raw", import: "default" });
+  const raw = import.meta.glob(["../../assets/resource/base/data/*.{json,yaml}", "../../assets/resource/base/data/*/{index,plates}.json"], { query: "?raw", import: "default" });
   const images = import.meta.glob("../../assets/resource/base/data/*/*.webp", { query: "?url", import: "default" });
   const texts: Record<string, string> = {};
   for (const name of GAME_TEXTS) {

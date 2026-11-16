@@ -3,13 +3,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, STATUS_WORDS, keywordIconUrl, packName } from "./giftCatalog";
+import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, giftSin, plateOf, STATUS_WORDS, keywordIconUrl, packName } from "./giftCatalog";
 import giftCss from "./giftlists.css?raw";
 import { GiftListsTab } from "./GiftLists";
 import { EffectText, place, usedText } from "./GiftPopover";
 import { queue } from "./gifts";
 import { TEXT } from "./i18n";
 import indexCss from "./index.css?raw";
+import plates from "../../assets/resource/base/data/gift_plates/plates.json";
 import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, newSettings, type GiftList, type Settings } from "./model";
 import { contrast, cssValueOf, renderEditor } from "./testing";
 
@@ -369,6 +370,48 @@ describe("hover card: the gift's effect as the game's gift panel prints it (#764
     const plain = popover()!.querySelector(".gl-tip-icon")!;
     expect(within(plain as HTMLElement).getByText("III")).toBeInTheDocument();
     expect(plain.querySelectorAll("img")).toHaveLength(1); // the gift's own
+  });
+});
+
+describe("hover card: the gift's name on its sin's plate, as the game's gift panel draws it (#786)", () => {
+  const plateOfCard = () => popover()!.querySelector<HTMLElement>(".gl-plate")!;
+
+  test("Distant Star's name is on the VIOLET plate in the light ink the tool measured it in; its English name under it", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9125);
+    const plate = plateOfCard();
+    expect(plate).toHaveTextContent(/^彼方之星$/);
+    expect(giftSin(9125)).toBe("VIOLET");
+    expect(plate.style.getPropertyValue("--plate")).toBe(`url(${plateOf("VIOLET").url})`);
+    expect(plate.style.color).toBe("rgb(255, 255, 255)"); // plates.json: VIOLET takes the light ink
+    expect(plate).toHaveAttribute("data-ink", "light");
+    expect(plate.nextElementSibling).toHaveTextContent(/^Distant Star$/);
+  });
+
+  test("a bright plate takes the dark ink (Dust to Dust: AMBER), and in English the plate carries the English name alone", async () => {
+    const r = await open([mine()], "en_us");
+    await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + TEXT.en_us["kw.Burn"]) }));
+    await r.user.hover(screen.getByRole("button", { name: /^Dust to Dust, / }));
+    const plate = plateOfCard();
+    expect(plate.textContent).toBe("Dust to Dust");
+    expect(plate.style.getPropertyValue("--plate")).toBe(`url(${plateOf("AMBER").url})`);
+    expect(plate.style.color).toBe("rgb(0, 0, 0)");
+    expect(plate).toHaveAttribute("data-ink", "dark");
+    expect(plate.nextElementSibling).toBeNull();
+  });
+
+  test("the card slices the plate by the border the tool read off the game's sprite, at 0.4 of its size", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9125);
+    const plate = plateOfCard();
+    const [top, right, bottom, left] = plates.border;
+    const widths = [top, right, bottom, left].map((v) => `${+(v * 0.4).toFixed(1)}px`).join(" ");
+    expect(cssValueOf(giftCss, plate, "border-image", false, "::before")).toBe(`var(--plate) ${top} ${right} ${bottom} ${left} fill / ${widths}`);
+    expect(cssValueOf(giftCss, plate, "border-width", false, "::before")).toBe(widths);
+  });
+
+  test("every gift the tab shows has its sin and that sin its plate", () => {
+    for (const g of CATALOG) expect(plateOf(giftSin(g.id)!)?.url, `${g.id}`).toBeTruthy();
   });
 });
 

@@ -110,7 +110,9 @@ def test_the_shop_may_sell_the_drop_pool_less_its_global_excludes_and_the_fusion
     assert 9207 not in sells  # globalExcludeEgoGifts
     assert 9156 in sells and 9156 in hard_only  # excludeEgoGifts (excludeTargetIdxList [0]): not on a NORMAL floor
     assert 9302 in sells and 9205 in sells  # 9205: in no egoGifts, but in theme packs' own pools, and seen on sale (live 2026-10-22)
-    assert hard_only <= sells and (len(sells), len(hard_only)) == (366, 68)
+    # 1.119.0: pack 1129's own pool (9292, 9293, 9297-9300) is sold; 9294-9296 joined globalExcludeEgoGifts
+    assert {9292, 9293, 9297, 9298, 9299, 9300} <= sells and not {9294, 9295, 9296} & sells
+    assert hard_only <= sells and (len(sells), len(hard_only)) == (372, 68)
 
 
 def test_the_five_vestiges_are_data_ids_9991_to_9995_keywordless_tier_i_to_v():
