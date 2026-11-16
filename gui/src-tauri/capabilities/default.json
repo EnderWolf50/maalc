@@ -14,6 +14,8 @@
     "allow-load-settings",
     "allow-load-theme-packs",
     "allow-save-settings",
+    "allow-load-team-options",
+    "allow-save-team-options",
     "allow-append-runs-log"
   ]
 }

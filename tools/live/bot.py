@@ -16,14 +16,16 @@ task list, and runs them in turn (#364). It exits 0 when every task succeeded. S
 the list. A line per task says the values it used, `(default)` after one no `--option` set. An option, case or task
 interface.json lacks stops it, exit 1, before the device is touched.
 
-**prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
-from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
-into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to VALUE
-(JSON, else a string): `--set luxcavation.exp.count=2`; a list's item goes by its id, `--set teams.t3.heal=revive`. A
-key it cannot set stops it before DIR is touched, and so does a `run.*` key: the Mirror Dungeon task's options and the
-global ones are the client's now (#779), set with `run --option` (`--set run.runs=1` names `--option MirrorRunsLimit=Yes
---option MirrorRuns=1`). DIR comes from `tools/install.py` (a worktree's install/) or a copy of one under
-`.local/scratch/<task>/`.
+**prep** copies `config/settings.json`, `config/maa_option.json` and, when the source has them, the team options file
+`config/team_options.json` the settings GUI writes (#780: `run --option ExpTeam=<team id>` picks from its cases) and
+`state/` from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation
+cursor into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to
+VALUE (JSON, else a string): `--set luxcavation.exp.count=2`; a list's item goes by its id, `--set teams.t3.heal=revive`.
+A key it cannot set stops it before DIR is touched, and so does a key that is a client's option now, set with
+`run --option`: a `run.*` key, the Mirror Dungeon task's options and the global ones (#779; `--set run.runs=1` names
+`--option MirrorRunsLimit=Yes --option MirrorRuns=1`), and a Luxcavation task's team (#780;
+`--set luxcavation.exp.team=t3` names `--option ExpTeam=t3`). DIR comes from `tools/install.py` (a worktree's install/)
+or a copy of one under `.local/scratch/<task>/`.
 
 **awake** keeps the display and the machine on for that many minutes: a recording needs the screen awake
 (screen-record). Windows only.
@@ -183,15 +185,24 @@ def tasker(root: Path, tasks: list[str], port: int, options: list[str]) -> int:
 
 
 AGENT_OPTIONS = TOOLS.parent / "agent" / "task_options.schema.json"
+LUX_NODES = {"exp": "ExpLuxcavation", "thread": "ThreadLuxcavation"}  # luxcavation.<key>'s task, whose options node it is
 
 
 def moved(key: str, value: str) -> str | None:
-    """Where settings key went (#779): the --option of bot.py run that sets it now, for a run.<key> the client's options
-    took over; None for a key still in the settings file."""
+    """Where settings key went (#779, #780): the --option of bot.py run that sets it now, for a run.<key> the client's
+    options took over and a luxcavation.<task>.<key> its task's options did (the schema's title names the option);
+    None for a key still in the settings file."""
+    nodes = json.loads(AGENT_OPTIONS.read_text(encoding="utf-8"))["$defs"]
     section, _, name = key.partition(".")
+    if section == "luxcavation":
+        task, _, name = name.partition(".")
+        props = nodes.get(LUX_NODES.get(task), {}).get("properties", {})
+        if name not in props:
+            return None
+        case = {"true": "Yes", "false": "No", "null": "none"}.get(value, value)  # a switch's cases; a team's 「未選擇」
+        return f"bot.py run --option {props[name]['title']}={case}"
     if section != "run":
         return None
-    nodes = json.loads(AGENT_OPTIONS.read_text(encoding="utf-8"))["$defs"]
     option = next((d["properties"][name]["title"] for d in nodes.values() if name in d["properties"]), None)
     if option is None:
         return "the settings' run section is no longer read: set its options with bot.py run --option"
@@ -208,7 +219,7 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
     for item in sets:
         key, _, value = item.partition("=")
         if where := moved(key, value):
-            raise SystemExit(f"prep: {key} is a task or global option of the client now (#779): {where}")
+            raise SystemExit(f"prep: {key} is a task or global option of the client now (#776): {where}")
     settings = json.loads((source / "config/settings.json").read_text(encoding="utf-8"))
     for item in sets:
         key, value = item.split("=", 1)
@@ -229,6 +240,8 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
             node[last] = value
     (install / "config").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "config/maa_option.json", install / "config/maa_option.json")
+    if (source / "config/team_options.json").is_file():  # the GUI's, which interface.json imports (#780)
+        shutil.copy2(source / "config/team_options.json", install / "config/team_options.json")
     if (source / "state").is_dir():
         shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
     (install / "config/settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")

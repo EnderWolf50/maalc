@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// <root> is the folder holding this executable (spec 04 section 1), so the user never picks it.
 /// Debug builds honour MAALC_ROOT, because `tauri dev` runs the exe from target/debug.
@@ -21,6 +21,41 @@ fn settings_path() -> Result<PathBuf, String> {
     Ok(root()?.join("config").join("settings.json"))
 }
 
+/// The team options file (#780): assets/interface.json imports it from here (gui/src/teamOptions.test.ts checks the two
+/// agree), and config/ is what tools/install.py and both clients' updates leave alone.
+fn team_options_path() -> Result<PathBuf, String> {
+    Ok(root()?.join("config").join("team_options.json"))
+}
+
+/// A file's text, or None when it does not exist yet.
+fn read_if_there(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Write text to a temp file next to path, then rename it over path once `ready` agrees, so a crash never leaves half a
+/// file. Nothing is written when `ready` refuses or a step fails.
+fn replace(path: &Path, text: &str, ready: impl FnOnce() -> std::io::Result<()>) -> Result<(), String> {
+    let dir = path.parent().unwrap();
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!("{}.tmp", path.file_name().unwrap().to_string_lossy()));
+    let written = (|| {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(text.as_bytes())?;
+        f.sync_all()?;
+        drop(f);
+        ready()?;
+        fs::rename(&tmp, path) // replaces the old file on Windows too
+    })();
+    if written.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    written.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn root_dir() -> Result<String, String> {
     Ok(root()?.display().to_string())
@@ -29,11 +64,19 @@ fn root_dir() -> Result<String, String> {
 /// The settings file text, or None when it does not exist yet.
 #[tauri::command]
 fn load_settings() -> Result<Option<String>, String> {
-    match fs::read_to_string(settings_path()?) {
-        Ok(text) => Ok(Some(text)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.to_string()),
-    }
+    read_if_there(&settings_path()?)
+}
+
+/// The team options file text, or None when it does not exist yet.
+#[tauri::command]
+fn load_team_options() -> Result<Option<String>, String> {
+    read_if_there(&team_options_path()?)
+}
+
+/// Write the team options file as save_settings writes its file: a temp file, then a rename. The GUI is its one writer.
+#[tauri::command]
+fn save_team_options(text: String) -> Result<(), String> {
+    replace(&team_options_path()?, &text, || Ok(()))
 }
 
 /// The season's theme pack data file text (spec 05 section 2). resource/ sits under <root> in a
@@ -59,14 +102,7 @@ const CHANGED: &str = "settings.json changed on disk";
 #[tauri::command]
 fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
     let path = settings_path()?;
-    let dir = path.parent().unwrap();
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let tmp = dir.join("settings.json.tmp");
-    let written = (|| {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(text.as_bytes())?;
-        f.sync_all()?;
-        drop(f);
+    replace(&path, &text, || {
         let current = match fs::read_to_string(&path) {
             Ok(current) => Some(current),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
@@ -75,12 +111,8 @@ fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
         if current != expected {
             return Err(std::io::Error::other(CHANGED));
         }
-        fs::rename(&tmp, &path) // replaces the old file on Windows too
-    })();
-    if written.is_err() {
-        let _ = fs::remove_file(&tmp);
-    }
-    written.map_err(|e| e.to_string())
+        Ok(())
+    })
 }
 
 /// Append one JSON line to <root>/logs/runs.jsonl (the GUI only appends reset markers, spec 04 section 12).
@@ -107,6 +139,8 @@ pub fn run() {
             load_settings,
             load_theme_packs,
             save_settings,
+            load_team_options,
+            save_team_options,
             append_runs_log
         ])
         .run(tauri::generate_context!())

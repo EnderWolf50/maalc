@@ -45,6 +45,14 @@ test("連戰 is a switch as on the other tabs: the box in its label, its note un
   }
 });
 
+test("no team is picked here: each Luxcavation task's team is the client's dropdown (#780)", () => {
+  const s = newSettings();
+  s.luxcavation.exp.team = "gone";
+  renderEditor(<DailyTab />, s);
+  expect(screen.queryByRole("combobox", { name: /隊伍/ })).toBeNull();
+  expect(screen.getAllByRole("combobox")).toHaveLength(2); // the two tasks' modes
+});
+
 test("the tab's notes show one topic to a line, Lunacy's cost on the first", () => {
   renderEditor(<DailyTab />, newSettings());
   for (const key of ["daily.note", "lux.exp_note", "lux.thread_note", "lux.consecutive_note", "charge.note"] as const) expectLines(zh[key]);

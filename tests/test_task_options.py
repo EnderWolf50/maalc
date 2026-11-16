@@ -3,7 +3,8 @@ once, before any tap, from the attach a client's override array leaves on the en
 every reader takes them from there. A value missing or wrong, or a rule that crosses them with the teams, ends the task
 at its start: MirrorDungeon fails, a daily task takes the stop procedure.
 
-Every override here is the one tools/client_override.py builds from assets/interface.json, as MXU does (client_options).
+Every override here is the one tools/client_override.py builds from assets/interface.json, as MXU does (client_options),
+its ExpTeam and ThreadTeam from the team options file the settings GUI writes (tests/team_options.json, #780).
 In process on test_actions' fake Maa context, then the real tasks on MaaFramework in a child process (daily_child.py):
 this file run as a script, as test_task_chain.py does.
 """
@@ -16,7 +17,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from client_options import override, send
+from client_options import TEAM_OPTIONS, override, send
 from daily_child import bind, game_class, load, result, run_child, run_task, screen
 from test_settings import VALID, apply_edits
 
@@ -41,6 +42,10 @@ NOT_DEFAULT_LINE = ("options: webhook_url (set), auto_accept_terms=false, auto_d
                     "weekly_bonus_use=none, weekly_bonus_amount=one, stop_when_weekly_bonus_out=true, "
                     "starlight_unaffordable=stop, wipe_retries=0, after_retries=stop")
 HARD_FROM_1 = [{"set": "teams/1/hard_from_floor", "value": 1}]  # the valid file's team b starts HARD at floor 3
+LUX_WHERE = "the options of the {task} task in the client's task list"
+# A Luxcavation task's team option (#780) with no team picked: 「未選擇」, or a list with no team in it.
+NO_PICK = ("{option} (team): no team picked; pick one in " + LUX_WHERE
+           + " (an empty list: create the team in the settings GUI, save, then reopen the client)")
 
 if __name__ != "__main__":  # pytest; the child imports the agent itself, under a stand-in AgentServer (daily_child.load)
     import actions
@@ -62,15 +67,15 @@ def write(data):
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
 
 
-def start(context, monkeypatch, task, *options, drop=()):
-    """task's entry action, posted by a client with these options (drop: attach keys it did not send), on the settings
-    file under ROOT, as at launch (no task before it): what it returned, the stop procedure's reasons (the procedure
-    itself left out), and the log."""
+def start(context, monkeypatch, task, *options, drop=(), teams=TEAM_OPTIONS):
+    """task's entry action, posted by a client with these options (drop: attach keys it did not send; teams: the team
+    options file it found, None for none), on the settings file under ROOT, as at launch (no task before it): what it
+    returned, the stop procedure's reasons (the procedure itself left out), and the log."""
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # TaskStart starts afresh: TASK and STUCK come back after
     patch_all(monkeypatch, "STUCK", dict(actions.STUCK))
     stops = []
     patch_all(monkeypatch, "stop", lambda context, reason, **kw: stops.append(reason) or False)
-    send(context, task, *options, drop=drop)
+    send(context, task, *options, drop=drop, teams=teams)
     actions.LOG.clear()
     if task in LUX_KEYS:
         ok = lux_actions.LuxStart().run(context, SimpleNamespace(node_name=task, custom_action_param=json.dumps(LUX_KEYS[task])))
@@ -181,15 +186,15 @@ def test_a_value_of_the_wrong_type_is_named_with_what_came(context, monkeypatch)
 @pytest.mark.parametrize("case", CASES["task_start"], ids=lambda c: c["name"])
 def test_a_rule_that_crosses_a_tasks_options_with_the_teams_stops_it_at_its_start(context, monkeypatch, case):
     # #777: the target floor's rule (#385) and a Luxcavation task's team (#366) moved from the settings' load to the
-    # task's start; #779: the target floor and the difficulty come from the client.
+    # task's start; #779: the target floor and the difficulty come from the client; #780: the team too.
     write(apply_edits(CASES["valid"], case["edits"]))
     ok, stops, said = start(context, monkeypatch, case["task"], *case.get("options", []))
     if not case["cross"]:
         assert ok is True and stops == [] and not [line for line in said if line.startswith("stop:")]
     elif case["task"] == "MirrorDungeon":  # a failure, as PlanRun's on bad settings: no stop procedure
         assert ok is False and stops == [] and said[-1] == f"stop: {invalid(case['cross'])}"
-    else:  # a Luxcavation task: the stop procedure, as for any settings it cannot run on
-        assert ok is False and stops == [invalid(case["cross"], "settings")]
+    else:  # a Luxcavation task: the stop procedure, as for any option it cannot run on
+        assert ok is False and stops == [invalid(case["cross"])]
     context.tasker.controller.post_click.assert_not_called()
     context.run_task.assert_not_called()  # not even GoHome
 
@@ -208,11 +213,37 @@ def test_a_disabled_team_does_not_hide_a_normal_only_team_behind_it_from_a_targe
 
 
 def test_a_rule_a_task_does_not_play_by_leaves_it_alone(context, monkeypatch):
-    # Each task checks its own: a gone EXP team stops neither the mail nor the Thread task. Before #777 the settings'
-    # load refused the file, which stopped every task that loaded it at its start (Thread) and left the mail on the defaults.
-    write(apply_edits(CASES["valid"], [{"set": "luxcavation/exp/team", "value": "gone"}, {"set": "luxcavation/thread/team", "value": "a"}]))
+    # Each task checks its own: no EXP team picked stops neither the mail nor the Thread task, which picked its own.
+    # Before #777 the settings' load refused a gone EXP team, which stopped every task that loaded the file at its start
+    # (Thread) and left the mail on the defaults.
+    write(VALID)
     assert start(context, monkeypatch, "ClaimMail")[:2] == (True, [])
-    assert start(context, monkeypatch, "ThreadLuxcavation")[:2] == (True, [])
+    assert start(context, monkeypatch, "ThreadLuxcavation", "ThreadTeam=a")[:2] == (True, [])
+
+
+@pytest.mark.parametrize("task, option, name", [("ExpLuxcavation", "ExpTeam", "EXP Luxcavation"),
+                                                ("ThreadLuxcavation", "ThreadTeam", "Thread Luxcavation")])
+def test_a_luxcavation_task_plays_the_team_its_option_picked(context, monkeypatch, task, option, name):
+    # #780: the team is the client's dropdown, its case the team's id: team b's TEAMS #2 and guard turns, not team a's;
+    # the settings file's luxcavation team (a) is not read.
+    write(apply_edits(CASES["valid"], [{"set": f"luxcavation/{LUX_KEYS[task]}/team", "value": "a"}]))
+    ok, stops, said = start(context, monkeypatch, task, f"{option}=b")
+    assert ok is True and stops == []
+    assert actions.TASK["options"]["team"] == "b" and said[1].endswith(", team=b")
+    assert (actions.RUN["team"]["id"], actions.RUN["team"]["game_team"], actions.RUN["guard"]) == ("b", 2, 3)
+    assert said[-1].startswith(f"{name}: team 'Team b' (TEAMS #2), 3 guard turns, ")
+    context.tasker.controller.post_click.assert_not_called()
+
+
+@pytest.mark.parametrize("task, option", [("ExpLuxcavation", "ExpTeam"), ("ThreadLuxcavation", "ThreadTeam")])
+def test_a_client_that_found_no_team_options_file_sends_no_team_and_the_task_stops(context, monkeypatch, task, option):
+    # #780: the placeholder's dropdown is empty (no team in the settings GUI yet, or the client not reopened since): the
+    # stop procedure before any tap, the line saying how to fill the list.
+    write(VALID)
+    ok, stops, _ = start(context, monkeypatch, task, teams=None)
+    assert ok is False and stops == [invalid([NO_PICK.format(option=option, task=task)])]
+    context.tasker.controller.post_click.assert_not_called()
+    context.run_task.assert_not_called()
 
 
 def test_a_settings_file_saved_mid_task_changes_nothing_the_task_reads(context, monkeypatch):
@@ -264,15 +295,23 @@ SCENARIOS = {
     "missing": ("MirrorDungeon", (), ("wipe_retries",), []),
     "runs_zero": ("MirrorDungeon", ("MirrorRunsLimit=Yes", "MirrorRuns=0"), (), []),
     "target_normal_only": ("MirrorDungeon", ("MirrorTargetFloor=10",), (), [{"set": "teams/0/usage", "value": "normal_only"}, *HARD_FROM_1]),
-    "exp_team": ("ExpLuxcavation", (), (), [{"set": "luxcavation/exp/team", "value": "gone"}]),
+    # #780: the EXP task's team, picked; deleted in the settings GUI since; 「未選擇」; a client with no team options file
+    "exp_team_picked": ("ExpLuxcavation", ("ExpTeam=b",), (), []),
+    "exp_team_gone": ("ExpLuxcavation", ("ExpTeam=gone",), (), []),
+    "exp_team_none": ("ExpLuxcavation", ("ExpTeam=none",), (), []),
+    "exp_team_unsent": ("ExpLuxcavation", (), (), []),
     # GoHome's sub-task meets the game's download dialog (TitleDownload.png): with the client's AutoDownload off
     "download_off": ("ClaimMail", ("AutoDownload=No",), (), []),
 }
 
 
-def sent_without(task, options, drop):
+NO_TEAM_FILE = {"exp_team_unsent"}  # the scenarios a client posts that found no team options file
+READ_BACK = {"values": "MirrorHub", "exp_team_picked": "ExpLuxcavation"}  # whose next is ReadBack, which ends the task
+
+
+def sent_without(task, options, drop, teams=TEAM_OPTIONS):
     """The override a client posts task with, without the entries that write a key of drop."""
-    return [o for o in override(task, *options)
+    return [o for o in override(task, *options, teams=teams)
             if not any(k in node.get("attach", {}) for node in o.values() for k in drop)]
 
 
@@ -285,11 +324,14 @@ def child():
         images = {"main": screen("MainWindow.png"), "download": screen("TitleDownload.png")}
 
     class ReadBack(CustomAction):
-        """MirrorHub's next, for "values": what a node after the entry reads, the task's options and the attach."""
+        """The next of a READ_BACK node: what a node after the entry reads, the task's options, the entry's attach, and
+        the team and guard turns a Luxcavation task's start set."""
 
         def run(self, context, argv):
+            team = actions.RUN.get("team") or {}
             read_back.update(options=actions.TASK.get("options"),
-                             attach=(context.get_node_data("MirrorDungeon") or {}).get("attach"))
+                             attach=(context.get_node_data(actions.TASK["entry"]) or {}).get("attach"),
+                             team=[team.get("id"), team.get("game_team"), actions.RUN.get("guard")])
             return True
 
     resource.register_custom_action("ReadBack", ReadBack())
@@ -309,9 +351,9 @@ def child():
         game.clicks, game.keys = [], []
         before = evidence()
         actions.LOG.clear()
-        array = sent_without(task, options, drop)
-        if name == "values":  # the hub's first pass is ReadBack, which ends the task
-            array.append({"MirrorHub": {"next": ["ReadBack"]}, "ReadBack": {"action": "Custom", "custom_action": "ReadBack"}})
+        array = sent_without(task, options, drop, None if name in NO_TEAM_FILE else TEAM_OPTIONS)
+        if name in READ_BACK:
+            array.append({READ_BACK[name]: {"next": ["ReadBack"]}, "ReadBack": {"action": "Custom", "custom_action": "ReadBack"}})
         out[name] = {**result(run_task(tasker, name, task, array), game, actions),
                      "stops": [line.split(" ", 1)[1] for line in actions.LOG if " stop: " in line],
                      "said": [line.split(" ", 1)[1] for line in actions.LOG], "evidence": evidence() - before,
@@ -341,13 +383,28 @@ def test_the_real_mirror_dungeon_ends_at_its_entry_node_on_an_option_it_cannot_r
     assert o["stops"] == [f"stop: {invalid([error])}"] and o["evidence"] == 0, o
 
 
-def test_a_broken_rule_ends_the_real_luxcavation_task_at_its_entry_node_before_any_tap():
-    task, _, _, edits = SCENARIOS["exp_team"]
-    case = next(c for c in CASES["task_start"] if c["task"] == task and c["edits"] == edits)
-    o = run_child(__file__)["exp_team"]
-    assert (o["succeeded"], o["nodes"], o["clicks"], o["keys"]) == (False, [task], [], [])
-    assert o["stops"] == [f"stop: {invalid(case['cross'], 'settings')}"]
-    assert o["evidence"] == 1  # the stop procedure
+def test_the_real_exp_luxcavation_plays_the_team_the_client_picked():
+    # #780: the dropdown's case for team b sends its id: its TEAMS #2 and 3 guard turns, not team a's #1 and 0
+    o = run_child(__file__)["exp_team_picked"]
+    assert o["succeeded"] and o["nodes"] == ["ExpLuxcavation", "ReadBack"] and (o["clicks"], o["keys"]) == ([], []), o
+    assert o["read_back"]["attach"]["team"] == "b" and o["read_back"]["options"]["team"] == "b"
+    assert o["read_back"]["team"] == ["b", 2, 3]
+    assert "EXP Luxcavation: team 'Team b' (TEAMS #2), 3 guard turns, mode daily, 0 retries, consecutive on" in o["said"], o["said"]
+
+
+@pytest.mark.parametrize("name, error", [
+    ("exp_team_gone", "ExpTeam (team): team 'gone' was deleted in the settings GUI; pick another in "
+                      + LUX_WHERE.format(task="ExpLuxcavation")),
+    ("exp_team_none", NO_PICK.format(option="ExpTeam", task="ExpLuxcavation")),
+    ("exp_team_unsent", NO_PICK.format(option="ExpTeam", task="ExpLuxcavation")),
+])
+def test_the_real_exp_luxcavation_ends_at_its_entry_node_on_a_team_it_cannot_play(name, error):
+    # #780: a deleted team keeps its case, which still sends its id; 「未選擇」 and an empty list send nothing. The stop
+    # procedure (its evidence) before any tap.
+    o = run_child(__file__)[name]
+    assert (o["succeeded"], o["nodes"], o["clicks"], o["keys"]) == (False, ["ExpLuxcavation"], [], []), o
+    assert o["stops"] == [f"stop: {invalid([error])}"], o
+    assert o["evidence"] == 1
 
 
 def test_the_global_options_reach_go_home_run_as_a_sub_task():

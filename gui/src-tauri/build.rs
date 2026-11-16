@@ -7,6 +7,8 @@ fn main() {
             "load_settings",
             "load_theme_packs",
             "save_settings",
+            "load_team_options",
+            "save_team_options",
             "append_runs_log",
         ]),
     ))

@@ -36,6 +36,12 @@
             "./agent/main.py"
         ]
     },
+    // ExpTeam's and ThreadTeam's cases, one per team, come from the team options file the settings GUI writes under
+    // config/ (#780, ADR 0013): an imported option replaces the definition below in MXU, its cases in MFAAvalonia. A
+    // client that finds no such file loads this one alone, and the two dropdowns are empty.
+    "import": [
+        "config/team_options.json"
+    ],
     // Task and global options (#776, ADR 0013): each case or input writes one key into attach of its task's entry node, a
     // global option into attach of GlobalOptions, which no next names. The node names and the attach keys are the
     // agent's (agent/task_options.schema.json); a select's or switch's default case is its first, and a later case
@@ -91,12 +97,18 @@
         {
             "name": "ExpLuxcavation",
             "label": "$ExpLuxcavation",
-            "entry": "ExpLuxcavation"
+            "entry": "ExpLuxcavation",
+            "option": [
+                "ExpTeam"
+            ]
         },
         {
             "name": "ThreadLuxcavation",
             "label": "$ThreadLuxcavation",
-            "entry": "ThreadLuxcavation"
+            "entry": "ThreadLuxcavation",
+            "option": [
+                "ThreadTeam"
+            ]
         },
         {
             "name": "ClaimPassMissions",
@@ -216,6 +228,21 @@
                 {"name": "forfeit", "label": "$MirrorAfterRetries_forfeit", "pipeline_override": {"MirrorDungeon": {"attach": {"after_retries": "forfeit"}}}},
                 {"name": "stop", "label": "$MirrorAfterRetries_stop", "pipeline_override": {"MirrorDungeon": {"attach": {"after_retries": "stop"}}}}
             ]
+        },
+        // The team options' placeholders: the team options file (import above) holds each one whole, these cases and
+        // default_case filled in (gui/src/teamOptions.ts); nothing else differs. Its case 0 is 「未選擇」; its first
+        // default_case is the team the settings file picked, which MXU starts a task on and MFAAvalonia does not.
+        "ExpTeam": {
+            "type": "select",
+            "label": "$ExpTeam",
+            "description": "$ExpTeam_description",
+            "cases": []
+        },
+        "ThreadTeam": {
+            "type": "select",
+            "label": "$ThreadTeam",
+            "description": "$ThreadTeam_description",
+            "cases": []
         },
         // A password input: the clients mask and encrypt it, and the PI schema refuses a default on one.
         "WebhookUrl": {

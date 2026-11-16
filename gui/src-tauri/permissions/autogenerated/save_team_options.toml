@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-team-options"
+description = "Enables the save_team_options command without any pre-configured scope."
+commands.allow = ["save_team_options"]
+
+[[permission]]
+identifier = "deny-save-team-options"
+description = "Denies the save_team_options command without any pre-configured scope."
+commands.deny = ["save_team_options"]

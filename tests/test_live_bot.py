@@ -2,6 +2,7 @@ import json
 import os
 import signal
 import sys
+import shutil
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 import client_override
-from client_options import override
+from client_options import TEAM_OPTIONS, override
 from live import bot
 
 
@@ -57,12 +58,14 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     (src / "state").mkdir()
     (src / "config/settings.json").write_text(json.dumps({"luxcavation": {"exp": {"mode": "daily", "count": 1}}}))
     (src / "config/maa_option.json").write_text("{}")
+    (src / "config/team_options.json").write_text('{"option": {}}')  # the settings GUI's (#780)
     (src / "state/progress.json").write_text("{}")
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "luxcavation.exp.mode=count",
               "--set", "luxcavation.exp.count=2"])
     s = json.loads((dst / "config/settings.json").read_text())
     assert s["luxcavation"] == {"exp": {"mode": "count", "count": 2}}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
+    assert (dst / "config/team_options.json").read_text() == '{"option": {}}'  # bot.py run --option ExpTeam= picks from it
     assert json.loads((src / "config/settings.json").read_text())["luxcavation"]["exp"]["count"] == 1  # the source stays
 
 
@@ -74,13 +77,17 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     ("run.auto_download=false", "bot.py run --option AutoDownload=No"),
     ("run.stop_when_weekly_bonus_out=true", "bot.py run --option MirrorStopWhenBonusOut=Yes"),
     ("run.nope=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+    # #780: a Luxcavation task's team is its dropdown, a case per team id; null is 「未選擇」
+    ("luxcavation.exp.team=t3", "bot.py run --option ExpTeam=t3"),
+    ("luxcavation.thread.team=null", "bot.py run --option ThreadTeam=none"),
 ])
-def test_prep_stops_on_a_run_key_and_names_the_client_option_that_took_it_over(tmp_path, key, says):
-    # #779: the agent no longer reads the settings' run section; a run set there would not happen
+def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
+    # #779: the agent no longer reads the settings' run section, #780 a Luxcavation task's team: one set there would not
+    # happen
     src, dst = prep_source(tmp_path), tmp_path / "test"
     with pytest.raises(SystemExit) as e:
         bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", key])
-    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now (#779): {says}"
+    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now (#776): {says}"
     assert not dst.exists()
 
 
@@ -152,14 +159,30 @@ def test_plan_posts_each_task_with_the_override_mxu_would_send_and_says_the_valu
 
 
 def test_plan_posts_every_task_of_the_interface_with_the_global_options_and_its_own():
-    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too
+    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too. The repo's
+    # assets/ has no team options file (#780): a line says so, as MXU warns, and the team dropdowns have no case.
     tasks = [t["name"] for t in client_override.load_interface(REPO / "assets/interface.json")["task"]]
     lines = []
     jobs = bot.plan(REPO / "assets", tasks, ["MirrorRuns=2"], lines.append)
-    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2")) for name in tasks]
+    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2", teams=None)) for name in tasks]
+    assert lines[0] == "[run] import config/team_options.json not read (FileNotFoundError): skipped"
     assert all(line.startswith(f"[run] {name} options: WebhookUrl=(not set) (default), AutoAcceptTerms=Yes (default)")
-               for name, line in zip(tasks, lines))
-    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[tasks.index("MirrorDungeon")]
+               for name, line in zip(tasks, lines[1:]))
+    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[1 + tasks.index("MirrorDungeon")]
+    assert lines[1 + tasks.index("ExpLuxcavation")].endswith(", ExpTeam=(no case) (default)")
+
+
+def test_run_option_picks_a_team_of_the_team_options_file_the_install_has(tmp_path):
+    # #780: --option ExpTeam=<team id> sends the case of that team, which writes its id into the entry's attach
+    shutil.copy(REPO / "assets/interface.json", tmp_path / "interface.json")
+    (tmp_path / "config").mkdir()
+    shutil.copy(TEAM_OPTIONS, tmp_path / "config/team_options.json")
+    lines = []
+    ((_, entry, array),) = bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=b"], lines.append)
+    assert entry == "ExpLuxcavation" and {"ExpLuxcavation": {"attach": {"team": "b"}}} in array
+    assert lines[0].endswith(", ExpTeam=b")
+    with pytest.raises(SystemExit, match="ExpTeam has no case t9"):
+        bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=t9"], lines.append)
 
 
 @pytest.mark.parametrize("tasks, option, says", [

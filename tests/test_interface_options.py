@@ -1,17 +1,23 @@
 """assets/interface.json's task and global options against what the agent reads (#776, #779, ADR 0013): every value a
 client can send passes the agent's option schema (agent/task_options.schema.json), and every key the agent needs has an
-option that sends it. Each value goes through tools/client_override.py, the override builder that follows MXU v2.7.1."""
+option that sends it. Each value goes through tools/client_override.py, the override builder that follows MXU v2.7.1.
+ExpTeam's and ThreadTeam's cases are those of the team options file the settings GUI writes (#780): tests/team_options.json
+in place of the file interface.json imports (client_options)."""
 
 import itertools
 import json
 import re
+import shutil
+
 import pytest
 
 import client_override
 import task_options
-from client_options import ROOT, attach, interface
+from client_options import ROOT, TEAM_OPTIONS, attach, interface
 
 PI = interface()
+BARE = interface(teams=None)  # what a client loads before the settings GUI wrote the team options file
+TEAM_KEYS = ("ExpTeam", "ThreadTeam")  # the team options: their cases come from that file
 OPTIONS = PI["option"]
 TASKS = {t["name"]: t for t in PI["task"]}
 SCHEMA = task_options.SCHEMA["$defs"]
@@ -101,9 +107,11 @@ def test_the_global_options_write_only_global_options_node_and_a_tasks_only_its_
 
 
 def test_a_select_or_switch_starts_on_its_first_case_in_both_clients():
-    # MFAAvalonia starts a task option on case 0 and ignores default_case; MXU takes default_case: the same (#776)
+    # MFAAvalonia starts a task option on case 0 and ignores default_case; MXU takes default_case: the same (#776). Not
+    # the team options: the file's first default_case is the team the settings file picked (MXU only), its case 0
+    # 「未選擇」 (#780).
     for key, opt in OPTIONS.items():
-        if client_override.kind(opt) in CHOSEN:
+        if client_override.kind(opt) in CHOSEN and key not in TEAM_KEYS:
             assert opt.get("default_case") == opt["cases"][0]["name"], key
 
 
@@ -169,6 +177,29 @@ def test_every_text_interface_json_names_is_in_both_languages(language):
     named = {s[1:] for s in strings(PI) if s.startswith("$")}
     assert named and named - set(texts) == set()
     assert all(texts[k].strip() for k in named)
+
+
+@pytest.mark.parametrize("key", TEAM_KEYS)
+def test_a_team_option_is_a_placeholder_the_team_options_file_fills_with_its_cases(key):
+    # #780: interface.json's own definition has no case, so the dropdown is empty until the settings GUI wrote the
+    # file; the file's definition is the same but for its cases and default_case (MXU replaces the whole definition)
+    placeholder, filled = BARE["option"][key], OPTIONS[key]
+    assert placeholder["cases"] == [] and "default_case" not in placeholder
+    drop = ("cases", "default_case")
+    assert {k: v for k, v in filled.items() if k not in drop} == {k: v for k, v in placeholder.items() if k not in drop}
+    assert filled["cases"][0] == {"name": "none", "label": f"${key}_none"}  # 「未選擇」, which sends nothing
+    assert errors(next(t for t in TASKS if key in TASKS[t].get("option", [])), f"{key}=none") == []
+
+
+def test_interface_json_imports_the_team_options_file_from_the_config_folder(tmp_path):
+    # #780: a client reads interface.json's imports from its folder; the settings GUI writes config/team_options.json
+    # (gui/src/teamOptions.test.ts checks the GUI's path), which install.py and both clients' updates leave alone
+    assert BARE["import"] == ["config/team_options.json"]
+    shutil.copy(ROOT / "assets" / "interface.json", tmp_path / "interface.json")
+    (tmp_path / "config").mkdir()
+    shutil.copy(TEAM_OPTIONS, tmp_path / "config" / "team_options.json")
+    loaded = client_override.load_interface(tmp_path / "interface.json")
+    assert {k: loaded["option"][k] for k in TEAM_KEYS} == {k: OPTIONS[k] for k in TEAM_KEYS}
 
 
 def test_global_options_is_a_node_no_next_names():

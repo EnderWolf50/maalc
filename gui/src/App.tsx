@@ -8,6 +8,7 @@ import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { StarlightTab } from "./Starlight";
+import { teamOptionsText } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
 import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
@@ -32,6 +33,22 @@ type TabId = (typeof TABS)[number][0];
 const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
+/** Write the team options file when these settings change what it says (#780, teamOptions.ts): true when it was written. */
+async function writeTeamOptions(s: Settings) {
+  const text = teamOptionsText(await api.loadTeamOptions(), s);
+  if (text === null) return false;
+  await api.saveTeamOptions(text);
+  return true;
+}
+/** The status after the team options file was brought up to date for s: `done` (a TEXT key) when it was written, "" when
+ * nothing changed, `failed` filled in with the error, in s's language, when the write failed. */
+async function teamOptionsNote(s: Settings, done: Key, failed: Key) {
+  try {
+    return (await writeTeamOptions(s)) ? done : "";
+  } catch (e) {
+    return fill(TEXT[s.language][failed], { error: String(e) });
+  }
+}
 /** The element id of the problem at this place in the problems block. */
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
@@ -122,7 +139,8 @@ export default function App() {
         const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
-        if (migrated && !validate(data).length) {
+        const ok = !validate(data).length;
+        if (migrated && ok) {
           try {
             await api.saveSettings(migratedText, text);
             disk.current = migratedText;
@@ -130,7 +148,12 @@ export default function App() {
             if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file
           }
         }
-        setStatus(unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "");
+        // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
+        // checks refuse, whose teams may not read as teams
+        const teams = ok ? await teamOptionsNote(data, "teamOptions.updated", "teamOptions.failed") : "";
+        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", teams].filter(Boolean);
+        const say = (n: string) => (Object.prototype.hasOwnProperty.call(TEXT[data.language], n) ? TEXT[data.language][n as Key] : n);
+        setStatus(notes.length === 1 ? notes[0] : notes.map(say).join(" ")); // one note stays a key: a language switch says it anew
       } catch (e) {
         setLoadError(String(e));
       }
@@ -237,7 +260,8 @@ export default function App() {
   const dirty = toText(s) !== savedText;
   const said = Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? t(status as Key) : status;
   // shown beside "unsaved" too (a refused save, the file read again), but not what an edit since has made stale
-  const note = status === "saved" || status === "reverted" ? "" : said;
+  const savedNow = status === "saved" || status === "savedTeams";
+  const note = savedNow || status === "reverted" ? "" : said;
 
   /** Check, then write; true when the file holds the edits. */
   const save = async () => {
@@ -265,7 +289,8 @@ export default function App() {
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
-        setStatus("saved");
+        // the team options file follows the teams saved; a change is said once, as the client reads it only at its start
+        setStatus((await teamOptionsNote(current, "savedTeams", "savedTeamsFailed")) || "saved");
         return true;
       }
     } catch (e) {
@@ -313,7 +338,7 @@ export default function App() {
   // The save state plate: problems to fix (a refused save, or problems a save would meet), a write that failed, unsaved,
   // saved, or a note. Save takes the crimson frame while problems stop it or after a write failed, the caution stripe while
   // unsaved changes can go through. It counts the problems the fields show, so it waits for a field being typed in too.
-  const state = shown.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : status === "saved" ? "saved" : said ? "note" : "clean";
+  const state = shown.length ? "blocked" : failed ? "failed" : dirty ? "dirty" : savedNow ? "saved" : said ? "note" : "clean";
   const stateText = [
     shown.length > 0 && fill(t(refused ? "saveState.refused" : "saveState.toFix"), { n: shown.length }),
     dirty ? [t("unsaved"), note].filter(Boolean).join(" ") : said || (!shown.length && t("saveState.clean")),

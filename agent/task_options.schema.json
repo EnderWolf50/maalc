@@ -33,6 +33,18 @@
       },
       "if": { "properties": { "runs_limited": { "const": true } }, "required": ["runs_limited"] },
       "then": { "required": ["runs"] }
+    },
+    "ExpLuxcavation": {
+      "type": "object",
+      "properties": {
+        "team": { "title": "ExpTeam", "type": "string", "minLength": 1, "description": "a teams[] id of the settings file: a case of the team options file the settings GUI writes (config/team_options.json, #780); not sent when none is picked, which task_options.team_errors stops on" }
+      }
+    },
+    "ThreadLuxcavation": {
+      "type": "object",
+      "properties": {
+        "team": { "title": "ThreadTeam", "type": "string", "minLength": 1, "description": "as ExpLuxcavation's team" }
+      }
     }
   }
 }

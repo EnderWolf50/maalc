@@ -67,6 +67,7 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
                "ev_continue": (EVENT_BUTTON, "fight")}
 
 
+TEAM_OPTION = {"ExpLuxcavation": "ExpTeam", "ThreadLuxcavation": "ThreadTeam"}  # the client's team dropdown (#780)
 # scenario: (start screen, team, count, retries, how the battles end, then for the Thread task the tab Luxcavation
 # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2. A
 # battle the list does not reach ends in a win. CONSECUTIVE: the scenarios that fight their wins as Consecutive Battles
@@ -286,7 +287,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
-        opts = {"mode": "daily" if scenario in daily else "count", "count": count, "team": team, "retries": retries,
+        # the team is the client's option (#780): the settings file's is not read
+        opts = {"mode": "daily" if scenario in daily else "count", "count": count, "team": None, "retries": retries,
                 "consecutive": scenario in consecutive}
         (actions.ROOT / "config" / "settings.json").write_text(
             json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
@@ -297,7 +299,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
         override = state.pop("override", {})
         for name, value in state.items():
             setattr(game, name, value)
-        out[scenario] = {**result(tasker.post_task(task, posted(task, override)).wait().get(), game, actions), "swipes": game.swipes,
+        array = posted(task, override, [f"{TEAM_OPTION[task]}={team}"])
+        out[scenario] = {**result(tasker.post_task(task, array).wait().get(), game, actions), "swipes": game.swipes,
                          "drags": game.drags, "fights": game.fights, "presses": game.presses,
                          "restarts": [game.stops, game.starts]}
     print(json.dumps(out))
@@ -368,7 +371,8 @@ def test_a_defeat_counts_nothing_and_the_same_stage_is_played_again_within_the_r
 
 def test_exp_luxcavation_is_a_task_of_the_interface():
     interface = interface_json()
-    assert {"name": "ExpLuxcavation", "label": "$ExpLuxcavation", "entry": "ExpLuxcavation"} in interface["task"]
+    # its team the client's dropdown (#780), whose cases the settings GUI's team options file gives
+    assert {"name": "ExpLuxcavation", "label": "$ExpLuxcavation", "entry": "ExpLuxcavation", "option": ["ExpTeam"]} in interface["task"]
 
 
 def title_taps(o, box):

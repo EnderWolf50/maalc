@@ -151,7 +151,7 @@ describe("in the editor", () => {
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved: Settings = JSON.parse(file.saved[0]);
     expect(saved.teams.map((t) => t.name)).toEqual(["Tb", "Tc", "Ta!"]);
-    expect(screen.getByText(zh.saved)).toBeInTheDocument();
+    expect(screen.getByText(zh.savedTeams)).toBeInTheDocument(); // the rename changed the team list too (#780)
   });
 
   test("a file deleted while the editor is open is written again by a save", async () => {

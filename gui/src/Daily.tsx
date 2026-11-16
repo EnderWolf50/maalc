@@ -1,4 +1,6 @@
-// The daily tab: the Luxcavation tasks' options (spec 04 section 12) and Charge Enkephalin's.
+// The daily tab: the Luxcavation tasks' options (spec 04 section 12) and Charge Enkephalin's. Each Luxcavation task's team
+// is the client's dropdown (ExpTeam, ThreadTeam, #780): the settings file's luxcavation.<task>.team is written back as it
+// was, unread.
 import { LUX_MODES, type Luxcavation, type LuxMode, type Settings } from "./model";
 import { Field, Input, Mark, Num, Select, useEditor, withBreaks } from "./ui";
 
@@ -45,11 +47,6 @@ function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
         </Field>
         <Field label={t("lux.count")} path={`${path}/count`} note={opts.mode === "daily" ? t("lux.count_unused") : undefined}>
           <Num value={opts.count} min={1} disabled={opts.mode === "daily"} onChange={(v) => set({ count: v })} />
-        </Field>
-        <Field label={t("lux.team")} path={`${path}/team`} note={t("lux.team_note")}>
-          <Select value={opts.team ?? ""} options={["", ...s.teams.map((x) => x.id)]}
-            label={(id) => { const x = s.teams.find((x) => x.id === id); return x ? `${x.name || "—"} (#${x.game_team})` : t("lux.team_none"); }}
-            onChange={(v) => set({ team: v || null })} />
         </Field>
         {/* a switch as on the other tabs: the label's text the size of theirs, the note under it (#721) */}
         <Mark className="toggle" path={`${path}/consecutive`}>

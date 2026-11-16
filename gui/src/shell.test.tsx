@@ -7,13 +7,24 @@ import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam } from "./model";
 
 const zh = TEXT.zh_tw;
-const file = vi.hoisted(() => ({ text: "", saved: [] as string[], fail: "" }));
+// teams: the team options file's text (null: none), teamWrites each text written to it, teamFail the error its write
+// meets (#780)
+const file = vi.hoisted(() => ({
+  text: "", saved: [] as string[], fail: "", teams: null as string | null, teamWrites: [] as string[], teamFail: "",
+}));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
   saveSettings: (text: string) => {
     if (file.fail) return Promise.reject(new Error(file.fail));
     file.saved.push(text);
+    return Promise.resolve();
+  },
+  loadTeamOptions: () => Promise.resolve(file.teams),
+  saveTeamOptions: (text: string) => {
+    if (file.teamFail) return Promise.reject(new Error(file.teamFail));
+    file.teamWrites.push(text);
+    file.teams = text;
     return Promise.resolve();
   },
   rootDir: () => Promise.resolve("root"),
@@ -27,7 +38,17 @@ function clash() {
   return JSON.stringify(s, null, 2) + "\n";
 }
 
-beforeEach(() => { file.text = JSON.stringify(newSettings(), null, 2) + "\n"; file.saved = []; file.fail = ""; });
+beforeEach(() => {
+  file.text = JSON.stringify(newSettings(), null, 2) + "\n";
+  file.saved = [];
+  file.fail = "";
+  file.teams = null;
+  file.teamWrites = [];
+  file.teamFail = "";
+});
+
+/** The team ids of the team options file's ExpTeam cases, in order (teamOptions.ts). */
+const teamCases = () => (JSON.parse(file.teams!).option.ExpTeam.cases as { name: string }[]).map((c) => c.name);
 
 test("the arrow keys move along the main tabs and open the one they reach; Home and End go to the ends", async () => {
   const user = userEvent.setup();
@@ -84,6 +105,90 @@ test("a save writes the file's run section back as it was, though no tab shows i
   const saved = JSON.parse(file.saved[0]);
   expect(saved.teams[0].name).toBe("Ta!");
   expect(saved.run).toEqual(s.run);
+});
+
+test("a save writes the file's Luxcavation teams back as they were, though no tab picks them (#780)", async () => {
+  // the team is the client's dropdown now; a team id the teams lack saves too: the agent stops that task at its start
+  const s = newSettings();
+  s.teams = [newTeam(1, "Ta")];
+  s.luxcavation.exp.team = "gone";
+  s.luxcavation.thread.team = s.teams[0].id;
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+  await user.click(screen.getByRole("button", { name: zh.save }));
+  await waitFor(() => expect(file.saved).toHaveLength(1));
+  expect(JSON.parse(file.saved[0]).luxcavation).toEqual(s.luxcavation);
+});
+
+describe("the team options file (#780)", () => {
+  const twoTeams = () => {
+    const s = newSettings();
+    s.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+    file.text = JSON.stringify(s, null, 2) + "\n";
+    return s;
+  };
+
+  test("the start writes it when it is not there, and the header says to reopen the client", async () => {
+    const s = twoTeams();
+    render(<App />);
+    await waitFor(() => expect(file.teamWrites).toHaveLength(1));
+    expect(teamCases()).toEqual(["none", ...s.teams.map((t) => t.id)]);
+    await waitFor(() => expect(document.querySelector(".status")).toHaveTextContent(zh["teamOptions.updated"]));
+  });
+
+  test("a save that changes the team list writes it and says so once; a save that does not, writes nothing", async () => {
+    const s = twoTeams();
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(file.teamWrites).toHaveLength(1)); // the start's
+    await user.click(screen.getByRole("button", { name: `+ ${zh.add}` }));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    const added = JSON.parse(file.saved[0]).teams[2].id;
+    expect(file.teamWrites).toHaveLength(2);
+    expect(teamCases()).toEqual(["none", s.teams[0].id, s.teams[1].id, added]);
+    const plate = document.querySelector(".status")!;
+    expect(plate).toHaveAttribute("data-state", "saved");
+    expect(plate).toHaveTextContent(zh.savedTeams);
+    // a team's slot is in its label: written again; whether it is enabled is not: nothing written
+    await user.click(screen.getAllByRole("listitem")[1]);
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "5" } });
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(2));
+    expect(file.teamWrites).toHaveLength(3);
+    expect(JSON.parse(file.teams!).option.ExpTeam.cases[2].label).toBe("Tb（TEAMS #5）");
+    await user.click(screen.getByRole("checkbox", { name: new RegExp(zh["team.enabled"]) }));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(3));
+    expect(file.teamWrites).toHaveLength(3);
+    expect(plate).toHaveTextContent(zh.saved);
+    expect(plate).not.toHaveTextContent(zh["teamOptions.updated"]);
+  });
+
+  test("a write of it that fails says so, at the start and after a save that went through", async () => {
+    twoTeams();
+    file.teamFail = "disk full";
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
+    const plate = document.querySelector(".status")!;
+    expect(plate).toHaveTextContent(fill(zh["teamOptions.failed"], { error: "Error: disk full" })); // beside unsaved
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    await waitFor(() => expect(plate).toHaveTextContent(fill(zh.savedTeamsFailed, { error: "Error: disk full" })));
+    expect(file.teamWrites).toEqual([]);
+  });
+
+  test("a save the checks refuse writes neither file", async () => {
+    file.text = clash();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: zh.save }));
+    await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked"));
+    expect(file.teamWrites).toEqual([]); // not at the start either: the checks refuse the file's teams
+  });
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {
