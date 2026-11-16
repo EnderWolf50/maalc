@@ -6,7 +6,7 @@ import libRs from "../src-tauri/src/lib.rs?raw";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { MOVED, newSettings, newTeam } from "./model";
-import { queuedTeams } from "./testing";
+import { queuedTeams, sideList } from "./testing";
 import { v20File, v21File, type Edit } from "./settingsCases";
 
 const zh = TEXT.zh_tw;
@@ -136,7 +136,7 @@ describe("the team options file (#780)", () => {
     expect(plate).toHaveAttribute("data-state", "saved");
     expect(plate).toHaveTextContent(zh.savedTeams);
     // a team's slot is in its label: written again; whether it is enabled is not: nothing written
-    await user.click(screen.getAllByRole("listitem")[1]);
+    await user.click(sideList().getAllByRole("listitem")[1]);
     fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "5" } });
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(2));
@@ -352,7 +352,7 @@ test("a problem made after a good save asks to fix it before saving: no save was
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(save);
   await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "saved"));
-  await user.click(screen.getAllByRole("listitem")[1]);
+  await user.click(sideList().getAllByRole("listitem")[1]);
   const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
   fireEvent.change(slot, { target: { value: "1" } });
   const plate = document.querySelector(".status")!;
@@ -381,7 +381,7 @@ test("a problem typed before any save says Save must wait, on the plate and on S
   const user = userEvent.setup();
   render(<App />);
   const save = await screen.findByRole("button", { name: zh.save });
-  await user.click(screen.getAllByRole("listitem")[1]);
+  await user.click(sideList().getAllByRole("listitem")[1]);
   const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
   await user.type(slot, "{Backspace}"); // TEAMS #2 emptied: the lowest, #1, the first team's
   const plate = document.querySelector(".status")!;
