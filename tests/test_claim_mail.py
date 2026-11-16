@@ -6,7 +6,7 @@ move between them.
 
 import json
 
-from daily_child import ROOT, bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, inside, interface as interface_json, load, posted, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
 MAIL_ICON = (1085, 95, 70, 60)
@@ -48,7 +48,7 @@ def child():
         "main": ("main", True), "drive": ("drive", True), "box_open": ("mailbox", True), "no_mail": ("main", False),
     }.items():
         game.set(start, mail)
-        out[scenario] = result(tasker.post_task("ClaimMail", {"ClaimMailHub": {"timeout": 20000}}).wait().get(), game, actions)
+        out[scenario] = result(tasker.post_task("ClaimMail", posted("ClaimMail", {"ClaimMailHub": {"timeout": 20000}})).wait().get(), game, actions)
     print(json.dumps(out))
 
 

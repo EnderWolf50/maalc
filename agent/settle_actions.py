@@ -7,7 +7,8 @@ from maa.custom_action import CustomAction
 import recovery
 import settlement
 from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, current_run, hands_back, log,
-                     number, ocr, page_guard, run_line, screen, still, stop, stuck, tap_shown, tap_then, text, until)
+                     number, ocr, options, page_guard, run_line, screen, still, stop, stuck, tap_shown, tap_then, text,
+                     until)
 from ocrtext import has
 from team_queue import requeue
 
@@ -65,7 +66,7 @@ class Settle(CustomAction):
         if not settlement.claim_ok(result):
             return self.give_up(context, run, result)
 
-        s, team = run["settings"]["run"], run["team"]
+        s, team = options(), run["team"]
         left = number(text(context, image, WEEKLY_LEFT).split("/")[0])
         # The difficulty each floor was played on, as the theme pack page showed it: a run with no plan in memory (an
         # expired session's dialog came first, #382) counts the same. Floors not seen (a resumed run): the window's floor 1 tile.

@@ -1,6 +1,6 @@
 {
     // Lunacy for Enkephalin (#373, spec 00 daily tasks): the main window's Enkephalin bar, then the Charge Enkephalin
-    // window's Use Lunacy tab, Confirm once per charge. It spends Lunacy: charge_enkephalin.count (0 by default) decides, 0
+    // window's Use Lunacy tab, Confirm once per charge. It spends Lunacy: the task option ChargeCount (0 by default, #781) decides, 0
     // never opens the window, and every Confirm waits for lunacy.check, the game's price table, on the price the prompt
     // shows (ChargePanel). Same shape as AssembleModules: GoHome first, done only from the main window, the last step.
     "ChargeEnkephalin": {

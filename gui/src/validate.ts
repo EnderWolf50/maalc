@@ -133,37 +133,8 @@ export function crossCheck(data: Settings): Problem[] {
     });
   });
 
-  const targetFloor = data.run.target_floor;
-  if (targetFloor > 5) {
-    // floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
-    const need = `but target_floor ${targetFloor} needs the whole run HARD`;
-    if (data.run.difficulty === "normal") {
-      errors.push({
-        paths: ["run/difficulty"], text: `run/difficulty: difficulty is 'normal', ${need}`,
-        say: { key: "problem.floorDifficulty", vars: { floor: targetFloor } },
-      });
-    }
-    teams.forEach((t, i) => {
-      if (!t.enabled) return;
-      if (t.usage === "normal_only") {
-        const path = `teams/${i}/usage`;
-        errors.push({
-          paths: [path], text: `${path}: team ${pyRepr(t.name)} is normal_only, ${need}`,
-          say: { key: "problem.floorNormalOnly", vars: { floor: targetFloor, team: named(t.name) } },
-        });
-      }
-      if (t.hard_from_floor !== 1) {
-        const path = `teams/${i}/hard_from_floor`;
-        const what = t.hard_from_floor === null ? "never switches to HARD" : `starts HARD at floor ${t.hard_from_floor}`;
-        errors.push({
-          paths: [path], text: `${path}: team ${pyRepr(t.name)} ${what}, ${need} (hard_from_floor 1)`,
-          say: t.hard_from_floor === null
-            ? { key: "problem.floorNeverHard", vars: { floor: targetFloor, team: named(t.name) } }
-            : { key: "problem.floorHardFrom", vars: { floor: targetFloor, team: named(t.name), k: t.hard_from_floor } },
-        });
-      }
-    });
-  }
+  // The target floor's rule (#385) is the agent's, at the Mirror Dungeon task's start: the target floor is a task option of
+  // the client (MXU, MFAAvalonia; #779), which the GUI does not see. The Teams tab says so (team.target_floor_note).
 
   data.gift_lists.forEach((list, i) => {
     for (const id of list.want.filter((g) => list.keep.includes(g))) {
@@ -175,16 +146,8 @@ export function crossCheck(data: Settings): Problem[] {
     }
   });
 
-  const teamIds = new Set(teams.map((t) => t.id));
-  for (const [task, opts] of Object.entries(data.luxcavation)) {
-    if (opts.team !== null && !teamIds.has(opts.team)) {
-      const path = `luxcavation/${task}/team`;
-      errors.push({
-        paths: [path], text: `${path}: team ${pyRepr(opts.team)} is not in teams`,
-        say: { key: "problem.luxTeam", vars: { task: { key: `lux.${task}` as Key } } },
-      });
-    }
-  }
+  // A Luxcavation task's team is the agent's too, at that task's start: the team is the client's dropdown (ExpTeam,
+  // ThreadTeam, #780), whose cases the team options file gives (teamOptions.ts); a deleted team's case stays, and stops it.
 
   dupes("event_overrides", data.event_overrides.map((o) => o.question), "question", "question", twice("problem.dupeQuestion"));
   dupes("trial_risk_overrides", data.trial_risk_overrides.map((o) => o.trial), "trial", "trial", twice("problem.dupeTrial"));

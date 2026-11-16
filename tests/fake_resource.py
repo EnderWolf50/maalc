@@ -8,8 +8,10 @@ import hashlib
 import json
 from pathlib import Path
 
+import resource_package as rp
 
-def manifest_of(files: dict, version: str, *, format=1, template=1, client="1.118.1", sources=()) -> dict:
+
+def manifest_of(files: dict, version: str, *, format=rp.FORMAT, template=rp.TEMPLATE, client="1.118.1", sources=()) -> dict:
     return {"version": version, "client": client, "format": format, "template": template, "sources": list(sources),
             "files": {name: {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in sorted(files.items())}}
 

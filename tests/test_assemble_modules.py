@@ -9,7 +9,7 @@ was, Confirm greyed): the bot reads the drop there and closes the window with Ca
 import itertools
 import json
 
-from daily_child import bind, game_class, inside, interface as interface_json, load, result, run_child, screen
+from daily_child import bind, game_class, inside, interface as interface_json, load, posted, result, run_child, screen
 from agent_patch import patch_all
 
 WINDOW_TAB = (790, 608, 70, 64)
@@ -73,7 +73,7 @@ def child():
         "arrow_as_four": ("main", "assembled", "panel_four"), "no_arrow": ("main", "assembled", "panel_none"),
     }.items():
         game.set(start, confirm_to, *opens)
-        out[scenario] = result(tasker.post_task("AssembleModules", {"AssembleHub": {"timeout": 15000}}).wait().get(), game, actions)
+        out[scenario] = result(tasker.post_task("AssembleModules", posted("AssembleModules", {"AssembleHub": {"timeout": 15000}})).wait().get(), game, actions)
     print(json.dumps(out))
 
 

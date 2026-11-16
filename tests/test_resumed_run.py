@@ -14,6 +14,8 @@ import battle_actions
 import test_actions
 from test_actions import argv, page
 from agent_patch import patch_all
+from client_options import send
+from test_task_chain import ENTRY_OPTIONS
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
@@ -21,13 +23,22 @@ clock, context = test_actions.clock, test_actions.context  # its fixtures: the f
 @pytest.fixture
 def resumed(context, monkeypatch):
     """settings_cases' valid file under the agent's ROOT: auto difficulty, the queue team a (any) then team b
-    (hard_only); the adb address "default"; no run plan in memory."""
+    (hard_only); the adb address "default"; MirrorDungeon started on it (start), no run plan in memory."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     context.tasker.controller.info = {}  # address "default"
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # the task started here ends with the test
+    start(context)
     actions.RUN.clear()
     return context
+
+
+def start(context, *options):
+    """MirrorDungeon's TaskStart, as a task the client starts after the agent's restart: posted with entry_page's
+    options and these (NAME=VALUE), on the settings file as it is now."""
+    send(context, "MirrorDungeon", *ENTRY_OPTIONS, *options)
+    assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
 
 
 def queue():
@@ -75,11 +86,11 @@ def test_a_queue_that_picks_another_team_on_the_other_difficulty_names_no_team(r
 
 def test_auto_with_a_target_above_floor_5_begins_hard_so_the_queues_hard_team_is_known(resumed, monkeypatch):
     # #385: auto plays a target above 5 hard (run_start.run_difficulty), so only b (hard_only) can have begun the run.
-    def target_10(data):
-        data["run"]["target_floor"] = 10
+    def hard_from_1(data):
         data["teams"][1]["hard_from_floor"] = 1  # a target above 5 needs the whole run HARD
         b_first(data)
-    edit_settings(target_10)
+    edit_settings(hard_from_1)
+    start(resumed, "MirrorTargetFloor=10")  # a target is the task's option: read at its start
     claim(resumed, monkeypatch, "HARD")
     assert queue() == ["a", "b"] and last_line()["team"] == "b"
 
@@ -108,11 +119,11 @@ def test_a_mirror_dungeon_stopped_before_it_touched_the_run_writes_its_stop_line
 
 def test_a_stop_line_is_written_when_no_team_fits_the_set_difficulty(resumed, monkeypatch):
     # NORMAL set, every team hard_only: no new run would start, but the stop procedure still writes its line.
-    def normal_set_hard_only_teams(data):
-        data["run"]["difficulty"] = "normal"
+    def hard_only_teams(data):
         for team in data["teams"]:
             team["usage"] = "hard_only"
-    edit_settings(normal_set_hard_only_teams)
+    edit_settings(hard_only_teams)
+    send(resumed, "MirrorDungeon", *ENTRY_OPTIONS, "MirrorDifficulty=normal")
     stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
     assert (last_line()["team"], last_line()["result"]) == (None, "stop")
 

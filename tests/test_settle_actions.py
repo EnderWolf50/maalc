@@ -22,7 +22,7 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "settings.json").write_text(json.dumps({"teams": teams}), encoding="utf-8")
-    actions.RUN.update(settings={"run": {}, "teams": teams}, team=teams[0], planned=True, difficulty="hard")
+    actions.RUN.update(settings={"teams": teams}, team=teams[0], planned=True, difficulty="hard")
     taps = []
 
     def ocr(context, image, roi, only_rec=False):
@@ -43,14 +43,16 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
 
 @pytest.mark.parametrize("cleared", [5, 3])  # claimed, given up
 def test_an_exploration_reward_gone_is_handed_back_untouched(context, guarded, monkeypatch, cleared):
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
+    actions.RUN.update(settings={}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setitem(actions.TASK, "options", {"weekly_bonus_use": "none", "weekly_bonus_amount": 0, "target_floor": 5})
     monkeypatch.setattr(settlement, "read_result", lambda text: settlement.Result(5, "normal", cleared, 5))
     assert settle_actions.Settle().run(context, argv())
     assert moved(context) == 0 and actions.STUCK["flag"] is None
 
 
 def test_an_exploration_reward_gone_after_a_toggle_tap_does_not_claim(context, guarded, monkeypatch):
-    actions.RUN.update(settings={"run": {"weekly_bonus_use": "all", "weekly_bonus_amount": 3, "target_floor": 5}}, team={"hard_from_floor": None}, difficulty="normal")
+    actions.RUN.update(settings={}, team={"hard_from_floor": None}, difficulty="normal")
+    monkeypatch.setitem(actions.TASK, "options", {"weekly_bonus_use": "all", "weekly_bonus_amount": 3, "target_floor": 5})
     monkeypatch.setattr(settlement, "read_result", lambda text: settlement.Result(5, "normal", 5, 5))
     monkeypatch.setattr(settlement, "bonus_toggles", lambda *a: 1)
     patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])

@@ -22,6 +22,12 @@ def test_each_maafw_binary_ships_once():
     assert {name: n for name, n in copies.items() if n > 1} == {}
 
 
+def test_the_release_ships_no_config_folder():
+    """MXU's full update moves away every top-level item the zip has (update.rs): a config/ in the zip would take the
+    user's settings and team options file (#780) with it."""
+    assert not (TREE / "config").exists()
+
+
 def test_maafw_holds_the_fixed_framework_dll():
     """MXU loads MaaFramework from <root>/maafw/."""
     assert (TREE / "maafw" / "MaaFramework.dll").read_bytes() == fixed_framework_dll()

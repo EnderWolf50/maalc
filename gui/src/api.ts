@@ -71,6 +71,25 @@ export function saveSettings(text: string, expected: string | null): Promise<voi
   return Promise.resolve();
 }
 
+/** Keep a settings file of an older version beside the settings file, as it was, before its migration is written back
+ * (#782): config/settings.v<version>.json, written over when there is one (lib.rs save_old_settings). */
+export function saveOldSettings(version: number, text: string): Promise<void> {
+  if (tauri) return invoke("save_old_settings", { version, text });
+  localStorage.setItem(`settings.v${version}.json`, text);
+  return Promise.resolve();
+}
+
+/** The team options file's text (config/team_options.json, #780), null when there is none yet. */
+export const loadTeamOptions = (): Promise<string | null> =>
+  tauri ? invoke("load_team_options") : Promise.resolve(localStorage.getItem("team_options.json"));
+
+/** Write the team options file (a temp file, then a rename, as the settings file): the GUI is its one writer. */
+export function saveTeamOptions(text: string): Promise<void> {
+  if (tauri) return invoke("save_team_options", { text });
+  localStorage.setItem("team_options.json", text);
+  return Promise.resolve();
+}
+
 /** Ask `keepOpen` each time the user closes the window (its ✕, Alt+F4): true keeps it open. Returns the function that stops
  * asking. With a listener, Tauri leaves the closing to the page, which destroys the window (needs core:window:allow-destroy,
  * capabilities/default.json). A plain browser has no window to keep. */

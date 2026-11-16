@@ -44,7 +44,7 @@ def game(monkeypatch):
     monkeypatch.setattr(actions.time, "sleep", lambda s: None)
     patch_all(monkeypatch, "stop", lambda context, reason, line=None, whole_list=False: state.stops.append(reason) or False)
     actions.RUN.clear()
-    actions.RUN["settings"] = {"run": {"auto_accept_terms": True, "auto_download": True}}
+    monkeypatch.setitem(actions.TASK, "options", {"auto_accept_terms": True, "auto_download": True})  # the task's
     actions.STUCK["updates"] = 0
     state.ctx = ctx
     yield state
@@ -94,13 +94,13 @@ def test_no_confirm_while_a_box_stays_unticked(game):
 
 
 def test_terms_off_stops_without_a_tap(game):
-    actions.RUN["settings"]["run"]["auto_accept_terms"] = False
+    actions.TASK["options"]["auto_accept_terms"] = False
     assert not actions.AcceptTerms().run(game.ctx, None)
-    assert game.taps == [] and "auto_accept_terms" in game.stops[0]
+    assert game.taps == [] and "AutoAcceptTerms" in game.stops[0]
 
 
 def test_download_off_stops_without_a_tap(game):
-    actions.RUN["settings"]["run"]["auto_download"] = False
+    actions.TASK["options"]["auto_download"] = False
     box = SimpleNamespace(box=[600, 460, 80, 20])
     assert not actions.ConfirmDownload().run(game.ctx, box)
     assert not actions.AcceptUpdate().run(game.ctx, box)

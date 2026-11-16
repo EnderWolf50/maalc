@@ -1,6 +1,8 @@
 ---
-status: accepted（延續 ADR 0006）
+status: accepted（延續 ADR 0006）；由 ADR 0013 修訂
 ---
+
+> [ADR 0013](0013-run-and-daily-options-in-pi-task-options.md) 修訂：每個任務怎麼跑（次數、隊伍、重打次數、連戰、Daily Count，以及鏡牢的執行選項）改成 PI 的任務選項，不再放在 `settings.json`；「在 PI 選項放次數與隊伍」被否決的理由不適用，隊伍的 case 由設定 GUI 從使用者的隊伍產生。一個日常一個 PI 任務、順序與排程交給 client，照舊。（#776，2026-11-16）
 
 # 每個日常一個 PI 任務，順序與排程交給 client
 

@@ -65,7 +65,7 @@ LIVE_QUEUE = """- The emulator only through the `maalc-live-test` skill's steps 
 
 SETTINGS = """## Run settings
 
-These are the settings of this run. Set each with `bot.py prep --set`; nothing is inherited from an earlier run or brief.
+These are the settings of this run. Set them as the client does, with `bot.py run --option`; nothing is inherited from an earlier run or brief.
 
 | setting | value |
 | --- | --- |
@@ -76,7 +76,7 @@ These are the settings of this run. Set each with `bot.py prep --set`; nothing i
 | recording | {recording} |
 
 {recording_text}
-`bot.py prep --set run.difficulty={difficulty} --set run.runs={runs} --set run.weekly_bonus_use={bonus} {lux_sets}`; check the keys against `agent/settings.schema.json` and confirm the effective values in `run.log` before the bot starts the run.
+`bot.py run {options}` (the options of `assets/interface.json`); confirm the effective values in `run.log` before the bot starts the run: each task's `[run] <task> options:` line and the agent's `options:` line at the task's start.
 """
 
 RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5), one recording kept on from the start of "
@@ -85,12 +85,15 @@ RECORD_YES = ("Record the run: `screen-record` with `--height 720` (skill step 5
 RECORD_NO = ("Do not record this run: the user asked for a run without a recording. Step 8's route and pack "
              "stills come from device screenshots.")
 
-LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation is under way"),
-       "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left")}
+# Each Luxcavation task: its name, what daily mode fights, the prefix of its option names (ExpMode, ExpCount).
+LUX = {"exp": ("EXP", "fights 1 while the pass's Daily row Clear EXP Luxcavation is under way", "Exp"),
+       "thread": ("Thread", "fights n when Daily Bonuses reads n/3 left", "Thread")}
 
 
 def lux(a: argparse.Namespace) -> list[tuple[str, str, str, str, int]]:
-    return [(key, name, daily, getattr(a, f"{key}_mode"), getattr(a, f"{key}_count")) for key, (name, daily) in LUX.items()]
+    """Each Luxcavation task's (option prefix, name, what daily mode fights, mode, count) for this run."""
+    return [(prefix, name, daily, getattr(a, f"{key}_mode"), getattr(a, f"{key}_count"))
+            for key, (name, daily, prefix) in LUX.items()]
 
 
 def lux_rows(a: argparse.Namespace) -> str:
@@ -101,8 +104,13 @@ def lux_rows(a: argparse.Namespace) -> str:
     return "\n".join(rows)
 
 
-def lux_sets(a: argparse.Namespace) -> str:
-    return " ".join(f"--set luxcavation.{key}.mode={mode} --set luxcavation.{key}.count={count}" for key, _, _, mode, count in lux(a))
+def options(a: argparse.Namespace) -> str:
+    """The task options of the run, as bot.py run takes them: the client's option names, the Mirror Dungeon ones (#779)
+    and the Luxcavation ones (#781), whose count the client sends in count mode alone."""
+    mirror = [f"MirrorDifficulty={a.difficulty}", "MirrorRunsLimit=Yes", f"MirrorRuns={a.runs}", f"MirrorWeeklyBonusUse={a.weekly_bonus}"]
+    daily = [pair for prefix, _, _, mode, count in lux(a)
+             for pair in [f"{prefix}Mode={mode}", *([f"{prefix}Count={count}"] if mode == "count" else [])]]
+    return " ".join(f"--option {pair}" for pair in [*mirror, *daily])
 
 
 GOAL = "\n## Goal\n\n(The agent that creates this task writes the goal here: what to prove, the segment each check needs, the acceptance numbers.)\n"
@@ -113,7 +121,7 @@ def build(kind: str, a: argparse.Namespace, rules: str | None) -> str:
     text = COMMON.format(task=a.task, skills=LIVE_SKILLS if live else CODE_SKILLS,
                          live_queue=LIVE_QUEUE.format(task=a.task) if live else "")
     if live:
-        text += "\n" + SETTINGS.format(difficulty=a.difficulty, runs=a.runs, lux_rows=lux_rows(a), lux_sets=lux_sets(a),
+        text += "\n" + SETTINGS.format(difficulty=a.difficulty, runs=a.runs, lux_rows=lux_rows(a), options=options(a),
                                        bonus=a.weekly_bonus, recording=a.recording,
                                        recording_text=RECORD_YES if a.recording == "yes" else RECORD_NO)
     text += GOAL

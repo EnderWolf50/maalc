@@ -2,11 +2,15 @@ import json
 import os
 import signal
 import sys
+import shutil
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import client_override
+from client_options import TEAM_OPTIONS, override
 from live import bot
 
 
@@ -52,15 +56,68 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     src, dst = tmp_path / "main", tmp_path / "test"
     (src / "config").mkdir(parents=True)
     (src / "state").mkdir()
-    (src / "config/settings.json").write_text(json.dumps({"run": {"runs": 5, "difficulty": "hard"}}))
+    # the keys the agent still reads from the settings file: the teams and plans, not a task's options (#779-#781)
+    (src / "config/settings.json").write_text(json.dumps({"language": "zh_tw", "teams": [{"id": "t3", "heal": "none"}]}))
     (src / "config/maa_option.json").write_text("{}")
+    (src / "config/team_options.json").write_text('{"option": {}}')  # the settings GUI's (#780)
     (src / "state/progress.json").write_text("{}")
-    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1", "--set", "run.difficulty=normal",
-              "--set", "run.weekly_bonus_use=none"])
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "language=en_us", "--set", "teams.t3.heal=revive"])
     s = json.loads((dst / "config/settings.json").read_text())
-    assert s["run"] == {"runs": 1, "difficulty": "normal", "weekly_bonus_use": "none"}
+    assert s == {"language": "en_us", "teams": [{"id": "t3", "heal": "revive"}]}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
-    assert json.loads((src / "config/settings.json").read_text())["run"]["runs"] == 5  # the source stays
+    assert (dst / "config/team_options.json").read_text() == '{"option": {}}'  # bot.py run --option ExpTeam= picks from it
+    assert json.loads((src / "config/settings.json").read_text())["language"] == "zh_tw"  # the source stays
+
+
+@pytest.mark.parametrize("key, says", [
+    ("run.runs=1", "bot.py run --option MirrorRunsLimit=Yes --option MirrorRuns=1"),
+    ("run.runs=null", "bot.py run --option MirrorRunsLimit=No"),
+    ("run.difficulty=normal", "bot.py run --option MirrorDifficulty=normal"),
+    ("run.target_floor=10", "bot.py run --option MirrorTargetFloor=10"),
+    ("run.auto_download=false", "bot.py run --option AutoDownload=No"),
+    ("run.stop_when_weekly_bonus_out=true", "bot.py run --option MirrorStopWhenBonusOut=Yes"),
+    ("run.nope=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+    # #781: a daily task's own, a nested count after the case that sends it
+    ("luxcavation.exp.mode=count", "bot.py run --option ExpMode=count"),
+    ("luxcavation.thread.count=5", "bot.py run --option ThreadMode=count --option ThreadCount=5"),
+    ("luxcavation.exp.retries=2", "bot.py run --option ExpRetries=2"),
+    ("luxcavation.thread.consecutive=false", "bot.py run --option ThreadConsecutive=No"),
+    ("charge_enkephalin.count=3", "bot.py run --option ChargeCount=3"),
+    # a key under a moved section that is not an option, and a whole section, or one that holds one: all stop
+    ("run.x.y=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
+    ("charge_enkephalin.nope=1", "the settings' charge_enkephalin section is no longer read: set its options with bot.py run --option"),
+    ("luxcavation.exp.nope=1", "the settings' luxcavation.exp section is no longer read: set its options with bot.py run --option"),
+    ("run={}", "the agent reads run's keys from the client's options: set them with bot.py run --option"),
+    ("luxcavation.thread={}", "the agent reads luxcavation.thread's keys from the client's options: set them with bot.py "
+     "run --option"),
+    ("luxcavation={}", "the agent reads luxcavation.exp's keys from the client's options: set them with bot.py run --option"),
+    # #780: a Luxcavation task's team is its dropdown, a case per team id; null is 「未選擇」
+    ("luxcavation.exp.team=t3", "bot.py run --option ExpTeam=t3"),
+    ("luxcavation.thread.team=null", "bot.py run --option ThreadTeam=none"),
+    ("run.webhook_url=null", "bot.py run --option WebhookUrl=null"),  # none is a team's 「未選擇」 alone
+])
+def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
+    # #779, #780, #781: the agent no longer reads these keys of the settings file; a value set there would not happen
+    src, dst = prep_source(tmp_path), tmp_path / "test"
+    with pytest.raises(SystemExit) as e:
+        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", key])
+    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now: {says}"
+    assert not dst.exists()
+
+
+def test_every_key_prep_refuses_names_an_option_of_the_interface():
+    # the option names come from the agent's schema titles: each is an option assets/interface.json has. The keys are
+    # every one of the three sections settings version 21 dropped (#782), as a v0.1.0 file had them (settings_cases v20).
+    options = client_override.load_interface(REPO / "assets/interface.json")["option"]
+    v20 = json.loads((REPO / "tests/settings_cases.json").read_text(encoding="utf-8"))["v20"]
+    keys = [*(f"run.{k}" for k in v20["run"]),
+            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in v20["luxcavation"][task]),
+            *(f"charge_enkephalin.{k}" for k in v20["charge_enkephalin"])]
+    assert len(keys) == 25
+    for key in keys:
+        where = bot.moved(key, "1")
+        named = [w.split("=")[0] for w in where.split("--option ")[1:]]
+        assert named and all(n in options for n in named), (key, where)
 
 
 def prep_source(tmp_path):
@@ -73,9 +130,13 @@ def prep_source(tmp_path):
 
 
 def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
-    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/
+    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/.
+    # #780: nor a team options file, and one an earlier prep left goes: its teams may not be the source's
     src, dst = prep_source(tmp_path), tmp_path / "test"
+    (dst / "config").mkdir(parents=True)
+    (dst / "config/team_options.json").write_text("{}")
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive"])
+    assert not (dst / "config/team_options.json").exists()
     assert json.loads((dst / "config/settings.json").read_text())["teams"][1]["heal"] == "revive"
     assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
 
@@ -91,7 +152,7 @@ def test_prep_sets_a_list_item_by_its_id(tmp_path):
 def test_prep_stops_on_a_key_it_cannot_set_before_the_install_is_touched(tmp_path, key, says):
     src, dst = prep_source(tmp_path), tmp_path / "test"
     with pytest.raises(SystemExit, match=says):
-        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1", "--set", f"{key}=1"])
+        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t1.heal=revive", "--set", f"{key}=1"])
     assert not dst.exists()
 
 
@@ -99,6 +160,68 @@ def test_awake_holds_the_display_for_the_minutes():
     calls = []
     bot.awake(2, set_state=calls.append, sleep=calls.append)
     assert calls == [bot.ES_CONTINUOUS | bot.ES_SYSTEM_REQUIRED | bot.ES_DISPLAY_REQUIRED, 120, bot.ES_CONTINUOUS]
+
+
+REPO = Path(__file__).resolve().parent.parent
+
+INTERFACE = """{
+    "interface_version": 2,
+    // a whole-line comment, as assets/interface.json has
+    "task": [{"name": "Mirror", "entry": "MirrorEntry", "option": ["Difficulty"]}],
+    "option": {"Difficulty": {"cases": [
+        {"name": "auto", "pipeline_override": {"MirrorEntry": {"attach": {"difficulty": "auto"}}}},
+        {"name": "hard", "pipeline_override": {"MirrorEntry": {"attach": {"difficulty": "hard"}}}}]}}
+}"""
+
+
+def test_plan_posts_each_task_with_the_override_mxu_would_send_and_says_the_values(tmp_path):
+    (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
+    lines = []
+    jobs = bot.plan(tmp_path, ["Mirror", "Mirror"], ["Difficulty=hard"], lines.append)
+    assert jobs == [("Mirror", "MirrorEntry", [{"MirrorEntry": {"attach": {"difficulty": "hard"}}}])] * 2
+    assert lines == ["[run] Mirror options: Difficulty=hard"] * 2
+
+
+def test_plan_posts_every_task_of_the_interface_with_the_global_options_and_its_own():
+    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too. The repo's
+    # assets/ has no team options file (#780): a line says so, as MXU warns, and the team dropdowns have no case.
+    tasks = [t["name"] for t in client_override.load_interface(REPO / "assets/interface.json")["task"]]
+    lines = []
+    jobs = bot.plan(REPO / "assets", tasks, ["MirrorRuns=2"], lines.append)
+    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2", teams=None)) for name in tasks]
+    assert lines[0] == "[run] import config/team_options.json not read (FileNotFoundError): skipped"
+    assert all(line.startswith(f"[run] {name} options: WebhookUrl=(not set) (default), AutoAcceptTerms=Yes (default)")
+               for name, line in zip(tasks, lines[1:]))
+    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[1 + tasks.index("MirrorDungeon")]
+    assert ", ExpTeam=(no case) (default), " in lines[1 + tasks.index("ExpLuxcavation")]
+
+
+def test_run_option_picks_a_team_of_the_team_options_file_the_install_has(tmp_path):
+    # #780: --option ExpTeam=<team id> sends the case of that team, which writes its id into the entry's attach
+    shutil.copy(REPO / "assets/interface.json", tmp_path / "interface.json")
+    (tmp_path / "config").mkdir()
+    shutil.copy(TEAM_OPTIONS, tmp_path / "config/team_options.json")
+    lines = []
+    ((_, entry, array),) = bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=b"], lines.append)
+    assert entry == "ExpLuxcavation" and {"ExpLuxcavation": {"attach": {"team": "b"}}} in array
+    assert ", ExpTeam=b, " in lines[0]
+    with pytest.raises(SystemExit, match="ExpTeam has no case t9"):
+        bot.plan(tmp_path, ["ExpLuxcavation"], ["ExpTeam=t9"], lines.append)
+
+
+@pytest.mark.parametrize("tasks, option, says", [
+    ("Mirror", "Nope=1", "--option Nope=1: interface.json has no option Nope"),
+    ("Mirror", "Difficulty=extreme", "--option Difficulty=extreme: Difficulty has no case extreme (cases: auto, hard)"),
+    ("Mirror,Nope", "Difficulty=hard", "interface.json has no task Nope (tasks: Mirror)"),
+])
+def test_run_stops_before_posting_any_task_on_an_option_case_or_task_the_interface_lacks(tmp_path, tasks, option, says):
+    (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
+    log = tmp_path / "run.log"
+    code = bot.main(["run", "--install", str(tmp_path), "--log", str(log), "--task", tasks, "--option", option])
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert code != 0
+    assert any(line.endswith(f"[run] {says}: stopped before posting any task") for line in lines), lines
+    assert not any("[run] start" in line or " options: " in line for line in lines)  # no device, no task, no values
 
 
 def test_run_tasks_posts_the_list_up_front_and_follows_each_task_by_its_detail():
@@ -121,9 +244,9 @@ def test_run_tasks_posts_the_list_up_front_and_follows_each_task_by_its_detail()
         def running(self):  # the account-level stop: the first task ends it, the rest stay pending
             return self.ticks < 4
 
-        def post_task(self, name):
-            posted.append(name)
-            return Job(name if name not in posted[:-1] else name + "2")
+        def post_task(self, entry, override):
+            posted.append((entry, override))
+            return Job(entry if entry not in [e for e, _ in posted[:-1]] else entry + "2")
 
     class Job:
         def __init__(self, name):
@@ -144,9 +267,10 @@ def test_run_tasks_posts_the_list_up_front_and_follows_each_task_by_its_detail()
         tasker.ticks += 1
 
     lines = []
-    assert bot.run_tasks(tasker, ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"], lines.append, sleep) == [
-        "succeeded", "pending", "none"]
-    assert posted == ["MirrorDungeon", "MirrorDungeon", "ExpLuxcavation"]
+    hard, normal = [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}], [{"MirrorDungeon": {"attach": {"difficulty": "normal"}}}]
+    jobs = [("MirrorDungeon", "MirrorDungeon", hard), ("MirrorDungeon", "MirrorDungeon", normal), ("ExpLuxcavation", "ExpLuxcavation", [])]
+    assert bot.run_tasks(tasker, jobs, lines.append, sleep) == ["succeeded", "pending", "none"]
+    assert posted == [("MirrorDungeon", hard), ("MirrorDungeon", normal), ("ExpLuxcavation", [])]  # each its own override
     assert polls[:3] == ["MirrorDungeon"] * 3  # polled until its detail said done
     assert not tasker.running  # returned (the agent closes) only once the tasker had stopped
     assert [ln.split(" t=")[0] for ln in lines if "status=" in ln] == [

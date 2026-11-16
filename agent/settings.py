@@ -16,9 +16,18 @@ SCHEMA = json.loads((Path(__file__).parent / "settings.schema.json").read_text(e
 CURRENT_VERSION = SCHEMA["properties"]["version"]["const"]
 # v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653)
 OLDEST_VERSION = 20
+# Version 21's: the sections whose 25 values the client's task and global options hold since #779, #780 and #781 (#782).
+MOVED = ("run", "luxcavation", "charge_enkephalin")
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
 # gui/src/model.ts.
-MIGRATIONS = {}
+MIGRATIONS = {20: lambda data: {k: v for k, v in data.items() if k not in MOVED}}
+# NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is still at version n, until the GUI writes it
+# back: what its migration took away and where it went.
+NOTES = {
+    20: "settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task "
+        "and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists the values "
+        "to set in the client",
+}
 
 
 ROOT = Path(__file__).resolve().parent.parent  # resource/ sits under it in a release, under assets/ in the repo
@@ -119,9 +128,11 @@ NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
 
 class SettingsError(Exception):
+    WHAT = "settings"  # what the errors are of, for the first line
+
     def __init__(self, errors):
         self.errors = errors
-        super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))
+        super().__init__(f"Invalid {self.WHAT}:\n" + "\n".join(f"- {e}" for e in errors))
 
 
 def settings_path(root):
@@ -149,10 +160,11 @@ def write_settings(root, data, expected):
     return True
 
 
-def load_settings(root, need_team=False):
+def load_settings(root, need_team=False, notes=None):
     """Return the checked settings dict, or raise SettingsError listing every problem.
 
     need_team: MirrorDungeon's own check, an enabled team (#364); the dailies run without one.
+    notes: a list that gets the NOTES line of each version the file was migrated from, also when it then fails a check.
     """
     path = settings_path(root)
     try:
@@ -162,7 +174,7 @@ def load_settings(root, need_team=False):
     except (OSError, ValueError) as e:
         raise SettingsError([f"{path} is not readable JSON: {e}"]) from None
 
-    data = migrate(data)
+    data = migrate(data, notes)
     errors = [
         f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}"
         for e in sorted(Draft202012Validator(SCHEMA).iter_errors(data), key=lambda e: list(map(str, e.absolute_path)))
@@ -178,7 +190,8 @@ def load_settings(root, need_team=False):
     return data
 
 
-def migrate(data):
+def migrate(data, notes=None):
+    """data at CURRENT_VERSION; notes (a list) gets the NOTES line of each version it went through."""
     version = data.get("version") if isinstance(data, dict) else None
     if not isinstance(version, int) or isinstance(version, bool):
         raise SettingsError([f"version must be an integer, got {version!r}"])
@@ -189,13 +202,16 @@ def migrate(data):
             raise SettingsError([f"settings version {version} is too old: maalc reads version {OLDEST_VERSION} and later; "
                                  "start a new settings file in the settings GUI"])
         data = MIGRATIONS[version](data)
+        if notes is not None and version in NOTES:
+            notes.append(NOTES[version])
         version += 1
         data["version"] = version
     return data
 
 
 def cross_check(data):
-    """The checks spec 04 section 2 says the schema cannot express."""
+    """The checks spec 04 section 2 says the schema cannot express, but the two that cross a task's options with the
+    teams (the target floor's, a Luxcavation task's team): the task's start checks those (task_options, #777)."""
     errors = []
 
     def dupes(path, values, what):
@@ -239,32 +255,11 @@ def cross_check(data):
             if target["s3"] < 1:
                 errors.append(f"{path}/s3: {who} targets {target['s3']} of skill 3, but swaps only raise it from the game's 1")
 
-    target_floor = data["run"]["target_floor"]
-    if target_floor > 5:
-        # floors 6+ open only when every floor of the run was HARD, and the rotation picks from the enabled teams (#385)
-        need = f"but target_floor {target_floor} needs the whole run HARD"
-        if data["run"]["difficulty"] == "normal":
-            errors.append(f"run/difficulty: difficulty is 'normal', {need}")
-        for i, t in enumerate(teams):
-            if not t["enabled"]:
-                continue
-            if t["usage"] == "normal_only":
-                errors.append(f"teams/{i}/usage: team {t['name']!r} is normal_only, {need}")
-            if t["hard_from_floor"] is None:
-                errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} never switches to HARD, {need} (hard_from_floor 1)")
-            elif t["hard_from_floor"] != 1:
-                errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} starts HARD at floor {t['hard_from_floor']}, {need} (hard_from_floor 1)")
-
     for i, gift_list in enumerate(data["gift_lists"]):
         errors.extend(
             f"gift_lists/{i}: list {gift_list['name']!r} has gift {gid} in both want and keep"
             for gid in gift_list["want"] if gid in gift_list["keep"]
         )
-
-    team_ids = {t["id"] for t in teams}
-    for task, opts in data["luxcavation"].items():
-        if opts["team"] is not None and opts["team"] not in team_ids:
-            errors.append(f"luxcavation/{task}/team: team {opts['team']!r} is not in teams")
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")

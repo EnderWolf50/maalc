@@ -6,7 +6,9 @@ Count painted over and the model's drawn in. No Confirm was pressed for it (no L
 after one, and at 10/10, is the model's guess.
 
 The scenarios are the task's paths through its pipeline: a target of 0 (no window opened), the window that closes after
-each Confirm, the one that stays open, the Use Boxes tab. Each decision of the panel is tested in process below (#641).
+each Confirm, the one that stays open, the Use Boxes tab, a target past the game's 10. The client sends the target as
+the task's option ChargeCount (#781); the settings file has no charge_enkephalin since version 21 (#782). Each decision of the panel
+is tested in process below (#641).
 """
 
 import json
@@ -16,7 +18,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from daily_child import ROOT, bind, game_class, interface as interface_json, load, result, run_child, screen
+from daily_child import ROOT, bind, game_class, interface as interface_json, load, posted, result, run_child, said, screen
 from test_settings import VALID
 from agent_patch import patch_all, rebind
 
@@ -44,13 +46,13 @@ def lunacy_tab(used):
 
 
 def child():
-    """Run ChargeEnkephalin in each scenario; print one JSON line {scenario: {succeeded, nodes, clicks, done}}."""
+    """Run ChargeEnkephalin in each scenario; print one JSON line {scenario: {succeeded, nodes, clicks, done, stops}}."""
     actions, resource = load()
 
-    def settings(count):
+    def settings():
         folder = Path(tempfile.mkdtemp())
         (folder / "config").mkdir()
-        (folder / "config" / "settings.json").write_text(json.dumps({**VALID, "charge_enkephalin": {"count": count}}))
+        (folder / "config" / "settings.json").write_text(json.dumps(VALID))
         return folder
 
     class Game(game_class()):
@@ -93,10 +95,14 @@ def child():
         # Confirm leaves the window open: ChargePanel looks at near the same screen 7 times, past the watchdog's SAME_SCREEN
         "window_stays": (10, {"stays": True, "bought": 4}),
         "boxes_tab": (2, {"tab": "boxes"}),  # the same Recharge prompt, no Daily Count
+        "eleven": (11, {}),  # MXU sends it though its verify marks the field; MFAAvalonia refuses the start
     }.items():
-        rebind("ROOT", settings(count))  # the settings, and the stop procedure's evidence and log
+        rebind("ROOT", settings())  # the settings, and the stop procedure's evidence and log
         game.set(**state)
-        out[scenario] = result(tasker.post_task("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}}).wait().get(), game, actions)
+        actions.LOG.clear()
+        array = posted("ChargeEnkephalin", {"ChargeHub": {"timeout": 25000}}, [f"ChargeCount={count}"])
+        out[scenario] = {**result(tasker.post_task("ChargeEnkephalin", array).wait().get(), game, actions),
+                         "stops": said(actions, " stop: ")}
     for shown in ("modules", "lunacy0"):  # the prompt: the Modules tab's own line is not it
         game.set()
         game.screen = shown
@@ -130,6 +136,14 @@ def test_charges_in_a_window_that_stays_open_are_not_a_stuck_screen_and_end_at_1
     assert o["done"] == "Daily Count 10/10, target 10: 6 charged" and o["nodes"].count("ChargePanel") > 5
 
 
+def test_a_target_past_the_games_10_a_day_stops_the_task_before_any_tap():
+    # #781: the agent does not trust the client's verify; the stop procedure, at the entry node
+    o = run_child(__file__)["eleven"]
+    assert (o["succeeded"], o["nodes"], o["clicks"]) == (False, ["ChargeEnkephalin"], [])
+    assert o["stops"] == ["stop: Invalid task options:\n- ChargeCount (count): 11 is greater than the maximum of 10; set it "
+                          "in the options of the ChargeEnkephalin task in the client's task list"]
+
+
 def test_the_use_boxes_tab_has_the_same_prompt_but_no_daily_count_and_is_never_confirmed():
     o = run_child(__file__)["boxes_tab"]
     assert o["succeeded"] and list(CONFIRM) not in o["clicks"] and o["clicks"][-1] == list(CANCEL)
@@ -143,7 +157,8 @@ def test_the_recharge_prompt_is_read_on_the_lunacy_tab_and_not_on_the_modules_ta
 
 def test_charge_enkephalin_is_a_task_of_the_interface():
     interface = interface_json()
-    assert {"name": "ChargeEnkephalin", "label": "$ChargeEnkephalin", "entry": "ChargeEnkephalin"} in interface["task"]
+    assert {"name": "ChargeEnkephalin", "label": "$ChargeEnkephalin", "entry": "ChargeEnkephalin",
+            "option": ["ChargeCount"]} in interface["task"]
 
 
 # ChargePanel in process (#641): the branches the scenarios above once ran in MaaFramework, test_actions.py's

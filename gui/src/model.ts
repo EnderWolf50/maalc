@@ -22,8 +22,7 @@ export interface GraceEffects { base: TextRun[][]; plus?: TextRun[][]; plus2?: T
 /** A grace's names and its effects in each language (#751). */
 export interface Grace { en: string; zh: string; effects: { en: GraceEffects; zh: GraceEffects } }
 
-/** Enum values of a run or team field, in schema order. */
-export const runEnum = (k: keyof typeof P.run.properties) => (P.run.properties[k] as { enum: string[] }).enum;
+/** Enum values of a team field, in schema order. */
 export const teamEnum = (k: keyof typeof TEAM) => (TEAM[k] as { enum: string[] }).enum;
 
 export type Order = string[];
@@ -298,12 +297,6 @@ export interface GiftRef { keyword: string; tier: number; name: string }
 export interface Settings {
   version: number;
   language: "zh_tw" | "en_us";
-  run: {
-    difficulty: string; target_floor: number; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
-    stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number;
-    after_retries: string; webhook_url: string; theme_pack_refresh: string;
-    auto_accept_terms: boolean; auto_download: boolean; keep_dismissed_screens: boolean;
-  };
   deployment_order_plans: DeploymentPlan[];
   starlight_plans: StarlightPlan[];
   theme_pack_plans: ThemePackPlan[];
@@ -311,30 +304,19 @@ export interface Settings {
   teams: Team[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
-  luxcavation: { exp: Luxcavation; thread: Luxcavation };
-  charge_enkephalin: { count: number };
 }
-/** One Luxcavation daily task's options (#366, #431): daily (the battles the day still needs, read in the game) or count
- * (count wins this run), a teams[] id (null: none picked), the defeats fought again. */
-export interface Luxcavation { mode: LuxMode; count: number; team: string | null; retries: number; consecutive: boolean }
-export type LuxMode = "daily" | "count";
-export const LUX_MODES = schema.$defs.luxcavation.properties.mode.enum as LuxMode[];
-// count: EXP 1, Thread 3 (its 3 Daily Bonuses a day; the schema's default is EXP's)
-const newLuxcavation = (count = 1): Luxcavation =>
-  ({ ...defaultsOf(schema.$defs.luxcavation.properties), count }) as unknown as Luxcavation;
 
 const defaultsOf = (props: Record<string, object>) =>
   Object.fromEntries(Object.entries(props).map(([k, v]) => [k, structuredClone((v as { default?: unknown }).default)]));
 
 export const newId = () => crypto.randomUUID();
 
-/** A new settings file: empty lists and the schema defaults for run (spec 04 section 4). */
+/** A new settings file: empty lists (spec 04 section 4). How each task runs is the client's task options (#782). */
 export function newSettings(): Settings {
   return {
-    version: VERSION, language: "zh_tw", run: defaultsOf(P.run.properties) as Settings["run"],
+    version: VERSION, language: "zh_tw",
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], gift_lists: [], teams: [],
-    event_overrides: [], trial_risk_overrides: [], luxcavation: { exp: newLuxcavation(), thread: newLuxcavation(3) },
-    charge_enkephalin: { count: 0 },
+    event_overrides: [], trial_risk_overrides: [],
   };
 }
 
@@ -361,14 +343,23 @@ export function freeName(base: string, taken: string[]) {
 
 /** v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653). */
 export const OLDEST_VERSION = 20;
+/** Version 21's (#782): the sections whose 25 values the client's task and global options hold since #779, #780 and #781
+ * (agent/settings.py MOVED). */
+export const MOVED = ["run", "luxcavation", "charge_enkephalin"];
 /** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file, one for each n from OLDEST_VERSION up; keep in step with
  * agent/settings.py. */
-export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {};
+export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
+  20: (d) => Object.fromEntries(Object.entries(d).filter(([k]) => !MOVED.includes(k))),
+};
 
 /** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
- * (spec 04 section 2). */
-export function parseSettings(text: string): { data: Settings; migrated: boolean; unknown: number } {
+ * (spec 04 section 2). old: the file's version and the file as it read, before its migration (null when it needed none),
+ * for what the caller does with an older file before it writes it back (App.tsx). */
+export function parseSettings(text: string): {
+  data: Settings; unknown: number; old: { version: number; data: Record<string, unknown> } | null;
+} {
   let data = JSON.parse(text);
+  const asRead = data;
   let version = data?.version;
   if (!Number.isInteger(version)) throw new Error(`version must be an integer, got ${JSON.stringify(version)}`);
   if (version > VERSION) throw new Error(`settings version ${version} is newer than this GUI supports (${VERSION}); update maalc`);
@@ -390,7 +381,7 @@ export function parseSettings(text: string): { data: Settings; migrated: boolean
       return cleaned.list;
     }),
   };
-  return { data, migrated, unknown };
+  return { data, unknown, old: migrated ? { version: asRead.version, data: asRead } : null };
 }
 
 /** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a

@@ -1,16 +1,16 @@
 # 04 設定結構
 
-本章定義使用者設定：設定檔放在哪裡、怎麼寫入與檢查，以及每一組設定的欄位，包括執行選項、出戰順序方案、星光方案、主題包方案、飾品清單、隊伍、事件覆寫與試煉分數覆寫；最後是 Agent 與 GUI 寫的其他檔案（`runs.jsonl` 等）。遊戲資料（主題包清單與預設方案、事件覆寫表、試煉表、選路權重）見 [05-game-data.md](05-game-data.md)。
+本章定義使用者設定：設定檔放在哪裡、怎麼寫入與檢查，以及每一組設定的欄位，包括鏡牢任務選項與全域選項、日常的任務選項（都在 client，不在設定檔）、出戰順序方案、星光方案、主題包方案、飾品清單、隊伍、事件覆寫與試煉分數覆寫；最後是 Agent 與 GUI 寫的其他檔案（`runs.jsonl` 等）。遊戲資料（主題包清單與預設方案、事件覆寫表、試煉表、選路權重）見 [05-game-data.md](05-game-data.md)。
 
 ## 1. 總則
 
-- 使用者設定全部放在一份設定檔 `<root>/config/settings.json`，由自製設定 GUI（`gui/`，Tauri 2 + React/TypeScript）寫入，Agent 讀取。理由見 [ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)。（#19，2026-10-14 定案）唯一的例外是隊伍佇列：Agent 在 bot 領到獎勵後把那一隊移到 `teams` 最後，只改順序（第 9 節「輪替」，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。
-- PI V2 只保留控制器、資源與鏡牢任務，鏡牢任務沒有使用者選項。執行仍在 MXU 或 MFAAvalonia：PI 用 `agent.child_exec` 啟動 Agent，Agent 在任務開始時讀設定檔。（#6、#19，2026-10-14 定案）
+- 隊伍、方案、飾品清單與覆寫表放在一份設定檔 `<root>/config/settings.json`，由自製設定 GUI（`gui/`，Tauri 2 + React/TypeScript）寫入，Agent 讀取。理由見 [ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)。（#19，2026-10-14 定案）唯一的例外是隊伍佇列：Agent 在 bot 領到獎勵後把那一隊移到 `teams` 最後，只改順序（第 9 節「輪替」，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。
+- 每個任務怎麼跑的單一的值（難度、目標層數、局數上限……）是 MXU／MFAAvalonia 的**任務選項**，每個任務都用到的 4 個是**全域選項**，定義在手寫的 `interface.json`，值存在 client 的設定裡，隨任務送給 Agent（第 5 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)）。執行仍在 MXU 或 MFAAvalonia：PI 用 `agent.child_exec` 啟動 Agent，Agent 在任務開始時讀任務選項與設定檔。（#6、#19，2026-10-14 定案；#776、#779，2026-11-16）
 - 第一階段（A1）的 GUI 只編輯設定，不執行 bot。之後 GUI 可能也負責執行（A2）；設定檔格式不得因此改變。（#19，2026-10-14 定案）
 - 方案與隊伍數量不限，名稱由使用者自取。方案與隊伍各有一個 id，由 GUI 產生，不隨改名或排序改變；所有引用都用 id。（#19，2026-10-14 定案）
 - `<root>` 是 Agent 的根目錄，用 Agent 程式的 `__file__` 定位，不依賴工作目錄，因為 MFAAvalonia 的獨立資料目錄模式下工作目錄不同。（#6）
 - 設定 GUI 和 Agent 放在同一個發佈目錄，GUI 用自己執行檔所在的位置找到 `<root>`，不讓使用者選。（#19，2026-10-14 定案）
-- 困難或普通、每週獎勵怎麼用這類策略都是設定。Agent 沒有狀態檔。（#8、#501，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
+- 困難或普通、每週獎勵怎麼用這類策略是鏡牢的任務選項（第 5 節），不另外存檔。Agent 沒有狀態檔。（#8、#501，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 
 ## 2. 寫入與檢查
 
@@ -35,6 +35,14 @@
   - 版本 18（#431）：`luxcavation.exp`、`luxcavation.thread` 新增 `mode`（`daily` 每日模式／`count` 自訂次數），從版本 17 遷移時兩個都填 `daily`（使用者 2026-11-05 決定：預設每日模式，遷移的檔也是），`count` 保留給自訂次數用。舊版 Agent 讀到版本 18 會報「比自己新」。
   - 版本 19（#454）：隊伍新增 `skill_replacement`（商店技能替換，見第 9 節），從版本 18 遷移時每支隊伍填預設值：`sinners` 是空的（沒列的罪人維持遊戲原本的 3／2／1），ID Skill Search 關、付 Cost，所以行為和以前完全一樣；每支隊伍各有一份自己的複本。版本 19 還沒發布前改過一次形狀（使用者 2026-11-06 定案）：原本 12 位全列、每位帶 `options`，改成只列要換的罪人、每位帶 `s1_s3_first`；沒有檔案帶著舊形狀，所以版本號不變、直接改遷移。Agent 在記憶體裡遷移，GUI 遷移後寫回；舊版 Agent 讀到版本 19 會報「比自己新」。
   - 版本 20（#385）：執行選項新增 `target_floor`（整局目標層數，5／10／15），從版本 19 遷移時填 5，行為和以前完全一樣。Agent 目前只用它決定自動難度（見第 5 節）；入口與提示的行為之後再接。舊版 Agent 讀到版本 20 會報「比自己新」。
+  - 版本 21（#782）：移除 `run`、`luxcavation`、`charge_enkephalin` 三段，其他不變。這三段的 25 個值改成 MXU／MFAAvalonia 的任務選項與全域選項（第 5、12 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)），Agent 從 #779、#780、#781 起就只從 client 讀。從版本 20 遷移就是刪掉這三段，三段裡的值不檢查（手改壞的也照樣刪掉）。
+    - Agent 在記憶體裡遷移，不寫回。檔案還是版本 20 時，每個任務開始時（讀任務選項之前，選項有錯也記）記一行 `settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task and global options now (#782); open the settings GUI once: it writes the file as version 21 and lists the values to set in the client`，GUI 寫回之前每次都記。
+    - GUI 讀到版本 20 時，在寫回之前依序：
+      1. 舊檔原樣另存成 `config/settings.v20.json`（已有就蓋掉；存不了就顯示讀取失敗，設定檔不動）。
+      2. 用舊檔的 `luxcavation.exp.team`、`luxcavation.thread.team` 產生第一份隊伍選項檔的 `default_case`（第 12 節；隊伍選項檔已經存在時沿用它的）。隊伍選項檔寫不進去時不寫回，設定檔留在版本 20，下次開啟再從舊檔的隊伍產生。
+      3. 寫回版本 21。設定檔沒通過檢查時，等使用者改好按儲存：那次儲存照樣先寫隊伍選項檔、再寫設定檔。隊伍選項檔寫不進去時，這次儲存什麼都不寫，狀態列說原因，下次儲存再試。
+      4. 寫回之後，在分頁上方列出一次搬走的值裡和 client 預設不同的：每項是 client 裡的任務、選項名稱與原本的值（選擇型用 case 的名稱，開關說開或關），webhook 只說「有設定」。巢狀的輸入只在舊值選了它所屬的 case 時才比，例如自訂次數的場數只在模式是自訂次數時列。client 不接受的舊值（手改壞的）不列。全部是預設值時不顯示。使用者按「知道了」收起；寫回之後再打開就不會再列。client 的預設取自 `interface.json`（`gui/src/movedOptions.ts`）。
+    - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `v20`、`migrate_v20`）。舊版 Agent 讀到版本 21 會報「比自己新」。
   - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
@@ -58,7 +66,7 @@
   - 兩支啟用的隊伍指到同一個遊戲內隊伍欄位；
   - 隊伍的 `skill_replacement.sinners` 裡同一位罪人出現兩次，或某位罪人的 `target` 走不到：三個數字加起來不是 6、S1 超過 3、或 S3 少於 1（遊戲牌組是 3／2／1，每種換法都把一張牌往上換，S1 只會變少、S3 只會變多）；
   - 隊伍引用的方案不存在；
-  - `run.target_floor` 大於 5 時（第 6 層起要求這一局每一層都是困難），每一支啟用的隊伍（輪替只用啟用的隊伍）的 `hard_from_floor` 必須是 1（關閉也不行），`usage` 不能是 `normal_only`；執行選項的難度也不能是 `normal`。錯誤訊息指出是哪一隊（`teams/<i>/hard_from_floor`、`teams/<i>/usage`、`run/difficulty`）。（#385）
+  - 目標層數與隊伍的規則不在這裡：目標層數是 client 的任務選項，Agent 在鏡牢任務開始時檢查，GUI 不檢查（第 5 節，#779）。
   - 同一種方案或隊伍的 id 重複，或同一種方案的名稱重複；
   - 事件覆寫或試煉分數覆寫裡，同一個問題文字或試煉名稱出現兩次。
 - GUI 邊改邊做兩層檢查，不用先按儲存：一出現錯誤就標出欄位、分頁標記和分頁內的問題清單，修好就立刻消失；有錯時按儲存被擋下，不寫入。Agent 在任務開始時重做兩層檢查，有任何錯誤就報錯並停止，不開始跑。（#9、#19，2026-10-14 定案；邊改邊標：使用者 2026-11-14 決定，#717）
@@ -70,7 +78,8 @@
 
 ## 3. 介面語言
 
-- GUI 與 PI 都提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`。GUI 的語言存在設定檔的 `language`。PI 只剩少數標籤，`interface.json` 手寫，翻譯放 `interface_zh_tw.json` 與 `interface_en_us.json`。（#18、#19）
+- GUI 提供 `zh_tw` 與 `en_us` 兩種語言，預設 `zh_tw`，存在設定檔的 `language`。`interface.json` 手寫，任務與任務選項的標題、說明和 case 名稱用 `$` 開頭的鍵，翻譯放 `assets/locales/zh_tw.json` 與 `en_us.json`；選項的說明沿用設定視窗原本的文字（#779）。PI 的語言由 client 的介面語言決定。（#18、#19）
+- PI 另有 `zh_cn`：MFAAvalonia 預設簡體中文，且只從介面語言的翻譯檔取字，沒有這個檔就顯示原始鍵。`assets/locales/zh_cn.json` 由 `tools/zh_cn_locale.py` 以 OpenCC t2s 從 `zh_tw.json` 轉出，用詞跟著繁中，不手改；`tests/test_zh_cn_locale.py` 在兩個檔不一致時失敗。（#799）
 - 遊戲名詞保留英文原文，兩種語言都一樣：罪人名、體系、主題包、飾品、獎勵卡種類、試煉。只翻譯 bot 自己的說明文字。（#18）
 - 例外是體系：`zh_tw` 的介面一律寫中文體系名（燒傷、流血、震顫……，`gui/src/i18n.ts` 的 `kw.*`），`en_us` 寫英文；設定檔仍存英文 id。（使用者 2026-11-14 決定）
 - 例外是星光加成：`zh_tw` 的星光卡片以都市零漢化組（LLC）的中文名稱為主、英文名稱為輔，並列出該等級的效果文字；`en_us` 顯示英文名稱和遊戲客戶端英文文字的效果文字，數值與黃字和中文相同（#751）。資料在 `assets/resource/base/data/graces.json`，來源與授權見 NOTICE.md。設定檔與 Agent 仍只用編號與英文名稱。（#52、#751）
@@ -81,7 +90,6 @@
 |---|---|---|---|
 | `version` | 整數 | 設定檔格式的版本 | #19 |
 | `language` | 字串 | `zh_tw`／`en_us`，預設 `zh_tw` | #18 |
-| `run` | 物件 | 執行選項，見第 5 節 | #8、#9、#14、#16 |
 | `deployment_order_plans` | 陣列 | 出戰順序方案，見第 6 節 | #9 |
 | `starlight_plans` | 陣列 | 星光方案，見第 7 節 | #9 |
 | `theme_pack_plans` | 陣列 | 使用者的主題包方案，見第 8 節 | #11 |
@@ -89,39 +97,48 @@
 | `teams` | 陣列 | 隊伍，順序就是隊伍佇列，見第 9 節 | #9、#501 |
 | `event_overrides` | 陣列 | 事件覆寫，見第 10 節 | #11 |
 | `trial_risk_overrides` | 陣列 | 試煉分數覆寫，見第 11 節 | #17、#381 |
-| `luxcavation` | 物件 | 日常的 Luxcavation 任務，見第 12 節 | #366 |
 
 - 鍵名用 snake_case。（#19）
-- 新的設定檔：各陣列都是空的，`run` 用下表的預設值。沒有隊伍，所以 Agent 會報「先設定隊伍」。（#19）
+- 版本 20 的 `run`、`luxcavation`、`charge_enkephalin` 在版本 21 移除：它們的值是第 5、12 節的任務選項（#782）。
+- 新的設定檔：各陣列都是空的。沒有隊伍，所以 Agent 會報「先設定隊伍」。（#19）
 
-## 5. 執行選項（`run`）
+## 5. 鏡牢任務選項與全域選項
 
-03 與 06 章說的「全域」設定就是這一組。（#19）
+這組值不在設定檔，是 MXU／MFAAvalonia 的任務選項（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#776、#779）：鏡牢任務的 10 個在任務清單裡、鏡牢任務旁邊設定；4 個全域選項每個任務都會用到，MXU 在設定頁的「全域選項」區塊設定、所有實例共用一份，MFAAvalonia 在任務清單的全域選項項目設定、每個實例各一份。03 與 06 章說的「全域」設定就是這一組。版本 20 的設定檔的 `run` 有同名的鍵，版本 21 移除（#782）。（#19）
 
-| 欄位 | 鍵 | 類型 | 值 | 預設 | 來源 |
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
 |---|---|---|---|---|---|
-| 難度 | `difficulty` | 字串 | `hard` 困難／`normal` 普通／`auto` 自動 | `auto` | #9、#19 |
-| 目標層數 | `target_floor` | 整數 | `5` 五層（普通／困難）／`10`（INFINITY，`zh_tw` 寫無限）／`15`（EXTREME，`zh_tw` 寫極限）：這局打到第幾層。大於 5 時要求整局困難（見第 2 節的跨物件檢查，GUI 在欄位下提示「需要整局困難」）。v1 在 #434 之前入口仍關、每局打 5 層：選 10／15 時每局都是 `claim_ok` 但不是 `target_reached`，所以不切每週獎勵；GUI 選 10／15 時也在欄位下提示「目前每局仍只打到第 5 層」，#434 接上時拿掉 | `5` | #385 |
-| 限制局數 | `runs` | 開關＋整數 ≥ 1（關 = `null`） | 開：這次啟動要領到獎勵的局數 N；關：不限局數，跑到其他停止條件成立 | 開，1 | #8、#19、#137 |
-| 每週獎勵用法 | `weekly_bonus_use` | 字串 | `none` 不用／`normal` 用在普通／`hard` 用在困難 | `hard` | #9、#19 |
-| 每週獎勵用量 | `weekly_bonus_amount` | 字串 | `one` 每局只用一次／`all` 一次全用 | `all` | #9、#19 |
-| 每週獎勵用完就停 | `stop_when_weekly_bonus_out` | 布林 | 開／關 | 關 | #8、#19 |
-| 星光買不起時 | `starlight_unaffordable` | 字串 | `stop` 停止任務／`skip` 跳過這個加成（見第 7 節） | `skip` | #9、#19 |
-| 全滅重打次數 N | `wipe_retries` | 整數 ≥ 0 | 同一場遭遇戰最多重打幾次 | 2 | #16 |
-| 重打用完後 | `after_retries` | 字串 | `stop` 停止／`forfeit` 放棄這局（已通過第 5 層就在結算視窗 Claim、隊伍照常移到佇列最後，沒過第 5 層則不領獎勵、佇列不動） | `forfeit` | #16、#95 |
-| 失敗通知 webhook | `webhook_url` | 字串 | 停止時送出摘要的網址；空字串 = 不送 | 空字串 | #14 |
-| 每層最多刷新主題包 | `theme_pack_refresh` | 字串 | `none` 不用／`once` 用一次／`all` 全用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
-| 自動同意使用者條款 | `auto_accept_terms` | 布林 | 開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
-| 關掉前先存截圖 | `keep_dismissed_screens` | 布林 | 開：bot 關掉公告、彈窗（Notices、Mailbox、設定選單、說明頁、單鈕彈窗、重試、平行模式提示）或 recovery 按返回之前，先把畫面存到 install 的 `logs/dismissed/<時間>-<節點>.png`，最多留 100 張，只有重試（`RetryPopup`）同一種 60 秒內只存一張，其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制；截圖含帳號畫面（UID 等），只存本機；關：不存 | 開 | #244 |
-| 自動下載與更新 | `auto_download` | 布林 | 開：標題的資料下載對話框按 Confirm，遊戲內的更新對話框按下後重啟遊戲；關：停下並通知 | 開 | #86、2026-10-21 |
+| 難度 | `MirrorDifficulty` | `difficulty` | 選擇：`auto` 自動／`hard` 困難／`normal` 普通 | `auto` | #9、#19 |
+| 目標層數 | `MirrorTargetFloor` | `target_floor` | 選擇：`5` 五層（普通／困難）／`10`（INFINITY，`zh_tw` 寫無限）／`15`（EXTREME，`zh_tw` 寫極限），送整數：這局打到第幾層。大於 5 時要求整局困難（見下面的規則，選項說明也寫了）。v1 在 #434 之前入口仍關、每局打 5 層：選 10／15 時每局都是 `claim_ok` 但不是 `target_reached`，所以不切每週獎勵；選項說明也提示「目前每局仍只打到第 5 層」，#434 接上時拿掉 | `5` | #385 |
+| 限制局數 | `MirrorRunsLimit`，`Yes` 底下巢狀 `MirrorRuns` | `runs_limited`、`runs` | 開關＋整數輸入 ≥ 1：開時這次任務要領到獎勵的局數 N；關時不送 `runs`，不限局數，跑到其他停止條件成立 | 開，1 | #8、#19、#137 |
+| 每週獎勵用法 | `MirrorWeeklyBonusUse` | `weekly_bonus_use` | 選擇：`hard` 用在困難／`normal` 用在普通／`none` 不用 | `hard` | #9、#19 |
+| 每週獎勵用量 | `MirrorWeeklyBonusAmount` | `weekly_bonus_amount` | 選擇：`all` 一次全用／`one` 每局只用一次 | `all` | #9、#19 |
+| 每週獎勵用完就停 | `MirrorStopWhenBonusOut` | `stop_when_weekly_bonus_out` | 開關 | 關 | #8、#19 |
+| 星光買不起時 | `MirrorStarlightUnaffordable` | `starlight_unaffordable` | 選擇：`skip` 跳過這個加成／`stop` 停止任務（見第 7 節） | `skip` | #9、#19 |
+| 全滅重打次數 N | `MirrorWipeRetries` | `wipe_retries` | 整數輸入 ≥ 0：同一場遭遇戰最多重打幾次 | 2 | #16 |
+| 重打用完後 | `MirrorAfterRetries` | `after_retries` | 選擇：`forfeit` 放棄這局（已通過第 5 層就在結算視窗 Claim、隊伍照常移到佇列最後，沒過第 5 層則不領獎勵、佇列不動）／`stop` 停止 | `forfeit` | #16、#95 |
+| 每層最多刷新主題包 | `MirrorThemePackRefresh` | `theme_pack_refresh` | 選擇：`all` 全用／`once` 用一次／`none` 不用：最好的包低於方案的刷新門檻時用的免費刷新次數（見 [03](03-decisions.md#6-主題包) 第 6 節） | `all` | #41、#240 |
+| 失敗通知 webhook | `WebhookUrl`（全域） | `webhook_url` | 文字輸入（`password`，client 遮住並加密存）：停止時送出摘要的網址；空白 = 不送 | 空白 | #14 |
+| 自動同意使用者條款 | `AutoAcceptTerms`（全域） | `auto_accept_terms` | 開關。開：標題畫面的 User Agreement 勾兩個 I agree.、確認都勾上再按 Confirm；關：停下並通知（停止程序） | 開 | #85、2026-10-21 |
+| 自動下載與更新 | `AutoDownload`（全域） | `auto_download` | 開關。開：標題的資料下載對話框按 Confirm，遊戲內的更新對話框按下後重啟遊戲；關：停下並通知 | 開 | #86、2026-10-21 |
+| 關掉前先存截圖 | `KeepDismissedScreens`（全域） | `keep_dismissed_screens` | 開關。開：bot 關掉公告、彈窗（Notices、Mailbox、設定選單、說明頁、單鈕彈窗、重試、平行模式提示）或 recovery 按返回之前，先把畫面存到 install 的 `logs/dismissed/<時間>-<節點>.png`，最多留 100 張，只有重試（`RetryPopup`）同一種 60 秒內只存一張，其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制；截圖含帳號畫面（UID 等），只存本機；關：不存 | 開 | #244 |
+
+送法與讀法：
+
+- 全域選項列在 `interface.json` 的 `global_option`。MXU 只在設定頁的 `setting` 區塊顯示它們，所以 `setting` 的 `option` 也列這 4 個；同一區塊最後放一個空的 `Option`，MFAAvalonia 讀到它（欄位名稱不分大小寫、後面的蓋掉前面的）就跳過這個區塊，否則它每次開始任務都在 `setting` 上丟例外、一個任務都跑不了（#799，ADR 0013）。MFAAvalonia 的全域選項只從 `global_option` 顯示一次。
+- 每個 case（或輸入值）只寫一個鍵，寫進入口節點 `MirrorDungeon` 的 `attach`；全域選項寫進 `GlobalOptions` 節點（`pipeline/options.json`，沒有 `next` 指到它）。兩個 client 都把各選項的 `pipeline_override` 收成陣列送出，MaaFramework 依序套用，`attach` 逐鍵合併，所以各選項的鍵不會互相蓋掉；用 `context.run_task` 開的子任務（GoHome、RecoverL3）也看得到。（#776）
+- 選擇型與開關的預設 case 放第一個，`default_case` 也指它：MFAAvalonia 的任務選項一律從第 0 個 case 開始。之後加 case 只加在最後，MFAAvalonia 存的是索引（ADR 0013）。開關的 case 叫 `Yes`／`No`：MFAAvalonia 看名字畫開關。輸入用 `pipeline_type: "int"` 送整數，`verify` 只用 JavaScript 與 .NET 都認得的簡單正則；MXU 不擋 `verify` 不過的值，打錯的整數讓那一筆整個不送，Agent 不信任 `verify`。巢狀的 `MirrorRuns` 只列在 `Yes` 底下，不另外列進任務的選項。`tests/test_interface_options.py` 檢查這些規則，以及每個 case 與預設經 `tools/client_override.py` 產生的值都通過 Agent 的 schema。
+- 每個任務的入口動作（`TaskStart`，以及繼承它的 `LuxStart`、`ChargeStart`）在點任何東西之前讀一次 `GlobalOptions` 的 `attach`，鏡牢任務再加 `MirrorDungeon` 的，日常任務加自己入口節點的（第 12 節），依 `agent/task_options.schema.json` 檢查型別、範圍和必填；之後所有讀這些值的地方都從那裡拿（`agent/task_options.py`），沒有「讀不到就用設定檔」的退路。任務開始時記一行 `options: ...`，列出讀到的值，webhook 只寫 `(set)`／`(not set)`。（#777、#779）
+- 少一個值、型別或範圍不對：任務在點任何東西之前結束，記一行 `stop: Invalid task options:`，每項寫選項名稱與鍵、收到的值（沒送就是 `not sent`）和要去哪裡改。鏡牢任務失敗結束；日常任務走停止程序。（#779）
+- 目標層數大於 5 時（第 6 層起要求這一局每一層都是困難）：難度不能是 `normal`，每一支啟用的隊伍（輪替只用啟用的隊伍）的 `hard_from_floor` 必須是 1（關閉也不行），`usage` 不能是 `normal_only`。鏡牢任務開始時對設定檔的隊伍檢查，不符就在點任何東西之前失敗，訊息指出選項或隊伍（`MirrorDifficulty`、`teams/<i>/usage`、`teams/<i>/hard_from_floor`）；每局開始前 `PlanRun` 再對當下的隊伍檢查一次，存檔可能改了它們。GUI 看不到目標層數，不在存檔時檢查；隊伍頁在用途旁放一行固定說明。（#385、#777、#779）
 
 規則：
 
-- 自動難度：開局前讀入口頁的 Weekly Bonuses，還有剩就跑困難，用完改普通。`target_floor` 大於 5 時一律跑困難，不看每週獎勵（`run_start.run_difficulty`；使用者 2026-11-08 定案：整局困難，不改打普通）。（#9、#385）
+- 自動難度：開局前讀入口頁的 Weekly Bonuses，還有剩就跑困難，用完改普通。目標層數大於 5 時一律跑困難，不看每週獎勵（`run_start.run_difficulty`；使用者 2026-11-08 定案：整局困難，不改打普通）。（#9、#385）
 - 「限制局數」只算這個任務開始後領到獎勵的局數，放棄獎勵的局不算；不存檔。（#8、#30，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）連續 3 局放棄獎勵就停止任務（[03-decisions.md](03-decisions.md#9-全滅與陣亡) 第 9 節）。（#560）
 - 「每週獎勵用完就停」的剩餘次數直接從畫面讀。（#8）
-- 每週獎勵用法選「用在普通」時，設定 GUI 在欄位下提示「普通局的每週獎勵報酬很少，建議只用在困難」。（#30，2026-10-16 定案）
-- 每週獎勵的剩餘次數從結算視窗讀。已通過第 5 層（`claim_ok`，結算視窗的 `Floor` 後面可到 15）就 Claim，沒過第 5 層放棄獎勵；只有通過層數到達 `target_floor` 的局（`target_reached`）才依用法與用量切開關。只要有一層是困難，這一局就算困難局。規則的全文只在 [03-decisions.md](03-decisions.md) 第 14 節。（#9、#17、#19、#384、#385）
+- 每週獎勵用法的說明寫「普通局的每週獎勵報酬很少，建議只用在困難」。（#30，2026-10-16 定案）
+- 每週獎勵的剩餘次數從結算視窗讀。已通過第 5 層（`claim_ok`，結算視窗的 `Floor` 後面可到 15）就 Claim，沒過第 5 層放棄獎勵；只有通過層數到達目標層數的局（`target_reached`）才依用法與用量切開關。只要有一層是困難，這一局就算困難局。規則的全文只在 [03-decisions.md](03-decisions.md) 第 14 節。（#9、#17、#19、#384、#385）
 - 全滅重打的計數以每場遭遇戰為單位，打贏就歸零。只有重打次數用完、而「重打用完後」為「放棄這局」時，才按 `Accept results` 回到地圖，再從設定面板按 Forfeit 結束這局，然後結算（[03-decisions.md](03-decisions.md#9-全滅與陣亡) 第 9 節）。停止時保存證據。（#16、#19）
 - webhook 在停止時由 Agent 以 JSON POST 送出這局的摘要與證據存放路徑。MFAAvalonia 內建的通知可以另外使用。（#14、#19）
 
@@ -187,7 +204,7 @@
   - 連續點太快（間隔不到約 1 秒）會漏掉輸入。離開再回到星光頁時，選取與等級都重設。
 - 可用的星光是星光頁右上的 `Available`，等於選隊頁該隊的 `Starlight Bonus`，不是持有的 `Owned`。「剩下的星光換成 Cost」對應星光確認對話框的 `Convert Starlight to Cost`；不換時，剩下的星光加進這局的結算獎勵。（實機：captures/01_team_picker.png、captures/04_starlight_confirm.png）
 - 依購買順序購買。（#9、#19）
-- 買不起（`Available` 加 `Owned` 仍不夠）時依執行選項「星光買不起時」處理：`skip` 跳過這張繼續買下一張，`stop` 停止整個任務：方案裡只要有一張買不起，就一張都不買，這局停在星光頁。買不起的加成不降級購買。（#9、#25）
+- 買不起（`Available` 加 `Owned` 仍不夠）時依鏡牢任務選項「星光買不起時」處理：`skip` 跳過這張繼續買下一張，`stop` 停止整個任務：方案裡只要有一張買不起，就一張都不買，這局停在星光頁。買不起的加成不降級購買。（#9、#25）
 
 ## 8. 主題包方案（`theme_pack_plans`）
 
@@ -228,7 +245,7 @@
 | 一般刷新次數 | `shop_refresh_normal` | 整數 ≥ 0 | 每家商店最多用幾次一般刷新；體系刷新次數用完或錢不夠時才用 | 0 | #10、#19、#310 |
 | 治療方式 | `heal` | 字串 | `none` 不治療／`full` 錢 ≥ 100 + 預留時全體治療／`revive` 有罪人陣亡時才治療 | `revive` | #10 |
 | 預留金額 | `reserve_cost` | 整數 ≥ 0 | 所有花費（治療、購買、刷新）後至少留下的錢；全體治療的門檻是錢 ≥ 100 + 預留金額 | 0 | #10、#19 |
-| 存活少於 K 人時結束這局 | `min_alive` | 整數 0–12 | 戰前編隊讀到出戰順序裡沒有灰卡的罪人少於 K 人時，照「重打用完後」（`run.after_retries`）處理；不在出戰順序裡的罪人不算；0 = 不檢查 | 0 | #16、#137、#616 |
+| 存活少於 K 人時結束這局 | `min_alive` | 整數 0–12 | 戰前編隊讀到出戰順序裡沒有灰卡的罪人少於 K 人時，照鏡牢任務選項的「重打用完後」（`MirrorAfterRetries`）處理；不在出戰順序裡的罪人不算；0 = 不檢查 | 0 | #16、#137、#616 |
 | 開局連續防禦回合數 | `guard_turns` | 整數 0–5 | 鏡牢每局最前面 N 個戰鬥回合（跨場累計）全員防禦，經驗本和紐本則是每場戰鬥的前 N 回合；焦點戰不防禦、不扣回合數；0 = 不用 | 0 | #52 |
 | 可以持有 White Gossypium | `allow_white_gossypium` | 布林 | 關：選飾品時排在最後（只剩它才選，不拿隨機試煉）、商店不買，已持有的優先當合成／出售材料（[03](03-decisions.md) 第 12、13 節） | 開 | #90 |
 | 出售的最高階級 | `sell_max_tier` | 整數 1–5 | 比它高階的飾品不出售；4 = V 階永遠不賣 | 4 | #161 |
@@ -240,7 +257,7 @@
 規則：
 
 - 出戰順序與星光可以引用方案，也可以選「自訂」，直接填只給這支隊伍用的值。把自訂的值存成方案、或從方案複製成自訂，由 GUI 提供。（#19，2026-10-14 定案）
-- 「困難局從第 N 層起轉困難」只在這一局是困難局時有效。關閉時這隊打普通；只有執行選項的難度明確設成「困難」時以全域為準，整局每層都困難。難度是「自動」時，就算還有每週獎勵，輪到這隊的局也是普通局（`run_start.team_difficulty`；#137，2026-10-18 定案）。第 N 層之前用普通。任何一層選了困難後，之後都不能切回普通。普通局第 N 層（N > 1）能不能切到困難還沒實測；不能的話這個欄位會移除（[03-decisions.md](03-decisions.md#未決)）。（#9、#19）
+- 「困難局從第 N 層起轉困難」只在這一局是困難局時有效。關閉時這隊打普通；只有鏡牢任務選項的難度明確設成「困難」時以任務選項為準，整局每層都困難。難度是「自動」時，就算還有每週獎勵，輪到這隊的局也是普通局（`run_start.team_difficulty`；#137，2026-10-18 定案）。第 N 層之前用普通。任何一層選了困難後，之後都不能切回普通。普通局第 N 層（N > 1）能不能切到困難還沒實測；不能的話這個欄位會移除（[03-decisions.md](03-decisions.md#未決)）。（#9、#19）
 - 獎勵卡比對不到任何類型時選第一張。（#11）
 - 「存活少於 K 人時結束這局」的說明必須提醒：需要罪人陣亡的隊伍，治療方式應設為「不治療」。（#16）
 - 0 有特殊意義、使用者看不懂的數字欄位，GUI 一律做成「開關＋數字」，關閉時數字欄反灰：限制局數、困難局從第 N 層起轉困難。單純 0 就表示「不做」的欄位（商店刷新上限、預留金額、全滅重打次數、存活少於 K 人）維持數字。（#137，2026-10-18 定案）
@@ -301,40 +318,63 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 - 同一個試煉在設定檔與資料檔都有時，以設定檔為準。（#19）名稱不在試煉表裡的覆寫不起作用。（#381）
 - 欄位名仍是 `trial_risk_overrides`／`risk`：版本 16 只改了值的意思與範圍，沒有改鍵名。（#381）
 
-## 12. 日常的 Luxcavation（`luxcavation`）
+## 12. 日常的任務選項與 Luxcavation 的隊伍
 
-GUI 的「日常」分頁編輯。要跑哪些日常、依什麼順序，由 MXU／MFAAvalonia 的任務清單決定（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)），分頁上方寫明這點和建議順序。（#362、#366）
+經驗本（PI 任務 `ExpLuxcavation`）、紐本（`ThreadLuxcavation`，#368）與狂氣換腦啡肽（`ChargeEnkephalin`，#373）怎麼跑，是 MXU／MFAAvalonia 的任務選項，在任務清單裡、各任務旁邊設定（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#781）。送法、讀法與值不對時的停法同第 5 節：每個選項寫進任務入口節點的 `attach`，入口動作（`LuxStart`、`ChargeStart`）在點任何東西之前依 `agent/task_options.schema.json` 檢查、記一行 `options: ...`；少值或值不對時走停止程序。要跑哪些日常、依什麼順序，由任務清單決定（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）。（#362、#366）
 
-`exp` 是經驗本（PI 任務 `ExpLuxcavation`），`thread` 是紐本（`ThreadLuxcavation`，#368），兩個的欄位一樣：
+經驗本與紐本的選項相同，名稱分別以 `Exp`、`Thread` 開頭；隊伍見下面的「經驗本與紐本的隊伍」：
 
-| 欄位 | 鍵 | 類型 | 值 | 來源 |
-|---|---|---|---|---|
-| 模式 | `mode` | `daily`／`count` | `daily`（每日模式，預設）：打今天還沒打的，當天已贏的（手動打的也算）不再打；經驗本看通行證 Daily 的 `Clear EXP Luxcavation` 那一列，進行中打 1 場、完成不打；紐本看 Daily Bonuses，剩 n 次打 n 場；讀不到就不打；不用 `count`。`count`（自訂次數）：這次打贏 `count` 場，不讀今天打過幾場（經驗本不走通行證頁）（[spec 03 第 15 節](03-decisions.md)） | #429、#431 |
-| 次數 | `count` | 整數 ≥ 1 | 只有自訂次數模式用：這次要打贏的場數。新檔與遷移的預設：經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定）。GUI 在每日模式把這格停用 | #366、#431 |
-| 隊伍 | `team` | 字串或 `null` | `teams[]` 的 id：用它的遊戲隊伍編號、出戰順序和 `guard_turns`，不必啟用；`null` 是還沒選，任務開始時停止 | #366 |
-| 戰敗重打 | `retries` | 整數 ≥ 0 | 每一場輸掉後重打的次數（打贏就重算，同鏡牢的全滅重打），預設 0 | #366 |
-| 連戰 | `consecutive` | 布林 | 開（預設）：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431） | #375、#429 |
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 模式 | `ExpMode`／`ThreadMode`，`count` 底下巢狀 `ExpCount`／`ThreadCount` | `mode` | 選擇：`daily` 每日模式：打今天還沒打的，當天已贏的（手動打的也算）不再打；經驗本看通行證 Daily 的 `Clear EXP Luxcavation` 那一列，進行中打 1 場、完成不打；紐本看 Daily Bonuses，剩 n 次打 n 場；讀不到就不打；不送 `count`。`count` 自訂次數：這次打贏 `count` 場，不讀今天打過幾場（經驗本不走通行證頁）（[spec 03 第 15 節](03-decisions.md)） | `daily` | #429、#431 |
+| 次數 | `ExpCount`／`ThreadCount` | `count` | 整數輸入 ≥ 1，只在模式是 `count` 時送：這次要打贏的場數 | 經驗本 1、紐本 3（每天 3 次 Daily Bonuses，2026-10-27 使用者決定） | #366、#431 |
+| 戰敗重打 | `ExpRetries`／`ThreadRetries` | `retries` | 整數輸入 ≥ 0：每一場輸掉後重打的次數（打贏就重算，同鏡牢的全滅重打） | 0 | #366 |
+| 連戰 | `ExpConsecutive`／`ThreadConsecutive` | `consecutive` | 開關。開：進場時把 Consecutive Battle 設成「剩下的場數，最多 10」，一場打完，一場 ×N 算 N 場；超過 10 就先 ×10 再開下一場打剩下的。關：一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431） | 開 | #375、#429 |
 
-- `team` 指向不存在的隊伍是交叉檢查錯誤。（#366）
-- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3。（#366、#368）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
-- 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
+狂氣換腦啡肽花 Lunacy（先扣免費的，再扣付費的），所以預設不做：
 
-### 狂氣換腦啡肽（`charge_enkephalin`）
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 次數 | `ChargeCount` | `count` | 整數輸入 0–10：當天的目標 Daily Count：畫面上的 Daily Count（手動換的也算）已到就不換，否則換到 Daily Count = `count`；讀不到就不換（[spec 03 第 16 節](03-decisions.md)）。0 時任務一開始就成功結束，不開視窗、不碰 Use Lunacy 頁。遊戲一天最多 10 次（`chance` 9999） | 0 | #373、#429 |
 
-PI 任務 `ChargeEnkephalin`，GUI 的「日常」分頁編輯。它花 Lunacy（先扣免費的，再扣付費的），所以預設不做。（#373）
-
-| 欄位 | 鍵 | 類型 | 值 | 來源 |
-|---|---|---|---|---|
-| 次數 | `count` | 整數 0–10 | 當天的目標 Daily Count：畫面上的 Daily Count（手動換的也算）已到就不換，否則換到 Daily Count = `count`；讀不到就不換（[spec 03 第 16 節](03-decisions.md)）。預設 0，0 時任務一開始就成功結束，不開視窗、不碰 Use Lunacy 頁。遊戲一天最多 10 次（`chance` 9999） | #373、#429 |
-
-- 版本 11 遷移到 12 時加上 `{"count": 0}`。（#373）
+- `verify` 與 Agent 的範圍相同：次數 `^[1-9][0-9]*$`，戰敗重打 `^(0|[1-9][0-9]*)$`，`ChargeCount` `^([0-9]|10)$`。MXU 只把不符的欄位標紅、照樣送出，所以 `ChargeCount` 填 11 時，任務在入口記 `ChargeCount (count): 11 is greater than the maximum of 10` 並走停止程序。（#781）
+- 狂氣換腦啡肽不讀設定檔：設定檔讀不到時照常跑，和沒有自己選項的日常任務一樣。經驗本與紐本要讀 `teams`（選的隊伍要在裡面），讀不到就走停止程序。（#781、#780）
 - 價格怎麼核對：[spec 03 第 16 節](03-decisions.md)。
+
+### 經驗本與紐本的隊伍：任務選項與隊伍選項檔
+
+經驗本與紐本的隊伍是任務選項 `ExpTeam`、`ThreadTeam`，一個下拉選單，選項是設定視窗裡的隊伍（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)，#780）。
+
+| 欄位 | 選項（`interface.json`） | 寫進 `attach` 的鍵 | 類型與值 | 預設 | 來源 |
+|---|---|---|---|---|---|
+| 隊伍 | `ExpTeam`／`ThreadTeam` | `team` | 選擇，case 由隊伍選項檔提供（見下）：`teams[]` 的 id，用它的遊戲內隊伍欄位（`game_team`）、出戰順序和 `guard_turns`，不必啟用；「未選擇」不送值 | 「未選擇」；MXU 上第一次產生的檔案用設定檔原本選的隊伍 | #366、#780 |
+
+- **檢查**：`LuxStart` 在任務開始時和其他選項一起讀，點任何東西之前不符就走停止程序，記一行 `stop: Invalid task options:`：
+  - 沒送值（選了「未選擇」，或選單是空的）：`ExpTeam (team): no team picked; pick one in the options of the ExpLuxcavation task in the client's task list (an empty list: create the team in the settings GUI, save, then reopen the client)`。
+  - 送來的 id 不在設定檔的 `teams` 裡（隊伍已刪除）：`ExpTeam (team): team '<id>' was deleted in the settings GUI; pick another in the options of the ExpLuxcavation task in the client's task list`。紐本相同，選項是 `ThreadTeam`。
+  - GUI 看不到 client 選的隊伍，存檔時不檢查。
+- **佔位定義**：`interface.json` 的 `ExpTeam`、`ThreadTeam` 有標題和說明（說明寫「先在設定視窗建立隊伍，存檔後重開 client」），`cases` 是空的。頂層的 `import` 引入 `config/team_options.json`。檔案不存在時兩個 client 都只記一行警告、照常載入，下拉選單是空的，任務什麼都不送。
+- **隊伍選項檔** `config/team_options.json`：設定視窗寫（`gui/src/teamOptions.ts`）。兩個選項各一份完整定義，和佔位定義相同，只換 `cases` 與 `default_case`：MXU 的引入是整個選項取代，MFAAvalonia 只換 `cases`。
+  - 第 0 個 case 是「未選擇」（名稱 `none`，標籤 `$LuxTeam_none`），不送值。
+  - 之後每支隊伍一個 case：名稱是隊伍 id，標籤是隊伍名稱加 `TEAMS #N`（`隊伍 A（TEAMS #3）`，英文介面 `Team A (TEAMS #3)`），override 寫 `team: <id>`。
+  - **只往後加**：MFAAvalonia 存的是 case 的索引，MXU 存名稱，插入、重排或刪除會讓選好的值悄悄變成別隊或「未選擇」。新隊伍加在最後；順序是這個檔原本的順序，不跟隊伍佇列走（Agent 每次領獎都改佇列，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。刪掉的隊伍保留它的 case，標籤後面加「（已刪除）」（英文 ` (deleted)`），override 仍送它的 id，Agent 就停下。改名、改 `TEAMS #N` 只改標籤。標籤用設定視窗當下的語言。
+  - 第一次產生時（檔案不存在，或讀不懂），`default_case` 是遷移前的版本 20 設定檔裡那個任務的 `luxcavation.<task>.team`（同一次開啟裡遷移過的才有；版本 21 的檔沒有，就是「未選擇」），它不在 `teams` 裡或沒選也是「未選擇」；之後沿用檔案裡的。MXU 對還沒存過值的任務用 `default_case`；MFAAvalonia 的任務選項一律從第 0 個 case 開始，停在「未選擇」。
+  - 存檔成功後與啟動時（設定檔通過檢查時）產生，內容有變才寫，寫法和設定檔一樣：先寫暫存檔再改名（`save_team_options`）。沒有檔案也沒有隊伍時不寫。內容變了，狀態列說一次：「隊伍清單已更新：重新開啟 MXU／MFAAvalonia 後，任務選項的隊伍下拉選單才會更新。」存檔時是「已儲存。」接著這句。
+  - 不做重新整理按鈕：兩個 client 執行中都不重讀 `interface.json`，改了隊伍要重開 client。
+- `tools/install.py` 重新組裝時不動 `config/`；發佈的 zip 不含 `config/`（`tests/test_release_zip.py`），否則 MXU 的完整更新會把使用者的整個 `config/` 移走。實機工具的 `bot.py prep` 會一併複製來源 install 的隊伍選項檔（來源沒有就刪掉目的地的），`bot.py run --option ExpTeam=<隊伍 id>` 從它的 case 選；`prep --set luxcavation.<task>.team` 停下並指向 `--option`。
+
+### 版本 20 的 `luxcavation` 與 `charge_enkephalin`
+
+- 版本 20 的設定檔 `luxcavation` 的 `mode`、`count`、`team`、`retries`、`consecutive` 與 `charge_enkephalin.count`，Agent 從 #780、#781 起不再讀，改讀上面的任務選項；版本 21 移除這兩段（#782）。設定視窗遷移版本 20 的檔時，用舊檔的 `luxcavation.<task>.team` 當第一份隊伍選項檔的 `default_case`，並列出和 client 預設不同的值（第 2 節的版本 21）。
+- 版本 11 遷移到 12 時加上 `exp` 和 `thread`，經驗本 `{"count": 1, "team": null, "retries": 0}`，紐本 `count` 是 3，以及 `charge_enkephalin` `{"count": 0}`。（#366、#368、#373）版本 12 遷移到 13 時各加 `consecutive: true`。（#375）版本 17 遷移到 18 時各加 `mode: "daily"`。（#431）
+- 場數與 `retries` 由 #367 接上：打贏這個模式算出的場數結束，戰敗在 `retries` 內重打（[spec 03 第 15 節](03-decisions.md)）；戰敗訊號待截圖。
 
 ## 13. 其他檔案
 
 | 檔案 | 寫入者 | 內容 | 用途 | 來源 |
 |---|---|---|---|---|
 | `<root>/config/settings.json` | GUI；Agent 只改 `teams` 的順序 | 本章的使用者設定；`teams` 的順序就是隊伍佇列 | Agent 在任務開始時讀取；領獎後把那一隊移到最後 | #19、#501 |
+| `<root>/config/team_options.json` | GUI | 隊伍選項檔：`ExpTeam`、`ThreadTeam` 的完整定義，每支隊伍一個 case（第 12 節） | `interface.json` 引入，client 啟動時讀，成為經驗本與紐本的隊伍下拉選單 | #780 |
 | `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算每層時間上限；不用於接續判斷 | #14、#19 |
 | `<root>/logs/evidence/<時間>/` | Agent | 停止時保存的證據 | 除錯與通知 | #14、#19 |
 

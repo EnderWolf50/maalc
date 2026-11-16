@@ -14,9 +14,11 @@ import pack_cover
 import recovery
 import run_start
 import settlement
+import task_options
 from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, grid_moved, hands_back, log, number, ocr, page_guard, restart_floor_clock, run_team,
-                     screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then, text, until)
+                     finish, grid_moved, hands_back, log, number, ocr, option, options, page_guard,
+                     restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
+                     text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
 from team_queue import pick_team
@@ -49,7 +51,8 @@ REFRESH_BRIGHT, REFRESH_LIT_MIN = 120, 100
 
 @AgentServer.custom_action("PlanRun")
 class PlanRun(CustomAction):
-    """Entry page, no run under way: check settings, pick difficulty and team, press Enter (spec 03 sections 1, 2).
+    """Entry page, no run under way: check settings, pick difficulty and team by the task's options, press Enter (spec
+    03 sections 1, 2).
 
     Nothing left to do (the run count reached, the weekly bonuses out, no enabled team, none for the difficulty) ends
     the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False), and
@@ -59,7 +62,11 @@ class PlanRun(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         try:
             settings = load_settings(ROOT)
-        except SettingsError as e:
+            run = options()
+            # TaskStart checked the teams of the task's start: a save since may have changed them
+            if errors := task_options.target_floor_errors(run, settings["teams"]):
+                raise task_options.OptionsError(errors)
+        except SettingsError as e:  # an OptionsError too
             log(f"stop: {e}")
             return False
         if not any(t["enabled"] for t in settings["teams"]):
@@ -67,7 +74,6 @@ class PlanRun(CustomAction):
         hsv_v = screen(context)[285:297].max(axis=2)  # V of HSV
         # Live: a filled slot reads V ~240, an empty one ~5 (2026-10-15).
         weekly = sum(hsv_v[:, x:x + 30].mean() > 40 for x in WEEKLY_SLOTS)
-        run = settings["run"]
         if settlement.runs_done(TASK["runs"], run["runs"]):
             return finish(context, f"{TASK['runs']} of {run['runs']} runs done")
         if why := settlement.forfeits_stop(TASK.get("forfeits", [])):
@@ -265,7 +271,7 @@ class BuyStarlight(CustomAction):
         if available is None:
             return stuck("could not read Available on the starlight page")
         owned = re.match(r"\D*(\d+)", text(context, image, STARLIGHT_OWNED))
-        unaffordable = run["settings"]["run"]["starlight_unaffordable"]
+        unaffordable = options()["starlight_unaffordable"]
         # Back from MirrorHub (#118): Available already has the graces selected so far taken off.
         paid = sum(run_start.grace_price(n, level) for n, level in enumerate(plan["levels"], 1)
                    if level != "none" and grace_selected(image, n))
@@ -697,14 +703,14 @@ class PickThemePack(CustomAction):
             TASK.pop("modules", None)  # a run is under way: Claim will take 5, the next one reads the Modules again (#369)
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
-            STUCK["ladder"].floor(floor, run["settings"].get("run", {}).get("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
+            STUCK["ladder"].floor(floor, option("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
 
         plan, file_packs, event_packs, file_art = theme_pack_plan(run["settings"], run["team"])
         packs, names, title_art = run_start.floor_reads(file_packs, plan["weights"], file_art, floor)  # #387: the floor's packs
-        setting = run["settings"]["run"]["theme_pack_refresh"]
+        setting = options()["theme_pack_refresh"]
         prev = None
         for used in range(10):  # a greyed button or its `0/m` ends it (#319, #482); unread, a refresh that changes nothing does
             # Three alike pairs in a row (#774): two let the deal's last small swing through. The 2026-11-10 recording

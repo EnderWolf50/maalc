@@ -18,6 +18,7 @@ import shop
 from settings import gift_tables
 from test_settings import DEFAULT_SKILLS
 from agent_patch import patch_all
+from client_options import send_defaults
 
 
 REAL_GUARD = actions.page_guard
@@ -50,8 +51,12 @@ def context(clock, monkeypatch, tmp_path):
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
     ctx.tasker.controller.post_shell.return_value.wait.return_value.get.return_value = ""  # focus not read
     ctx.tasker.stopping = False
+    send_defaults(ctx)  # what a client sends with a task: an entry action reads every option's default (#779)
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
+    # as at launch, put back after the test: no options read (a test that needs them sets them, #777), and no task left
+    # under way for the next test's TaskStart to pick up (test_task_chain's entry_page starts one)
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.STUCK["flag"] = None
     monkeypatch.setitem(actions.STUCK, "halted", None)  # no account-level stop this launch; a test's own is undone after
     yield ctx

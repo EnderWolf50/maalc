@@ -9,7 +9,7 @@ after 3 s with no recovery: what is tested is how the task gets to the main wind
 import json
 import time
 
-from daily_child import bind, game_class, inside, load, result, run_child, screen
+from daily_child import bind, game_class, inside, load, posted, result, run_child, screen
 
 WINDOW_TAB = (790, 608, 70, 64)
 SCREENS = {"lux": "LuxThread.png", "drive": "Drive.png", "main": "MainWindow.png"}
@@ -36,7 +36,7 @@ def child():
     tasker = bind(resource, game)
     override = {"MirrorHub": {"timeout": 3000, "on_error": []}, "GoToMirrorEntry": {"enabled": False}}
     began = time.monotonic()
-    out = {"error": None, **result(tasker.post_task("MirrorDungeon", override).wait().get(), game, actions),
+    out = {"error": None, **result(tasker.post_task("MirrorDungeon", posted("MirrorDungeon", override)).wait().get(), game, actions),
            "seconds": time.monotonic() - began}
     print(json.dumps(out))
 

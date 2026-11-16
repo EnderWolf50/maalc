@@ -31,7 +31,8 @@ def bgr(path):
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    monkeypatch.setitem(actions.TASK, "options", run)
     patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
@@ -49,7 +50,8 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default", "enabled": True}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    monkeypatch.setitem(actions.TASK, "options", run)
     patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
@@ -193,7 +195,8 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
     team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default", "enabled": True, "usage": "any"}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": {"difficulty": "normal", "target_floor": 5}, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    monkeypatch.setitem(actions.TASK, "options", {"difficulty": "normal", "target_floor": 5})
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
     assert run_start_actions.SelectTeam().run(context, argv())
@@ -202,7 +205,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
 
 
 def test_starlight_enter_waits_for_the_confirm_dialog(context, clock, monkeypatch):
-    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
+    monkeypatch.setitem(actions.TASK, "options", {"starlight_unaffordable": "skip"})
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: {"priority": [], "levels": []})  # nothing to buy
     page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): "63",
                    (480, 210, 320, 35): lambda clicks, looks: "Continue with selected effects?" if clicks and looks >= 3 else None})
@@ -228,7 +231,7 @@ def starlight_page(context, available, owned):
 
 
 def buy_grace_1(monkeypatch, unaffordable):
-    actions.RUN["settings"] = {"run": {"starlight_unaffordable": unaffordable}}
+    monkeypatch.setitem(actions.TASK, "options", {"starlight_unaffordable": unaffordable})
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: {"priority": [1], "levels": ["base"] + ["none"] * 9})
 
 
@@ -252,7 +255,7 @@ def test_a_grace_tap_waits_for_available_to_drop_not_a_fixed_1_s(context, clock,
 
 def test_a_grace_level_tap_waits_for_the_price_not_a_fixed_1_s(context, clock, monkeypatch):
     # #58: the + button's tap slept 1 s before the price was read again.
-    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
+    monkeypatch.setitem(actions.TASK, "options", {"starlight_unaffordable": "stop"})
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: {"priority": [1], "levels": ["plus"] + ["none"] * 9})
     page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): lambda clicks, looks: "30" if clicks < 2 else "10",
                    tuple(run_start_actions.STARLIGHT_OWNED): "0", (250, 149, 80, 28): lambda clicks, looks: "10" if clicks == 0 else "20",
@@ -327,8 +330,9 @@ def test_the_gift_search_switch_is_waited_for_not_slept_on(context, clock):
 
 
 def test_a_planned_run_plays_the_main_keyword_of_the_teams_list(context, clock, monkeypatch):
-    settings = {**listed("Bleed"), "run": {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}}
+    settings = listed("Bleed")
     patch_all(monkeypatch, "load_settings", lambda root, need_team=False: settings)
+    monkeypatch.setitem(actions.TASK, "options", {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5})
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
@@ -401,7 +405,7 @@ def test_refusing_the_search_waits_for_the_forgo_dialog(context, clock):
 
 
 def test_the_unspent_starlight_is_kept_for_the_search_unless_it_is_converted(context, clock, monkeypatch):
-    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "skip"}}
+    monkeypatch.setitem(actions.TASK, "options", {"starlight_unaffordable": "skip"})
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: {"priority": [], "levels": [], "convert_leftover": True})
     page(context, {tuple(run_start_actions.STARLIGHT_AVAILABLE): "63", (660, 395, 320, 90): "Any unspent Starlight will be added"})
     run_start_actions.BuyStarlight().run(context, argv())
@@ -439,7 +443,8 @@ def pack_page(context, monkeypatch, floor, setting, mode, covers=None, spent_aft
     no arguments, takes every screenshot instead, and grey_after then does nothing."""
     context.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = shot or \
         (lambda: (PACK_GREY if grey_after is not None and len(taps) >= grey_after else PACK_LIT).copy())
-    actions.RUN.update(settings={"run": {"theme_pack_refresh": setting}}, team={"hard_from_floor": 0}, difficulty=None)
+    actions.RUN.update(settings={}, team={"hard_from_floor": 0}, difficulty=None)
+    monkeypatch.setitem(actions.TASK, "options", {"theme_pack_refresh": setting})
     plan = {"weights": {}, "threshold": 0, "unlisted": -5, "event_packs": mode}
     art = {"Hello Bus": "S.E.A."}
     packs = {"S.E.A.": {"N": [2], "H": [2, 3]}, "Extreme Pack": {"X": True}}
@@ -659,7 +664,8 @@ def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypa
 def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"run": run, "teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    monkeypatch.setitem(actions.TASK, "options", run)
     patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
@@ -915,7 +921,8 @@ def test_a_new_floor_tells_the_ladder_the_floor_and_the_run_target(context, monk
     monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
     seen = []
     monkeypatch.setattr(actions.STUCK["ladder"], "floor", lambda floor, target: seen.append((floor, target)))
-    actions.RUN.update(difficulty=None, floor=5, settings={"run": {"target_floor": 15}})
+    actions.RUN.update(difficulty=None, floor=5, settings={})
+    monkeypatch.setitem(actions.TASK, "options", {"target_floor": 15})
     run_start_actions.PickThemePack().run(context, None)
     assert seen == [(6, 15)]
 
@@ -940,7 +947,7 @@ def test_a_theme_pack_page_gone_is_handed_back_untouched(context, guarded, monke
 def starlight(monkeypatch, available):
     """A starlight page planning graces 1 and 2 at base (10 each), Available reading available in turn (the last for
     good: the grace tap's wait reads it too, #58), nothing owned."""
-    actions.RUN["settings"] = {"run": {"starlight_unaffordable": "stop"}}
+    monkeypatch.setitem(actions.TASK, "options", {"starlight_unaffordable": "stop"})
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: {"priority": [1, 2], "levels": ["base", "base"] + ["none"] * 8})
     reads = list(available)
     patch_all(monkeypatch, "read_available", lambda context, image: reads.pop(0) if len(reads) > 1 else reads[0])
