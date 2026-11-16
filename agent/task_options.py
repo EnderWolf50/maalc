@@ -58,12 +58,17 @@ def check(node, values):
             for k in schema["properties"] if k in found]
 
 
+def sent(context, node):
+    """node's attach as MaaFramework's context has it: what the client sent over the bundle's own."""
+    return (context.get_node_data(node) or {}).get("attach") or {}
+
+
 def read(context, task):
-    """task's options as the client sent them: the attach of nodes(task) as MaaFramework's context has them, the
-    schema's keys only. OptionsError names each option that is missing or wrong."""
+    """task's options as the client sent them: the attach of nodes(task) (sent), the schema's keys only. OptionsError
+    names each option that is missing or wrong."""
     values, errors = {}, []
     for node in nodes(task):
-        got = (context.get_node_data(node) or {}).get("attach") or {}
+        got = sent(context, node)
         errors += check(node, got)
         values.update({k: got[k] for k in SCHEMA["$defs"][node]["properties"] if k in got})
     if errors:

@@ -141,6 +141,17 @@ def test_a_change_of_data_only_reloads_nothing(base, remote):
     assert tasker.calls == []
 
 
+@pytest.mark.parametrize("files, fields, reloaded", [
+    ({**NEW, "image/t.png": b"png-2"}, {}, True),
+    ({**NEW, "image/t.png": b"png-1"}, {}, False),  # data/ only
+    ({**NEW, "image/t.png": b"png-2"}, {"template": rp.TEMPLATE + 1}, False),  # image/ skipped
+])
+def test_the_update_says_whether_it_reloaded_the_bundle(base, remote, files, fields, reloaded):
+    # #779: TaskStart then takes the task's entry node, which the client's options override, from the reloaded bundle
+    publish(remote, files, "2026.11.16", **fields)
+    assert ru.update(base, lambda line: None, Tasker()) is reloaded
+
+
 def test_a_refused_clear_leaves_the_bundle_loaded_so_the_old_files_are_not_loaded_again(base, remote):
     # clear() refused (a load is still running): the resource was not touched, the files go back and nothing is reloaded
     publish(remote, {**NEW, "image/t.png": b"png-2", "pipeline/p.json": b"{}"}, "2026.11.16")

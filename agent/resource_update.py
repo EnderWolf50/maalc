@@ -2,8 +2,9 @@
 take the files maalc-resource published since, so a new event table, template or pipeline reaches the task that found it.
 
 `update(base, log, tasker)` is the one entry; it never raises, and a failure leaves the files as they were, with one log line
-saying why. It says whether it reloaded the bundle, for TaskStart to rebuild the task's entry node (#779). The steps, one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan
-what changes for each part of the package (`plan_part`), download it into a staging folder and verify it (`stage`), swap it
+saying why; it says whether it reloaded the bundle, for TaskStart to rebuild the task's entry node (#779). The steps,
+one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan what changes for
+each part of the package (`plan_part`), download it into a staging folder and verify it (`stage`), swap it
 in all or nothing and write the new manifest last (`swap`), then reload the bundle and clear what the old files left in memory (`refresh`).
 
 `APPLIED` names the parts this build applies, each group by the version that covers it. An update of `image/` or `pipeline/`
@@ -405,11 +406,12 @@ def run_update(base, log, tasker):
         stands = refresh(plans, tasker, base, undo, log)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+    reloads = needs_reload(plans)
     if stands:
         changed, removed = sum(len(p.changed) for p in plans), sum(len(p.removed) for p in plans)
-        reloaded = ", bundle reloaded" if needs_reload(plans) else ""
-        log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed{reloaded}")
-    return needs_reload(plans)
+        log(f"{PREFIX}{local['version']} -> {remote['version']}: {changed} changed, {removed} removed"
+            + (", bundle reloaded" if reloads else ""))
+    return reloads
 
 
 def write_manifest_only(base, manifest, staging):

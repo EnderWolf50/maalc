@@ -513,14 +513,13 @@ def stop(context, reason, line=None, whole_list=False):
     return False
 
 
-def follow_reload(context, entry):
-    """The task's entry node from the bundle the update just loaded (#772), with the attach the client sent (#779). The
-    client posts its options as an override of the entry node, and MaaFramework builds that node, next included, from
-    the bundle loaded at the post: after a reload the task would go on from the old pipeline's next."""
+def rebuild_entry(context, entry):
+    """The task's entry node again, from the bundle the update just loaded (#772), with the attach the client sent
+    (#779). The client posts its options as an override of the entry node, and MaaFramework builds that node, next
+    included, from the bundle loaded at the post: after a reload the task would go on from the old pipeline's next."""
     node = context.tasker.resource.get_node_data(entry)
     if node:  # none: the reload failed and left no bundle, and the task fails at its next node anyway
-        sent = (context.get_node_data(entry) or {}).get("attach") or {}
-        context.override_pipeline({entry: {**node, "attach": sent}})
+        context.override_pipeline({entry: {**node, "attach": {**node.get("attach", {}), **task_options.sent(context, entry)}}})
 
 
 @AgentServer.custom_action("TaskStart")
@@ -534,7 +533,7 @@ class TaskStart(CustomAction):
 
     Then, before any tap, it reads the task's options the client sent (TASK["options"], #777, #779): what options() gives
     every reader. One missing or wrong ends the task there (unsent). A subclass's own start goes on from begin(). An
-    update before them that reloaded the bundle (#772) hands the task its entry node from the new one (follow_reload)."""
+    update before them that reloaded the bundle (#772) hands the task its entry node from the new one (rebuild_entry)."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if STUCK["halted"]:
@@ -549,8 +548,9 @@ class TaskStart(CustomAction):
         STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
-        if resource_update.update(data_dir().parent, log, context.tasker):  # before the line below: it names the package this task runs on
-            follow_reload(context, argv.node_name)
+        # before the line below: it names the package this task runs on
+        if resource_update.update(data_dir().parent, log, context.tasker):
+            rebuild_entry(context, argv.node_name)
         log(resource_package.log_line(data_dir().parent))
         if argv.node_name == "MirrorDungeon" and (note := migrate_cursor(ROOT, address(context))):
             log(note)
