@@ -263,7 +263,8 @@ def test_the_files_come_over_https_too(base, remote, network):
     publish(remote, NEW, "2026.11.16")
     run(base)
     assert local_files(base)["data/a.json"] == NEW["data/a.json"]
-    assert network.seen[0][0] == "main/manifest.json" and ("2026.11.16/data/a.json", 60) in network.seen
+    # the timeout is a deadline minus the clock, so it is 60 only up to float rounding
+    assert network.seen[0][0] == "main/manifest.json" and ("2026.11.16/data/a.json", pytest.approx(60)) in network.seen
 
 
 @pytest.mark.parametrize("trouble, reason", [
