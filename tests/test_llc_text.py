@@ -67,16 +67,11 @@ def test_the_english_effects_mark_up_what_the_client_s_english_text_colours_yell
     assert english("Perfected Possibility", "plus")[3] == [("Upon entry, gain 1 Dark Vestige and 1 ", False), ("Faint Vestige", True), (" each", False)]
 
 
-def catalog_ids():
-    """Every gift the settings GUI shows, in its catalog's order (gui/src/giftCatalog.ts CATALOG)."""
-    recipes = DATA["gift_recipes"]
-    return [g["id"] for g in DATA["gift_search"]["gifts"]] + [
-        g["id"] for k in ("gifts", "materials", "extra_gifts", "vestiges") for g in recipes[k]]
-
-
 def test_every_gift_the_gui_shows_has_its_effect_in_english_and_chinese_as_runs():
+    # every gift of the GUI's catalog, in its order; gui/src/GiftPopover.test.tsx checks the catalog itself has each one
+    import llc_text
     effects, keywords = DATA["gift_effects"]["effects"], DATA["gift_effects"]["keywords"]
-    assert list(effects) == [str(i) for i in catalog_ids()]
+    assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 466
     for gid, e in effects.items():
         assert set(e) == {"en", "zh"}, gid
         for lang, runs in e.items():
@@ -147,12 +142,19 @@ def test_the_chinese_is_converted_run_by_run_and_must_read_as_the_text_converted
         llc_text.effect_runs("A[K]", {"K": "B"}, convert)
 
 
-@pytest.mark.parametrize("text", ["<style=highlight>Unique</style>", "<b>bold</b>", "<color=#5bffde>new</color>", "<sprite name=X>"])
+@pytest.mark.parametrize("text", ["<style=highlight>Unique</style>", "<b>bold</b>", "<B>bold</B>", "<color=#5bffde>new</color>",
+                                  "<sprite name=X>", "a</color>", "a</i>"])
 def test_markup_the_gui_does_not_draw_is_an_error(text):
-    # a new mark in a new client: the tool stops rather than drop it (as effect_lines does for a grace's colours)
+    # a new mark in a new client, or a closing tag with nothing open: the tool stops rather than drop it (as effect_lines does
+    # for a grace's colours). TextMeshPro reads its tags in any case, so <B> is a tag too.
     import llc_text
     with pytest.raises(ValueError, match="markup"):
         llc_text.effect_runs(f"heal 3 SP {text}", {})
+
+
+def test_a_tag_in_capitals_is_read_as_the_game_reads_it():
+    import llc_text
+    assert llc_text.effect_runs("a <I><COLOR=#A16A3B>b</COLOR></I>", {}) == ["a ", {"text": "b", "i": True, "colour": "Neutral"}]
 
 
 def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_the_wiki():
@@ -226,7 +228,7 @@ def test_the_gift_effects_match_the_llc_release_and_the_client_text_when_both_ar
     unpack = local_dir("unpack")
     if not (zip_path.is_file() and (unpack / "raw/Localize/en").is_dir() and (unpack / llc_text.BUFFS).is_dir()):
         pytest.skip("release zip or unpacked client data missing")
-    keywords, effects = llc_text.gift_effects(zipfile.ZipFile(zip_path), unpack, catalog_ids())
+    keywords, effects = llc_text.gift_effects(zipfile.ZipFile(zip_path), unpack, llc_text.catalog_ids())
     assert (keywords, effects) == (DATA["gift_effects"]["keywords"], DATA["gift_effects"]["effects"])
 
 

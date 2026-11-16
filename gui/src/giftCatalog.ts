@@ -34,18 +34,20 @@ export const GIFT_BY_ID = new Map(CATALOG.map((g) => [g.id, g]));
 /** Whether the list may want it: the shop sells it or fusing makes it. */
 export const wantable = (g: CatalogGift) => g.kind === "buyable" || g.kind === "fusion";
 
-/** A colour of a gift's effect text, by its name in the game's ColorCode table (a keyword's buffType; Neutral for flavour text). */
+/** A colour of a gift's effect text, by its name in the game's ColorCode table (a status word's buffType; Neutral for flavour
+ * text). */
 export type Colour = "Positive" | "Negative" | "Neutral";
-/** A run of a gift's effect text (gift_effects.json, tools/llc_text.py effect_runs): plain text, a keyword the game draws as its
- * icon and its name, or italic or coloured text (flavour text). */
+/** A run of a gift's effect text (gift_effects.json, tools/llc_text.py effect_runs): plain text, a status word (狀態詞, the
+ * game's `[tag]`, by its id) the game draws as its status icon and its name, or italic or coloured text (flavour text). */
 export type EffectRun = string | { kw: string } | { text: string; i?: boolean; colour?: Colour };
-/** A keyword of the effect texts: the colour its name is printed in, its status icon (buf_icons/<icon>.webp) and its names. */
-export interface Keyword { colour: Colour; icon: string; en: string; zh: string }
-export const KEYWORDS = effects.keywords as Record<string, Keyword>;
+/** A status word of the effect texts (gift_effects.json `keywords`; not a gift's keyword, its 體系): the colour its name is
+ * printed in, its status icon (buf_icons/<icon>.webp) and its names. */
+export interface StatusWord { colour: Colour; icon: string; en: string; zh: string }
+export const STATUS_WORDS = effects.keywords as Record<string, StatusWord>;
 const EFFECTS = effects.effects as Record<string, { en: EffectRun[]; zh: EffectRun[] }>;
 /** The gift's effect text in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764). */
 export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
-/** A keyword's status icon URL (gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). */
+/** A status word's icon URL (gui/src/buf_icons/<icon>.webp, tools/buf_icons.py). */
 export const bufIconUrl = webpFolder(import.meta.glob<string>("./buf_icons/*.webp", { eager: true, query: "?url", import: "default" }));
 
 /** The icon's URL (assets/.../gift_icons/<id>.webp). */

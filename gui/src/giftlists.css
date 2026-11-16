@@ -121,7 +121,10 @@
  * its tier at the top left, its keyword's icon at the bottom right. */
 .gl-tip-icon { position: relative; flex: none; width: 52px; height: 52px; padding: 3px; background: var(--art-top); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel; }
 .gl-tip-icon > img:first-child { width: 100%; height: 100%; object-fit: contain; }
-.gl-tip-icon .gl-tierno { position: absolute; left: -6px; top: -6px; font-size: 12px; line-height: 16px; padding: 0 5px; letter-spacing: 0.06em; }
+.gl-tip-tier {
+  position: absolute; left: 3px; top: 1px; font: 700 17px/1 var(--font-display); letter-spacing: 0.04em; color: var(--art-tier);
+  text-shadow: 0 0 2px #000, 0 1px 1px #000; /* over the gift's art, as the game's numeral */
+}
 .gl-tip-kwi { position: absolute; right: -7px; bottom: -6px; width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 1px 1px #000a); }
 .gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; flex: 1; line-height: 1.35; }
 .gl-tip-head > div > b { font-size: 14.5px; }

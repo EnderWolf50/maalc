@@ -156,19 +156,21 @@ def _runs(text, names):
         else:
             runs.append({"text": piece, **style})
 
-    for piece in re.split(r"(<noparse>.*?</noparse>|<[^>]+>|\[[^\]<]+\])", text, flags=re.S):
-        tag = re.match(r"</?([a-z-]+)\b", piece) if piece.startswith("<") else None
-        if piece.startswith("<noparse>"):
+    # TextMeshPro reads its tags in any case: each is matched lower-cased
+    for piece in re.split(r"(<noparse>.*?</noparse>|<[^>]+>|\[[^\]<]+\])", text, flags=re.S | re.I):
+        low = piece.lower() if piece.startswith("<") else ""
+        tag = re.match(r"</?([a-z-]+)\b", low)
+        if low.startswith("<noparse>"):
             add(piece[len("<noparse>"):-len("</noparse>")])
-        elif piece == "<i>":
+        elif low == "<i>":
             italic += 1
-        elif piece == "</i>":
+        elif low == "</i>" and italic:
             italic -= 1
-        elif piece.startswith("<color=") and piece[len("<color="):-1].lower() in COLOURS:
-            colours.append(COLOURS[piece[len("<color="):-1].lower()])
-        elif piece == "</color>":
+        elif low.startswith("<color=") and low[len("<color="):-1] in COLOURS:
+            colours.append(COLOURS[low[len("<color="):-1]])
+        elif low == "</color>" and colours:
             colours.pop()
-        elif tag and tag[1] in TMP_TAGS:
+        elif tag and tag[1] in TMP_TAGS:  # a new mark, or a closing tag with nothing open
             raise ValueError(f"markup the GUI does not draw: {piece} in {text}")
         elif piece.startswith("[") and piece[1:-1] in names:
             runs.append({"kw": piece[1:-1]})

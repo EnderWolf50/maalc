@@ -50,6 +50,7 @@
    * and the backup one #22fde3 (the formation screen), the name #fbc500 (the identity list). The deployed plate's word is
    * lighter than the game's (it reads 4.6:1 on the plate's brightest line, #bc4512), the backup's 4.8:1 on its (#0d687a). */
   --art-shade: #0b0806; --art-top: #2c2219; --art-dep: #ffb904; --art-bak: #22fde3; --art-name: #fbc500;
+  --art-tier: #fcc700; /* a gift's tier numeral on its icon's frame (the game's gift panel, #764) */
   --dep-ink: #fff0cc; --dep-rim: #9f441f; --bak-ink: #81f1ff; --bak-rim: #18675a;
   /* Grace of the Star is the game's own page (#719, #726): its textures draw the cards, the + / ++ plates and glyphs, the
    * price icon, the Enhance All panel and the page (gui/src/grace_card/, tools/grace_icons.py). What sits on them is the

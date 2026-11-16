@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, KEYWORDS, keywordIconUrl, packName } from "./giftCatalog";
+import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, STATUS_WORDS, keywordIconUrl, packName } from "./giftCatalog";
 import giftCss from "./giftlists.css?raw";
 import { GiftListsTab } from "./GiftLists";
 import { EffectText, place, usedText } from "./GiftPopover";
@@ -11,7 +11,7 @@ import { queue } from "./gifts";
 import { TEXT } from "./i18n";
 import indexCss from "./index.css?raw";
 import { GIFT_KEYWORDS, SEARCH_GIFTS, defaultGorder, newSettings, type GiftList, type Settings } from "./model";
-import { cssValueOf, renderEditor } from "./testing";
+import { contrast, cssValueOf, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 type Text = keyof typeof zh;
@@ -25,13 +25,6 @@ const tokenIn = (theme: "dark" | "light", name: string) => {
   const find = (text: string) => text.match(new RegExp(`${name}:\\s*#([0-9a-f]{6})\\b`, "i"))?.[1];
   const hex = (theme === "light" && find(lightCss.slice(0, lightCss.indexOf("\n}")))) || find(darkCss)!;
   return hex.match(/../g)!.map((c) => parseInt(c, 16) / 255);
-};
-// WCAG 2's contrast ratio of two sRGB colours.
-const linear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const luminance = (rgb: number[]) => rgb.map(linear).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
-const contrast = (a: number[], b: number[]) => {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
 };
 
 const mine = (patch: Partial<GiftList> = {}): GiftList => ({
@@ -319,8 +312,8 @@ describe("hover card: the gift's effect as the game's gift panel prints it (#764
 
   test("a Positive keyword in the game's yellow, a Neutral one in its brown; in Chinese the keyword's Chinese name", () => {
     render(<EffectText runs={[{ kw: "Breath" }, "、", { kw: "Aggro" }]} zh />);
-    expect(style(screen.getByText(KEYWORDS.Breath.zh), "color")).toBe("var(--kw-pos)");
-    expect(style(screen.getByText(KEYWORDS.Aggro.zh), "color")).toBe("var(--kw-neu)");
+    expect(style(screen.getByText(STATUS_WORDS.Breath.zh), "color")).toBe("var(--kw-pos)");
+    expect(style(screen.getByText(STATUS_WORDS.Aggro.zh), "color")).toBe("var(--kw-neu)");
   });
 
   test("flavour text is italic, in the game's Neutral brown when the text colours it", () => {
@@ -343,8 +336,8 @@ describe("hover card: the gift's effect as the game's gift panel prints it (#764
     const p = await hover(r, 9125);
     const effect = effectOf(popover()!);
     expect(effect).toHaveTextContent(/^使用增加沉淪強度，施加沉淪層數或施加特殊沉淪/);
-    expect(within(effect).getAllByText(KEYWORDS.Sinking.zh).length).toBeGreaterThanOrEqual(3);
-    expect(effect.querySelectorAll("img")).toHaveLength(within(effect).getAllByText(KEYWORDS.Sinking.zh).length);
+    expect(within(effect).getAllByText(STATUS_WORDS.Sinking.zh).length).toBeGreaterThanOrEqual(3);
+    expect(effect.querySelectorAll("img")).toHaveLength(within(effect).getAllByText(STATUS_WORDS.Sinking.zh).length);
     expect(effect.compareDocumentPosition(p.getByRole("group", { name: zh["gl.tip_set_group"] })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -370,7 +363,7 @@ describe("hover card: the gift's effect as the game's gift panel prints it (#764
     const r = await open([mine()]);
     await hover(r, 9125);
     const icon = popover()!.querySelector(".gl-tip-icon")!;
-    expect(within(icon as HTMLElement).getByText("III")).toBeInTheDocument();
+    expect(style(within(icon as HTMLElement).getByText("III"), "color")).toBe("var(--art-tier)"); // the game's yellow numeral
     expect(icon.querySelector(`img[src="${keywordIconUrl("Sinking")}"]`)).not.toBeNull();
     await hover(r, 9302); // The Measure of Frost: Keywordless, no keyword icon
     const plain = popover()!.querySelector(".gl-tip-icon")!;
