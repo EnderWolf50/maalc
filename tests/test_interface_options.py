@@ -5,8 +5,6 @@ option that sends it. Each value goes through tools/client_override.py, the over
 import itertools
 import json
 import re
-from pathlib import Path
-
 import pytest
 
 import client_override
@@ -40,6 +38,11 @@ def errors(task, *pairs):
     return [e for node in task_options.nodes(task) for e in task_options.check(node, nodes.get(node, {}))]
 
 
+def shown_under(task, key):
+    """The NAME=VALUE of the cases that show key among task's options: none for an option of the task's own list."""
+    return [f"{p}={c['name']}" for p in task_keys(task) for c in OPTIONS[p].get("cases", []) if key in c.get("option", [])]
+
+
 def values(key):
     """The values --option takes for option key: each case, or each input's default."""
     opt = OPTIONS[key]
@@ -62,7 +65,7 @@ def test_every_task_posted_with_the_defaults_has_every_value_the_agent_needs(tas
 @pytest.mark.parametrize("task, key", [(t, k) for t in TASKS for k in task_keys(t)])
 def test_every_case_and_default_of_every_option_passes_the_agents_schema(task, key):
     # each value with every other option at its default, and under a nested option, its parent's case that shows it
-    parents = [f"{p}={c['name']}" for p in task_keys(task) for c in OPTIONS[p].get("cases", []) if key in c.get("option", [])]
+    parents = shown_under(task, key)
     for value in values(key):
         assert errors(task, *parents, f"{key}={value}") == [], (key, value)
 
@@ -138,7 +141,7 @@ def test_an_input_the_client_lets_through_is_one_the_agent_takes(key, input):
     if input.get("pipeline_type") != "int":
         return
     task = next(t for t in TASKS if key in task_keys(t))
-    parents = [f"{p}={c['name']}" for p in task_keys(task) for c in OPTIONS[p].get("cases", []) if key in c.get("option", [])]
+    parents = shown_under(task, key)
     for text in ["0", "1", "2", "9", "10", "99", "01", "007", "-1", "", "1.5", " 1", "abc"]:
         if re.fullmatch(input["verify"], text):
             assert errors(task, *parents, f"{key}={text}") == [], text
@@ -181,14 +184,3 @@ def test_global_options_is_a_node_no_next_names():
 def test_the_entry_nodes_the_options_write_are_the_tasks_entries():
     for node in SCHEMA:
         assert node == task_options.GLOBAL_NODE or TASKS[node]["entry"] == node
-
-
-def test_the_options_line_names_no_webhook():
-    line = task_options.line({"webhook_url": "http://secret.invalid/", "auto_download": True})
-    assert line == "options: webhook_url (set), auto_download=true" and "secret" not in line
-    assert task_options.line({"webhook_url": ""}) == "options: webhook_url (not set)"
-
-
-def test_the_agent_reads_its_schema_from_its_own_folder():
-    # install.py copies agent/ whole (its json files with it): the schema ships beside task_options.py
-    assert (Path(task_options.__file__).parent / "task_options.schema.json").is_file()

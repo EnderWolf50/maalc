@@ -81,6 +81,18 @@ def start(context, monkeypatch, task, *options, drop=()):
     return ok, stops, [line.split(" ", 1)[1] for line in actions.LOG]
 
 
+def test_the_options_line_names_no_webhook():
+    # #779: the webhook's address stays out of the log, as the client keeps a password input out of its own
+    line = task_options.line({"webhook_url": "http://secret.invalid/", "auto_download": True})
+    assert line == "options: webhook_url (set), auto_download=true" and "secret" not in line
+    assert task_options.line({"webhook_url": ""}) == "options: webhook_url (not set)"
+
+
+def test_the_agent_reads_its_schema_from_its_own_folder():
+    # install.py copies agent/ whole (its json files with it): the schema ships beside task_options.py
+    assert (Path(task_options.__file__).parent / "task_options.schema.json").is_file()
+
+
 def invalid(errors, what="task options"):
     """The words of an OptionsError (a SettingsError: what "settings") of errors."""
     return f"Invalid {what}:\n- " + "\n- ".join(errors)
@@ -258,7 +270,7 @@ SCENARIOS = {
 }
 
 
-def posted(task, options, drop):
+def sent_without(task, options, drop):
     """The override a client posts task with, without the entries that write a key of drop."""
     return [o for o in override(task, *options)
             if not any(k in node.get("attach", {}) for node in o.values() for k in drop)]
@@ -297,7 +309,7 @@ def child():
         game.clicks, game.keys = [], []
         before = evidence()
         actions.LOG.clear()
-        array = posted(task, options, drop)
+        array = sent_without(task, options, drop)
         if name == "values":  # the hub's first pass is ReadBack, which ends the task
             array.append({"MirrorHub": {"next": ["ReadBack"]}, "ReadBack": {"action": "Custom", "custom_action": "ReadBack"}})
         out[name] = {**result(run_task(tasker, name, task, array), game, actions),

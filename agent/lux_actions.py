@@ -45,8 +45,8 @@ class LuxStart(TaskStart):
     def unread(self, context, error):
         return stop(context, str(error))
 
-    def options(self, argv, settings):
-        return task_options.luxcavation(TASK["options"], settings, json.loads(argv.custom_action_param))
+    def settings_options(self, argv, settings):
+        return task_options.luxcavation(settings, json.loads(argv.custom_action_param))
 
     def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
         key = json.loads(argv.custom_action_param)

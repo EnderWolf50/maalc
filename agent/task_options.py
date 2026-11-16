@@ -16,6 +16,8 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from settings import SettingsError
+
 SCHEMA = json.loads((Path(__file__).parent / "task_options.schema.json").read_text(encoding="utf-8"))
 GLOBAL_NODE = "GlobalOptions"  # assets/resource/base/pipeline/options.json
 GLOBAL = tuple(SCHEMA["$defs"][GLOBAL_NODE]["properties"])  # what every task reads: the webhook, the title's dialogs, the kept screens
@@ -24,10 +26,9 @@ WHERE = {GLOBAL_NODE: "the client's global options (MXU: Settings; MFAAvalonia: 
 SECRET = {"webhook_url"}  # the options line says only whether it is set
 
 
-class OptionsError(Exception):
-    def __init__(self, errors):
-        self.errors = errors
-        super().__init__("Invalid task options:\n" + "\n".join(f"- {e}" for e in errors))
+class OptionsError(SettingsError):
+    """What the task cannot run on among its options: a SettingsError, which every reader already stops on."""
+    WHAT = "task options"
 
 
 def nodes(task):
@@ -81,15 +82,15 @@ def options(task, values):
     return {**out, "runs": values["runs"] if values["runs_limited"] else None}
 
 
-def luxcavation(values, settings, key):
-    """A Luxcavation task's options (key "exp" or "thread"): the global ones read, and luxcavation.<key>'s mode, count,
-    team, retries and consecutive from the settings file."""
-    return {**values, **settings["luxcavation"][key]}
+def luxcavation(settings, key):
+    """A Luxcavation task's options the settings file still holds (key "exp" or "thread"): luxcavation.<key>'s mode,
+    count, team, retries and consecutive."""
+    return dict(settings["luxcavation"][key])
 
 
-def charge(values, settings):
-    """ChargeEnkephalin's options: the global ones read, and count, charge_enkephalin.count, from the settings file."""
-    return {**values, "count": settings["charge_enkephalin"]["count"]}
+def charge(settings):
+    """ChargeEnkephalin's option the settings file still holds: count, charge_enkephalin.count."""
+    return {"count": settings["charge_enkephalin"]["count"]}
 
 
 def target_floor_errors(options, teams):

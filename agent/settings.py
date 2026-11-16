@@ -119,9 +119,11 @@ NO_TEAM = "No enabled team: set up a team in the settings GUI first."
 
 
 class SettingsError(Exception):
+    WHAT = "settings"  # what the errors are of, for the first line
+
     def __init__(self, errors):
         self.errors = errors
-        super().__init__("Invalid settings:\n" + "\n".join(f"- {e}" for e in errors))
+        super().__init__(f"Invalid {self.WHAT}:\n" + "\n".join(f"- {e}" for e in errors))
 
 
 def settings_path(root):

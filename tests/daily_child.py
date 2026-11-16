@@ -152,10 +152,10 @@ def bind(resource, game):
     return tasker
 
 
-def posted(task, own=None, *options):
-    """What a client posts task with (client_options: these NAME=VALUE options, every other its default), then the
-    test's own override: a task's entry action ends it on an option the client did not send (#779)."""
-    return [*client_override(task, *options), *([own] if own else [])]
+def posted(task, own=None):
+    """What a client posts task with (client_options, every option at its default), then the test's own override: a
+    task's entry action ends it on an option the client did not send (#779)."""
+    return [*client_override(task), *([own] if own else [])]
 
 
 def run_task(tasker, scenario, entry, override=None):

@@ -41,7 +41,7 @@ def send(context, task, *pairs, drop=()):
     for values in nodes.values():
         for key in drop:
             values.pop(key, None)
-    context.get_node_data.side_effect = lambda name: {"attach": nodes[name]} if name in nodes else DEFAULT
+    answer(context, nodes)
 
 
 def send_defaults(context):
@@ -50,4 +50,9 @@ def send_defaults(context):
     for task in interface()["task"]:
         for name, values in attach(override(task["name"])).items():
             nodes.setdefault(name, {}).update(values)
+    answer(context, nodes)
+
+
+def answer(context, nodes):
+    """context's get_node_data gives each node of nodes its attach, any other node the mock's own answer."""
     context.get_node_data.side_effect = lambda name: {"attach": nodes[name]} if name in nodes else DEFAULT
