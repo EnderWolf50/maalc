@@ -1,6 +1,8 @@
 ---
-status: accepted（取代 ADR 0003 的輪替游標，修訂 ADR 0006）
+status: accepted（取代 ADR 0003 的輪替游標，修訂 ADR 0006）；「清單順序就是佇列」由 ADR 0014 取代
 ---
+
+> [ADR 0014](0014-team-queue-apart-from-team-list.md) 取代：隊伍佇列從設定檔版本 22 起存在 `team_queue`，和隊伍清單（`teams`）的順序分開；下文的「`teams` 的順序」都改指 `team_queue`，「設定檔格式不變，不升版本」也不再成立。領獎才移動、比對後交換、GUI 的合併與舊狀態檔游標的遷移不變。（#803）
 
 # 隊伍清單的順序就是佇列，Agent 領獎後把那一隊移到最後
 
