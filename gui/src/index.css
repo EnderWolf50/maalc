@@ -390,15 +390,11 @@ ol.reorder li.dragging { opacity: 0.4; }
 ol.reorder .grip { color: var(--muted); font-size: 11px; }
 ol.reorder .item { flex: 1; min-width: 0; }
 ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--muted); letter-spacing: 0.03em; }
-/* The team list is the queue: its place shows as the game's TEAMS number plate does. */
-.queue ol.reorder { counter-reset: q; }
-.queue ol.reorder li { counter-increment: q; }
-.queue ol.reorder li::before { content: counter(q) "."; min-width: 18px; text-align: right; font: 600 15px/20px var(--font-display); color: var(--muted); }
-.queue ol.reorder li.selected::before { color: var(--fg); }
 .qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
   border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
 .qtag.off { color: var(--muted); border-style: dashed; }
-.queue ol.reorder .item small {
+/* a team's slot, as the game's TEAMS number plate shows it */
+.team-list ol.reorder .item small {
   margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
 }
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }

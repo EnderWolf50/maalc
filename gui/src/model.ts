@@ -301,7 +301,11 @@ export interface Settings {
   starlight_plans: StarlightPlan[];
   theme_pack_plans: ThemePackPlan[];
   gift_lists: GiftList[];
+  /** The team list, in the order the user arranged it; the queue is team_queue (#803). */
   teams: Team[];
+  /** The team queue (ADR 0014): each team's id once, in the order the teams play; the Agent moves a team to its end after a
+   * claim. */
+  team_queue: string[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
 }
@@ -315,7 +319,7 @@ export const newId = () => crypto.randomUUID();
 export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw",
-    deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], gift_lists: [], teams: [],
+    deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], gift_lists: [], teams: [], team_queue: [],
     event_overrides: [], trial_risk_overrides: [],
   };
 }
@@ -350,7 +354,15 @@ export const MOVED = ["run", "luxcavation", "charge_enkephalin"];
  * agent/settings.py. */
 export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
   20: (d) => Object.fromEntries(Object.entries(d).filter(([k]) => !MOVED.includes(k))),
+  21: (d) => ({ ...d, team_queue: queueInListOrder(d.teams) }),
 };
+
+/** 21 -> 22 (#803): team_queue, the order of teams so far (agent/settings.py _queue_in_list_order). A teams list broken by
+ * hand gives what ids it has: the schema check names what is wrong. */
+function queueInListOrder(teams: unknown): unknown[] {
+  if (!Array.isArray(teams)) return [];
+  return teams.filter((t) => t !== null && typeof t === "object" && !Array.isArray(t) && "id" in t).map((t) => t.id);
+}
 
 /** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
  * (spec 04 section 2). old: the file's version and the file as it read, before its migration (null when it needed none),
@@ -385,7 +397,8 @@ export function parseSettings(text: string): {
 }
 
 /** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a
- * team to the end of the queue after a claim, #501); the fewest such moves; null when no moves do (a team deleted). */
+ * team to the end of the queue after a claim, #501, and a team picked to start a Mirror Dungeon task to its head, which moves
+ * the teams before it to the end, #802); the fewest such moves; null when no moves do (a team deleted). */
 export function movedToEnd(before: string[], after: string[]): string[] | null {
   for (let k = 0; k <= after.length; k++) {
     const tail = after.slice(after.length - k);
@@ -396,10 +409,19 @@ export function movedToEnd(before: string[], after: string[]): string[] | null {
 }
 
 /** The editor's settings once another writer changed the file from `base` to `disk` under it (#501): with no unsaved
- * edit, the file; otherwise the edits stay, and the teams the file moved to the end of the queue go there in them too. */
+ * edit, the file; otherwise the edits stay, and the teams the file moved to the end of the queue go there in them too. The
+ * Agent writes team_queue only (#803): the team list keeps the draft's order. */
 export function rebase(base: Settings, draft: Settings, disk: Settings): Settings {
   if (JSON.stringify(draft) === JSON.stringify(base)) return disk;
-  const moved = movedToEnd(base.teams.map((t) => t.id), disk.teams.map((t) => t.id)) ?? [];
-  const inDraft = (id: string) => draft.teams.filter((t) => t.id === id);
-  return { ...draft, teams: [...draft.teams.filter((t) => !moved.includes(t.id)), ...moved.flatMap(inDraft)] };
+  // a file without a queue (left half edited by hand) moves nothing: the schema check names it
+  const moved = movedToEnd(base.team_queue ?? [], disk.team_queue ?? []) ?? [];
+  const queue = draft.team_queue;
+  if (!moved.length || !Array.isArray(queue)) return draft;
+  return { ...draft, team_queue: [...queue.filter((id) => !moved.includes(id)), ...moved.filter((id) => queue.includes(id))] };
+}
+
+/** The settings with team `team` added: last in the team list and last in the queue (#803). */
+export function addTeam(s: Settings, team: Team) {
+  s.teams.push(team);
+  s.team_queue.push(team.id);
 }

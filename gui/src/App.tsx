@@ -16,7 +16,7 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["teams", "tab.teams", TeamsTab, ["teams"]],
+  ["teams", "tab.teams", TeamsTab, ["teams", "team_queue"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
   ["starlight", "tab.starlight", StarlightTab, ["starlight_plans"]],

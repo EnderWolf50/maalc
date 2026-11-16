@@ -2,7 +2,7 @@
 
 本章列出 Agent 在鏡牢中要做的每一種判斷：從畫面、使用者設定與遊戲資料檔讀進什麼，依什麼規則決定，預設值、上限與後備做法。流程如何在畫面之間切換見 [01-architecture.md](01-architecture.md) 與 [02-screens.md](02-screens.md)；設定的完整清單見 [04-settings.md](04-settings.md)；資料檔的格式見 [05-game-data.md](05-game-data.md)；卡住後的 L1/L2/L3 處理見 [06-recovery.md](06-recovery.md)。
 
-所有判斷都以當下畫面為準。Agent 沒有狀態檔：隊伍輪到誰就是設定裡隊伍清單的順序（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)），其他數值每次都從畫面重新讀取（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。需要判斷的選擇寫成 Agent 的 custom action 或 custom recognition，畫面之間的流程留在 `MirrorHub`（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）。
+所有判斷都以當下畫面為準。Agent 沒有狀態檔：隊伍輪到誰在設定檔的隊伍佇列（`team_queue`，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)），其他數值每次都從畫面重新讀取（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。需要判斷的選擇寫成 Agent 的 custom action 或 custom recognition，畫面之間的流程留在 `MirrorHub`（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）。
 
 本章用「每隊」標示設定檔裡每支隊伍的欄位，用「全域」標示鏡牢任務選項與全域選項（client 的任務選項，[04](04-settings.md) 第 5 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)），用「資料檔」標示遊戲資料（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)、[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。
 
@@ -12,20 +12,20 @@
 
 | 來源 | 內容 | 層級 |
 |---|---|---|
-| 設定 | 隊伍佇列（隊伍清單的順序）、隊伍是否啟用、遊戲內隊伍欄位（`TEAMS #1`–`#40`）、用途（都可／只跑困難／只跑普通） | 每隊 |
+| 設定 | 隊伍佇列（`team_queue`，和隊伍清單的順序無關）、隊伍是否啟用、遊戲內隊伍欄位（`TEAMS #1`–`#40`）、用途（都可／只跑困難／只跑普通） | 每隊 |
 | 任務選項 | 難度（困難／普通／自動）、限制局數、每週獎勵用完就停 | 全域 |
 | 畫面 | 入口頁的 Weekly Bonuses 剩餘次數；選隊頁與戰前編隊頁的 `TEAMS #N` | — |
 
 **規則**
 
-- 輪替：設定裡隊伍清單的順序就是隊伍佇列。每一局由佇列裡第一支用途符合的隊伍出戰，領到結算獎勵後移到佇列最後，所以啟用的隊伍依序各跑一局、循環下去。GUI 拖曳排序就決定下一局輪到誰。（#9、#19、#501，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）
+- 輪替：隊伍佇列是設定檔的 `team_queue`，`teams` 每個 id 各一次；隊伍清單（`teams`）的順序只用來顯示和整理，選隊不看它。每一局由佇列裡第一支用途符合的隊伍出戰，領到結算獎勵後移到佇列最後，所以啟用的隊伍依序各跑一局、循環下去。停用的隊伍留在原位。GUI 的「隊伍佇列」區塊調整佇列就決定下一局輪到誰（#804）。（#9、#19、#501、#803，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
 - 開新局前先決定這一局的難度（見第 2 節），再從佇列第一支往後找第一支用途符合的隊伍。用途不符的隊伍跳過，留在原位。（#9、#501）
 - 整個佇列都沒有用途符合的隊伍，就以成功結束任務：沒有事可做不是錯誤，client 的清單繼續下一個任務。（#9、#364）
 - 在選隊頁選出該隊的遊戲內隊伍欄位，確認畫面上的標題是 `TEAMS #N` 後再按確認。標題已經是 `TEAMS #N` 就不點也不捲；清單上看得到 `#N` 的列就直接點；都沒有，就從清單目前的位置往 `#N` 的方向捲（清單開啟時停在上次捲到的地方）；一列都讀不到時，才先拖回最上面（讀到的列號不再變為止，不比列的 y：OCR 框在靜止時也會差 1–2 px）。只認編號，不認名稱：隊伍名稱是玩家自己取的。（#8、#9、#226；實機 2026-10-27：`#3` 一開始就在畫面上，舊做法仍拖了 10 下）
-- 只有 bot 親眼看到某隊完成一局並領到結算獎勵後，Agent 才把它移到佇列最後：這時重新讀設定檔，只改 `teams` 的順序再寫回，GUI 這局中途存的修改照留（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。手動跑的局不影響佇列；手動開、交給 bot 接續的局見本節最後一項。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
+- 只有 bot 親眼看到某隊完成一局並領到結算獎勵後，Agent 才把它移到佇列最後：這時重新讀設定檔，只改 `team_queue` 再寫回，`teams` 的順序與 GUI 這局中途存的修改照留（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)；GUI 還沒寫回版本 22 的舊檔，佇列就是 `teams` 的順序，見 [04](04-settings.md) 第 2 節）。手動跑的局不影響佇列；手動開、交給 bot 接續的局見本節最後一項。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 放棄的局（全滅後重打用完而放棄，或沒過第 5 層而放棄獎勵）沒有領獎，佇列不動：下一局仍是同一支隊伍。停止的局也一樣。（#95，2026-10-18 定案）
 - 選隊頁顯示的隊伍和佇列選出的不同時，以畫面為準，照畫面上那支隊伍的設定繼續這一局。（#8）
-- 接續的局（Agent 中途重啟、Resume 暫停中的局、領上一局沒領的獎勵）記憶體裡沒有計畫。選隊之後沒有畫面顯示隊伍：設定面板、Resume 對話框、入口頁、地圖、戰前編隊頁與結算頁都沒有 `TEAMS #N`（`tests/screens/` 的這些畫面，#436）。所以隊伍從隊伍佇列推回：佇列只在領獎時變動，bot 開的局用的就是開局時佇列裡第一支符合的隊伍。任務選項的難度是 `hard` 或 `normal`、是 `auto` 而目標層數大於 5（這時一定開在困難，[04](04-settings.md) 第 5 節），或兩種難度從佇列選到同一支隊伍時，就是那一支：結算後它照常移到佇列最後，`runs.jsonl` 寫這支隊伍，log 記 `no run plan in memory: team '<隊名>' from the team queue`。難度是 `auto` 而兩種難度選到不同隊伍時（例如佇列第一支只打困難），不知道這局開在哪個難度：照舊先用困難選到的隊伍打（log 記 `assumed`），佇列不動、`runs.jsonl` 的隊伍寫 `null`。使用者手動開、暫停後交給 bot 接續的局，畫面分辨不出來，也當成佇列那支隊伍的局；開局到接續之間在設定裡改了隊伍的順序、啟用、用途，或在 client 改了難度，推回的也可能不是這局實際用的隊伍。選隊前暫停的空局 Resume 後直接進選隊頁，記憶體裡沒有計畫：不退回入口頁（入口頁只會再給 Resume，形成迴圈），而是和重啟後一樣依設定與佇列選隊、當作這局的計畫；選隊頁的標題讀到 bot 選的 `TEAMS #N`，這局的隊伍就確定了。（#8、#19、#128、#436）
+- 接續的局（Agent 中途重啟、Resume 暫停中的局、領上一局沒領的獎勵）記憶體裡沒有計畫。選隊之後沒有畫面顯示隊伍：設定面板、Resume 對話框、入口頁、地圖、戰前編隊頁與結算頁都沒有 `TEAMS #N`（`tests/screens/` 的這些畫面，#436）。所以隊伍從隊伍佇列推回：佇列只在領獎時變動，bot 開的局用的就是開局時佇列裡第一支符合的隊伍。任務選項的難度是 `hard` 或 `normal`、是 `auto` 而目標層數大於 5（這時一定開在困難，[04](04-settings.md) 第 5 節），或兩種難度從佇列選到同一支隊伍時，就是那一支：結算後它照常移到佇列最後，`runs.jsonl` 寫這支隊伍，log 記 `no run plan in memory: team '<隊名>' from the team queue`。難度是 `auto` 而兩種難度選到不同隊伍時（例如佇列第一支只打困難），不知道這局開在哪個難度：照舊先用困難選到的隊伍打（log 記 `assumed`），佇列不動、`runs.jsonl` 的隊伍寫 `null`。使用者手動開、暫停後交給 bot 接續的局，畫面分辨不出來，也當成佇列那支隊伍的局；開局到接續之間在設定裡改了隊伍佇列、啟用、用途，或在 client 改了難度，推回的也可能不是這局實際用的隊伍。選隊前暫停的空局 Resume 後直接進選隊頁，記憶體裡沒有計畫：不退回入口頁（入口頁只會再給 Resume，形成迴圈），而是和重啟後一樣依設定與佇列選隊、當作這局的計畫；選隊頁的標題讀到 bot 選的 `TEAMS #N`，這局的隊伍就確定了。（#8、#19、#128、#436）
 - 選隊確認後出現「隊伍平均等級低於建議等級」警告時，按 Confirm 繼續。（#8、#19）
 - 任務開始時，Agent 必須檢查設定，例如同一個出戰順序裡同一位罪人被選兩次、隊伍引用的方案不存在，有錯就報錯停止；沒有任何啟用的隊伍不算錯（鏡牢開局時才看，沒有就成功結束，#364）。完整清單見 [04-settings.md](04-settings.md#2-寫入與檢查)。（#9、#19，[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）
 

@@ -41,8 +41,15 @@ def start(context, *options):
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
 
 
+def on_disk():
+    return json.loads((actions.ROOT / "config" / "settings.json").read_text(encoding="utf-8"))
+
+
 def queue():
-    return [t["id"] for t in json.loads((actions.ROOT / "config" / "settings.json").read_text(encoding="utf-8"))["teams"]]
+    """The team queue on disk; the list's order stays a, b throughout (#803)."""
+    data = on_disk()
+    assert [t["id"] for t in data["teams"]] == ["a", "b"]
+    return data["team_queue"]
 
 
 def last_line():
@@ -65,7 +72,7 @@ def claim(context, monkeypatch, difficulty="NORMAL"):
 
 
 def b_first(data):
-    data["teams"].reverse()
+    data["team_queue"] = ["b", "a"]  # the list stays a, b (#803)
 
 
 def test_a_claim_with_no_run_plan_moves_the_queue_head_to_the_end_and_names_the_team(resumed, monkeypatch):

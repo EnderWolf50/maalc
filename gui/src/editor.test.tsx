@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
 import { TEXT, fill, type Key } from "./i18n";
-import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
-import { pickInList } from "./testing";
+import { GIFT_KEYWORDS, addTeam, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
+import { pickInList, queuedTeams } from "./testing";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0, reloaded: 0 }));
 vi.mock("./api", async (original) => ({
@@ -24,7 +24,7 @@ const zh = TEXT.zh_tw;
 const two = (prefix: string) => [1, 2].map((n) => ({ id: `${prefix}${n}`, name: `${prefix.toUpperCase()}${n}` }));
 const settings = (): Settings => ({
   ...newSettings(), language: "zh_tw",
-  teams: [{ ...newTeam(1, "Ta"), id: "a" }, { ...newTeam(2, "Tb"), id: "b" }],
+  ...queuedTeams([{ ...newTeam(1, "Ta"), id: "a" }, { ...newTeam(2, "Tb"), id: "b" }]),
   deployment_order_plans: two("d").map((p) => ({ ...p, order: [...SINNERS] })),
   starlight_plans: two("s").map((p) => ({ ...p, ...defaultStarlight() })),
   theme_pack_plans: two("p").map((p) => ({ ...p, ...newPackPlan() })),
@@ -192,7 +192,7 @@ describe("a problem shows while editing, before any save", () => {
   test("a problem already shown keeps its marks while typing brings the typed field into it; the field is marked once left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 12 });
+    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tc");
     await user.type(slot(), "{Backspace}"); // Tc's TEAMS #12 becomes #1
@@ -207,7 +207,7 @@ describe("a problem shows while editing, before any save", () => {
   test("typing a field out of one clash into another: the first goes at once, the second waits until the field is left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 12 });
+    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tb");
     await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12, Tc's
@@ -221,7 +221,8 @@ describe("a problem shows while editing, before any save", () => {
   test("typing a field from one shown clash into another: the first goes at once, the field joins the second once left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 12 }, { ...newTeam(4, "Td"), id: "d", game_team: 12 }); // Tc, Td #12
+    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 }); // Tc, Td #12
+    addTeam(s, { ...newTeam(4, "Td"), id: "d", game_team: 12 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tb");
     await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12
@@ -236,7 +237,7 @@ describe("a problem shows while editing, before any save", () => {
     + "new like any mark the typing makes, shown when the field is left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    s.teams.push({ ...newTeam(3, "Tc"), id: "c", game_team: 4 });
+    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 4 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tc");
     await user.type(slot(), "5"); // #45: above the game's 40
@@ -250,7 +251,7 @@ describe("a problem shows while editing, before any save", () => {
 
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
     const s = settings();
-    s.teams.push({ ...newTeam(3, "Tc"), id: "c" });
+    addTeam(s, { ...newTeam(3, "Tc"), id: "c" });
     s.teams.forEach((x) => { x.game_team = 1; });
     const user = await openOn(s, zh["tab.teams"]);
     await user.type(slot(), "2"); // the first team leaves TEAMS #1 for #12; the other two still share #1

@@ -1,7 +1,7 @@
 {
-  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order. v20 holds the three sections version 21 dropped (#782), as a new v0.1.0 file had them; each migrate_v20 case applies its edits to valid at version 20 with them, and the migration, the agent's and the GUI's, gives valid. moved is what the GUI then lists once (gui/src/movedOptions.ts): each moved value off the client's default as the client option that holds it and the value to set, NAME=VALUE as tools/live/bot.py run --option takes it (a switch Yes or No, a password input (set)), in the order the client sends them; a value no case or input of the client takes is not listed. skill_replacement_default is what a new team gets, no sinner listed, and the schema's default is the same. task_start holds the cases of the two rules that cross a task's options with the teams (the target floor's, a Luxcavation task's team): the agent checks them at that task's start (tests/test_task_options.py); the GUI checks neither, since the target floor and the team are client options it does not see (#779, #780). task is the task, options the client's NAME=VALUE options it starts with (assets/interface.json, its ExpTeam and ThreadTeam from tests/team_options.json: tests/client_options.py), edits the settings file's, cross that start's errors in order ([] when it passes them). too_old gives valid at an older version than the oldest both read and the one error both give for it, word for word. clean_gift_list cases give a list (want, keep, gorder; an unset gorder is {}) and what cleaning it gives (want, keep, dropped, gorder_head: a keyword's first ids, gorder_size: how many ids each keyword has).",
+  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order. v20 holds the three sections version 21 dropped (#782), as a new v0.1.0 file had them; each migrate_v20 case applies its edits to valid at version 20 with them and without team_queue (version 22's, #803), and the migration, the agent's and the GUI's, gives valid. Each migrate_v21 case applies its edits to valid at version 21 without team_queue, and the migration, the agent's and the GUI's, gives that file at version 22 with team_queue, the queue in the order of teams. moved is what the GUI then lists once (gui/src/movedOptions.ts): each moved value off the client's default as the client option that holds it and the value to set, NAME=VALUE as tools/live/bot.py run --option takes it (a switch Yes or No, a password input (set)), in the order the client sends them; a value no case or input of the client takes is not listed. skill_replacement_default is what a new team gets, no sinner listed, and the schema's default is the same. task_start holds the cases of the two rules that cross a task's options with the teams (the target floor's, a Luxcavation task's team): the agent checks them at that task's start (tests/test_task_options.py); the GUI checks neither, since the target floor and the team are client options it does not see (#779, #780). task is the task, options the client's NAME=VALUE options it starts with (assets/interface.json, its ExpTeam and ThreadTeam from tests/team_options.json: tests/client_options.py), edits the settings file's, cross that start's errors in order ([] when it passes them). too_old gives valid at an older version than the oldest both read and the one error both give for it, word for word. clean_gift_list cases give a list (want, keep, gorder; an unset gorder is {}) and what cleaning it gives (want, keep, dropped, gorder_head: a keyword's first ids, gorder_size: how many ids each keyword has).",
   "valid": {
-    "version": 21,
+    "version": 22,
     "language": "zh_tw",
     "deployment_order_plans": [
       {"id": "d1", "name": "Bleed order", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}
@@ -46,6 +46,7 @@
         }
       }
     ],
+    "team_queue": ["a", "b"],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}]
   },
@@ -86,6 +87,13 @@
     {"name": "a hand-broken section is dropped all the same, its broken value not listed",
      "edits": [{"set": "run/difficulty", "value": "extreme"}, {"set": "run/wipe_retries", "value": "2"}, {"delete": "charge_enkephalin"}],
      "moved": []}
+  ],
+  "migrate_v21": [
+    {"name": "the queue is the order of teams", "edits": [], "team_queue": ["a", "b"]},
+    {"name": "a list that starts at b queues b first", "edits": [{"set": "teams/0/id", "value": "b"}, {"set": "teams/1/id", "value": "a"}],
+     "team_queue": ["b", "a"]},
+    {"name": "a disabled team keeps its place", "edits": [{"set": "teams/0/enabled", "value": false}], "team_queue": ["a", "b"]},
+    {"name": "no team, an empty queue", "edits": [{"set": "teams", "value": []}], "team_queue": []}
   ],
   "cases": [
     {"name": "disabled teams may share a slot, plan names are per kind, empty weights",
@@ -154,7 +162,20 @@
     {"name": "empty override question", "edits": [{"set": "event_overrides/0/question", "value": ""}], "schema": ["event_overrides/0/question"]},
     {"name": "no enabled team: only MirrorDungeon asks for one (#364)", "edits": [{"set": "teams/0/enabled", "value": false}, {"set": "teams/1/enabled", "value": false}],
      "cross": []},
-    {"name": "no team at all", "edits": [{"set": "teams", "value": []}], "cross": []},
+    {"name": "no team at all", "edits": [{"set": "teams", "value": []}, {"set": "team_queue", "value": []}], "cross": []},
+    {"name": "the queue lists every team once, in an order of its own", "edits": [{"set": "team_queue", "value": ["b", "a"]}], "cross": []},
+    {"name": "the queue names a team that is not in teams", "edits": [{"set": "team_queue/-", "value": "x"}],
+     "cross": ["team_queue: id 'x' names no team"]},
+    {"name": "a team left out of the queue", "edits": [{"set": "team_queue", "value": ["a"]}],
+     "cross": ["team_queue: team 'Team b' (id 'b') is missing"]},
+    {"name": "a disabled team left out of the queue", "edits": [{"set": "teams/1/enabled", "value": false}, {"set": "team_queue", "value": ["a"]}],
+     "cross": ["team_queue: team 'Team b' (id 'b') is missing"]},
+    {"name": "the queue lists a team twice", "edits": [{"set": "team_queue/-", "value": "a"}],
+     "cross": ["team_queue: id 'a' appears 2 times"]},
+    {"name": "a queue wrong in every way names each", "edits": [{"set": "team_queue", "value": ["x", "a", "a"]}],
+     "cross": ["team_queue: id 'a' appears 2 times", "team_queue: id 'x' names no team", "team_queue: team 'Team b' (id 'b') is missing"]},
+    {"name": "version 22 has a team queue", "edits": [{"delete": "team_queue"}], "schema": ["(root)"]},
+    {"name": "the queue holds team ids", "edits": [{"set": "team_queue/0", "value": 1}], "schema": ["team_queue/0"]},
     {"name": "version 21 has no run section: its values are the client's options (#782)", "edits": [{"set": "run", "value": {}}],
      "schema": ["(root)"]},
     {"name": "version 21 has no luxcavation section (#782)", "edits": [{"set": "luxcavation", "value": {}}], "schema": ["(root)"]},
@@ -169,7 +190,8 @@
        "teams/0/deployment_order: team 'Team a' uses missing plan 'gone' (not in deployment_order_plans)",
        "teams/0/starlight: team 'Team a' uses missing plan 'gone' (not in starlight_plans)",
        "teams/1/theme_pack_plan: team 'Team b' uses missing plan 'gone' (not in theme_pack_plans)"]},
-    {"name": "duplicate team id", "edits": [{"set": "teams/1/id", "value": "a"}], "cross": ["teams: id 'a' appears 2 times"]},
+    {"name": "duplicate team id", "edits": [{"set": "teams/1/id", "value": "a"}, {"set": "team_queue", "value": ["a"]}],
+     "cross": ["teams: id 'a' appears 2 times"]},
     {"name": "duplicate plan id and name with quotes", "edits": [
        {"set": "deployment_order_plans/0/name", "value": "Don't"},
        {"set": "deployment_order_plans/-", "value": {"id": "d1", "name": "Don't", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}}],

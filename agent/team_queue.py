@@ -1,7 +1,8 @@
-"""The team queue (ADR 0011, docs/spec/03-decisions.md section 1): the order of `teams` in the settings file.
+"""The team queue (ADR 0014, docs/spec/03-decisions.md section 1): `team_queue` in the settings file, the ids of `teams` in
+queue order. The order of `teams` is the team list's, the user's to arrange in the settings GUI; no pick looks at it.
 
 A new run plays the first enabled team whose usage fits its difficulty. Once the bot saw that team claim, the team moves
-to the end of the list (requeue): the one write the agent makes to the settings file.
+to the end of the queue (requeue): the one write the agent makes to the settings file.
 """
 
 import contextlib
@@ -13,28 +14,35 @@ from settings import settings_path, write_settings
 
 USAGE_FITS = {"any": {"hard", "normal"}, "hard_only": {"hard"}, "normal_only": {"normal"}}
 UNUSABLE = (OSError, ValueError, LookupError, TypeError)  # a settings file missing, broken or of the wrong shape
+QUEUE_VERSION = 22  # the first settings version with team_queue (#803): before it, the queue is the order of teams
 
 
-def pick_team(teams, difficulty):
+def queued(settings):
+    """The teams of settings (at the current version) in queue order."""
+    by_id = {t["id"]: t for t in settings["teams"]}
+    return [by_id[i] for i in settings["team_queue"]]
+
+
+def pick_team(settings, difficulty):
     """First enabled team in queue order whose usage fits difficulty ("hard"/"normal"); None ends the task.
 
     Skipped teams keep their place.
     """
-    return next((t for t in teams if t["enabled"] and difficulty in USAGE_FITS[t["usage"]]), None)
+    return next((t for t in queued(settings) if t["enabled"] and difficulty in USAGE_FITS[t["usage"]]), None)
 
 
-def resumed_team(teams, difficulty):
+def resumed_team(settings, difficulty):
     """The team of a run under way that this agent did not plan (a restart, a paused run picked up), and whether it is
     known (#436).
 
     No screen shows the team after the team page, so it comes from the queue, which only a claim changes: a run the bot
     began plays pick_team for the difficulty it began on. difficulty None: that is not known (auto), and the team is
     known only when every difficulty a run could begin on picks it. The run is played by the first pick (hard before
-    normal); when no team fits, by the first enabled team, so a team comes back whenever one is enabled.
+    normal); when no team fits, by the queue's first enabled team, so a team comes back whenever one is enabled.
     """
     difficulties = [difficulty] if difficulty else ["hard", "normal"]
-    fits = [t for t in (pick_team(teams, d) for d in difficulties) if t]
-    team = fits[0] if fits else next(t for t in teams if t["enabled"])
+    fits = [t for t in (pick_team(settings, d) for d in difficulties) if t]
+    team = fits[0] if fits else next(t for t in queued(settings) if t["enabled"])
     return team, len({t["id"] for t in fits}) == 1
 
 
@@ -60,7 +68,7 @@ def requeue(root, team_id):
 
 def migrate_cursor(root, address):
     """#501: the rotation cursor of the state files before the queue (<root>/state/<adb address>.json, {"cursor": id})
-    becomes the queue head, once. The list turns at this instance's cursor, so the enabled teams run in the order the
+    becomes the queue head, once. The queue turns at this instance's cursor, so the enabled teams run in the order the
     cursor would have run them; a cursor that no enabled team has changes nothing, as it started from the first one.
     Then every state file goes, other instances' too: one queue serves them all. With no usable settings file the state
     files stay for the next start.
@@ -97,19 +105,26 @@ def _cursor_file(folder, address):
 
 
 def _reorder(root, change):
-    """change(teams) gives the new order, or None to leave the file alone; returns what was written, or None.
+    """change(teams in queue order) gives the new queue order, or None to leave the file alone; returns what was written,
+    or None.
 
-    The file is read now, not at the run's start, as the GUI may have saved since; nothing but the order of `teams`
-    changes. A file that changed between this read and the write (a GUI save) is read again (ADR 0011).
+    The file is read now, not at the run's start, as the GUI may have saved since; nothing but the queue changes. A file
+    the GUI has not written back as version 22 is written at its own version, its queue being the order of its teams
+    (docs/spec/04-settings.md section 2). A file that changed between this read and the write (a GUI save) is read again
+    (ADR 0011).
     """
     path = settings_path(root)
     for _ in range(3):
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
-        teams = change(data["teams"])
+        older = data["version"] < QUEUE_VERSION
+        teams = change(data["teams"] if older else queued(data))
         if teams is None:
             return None
-        data["teams"] = teams
+        if older:
+            data["teams"] = teams
+        else:
+            data["team_queue"] = [t["id"] for t in teams]
         if write_settings(root, data, expected=text):
             return teams
     raise OSError(f"{path} kept changing under the write")

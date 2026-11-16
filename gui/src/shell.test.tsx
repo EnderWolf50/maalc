@@ -6,7 +6,8 @@ import libRs from "../src-tauri/src/lib.rs?raw";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { MOVED, newSettings, newTeam } from "./model";
-import { v20File, type Edit } from "./settingsCases";
+import { queuedTeams } from "./testing";
+import { v20File, v21File, type Edit } from "./settingsCases";
 
 const zh = TEXT.zh_tw;
 // teamOptions: the team options file's text (null: none), teamWrites each text written to it, teamFail the error its write
@@ -44,7 +45,7 @@ vi.mock("./api", async (original) => ({
 /** Two enabled teams on game team slot 1: a save is refused (validate.ts crossCheck). */
 function clash() {
   const s = newSettings();
-  s.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+  Object.assign(s, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
   s.teams[1].game_team = 1;
   return JSON.stringify(s, null, 2) + "\n";
 }
@@ -107,7 +108,7 @@ test("the Run options and Daily tabs are gone: what they set is the client's tas
 describe("the team options file (#780)", () => {
   const twoTeams = () => {
     const s = newSettings();
-    s.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+    Object.assign(s, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
     file.text = JSON.stringify(s, null, 2) + "\n";
     return s;
   };
@@ -182,12 +183,12 @@ describe("a version 20 file (#782)", () => {
     return [option.ExpTeam.default_case, option.ThreadTeam.default_case];
   };
 
-  test("is written back as version 21, without the three sections", async () => {
+  test("is written back as version 22 in one go, without the three sections, the queue in the order of its teams", async () => {
     v20();
     render(<App />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
-    expect(saved.version).toBe(21);
+    expect([saved.version, saved.team_queue]).toEqual([22, ["a", "b"]]);
     expect(MOVED.filter((k) => k in saved)).toEqual([]);
   });
 
@@ -290,6 +291,20 @@ describe("a version 20 file (#782)", () => {
   });
 });
 
+describe("a version 21 file (#803)", () => {
+  test("is kept beside it, then written back as version 22 with the queue in the order of its list, and lists nothing", async () => {
+    // the list b, a: the queue starts at b, as before the upgrade
+    const old = v21File([{ set: "teams/0/id", value: "b" }, { set: "teams/1/id", value: "a" }]);
+    file.text = JSON.stringify(old, null, 2) + "\n";
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(file.old).toEqual([[21, file.text]]);
+    const saved = JSON.parse(file.saved[0]);
+    expect(saved).toEqual({ ...old, version: 22, team_queue: ["b", "a"], gift_lists: saved.gift_lists });
+    expect(screen.queryByRole("region", { name: zh["moved.title"] })).toBeNull();
+  });
+});
+
 test("with nothing edited the header says there is nothing to save", async () => {
   render(<App />);
   await screen.findByRole("button", { name: zh.save });
@@ -299,7 +314,7 @@ test("with nothing edited the header says there is nothing to save", async () =>
 
 test("a write that fails shows as a failure in the header, not as plain unsaved changes; the next good save clears it", async () => {
   const s = newSettings();
-  s.teams = [newTeam(1, "Ta")];
+  Object.assign(s, queuedTeams([newTeam(1, "Ta")]));
   file.text = JSON.stringify(s, null, 2) + "\n";
   file.fail = "disk full";
   const user = userEvent.setup();
@@ -330,7 +345,7 @@ test("a refused save shows in the header with the number of problems, also when 
 
 test("a problem made after a good save asks to fix it before saving: no save was refused", async () => {
   const ok = newSettings();
-  ok.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+  Object.assign(ok, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
   file.text = JSON.stringify(ok, null, 2) + "\n";
   const user = userEvent.setup();
   render(<App />);
@@ -361,7 +376,7 @@ test("an edit after a refused save still shows the refusal, with the unsaved cha
 
 test("a problem typed before any save says Save must wait, on the plate and on Save, with the field marked, once the field is left", async () => {
   const ok = newSettings();
-  ok.teams = [newTeam(1, "Ta"), newTeam(2, "Tb")];
+  Object.assign(ok, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
   file.text = JSON.stringify(ok, null, 2) + "\n";
   const user = userEvent.setup();
   render(<App />);
@@ -384,7 +399,7 @@ test("a problem typed before any save says Save must wait, on the plate and on S
 describe("Revert", () => {
   const edited = async () => {
     const ok = newSettings();
-    ok.teams = [newTeam(1, "Ta")];
+    Object.assign(ok, queuedTeams([newTeam(1, "Ta")]));
     file.text = JSON.stringify(ok, null, 2) + "\n";
     const user = userEvent.setup();
     render(<App />);
@@ -428,7 +443,7 @@ test("the header's file path, cut short in a narrow window, shows in full on hov
 
 test("after 放棄變更, an edit and its undoing drop the Undo: the edits it would bring back are no longer the newest", async () => {
   const ok = newSettings();
-  ok.teams = [newTeam(1, "Ta")];
+  Object.assign(ok, queuedTeams([newTeam(1, "Ta")]));
   file.text = JSON.stringify(ok, null, 2) + "\n";
   const user = userEvent.setup();
   render(<App />);

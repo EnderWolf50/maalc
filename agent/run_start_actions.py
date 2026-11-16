@@ -81,7 +81,7 @@ class PlanRun(CustomAction):
         if run["stop_when_weekly_bonus_out"] and weekly == 0:
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
-        team = pick_team(settings["teams"], difficulty)
+        team = pick_team(settings, difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
         if run_start.team_difficulty(run["difficulty"], difficulty, team["hard_from_floor"]) != difficulty:

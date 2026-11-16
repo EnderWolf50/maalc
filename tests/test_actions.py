@@ -626,7 +626,7 @@ def listed(*first):
     order = [*first, *(k for k in ORDER if k not in first)]
     team = {"id": "a", "name": "t", "enabled": True, "usage": "any", "game_team": 1, "guard_turns": 0, "hard_from_floor": 1, "gift_list": "g",
             "skill_replacement": replacing()}
-    return {"run": {}, "teams": [team], "gift_lists": [{"id": "g", "name": "G", "order": order}]}
+    return {"run": {}, "teams": [team], "team_queue": ["a"], "gift_lists": [{"id": "g", "name": "G", "order": order}]}
 
 
 @pytest.mark.parametrize(("first", "main"), [(("Bleed",), "Bleed"), (("Keywordless", "Pierce"), "Pierce"), ((), "Burn")])

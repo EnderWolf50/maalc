@@ -57,7 +57,8 @@ export function useScopedState<T>(scope: string, initial: T): [T, (value: T) => 
 
 /** Delete with one step back: `remove` takes item `i` out of a list tab's items (`edit` changes that list in the settings, `pick`
  * shows an item), and the note names it with an Undo button until the next delete or until the tab closes. Undo puts it back
- * before the item that followed it, which stays right when the Agent reorders the list meanwhile (#501). A confirmation
+ * before the item that followed it, which stays right when the list changes meanwhile (TeamsTab puts a team back in the
+ * queue the Agent reorders the same way, #501, #803). A confirmation
  * would stop every delete to catch the rare wrong one; this lets it go and puts it back. */
 export function useUndo() {
   const [last, setLast] = useState<{ name: string; undo: () => void } | null>(null);
@@ -81,7 +82,7 @@ export function useUndo() {
 /** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
  * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
  * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
- * note, so an Undo never puts a row into the next team picked. The teams and plans, which the Agent can reorder, use useUndo. */
+ * note, so an Undo never puts a row into the next team picked. The teams and plans use useUndo. */
 export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "") {
   const [last, setLast] = useScopedState<{ row: T; at: number; name: string } | null>(scope, null);
   const note = last && (

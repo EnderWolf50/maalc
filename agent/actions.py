@@ -424,7 +424,7 @@ def current_run(context):
         # The weekly bonuses left when the run began are not known: the difficulty is known when both answers agree.
         began = {run_start.run_difficulty(run["difficulty"], left, run["target_floor"]) for left in (0, 1)}
         difficulty = began.pop() if len(began) == 1 else None
-        team, known = resumed_team(settings["teams"], difficulty)
+        team, known = resumed_team(settings, difficulty)
         RUN.update(settings=settings, team=run_team(settings, team), difficulty=difficulty, planned=known)
         # The guard turns left are unknown after a restart: they count as used up (spec 03 section 8).
         how = "from the team queue" if known else "assumed: the team queue does not tell the run's team"

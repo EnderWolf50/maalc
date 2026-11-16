@@ -7,8 +7,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
-import { SINNERS, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
-import { pickInList, renderEditor } from "./testing";
+import { SINNERS, addTeam, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
+import { pickInList, queuedTeams, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
@@ -25,7 +25,7 @@ const entry = (sinner: string, s1: number, s2: number, s3: number, s1_s3_first =
 const settings = (sinners: SkillSinner[] = [], language: Settings["language"] = "zh_tw"): Settings => {
   const team = newTeam(1, "T1");
   team.skill_replacement.sinners = sinners;
-  return { ...newSettings(), language, teams: [team] };
+  return { ...newSettings(), language, ...queuedTeams([team]) };
 };
 const panel = () => screen.getByText(zh["skill.title"], { exact: false, selector: "summary" }).closest("details")!;
 const listed = () => [...panel().querySelectorAll("li[data-sinner]")].map((li) => li.getAttribute("data-sinner"));
@@ -265,7 +265,7 @@ describe("ID Skill Search", () => {
 });
 
 test("a team's panel edits that team alone", async () => {
-  const s = { ...settings(), teams: [newTeam(1, "T1"), newTeam(2, "T2")] };
+  const s = { ...settings(), ...queuedTeams([newTeam(1, "T1"), newTeam(2, "T2")]) };
   const r = renderEditor(<TeamsTab />, s);
   await expand(r);
   await add(r, "Outis");
@@ -318,7 +318,7 @@ describe("in the whole editor", () => {
 
 test("a team switch drops a removed sinner's Undo, also on the way back, and the open panel stays open", async () => {
   const s = settings([entry("Yi Sang", 2, 2, 2)]);
-  s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
+  addTeam(s, { ...newTeam(2, "T2"), id: "t2" });
   const r = renderEditor(<TeamsTab />, s);
   await expand(r);
   await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));

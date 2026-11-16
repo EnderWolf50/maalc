@@ -482,6 +482,7 @@ def mirror_task(context, monkeypatch, runs):
     entry page after those runs, the log, the runs started (taps on the entry page) and the runs.jsonl results."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
     data["teams"] = [{**data["teams"][0], "name": "A", "min_alive": 4}]
+    data["team_queue"] = [data["teams"][0]["id"]]
     (actions.ROOT / "config").mkdir()
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
     reads = {"formation": "3/3", "defeat": "All participating Sinners have been killed.", "panel": "Dungeon Progress", "quit": "Quit exploring the dungeon?",
