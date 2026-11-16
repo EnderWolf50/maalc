@@ -67,23 +67,94 @@ def test_the_english_effects_mark_up_what_the_client_s_english_text_colours_yell
     assert english("Perfected Possibility", "plus")[3] == [("Upon entry, gain 1 Dark Vestige and 1 ", False), ("Faint Vestige", True), (" each", False)]
 
 
-def test_every_gift_search_gift_has_its_effect_in_english_and_chinese_as_plain_text():
-    effects = DATA["gift_effects"]["effects"]
-    assert list(effects) == [str(g["id"]) for g in DATA["gift_search"]["gifts"]]
+def test_every_gift_the_gui_shows_has_its_effect_in_english_and_chinese_as_runs():
+    # every gift of the GUI's catalog, in its order; gui/src/GiftPopover.test.tsx checks the catalog itself has each one
+    import llc_text
+    effects, keywords = DATA["gift_effects"]["effects"], DATA["gift_effects"]["keywords"]
+    assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 466
     for gid, e in effects.items():
-        assert e["en"] and e["zh"], gid
-        for text in e.values():
-            # no markup and no keyword left as the game's tag ([Combustion] is shown as its name, Burn / 燒傷)
-            assert "<" not in text and "[Combustion]" not in text and "[Laceration]" not in text, gid
-    assert effects["9053"]["en"].startswith("First Turn Start of a wave: inflict 5 Burn Potency and +3 Burn Count")
-    assert "燒傷" in effects["9053"]["zh"]
+        assert set(e) == {"en", "zh"}, gid
+        for lang, runs in e.items():
+            assert runs, (gid, lang)
+            for r in runs:  # plain text, a keyword the table names, or styled text
+                assert isinstance(r, str) and r or set(r) == {"kw"} and r["kw"] in keywords or r["text"] and set(r) <= {"text", "i", "colour"}, (gid, lang, r)
+            # no tag the game parses left in the text: [Combustion] is a keyword run, markup a run's style
+            assert "[Combustion]" not in str(runs) and "noparse" not in str(runs), (gid, lang)
+    used = {r["kw"] for e in effects.values() for runs in e.values() for r in runs if isinstance(r, dict) and "kw" in r}
+    assert set(keywords) == used
+    for k, v in keywords.items():  # each with the game's name in both languages, its buff's colour and its icon
+        assert v["en"] and v["zh"] and v["colour"] in ("Positive", "Negative", "Neutral") and v["icon"], k
 
 
-def test_effect_text_names_the_keywords_drops_markup_and_keeps_a_bracketed_note():
+def test_distant_star_reads_as_the_game_s_gift_panel():
+    # the game's panel for Distant Star (#764): three Sinking keywords, each its icon and the name in the Negative red
+    e = DATA["gift_effects"]["effects"]["9125"]["en"]
+    sinking = {"kw": "Sinking"}
+    assert e[:7] == ["When activating the ", sinking, " effect(including 'Unique Sinking') on the target with an On Hit effect from a "
+                     "Base Attack Skill that inflicts or gains ", sinking, " Potency, ", sinking, " Count, or 'Unique Sinking', heal 3 SP "
+                     "at Turn End (2 times per turn per Identity)\n\nIf the said unit was at 45 SP at Turn Start, the effect changes to "
+                     "the following: when activating the "]
+    assert DATA["gift_effects"]["keywords"]["Sinking"] == {"colour": "Negative", "icon": "Sinking", "en": "Sinking", "zh": "沉淪"}
+    assert DATA["gift_effects"]["keywords"]["Breath"]["colour"] == "Positive"  # Poise: a Positive buff, the game's yellow
+    assert "燒傷" == DATA["gift_effects"]["keywords"]["Combustion"]["zh"]
+
+
+def test_an_effect_is_runs_a_keyword_tag_its_own_run_and_a_bracketed_note_kept_as_text():
+    # #764: the game draws a [tag] that names a keyword as the keyword's icon and name; a note naming none, it prints as written
     import llc_text
     names = {"Combustion": "Burn"}
-    assert llc_text.effect_text("inflict 5 [Combustion] Potency\n\n<noparse>Dawn Office</noparse> [Cannot Stack]", names) == (
-        "inflict 5 Burn Potency\n\nDawn Office [Cannot Stack]")
+    assert llc_text.effect_runs("inflict 5 [Combustion] Potency [Cannot Stack]", names) == [
+        "inflict 5 ", {"kw": "Combustion"}, " Potency [Cannot Stack]"]
+    assert llc_text.effect_runs("[Combustion][Combustion]", names) == [{"kw": "Combustion"}, {"kw": "Combustion"}]
+
+
+def test_flavour_text_is_a_run_of_its_own_italic_and_in_the_game_s_colour_by_name():
+    # the client's EN_EGOgift_a1c8p2.json 2061 ends on <i><color=#a16a3b>...</color></i>, StoryDungeon 2015 on <i>...</i>; the
+    # colour is named as the game's ColorCode table names it (#a16a3b: Neutral)
+    import llc_text
+    coin = "+0.5% damage for every Coin\n\n<i><color=#a16a3b>Artifacts used for the second round.</color></i>"
+    assert llc_text.effect_runs(coin, {}) == [
+        "+0.5% damage for every Coin\n\n", {"text": "Artifacts used for the second round.", "i": True, "colour": "Neutral"}]
+    quote = 'Speed Up next turn\n\n<i>"Taking a backward glance at our trails."</i>'
+    assert llc_text.effect_runs(quote, {}) == ["Speed Up next turn\n\n", {"text": '"Taking a backward glance at our trails."', "i": True}]
+
+
+def test_text_the_game_does_not_parse_is_printed_as_written():
+    # <noparse> keeps its text from TextMeshPro's parser (MirrorDungeon 9065); a <word> TextMeshPro has no tag for is printed
+    # as it is, the client's English "If there is a <Bloodfiend> among allies" (MirrorDungeon_7) and LLC's <血魔>
+    import llc_text
+    names = {"Combustion": "Burn"}
+    assert llc_text.effect_runs("[<noparse>Dawn Office</noparse> Identities Exclusive Effect] [Combustion]", names) == [
+        "[Dawn Office Identities Exclusive Effect] ", {"kw": "Combustion"}]
+    assert llc_text.effect_runs("<noparse>[Combustion] <i></noparse>", names) == ["[Combustion] <i>"]
+    assert llc_text.effect_runs("If there is a <Bloodfiend> or <Mechanical Amalgam> among allies; 若有<血魔>", names) == [
+        "If there is a <Bloodfiend> or <Mechanical Amalgam> among allies; 若有<血魔>"]
+
+
+def test_the_chinese_is_converted_run_by_run_and_must_read_as_the_text_converted_whole():
+    import llc_text
+    assert llc_text.effect_runs("使[Sinking]层数增加<i><color=#a16a3b>铜钱</color></i>", {"Sinking": "沉沦"}, llc_text.to_traditional) == [
+        "使", {"kw": "Sinking"}, "層數增加", {"text": "銅錢", "i": True, "colour": "Neutral"}]
+
+    def convert(text):  # reads "AB" as one phrase, as s2twp might read a phrase across a keyword's edge
+        return text.replace("AB", "X")
+    with pytest.raises(ValueError, match="run by run"):
+        llc_text.effect_runs("A[K]", {"K": "B"}, convert)
+
+
+@pytest.mark.parametrize("text", ["<style=highlight>Unique</style>", "<b>bold</b>", "<B>bold</B>", "<color=#5bffde>new</color>",
+                                  "<sprite name=X>", "a</color>", "a</i>"])
+def test_markup_the_gui_does_not_draw_is_an_error(text):
+    # a new mark in a new client, or a closing tag with nothing open: the tool stops rather than drop it (as effect_lines does
+    # for a grace's colours). TextMeshPro reads its tags in any case, so <B> is a tag too.
+    import llc_text
+    with pytest.raises(ValueError, match="markup"):
+        llc_text.effect_runs(f"heal 3 SP {text}", {})
+
+
+def test_a_tag_in_capitals_is_read_as_the_game_reads_it():
+    import llc_text
+    assert llc_text.effect_runs("a <I><COLOR=#A16A3B>b</COLOR></I>", {}) == ["a ", {"text": "b", "i": True, "colour": "Neutral"}]
 
 
 def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_the_wiki():
@@ -155,10 +226,10 @@ def test_the_gift_effects_match_the_llc_release_and_the_client_text_when_both_ar
     from local_dir import local_dir
     zip_path = local_dir("llc") / f"{DATA['gift_effects']['zh_release']}.zip"
     unpack = local_dir("unpack")
-    if not (zip_path.is_file() and (unpack / "raw/Localize/en").is_dir()):
+    if not (zip_path.is_file() and (unpack / "raw/Localize/en").is_dir() and (unpack / llc_text.BUFFS).is_dir()):
         pytest.skip("release zip or unpacked client data missing")
-    ids = [g["id"] for g in DATA["gift_search"]["gifts"]]
-    assert llc_text.gift_effects(zipfile.ZipFile(zip_path), unpack, ids) == DATA["gift_effects"]["effects"]
+    keywords, effects = llc_text.gift_effects(zipfile.ZipFile(zip_path), unpack, llc_text.catalog_ids())
+    assert (keywords, effects) == (DATA["gift_effects"]["keywords"], DATA["gift_effects"]["effects"])
 
 
 def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_there():
