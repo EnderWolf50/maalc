@@ -157,6 +157,13 @@ fn no_override() -> Value {
     Value::Object(Map::new())
 }
 
+impl TaskSpec {
+    /// The task with no override: its options are the settings file's (#813).
+    pub fn new(entry: String) -> TaskSpec {
+        TaskSpec { entry, override_: no_override() }
+    }
+}
+
 /// A null device is no device asked for, as the runner reads it.
 fn device_or_none<'de, D: Deserializer<'de>>(d: D) -> Result<DeviceWant, D::Error> {
     Ok(Option::<DeviceWant>::deserialize(d)?.unwrap_or_default())
@@ -375,7 +382,7 @@ pub type Sink = Box<dyn Fn(Message) + Send + Sync>;
 
 #[derive(Default)]
 struct State {
-    ended: bool,    // the end event came
+    end_event: bool, // the end event came
     stopping: bool, // the stop command went
     killed: bool,
     done: bool, // Exit went: nothing more is sent
@@ -456,9 +463,12 @@ impl Run {
                     break; // a process the runner started may hold a pipe open
                 }
             }
+            // what the runner left running (the adb server MaaFramework started, a process that holds its output) ends with
+            // it, as on a stop (spec #811: the next connect starts the adb server again)
+            waiter.job.terminate();
             let mut st = waiter.state.lock().unwrap();
             *waiter.stdin.lock().unwrap() = None;
-            let exit = Message::Exit { code, ended: st.ended, tail: st.tail.iter().cloned().collect() };
+            let exit = Message::Exit { code, ended: st.end_event, tail: st.tail.iter().cloned().collect() };
             (waiter.sink)(exit);
             st.done = true;
             waiter.exited.notify_all();
@@ -475,7 +485,7 @@ impl Run {
             Ok(event) => {
                 match &event {
                     Event::Log { line, .. } => st.keep(line),
-                    Event::End { .. } => st.ended = true,
+                    Event::End { .. } => st.end_event = true,
                     _ => {}
                 }
                 let cannot_stop = matches!(event, Event::Error { kind: ErrorKind::StopTimeout, .. });
@@ -668,7 +678,7 @@ mod tests {
     fn a_start_with_no_task_or_an_empty_entry_is_refused_before_anything_starts() {
         let start = |tasks: Vec<TaskSpec>| Command::Start { root: None, device: DeviceWant::default(), tasks };
         assert!(start(vec![]).check().is_err());
-        assert!(start(vec![TaskSpec { entry: "".into(), override_: no_override() }]).check().is_err());
+        assert!(start(vec![TaskSpec::new("".into())]).check().is_err());
         let spawn = Spawn { program: "cmd.exe".into(), args: vec![], dir: std::env::temp_dir() };
         assert!(Run::spawn(&spawn, &start(vec![]), STOP_WAIT, Box::new(|_| {})).is_err());
     }
@@ -696,7 +706,7 @@ mod tests {
     const HANG: &str = "ping -n 60 127.0.0.1 >nul";
 
     fn start_mail() -> Command {
-        Command::Start { root: None, device: DeviceWant::default(), tasks: vec![TaskSpec { entry: "ClaimMail".into(), override_: no_override() }] }
+        Command::Start { root: None, device: DeviceWant::default(), tasks: vec![TaskSpec::new("ClaimMail".into())] }
     }
 
     /// The run's messages, as the sink got them.
@@ -719,6 +729,23 @@ mod tests {
         let got = got.lock().unwrap();
         assert_eq!(got.iter().filter(|m| matches!(m, Message::Exit { .. })).count(), 1, "{got:?}");
         got.last().cloned().unwrap()
+    }
+
+    #[test]
+    fn what_the_runner_left_running_ends_with_it_though_it_holds_the_output() {
+        // `start /b` leaves ping running with the script's stdout: the pipe stays open after the script exits
+        let spawn = fake("left", &[READY, "start /b ping -n 60 127.0.0.1", r#"echo {"v":1,"event":"end","result":"succeeded"}"#, "exit /b 0"]);
+        let (got, sink) = collect();
+        let started = Instant::now();
+        let run = Run::spawn(&spawn, &start_mail(), STOP_WAIT, sink).unwrap();
+        assert!(run.wait(Duration::from_secs(15)));
+        assert!(started.elapsed() < Duration::from_secs(15));
+        assert!(matches!(the_exit(&got), Message::Exit { code: Some(0), ended: true, .. }));
+        let end = Instant::now() + Duration::from_secs(5);
+        while run.active() > 0 && Instant::now() < end {
+            thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(run.active(), 0, "ping ended with the run");
     }
 
     #[test]

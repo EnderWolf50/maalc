@@ -264,12 +264,18 @@ struct Active {
     relay: Arc<Mutex<Relay>>,
 }
 
+impl Active {
+    fn under_way(&self) -> bool {
+        !self.run.done()
+    }
+}
+
 #[derive(Default)]
 struct Runs(Mutex<Option<Active>>);
 
 impl Runs {
     fn running(&self) -> Option<Arc<Run>> {
-        self.0.lock().unwrap().as_ref().filter(|a| !a.run.done()).map(|a| a.run.clone())
+        self.0.lock().unwrap().as_ref().filter(|a| a.under_way()).map(|a| a.run.clone())
     }
 }
 
@@ -278,12 +284,12 @@ impl Runs {
 #[tauri::command]
 fn start_run(runs: tauri::State<Runs>, tasks: Vec<String>, device: DeviceWant, on_message: Channel<Message>) -> Result<(), String> {
     let mut slot = runs.0.lock().unwrap();
-    if slot.as_ref().is_some_and(|a| !a.run.done()) {
+    if slot.as_ref().is_some_and(Active::under_way) {
         return Err("a run is under way".into());
     }
     let root = root()?;
     let spawn = runner::runner_spawn(&root)?;
-    let tasks = tasks.into_iter().map(|entry| TaskSpec { entry, override_: serde_json::json!({}) }).collect();
+    let tasks = tasks.into_iter().map(TaskSpec::new).collect();
     let start = Command::Start { root: Some(root.display().to_string()), device, tasks };
     let relay = Arc::new(Mutex::new(Relay { channel: Some(on_message), history: History::default() }));
     let to = relay.clone();
@@ -304,7 +310,7 @@ fn attach_run(runs: tauri::State<Runs>, on_message: Channel<Message>) -> bool {
     let slot = runs.0.lock().unwrap();
     let Some(active) = slot.as_ref() else { return false };
     active.relay.lock().unwrap().attach(on_message);
-    !active.run.done()
+    active.under_way()
 }
 
 /// The devices a scan finds, MuMu first (runner/devices.py), each with its MuMu instance.

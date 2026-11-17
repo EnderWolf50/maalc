@@ -119,7 +119,11 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   const [starting, setStarting] = useState(false); // Start's save and the runner's start are under way
   const runRef = useRef(run);
   runRef.current = run;
-  useEffect(() => { api.attachRun(dispatch).catch(() => {}); }, []);
+  useEffect(() => {
+    let live = true; // the development build starts an effect twice: the first channel's messages are dropped
+    api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
   const sync = async () => {
@@ -410,7 +414,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   ].filter(Boolean).join(" · ");
   const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
   const canRevert = dirty && savedText !== ""; // a file to go back to: a new one has none
-  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty;
+  // not during a run: Undo would bring back edits to the settings the run reads, which a save would then write (#815)
+  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty && !isRunning(run);
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: ReactKeyboardEvent) => {
     const next = nextTab(TABS.map((x) => x[0]), tab, e.key);

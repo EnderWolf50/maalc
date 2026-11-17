@@ -3,6 +3,7 @@
 // device scan fills in the emulator, a run locks the settings it reads, and closing the window during a run hides it in the
 // tray. The backend (api.ts) is a fake that keeps what the page asked and hands the test the run's message channel.
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
@@ -36,8 +37,9 @@ vi.mock("./api", async (original) => ({
   attachRun: (onMessage: (m: Message) => void) => {
     if (!back.history) return Promise.resolve(false);
     back.send = onMessage;
-    back.history.messages.forEach(onMessage);
-    return Promise.resolve(back.history.active);
+    const { messages, active } = back.history;
+    setTimeout(() => messages.forEach(onMessage)); // a channel's messages come after the call, as the backend's do
+    return Promise.resolve(active);
   },
   scanDevices: () => { back.scans++; return back.devices instanceof Error ? Promise.reject(back.devices) : Promise.resolve(back.devices); },
   onCloseRequested: (keepOpen: () => boolean | Promise<boolean>) => { back.keepOpen = keepOpen; return () => {}; },
@@ -219,6 +221,7 @@ describe("what the run shows", () => {
     expect(alert).toHaveTextContent(fill(zh["runner.crash"], { code: 3 }));
     expect(alert).toHaveTextContent("Fatal Python error: access violation");
     expect(startButton()).toBeEnabled();
+    expect(screen.getByText(zh["runner.result.crashed"])).toBeVisible(); // the run failed (spec #811)
   });
 
   test("a run that ends without its end event fails the running task and cancels the rest; after a stop, stops it", async () => {
@@ -247,6 +250,16 @@ describe("what the run shows", () => {
     send({ type: "stopping" }, { type: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
     expect(screen.getByRole("alert")).toHaveTextContent(fill(zh["runner.killed"], { reason: "the runner cannot stop MaaFramework" }));
     expect(screen.queryByText(fill(zh["runner.crash"], { code: 1 }), { exact: false })).toBeNull();
+    expect(screen.getByText(zh["runner.result.stopped"])).toBeVisible();
+  });
+
+  test("a page taken up once in the development build's double start shows the run once", async () => {
+    back.history = { messages: [log("[maalc] task ClaimMail started")], active: true };
+    render(<StrictMode><App /></StrictMode>);
+    await screen.findByRole("button", { name: zh["runner.start"] });
+    await waitFor(() => expect(logLines()).toHaveLength(1));
+    send(log("[maalc] one more"));
+    expect(logLines()).toHaveLength(2);
   });
 
   test("a page loaded again during a run takes up the run so far, Stop on", async () => {
@@ -321,6 +334,16 @@ describe("during a run", () => {
     send(exit(0, true));
     expect(tick("領信")).toBeEnabled();
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeEnabled();
+  });
+
+  test("Undo of 放棄變更 is gone during a run: it would bring back edits the run reads", async () => {
+    const user = await open();
+    await user.click(tick("經驗本"));
+    await user.click(screen.getByRole("button", { name: zh.revert }));
+    expect(screen.getByRole("button", { name: zh.undo })).toBeVisible();
+    await started(user);
+    expect(back.saved).toEqual([]);
+    expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
   });
 
   test("another tab's edit saves as before, the settings the run reads as they were", async () => {

@@ -68,7 +68,7 @@ export interface RunView {
 export const IDLE: RunView = { phase: "idle", tasks: [], log: [] };
 
 /** HH:MM:SS.mmm now, the runner's log time (runner/runlog.py clock). */
-const now = () => new Date().toTimeString().slice(0, 8) + "." + String(new Date().getMilliseconds()).padStart(3, "0");
+const now = (d = new Date()) => d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
 
 const addLine = (v: RunView, source: LogLine["source"], line: string, t = now()): RunView => {
   const n = (v.log.length ? v.log[v.log.length - 1].n : 0) + 1;

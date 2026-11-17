@@ -7,7 +7,7 @@
 import { memo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
-import { isRunning, useRunner, type Device, type LogLine, type RunView } from "./runner";
+import { LOG_LINES, isRunning, useRunner, type Device, type LogLine, type RunView } from "./runner";
 import * as api from "./api";
 import { Choice, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
 
@@ -111,7 +111,9 @@ export function RunTab() {
 /** What the status line says of the run: the phase, then where it got to (the connection, the resource) or how it ended. */
 function statusOf(t: (k: Key) => string, v: RunView) {
   if (v.phase === "idle") return t("runner.status_idle");
-  if (v.phase === "ended") return t(v.result ? `runner.result.${v.result}` : "runner.result.none");
+  // ended before its end event: the window ended its tree after a stop, or it crashed and the run failed (spec #811)
+  if (v.phase === "ended") return t(v.exit && !v.exit.ended ? (v.killed ? "runner.result.stopped" : "runner.result.crashed")
+    : `runner.result.${v.result ?? "failed"}`);
   const parts = [
     v.phase === "stopping" && t("runner.stopping"),
     v.link ? fill(t(`runner.link.${v.link.state}`), { address: v.link.address }) : t("runner.status_starting"),
@@ -131,12 +133,12 @@ function RunnerSection() {
   const { t } = useEditor();
   const { view, start, stop, blocked } = useRunner();
   const running = isRunning(view);
-  const [native, setNative] = useState(false);
-  const shown = native ? view.log : view.log.filter((l) => l.source !== "console");
+  const [showConsole, setShowConsole] = useState(false);
+  const shown = showConsole ? view.log : view.log.filter((l) => l.source !== "console");
   // the log follows its newest line while the user has not scrolled up from the bottom
   const pane = useRef<HTMLOListElement>(null);
   const follow = useRef(true);
-  useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [shown]);
+  useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole]);
   const crashed = view.exit && !view.exit.ended && !view.killed;
   return (
     <fieldset className="runner">
@@ -174,9 +176,9 @@ function RunnerSection() {
         </div>
         <div className="run-log-pane">
           <h3>{t("runner.log")}</h3>
-          <p className="muted">{t("runner.log_note")}</p>
+          <p className="muted">{fill(t("runner.log_note"), { n: LOG_LINES })}</p>
           <label className="check">
-            <input type="checkbox" checked={native} onChange={(e) => setNative(e.target.checked)} />{t("runner.console")}
+            <input type="checkbox" checked={showConsole} onChange={(e) => setShowConsole(e.target.checked)} />{t("runner.console")}
           </label>
           <ol className="run-log" ref={pane} aria-label={t("runner.log")} tabIndex={0}
             onScroll={(e) => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
@@ -340,6 +342,9 @@ function GlobalOptions() {
   );
 }
 
+/** The last device scan: none yet, under way, the devices it found, or why it found none. */
+type Scan = { state: "none" } | { state: "scanning" } | { state: "found"; devices: Device[] } | { state: "failed"; error: string };
+
 /** A device of a scan as its pick list names it: a MuMu one by its instance. */
 const deviceName = (t: (k: Key) => string, d: Device) =>
   d.mumu ? fill(t("emu.device_mumu"), { index: d.mumu.index, address: d.address }) : fill(t("emu.device"), { name: d.name, address: d.address });
@@ -354,20 +359,20 @@ function EmulatorFields() {
   const text = (v: string) => (v.trim() === "" ? null : v);
   const running = isRunning(useRunner().view);
   // the last scan: its devices, or why it found none; null before the first
-  const [scan, setScan] = useState<null | "scanning" | { devices: Device[] } | { error: string }>(null);
+  const [scan, setScan] = useState<Scan>({ state: "none" });
   const find = () => {
-    setScan("scanning");
-    api.scanDevices().then((devices) => setScan({ devices }), (e) => setScan({ error: String(e) }));
+    setScan({ state: "scanning" });
+    api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
   };
-  const found = scan && typeof scan === "object" && "devices" in scan ? scan.devices : null;
+  const found = scan.state === "found" ? scan.devices : null;
   const at = found ? found.findIndex((d) => d.address === s.emulator.address) : -1;
   const pick = (d: Device) => set({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
       <div className="row scan">
-        <button type="button" disabled={scan === "scanning" || running} onClick={find}>
-          {scan === "scanning" ? t("emu.scanning") : t("emu.scan")}
+        <button type="button" disabled={scan.state === "scanning" || running} onClick={find}>
+          {scan.state === "scanning" ? t("emu.scanning") : t("emu.scan")}
         </button>
         {found && found.length > 0 && (
           <label className="field">
@@ -380,7 +385,7 @@ function EmulatorFields() {
           </label>
         )}
         {found && found.length === 0 && <p className="muted">{t("emu.none_found")}</p>}
-        {scan && typeof scan === "object" && "error" in scan && <p className="caution">{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
+        {scan.state === "failed" && <p className="caution">{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
       </div>
       <div className="row">
         <Field label={label("address")} path="emulator/address">

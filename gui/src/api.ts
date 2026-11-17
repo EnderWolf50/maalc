@@ -2,6 +2,7 @@
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
 import { Channel, convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Settings } from "./model";
 import type { Device, Message } from "./runner";
 
 const tauri = isTauri();
@@ -94,9 +95,6 @@ export function onCloseRequested(keepOpen: () => boolean | Promise<boolean>): ()
   return () => { listening.then((stop) => stop()); };
 }
 
-/** The device a start asks for: the settings' emulator block, each part null for none. */
-export interface DeviceWant { address: string | null; mumu_index: number | null; mumu_manager: string | null }
-
 const channel = (onMessage: (m: Message) => void) => {
   const c = new Channel<Message>();
   c.onmessage = onMessage;
@@ -106,7 +104,7 @@ const channel = (onMessage: (m: Message) => void) => {
 /** Start the runner on `entries` (the ticked tasks' entry nodes, in run order) and `device` (lib.rs start_run): each message
  * of the run goes to `onMessage`, the exit last. Each task reads its options from the settings file at its start, so the
  * page saves first. Refused while a run is under way, and in a plain browser, which has no runner. */
-export function startRun(entries: string[], device: DeviceWant, onMessage: (m: Message) => void): Promise<void> {
+export function startRun(entries: string[], device: Settings["emulator"], onMessage: (m: Message) => void): Promise<void> {
   if (!tauri) return Promise.reject(new Error("the runner runs only in the app"));
   return invoke("start_run", { tasks: entries, device, onMessage: channel(onMessage) });
 }
