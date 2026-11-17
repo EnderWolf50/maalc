@@ -15,6 +15,9 @@ fn main() {
             "attach_run",
             "scan_devices",
             "hide_to_tray",
+            "take_scheduled",
+            "log_schedule",
+            "sync_schedules",
         ]),
     ))
     .unwrap();

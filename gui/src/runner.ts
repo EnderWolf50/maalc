@@ -40,12 +40,13 @@ export type Message =
   | { type: "killed"; reason: string }
   | { type: "exit"; code: number | null; ended: boolean; tail: string[] };
 
-/** What the page itself adds: a start it asked for (the entries it posts), and a start the backend refused. */
-export type Action = Message | { type: "begin"; entries: string[] } | { type: "refused"; error: string };
+/** What the page itself adds: a start it asked for (the entries it posts), a start the backend refused, and a line of its
+ * own for the live log (what came of a scheduled run's start, #816). */
+export type Action = Message | { type: "begin"; entries: string[] } | { type: "refused"; error: string } | { type: "note"; line: string };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
- * protocol). `n` numbers the lines of a run. */
-export interface LogLine { n: number; t: string; source: Source | "raw"; line: string }
+ * protocol), `window` one of the window's own. `n` numbers the lines of a run. */
+export interface LogLine { n: number; t: string; source: Source | "raw" | "window"; line: string }
 
 /** idle: nothing ran since the window opened; running: the runner runs; stopping: the stop went; ended: it exited. */
 export type Phase = "idle" | "running" | "stopping" | "ended";
@@ -82,6 +83,7 @@ const addLine = (v: RunView, source: LogLine["source"], line: string, t = now())
 export function reduce(v: RunView, a: Action): RunView {
   if (a.type === "begin") return { phase: "running", tasks: a.entries.map((entry) => ({ entry, state: "pending" })), log: [] };
   if (a.type === "refused") return { ...IDLE, refused: a.error };
+  if (a.type === "note") return addLine(v, "window", a.line); // the run, or no run, as it was
   if (v.phase === "idle" || (v.phase === "ended" && a.type !== "exit")) v = { ...IDLE, phase: "running" };
   switch (a.type) {
     case "invalid": return addLine(v, "raw", a.line);
@@ -128,6 +130,9 @@ export interface Runner {
   start: () => void;
   stop: () => void;
   blocked: null | "problems" | "no_task" | "saving";
+  /** a scheduled run started (#816): the Run tab brings its log and Stop into view, then calls revealed */
+  reveal?: boolean;
+  revealed?: () => void;
 }
 
 export const RunnerContext = createContext<Runner>({ view: IDLE, start: () => {}, stop: () => {}, blocked: null });
