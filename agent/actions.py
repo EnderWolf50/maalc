@@ -561,11 +561,11 @@ class TaskStart(CustomAction):
         try:
             settings = load_settings(ROOT, notes=notes)
         except SettingsError as e:
-            settings, unread = None, e
+            settings, load_error = None, e
         for note in notes:
             log(note)
         if settings is None:
-            return self.unread(context, unread)
+            return self.unread(context, load_error)
         values = task_options.read(settings, argv.node_name)
         log(task_options.line(values))
         TASK["options"] = values  # the stop procedure's webhook from here on

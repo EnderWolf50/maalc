@@ -389,11 +389,11 @@ export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<s
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
 
 /** have with every key of fallback it lacks, an object inside an object filled the same way; anything else is have's own,
- * so the schema check names what a hand edit broke (agent/settings.py _fill). */
-function fill(fallback: unknown, have: unknown): unknown {
+ * so the schema check names what a hand edit broke (agent/settings.py _with_missing). */
+function withMissing(fallback: unknown, have: unknown): unknown {
   if (!isObject(fallback) || !isObject(have)) return have;
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(fallback)) out[k] = k in have ? fill(v, have[k]) : v;
+  for (const [k, v] of Object.entries(fallback)) out[k] = k in have ? withMissing(v, have[k]) : v;
   for (const [k, v] of Object.entries(have)) if (!(k in fallback)) out[k] = v;
   return out;
 }
@@ -402,7 +402,7 @@ function fill(fallback: unknown, have: unknown): unknown {
  * lacks (agent/settings.py _sections_back). A version 20 file still has its own run, luxcavation and charge_enkephalin. */
 function sectionsBack(d: Record<string, unknown>): Record<string, unknown> {
   const out = { ...d };
-  for (const [k, v] of Object.entries(newSections())) out[k] = k in d ? fill(v, d[k]) : v;
+  for (const [k, v] of Object.entries(newSections())) out[k] = k in d ? withMissing(v, d[k]) : v;
   return out;
 }
 

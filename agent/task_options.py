@@ -8,14 +8,13 @@ a team deleted or disabled stops only the task that names it."""
 
 import json
 
-from settings import SettingsError
+from settings import SCHEMA, SettingsError
 
 # The settings' run keys every task reads: the stop procedure's webhook, the title's two dialogs, the kept screens.
 GLOBAL = ("webhook_url", "auto_accept_terms", "auto_download", "keep_dismissed_screens")
-# The rest of run: MirrorDungeon's own.
-MIRROR = ("difficulty", "target_floor", "runs", "theme_pack_refresh", "weekly_bonus_use", "weekly_bonus_amount",
-          "stop_when_weekly_bonus_out", "starlight_unaffordable", "wipe_retries", "after_retries", "start_team")
-LUX = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}  # each Luxcavation task's key under luxcavation
+# The rest of run, in the schema's order: MirrorDungeon's own.
+MIRROR = tuple(k for k in SCHEMA["properties"]["run"]["properties"] if k not in GLOBAL)
+LUX_KEY = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}  # each Luxcavation task's section under luxcavation
 SECRET = {"webhook_url"}  # the options line says only whether it is set
 
 
@@ -37,8 +36,8 @@ def read(settings, task):
     values = {k: run[k] for k in GLOBAL}
     if task == "MirrorDungeon":
         values.update({k: run[k] for k in MIRROR})
-    elif task in LUX:
-        values.update(settings["luxcavation"][LUX[task]])
+    elif task in LUX_KEY:
+        values.update(settings["luxcavation"][LUX_KEY[task]])
     elif task == "ChargeEnkephalin":
         values.update(settings["charge_enkephalin"])
     return values
@@ -92,7 +91,7 @@ def start_team_errors(team, teams):
 def team_errors(task, team, teams):
     """A Luxcavation task's rule (#366, #780): its team (luxcavation.<key>.team), an id, names one of teams, enabled or
     not. None: none picked yet. An id not in teams: a team deleted in the settings GUI."""
-    path = f"luxcavation/{LUX[task]}/team"
+    path = f"luxcavation/{LUX_KEY[task]}/team"
     if team is None:
         return [f"{path}: no team picked; pick one in {where(task)}"]
     if team not in {t["id"] for t in teams}:

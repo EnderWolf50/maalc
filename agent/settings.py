@@ -46,12 +46,12 @@ def defaults():
     }
 
 
-def _fill(default, have):
+def _with_missing(default, have):
     """have with every key of default it lacks, a dict inside a dict filled the same way; anything else is have's own,
     so the schema check names what a hand edit broke."""
     if not (isinstance(default, dict) and isinstance(have, dict)):
         return have
-    return {**{k: _fill(v, have[k]) if k in have else v for k, v in default.items()},
+    return {**{k: _with_missing(v, have[k]) if k in have else v for k, v in default.items()},
             **{k: v for k, v in have.items() if k not in default}}
 
 
@@ -60,7 +60,7 @@ def _sections_back(data):
     the file lacks comes in at its defaults, and each key a section lacks; a version-20 file still has its own run,
     luxcavation and charge_enkephalin (20 -> 21 kept them), which only get start_team and keep_dismissed_screens when
     they lack them."""
-    return {**data, **{k: _fill(v, data[k]) if k in data else v for k, v in defaults().items()}}
+    return {**data, **{k: _with_missing(v, data[k]) if k in data else v for k, v in defaults().items()}}
 
 
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with

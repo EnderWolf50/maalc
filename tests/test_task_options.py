@@ -34,13 +34,13 @@ NOT_DEFAULT_READ = {"webhook_url": "http://hook.invalid/x", "auto_accept_terms":
                     "stop_when_weekly_bonus_out": True, "starlight_unaffordable": "stop", "wipe_retries": 0,
                     "after_retries": "stop", "start_team": "b"}
 NOT_DEFAULT_LINE = ("options: webhook_url (set), auto_accept_terms=false, auto_download=false, keep_dismissed_screens=false, "
-                    "difficulty=hard, target_floor=15, runs=3, theme_pack_refresh=once, weekly_bonus_use=none, "
-                    "weekly_bonus_amount=one, stop_when_weekly_bonus_out=true, starlight_unaffordable=stop, wipe_retries=0, "
-                    "after_retries=stop, start_team=b")
+                    "difficulty=hard, target_floor=15, runs=3, weekly_bonus_use=none, weekly_bonus_amount=one, "
+                    "stop_when_weekly_bonus_out=true, starlight_unaffordable=stop, wipe_retries=0, after_retries=stop, "
+                    "theme_pack_refresh=once, start_team=b")
 # The options lines of the valid file, whose options are the defaults; each Luxcavation task's with team b picked.
-MIRROR_LINE = (f"options: {GLOBAL_DEFAULTS}, difficulty=auto, target_floor=5, runs=1, theme_pack_refresh=all, "
-               "weekly_bonus_use=hard, weekly_bonus_amount=all, stop_when_weekly_bonus_out=false, starlight_unaffordable=skip, "
-               "wipe_retries=2, after_retries=forfeit, start_team=null")
+MIRROR_LINE = (f"options: {GLOBAL_DEFAULTS}, difficulty=auto, target_floor=5, runs=1, weekly_bonus_use=hard, "
+               "weekly_bonus_amount=all, stop_when_weekly_bonus_out=false, starlight_unaffordable=skip, wipe_retries=2, "
+               "after_retries=forfeit, theme_pack_refresh=all, start_team=null")
 LUX_LINE = {"ExpLuxcavation": f"options: {GLOBAL_DEFAULTS}, mode=daily, count=1, team=b, retries=0, consecutive=true",
             "ThreadLuxcavation": f"options: {GLOBAL_DEFAULTS}, mode=daily, count=3, team=b, retries=0, consecutive=true"}
 LINES = {"MirrorDungeon": MIRROR_LINE, **LUX_LINE, "ChargeEnkephalin": f"options: {GLOBAL_DEFAULTS}, count=0",
