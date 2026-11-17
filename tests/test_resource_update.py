@@ -373,10 +373,13 @@ def test_the_files_come_over_https_too(base, remote, network):
     publish(remote, NEW, "2026.11.16")
     run(base)
     assert local_files(base)["data/a.json"] == NEW["data/a.json"]
-    # the timeout is a deadline minus the clock, so it is 60 only up to float rounding
-    assert network.seen[0][0] == "main/manifest.json" and ("2026.11.16/data/a.json", pytest.approx(60)) in network.seen
+    # the timeout is a deadline minus the clock: what is left of the 60 s, less a tick of the clock (15.6 ms on Windows)
+    timeouts = dict(network.seen)
+    assert network.seen[0][0] == "main/manifest.json" and 59 < timeouts["2026.11.16/data/a.json"] <= 60
 
 
+# A stall waits until the test ends, so only its cases cut the budgets to 0.3 s and wait for them to run out; the other
+# cases keep the real budgets, which a slow runner does not use up (#822's first CI run timed out a 404 at 0.3 s).
 @pytest.mark.parametrize("trouble, reason", [
     ({"main/manifest.json": "stall"}, "timed out"),
     ({"main/manifest.json": "refuse"}, "cannot connect"),
@@ -389,8 +392,9 @@ def test_the_files_come_over_https_too(base, remote, network):
 def test_a_network_failure_keeps_the_files_and_says_why(base, remote, network, monkeypatch, trouble, reason):
     publish(remote, NEW, "2026.11.16")
     network.trouble.update(trouble)
-    monkeypatch.setattr(ru, "CHECK_SECONDS", 0.3)
-    monkeypatch.setattr(ru, "DOWNLOAD_SECONDS", 0.3)
+    if "stall" in trouble.values():
+        monkeypatch.setattr(ru, "CHECK_SECONDS", 0.3)
+        monkeypatch.setattr(ru, "DOWNLOAD_SECONDS", 0.3)
     before = tree(base)
     said = run(base)
     assert tree(base) == before and reason in said and "kept the current files" in said
