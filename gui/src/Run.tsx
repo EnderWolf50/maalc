@@ -37,10 +37,11 @@ export const optionLabel = (path: string): Key => {
   return (parts[0] === "luxcavation" ? `lux.${key}` : parts[0] === "charge_enkephalin" ? `charge.${key}` : `run.${key}`) as Key;
 };
 
-/** A field's label with its settings key after it, small: the key a stop line names. A screen reader reads the label alone. */
+/** A field's label with its settings key after it, small: the key a stop line names. A screen reader reads the label alone.
+ * One inline span, so a switch's flex row (.check) keeps the label and its key as one item. */
 function Keyed({ path }: { path: string }) {
   const { t } = useEditor();
-  return <>{t(optionLabel(path))}<code className="key" aria-hidden>{path}</code></>;
+  return <span className="keyed">{t(optionLabel(path))}<code className="key" aria-hidden>{path}</code></span>;
 }
 /** A field of the tab: its label and settings key, the control, a note. */
 const KeyField = ({ path, note, children }: { path: string; note?: string; children: ReactNode }) =>
@@ -257,7 +258,7 @@ function GlobalOptions() {
 function EmulatorFields() {
   const { s, update, t } = useEditor();
   const set = (patch: Partial<Settings["emulator"]>) => update((d) => { Object.assign(d.emulator, patch); });
-  const label = (k: "address" | "mumu_index") => <>{t(`emu.${k}`)}<code className="key" aria-hidden>emulator/{k}</code></>;
+  const label = (k: "address" | "mumu_index") => <span className="keyed">{t(`emu.${k}`)}<code className="key" aria-hidden>emulator/{k}</code></span>;
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>

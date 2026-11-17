@@ -203,6 +203,10 @@ describe("the global options and the emulator", () => {
     expect(screen.getByRole("checkbox", { name: zh["run.auto_download"] })).toBeInTheDocument();
     await r.user.click(within(rows()[3]).getByText("經驗本"));
     for (const key of ["luxcavation/exp/team", "luxcavation/exp/consecutive"]) expect(screen.getByText(key)).toBeVisible();
+    // a switch's label and its key are one item of its flex row: apart, the label wrapped a word to a line in the window
+    const label = screen.getByRole("checkbox", { name: zh["lux.consecutive"] }).closest("label")!;
+    expect([...label.children].map((x) => x.tagName)).toEqual(["INPUT", "SPAN"]);
+    expect(label.querySelector(":scope > span")).toHaveTextContent(`${zh["lux.consecutive"]}luxcavation/exp/consecutive`);
   });
 
   test("the tab's long notes show one topic to a line", () => {
