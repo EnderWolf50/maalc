@@ -36,7 +36,7 @@ def test_a_child_started_after_the_root_is_counted_under_its_role_until_the_root
 
 @pytest.mark.parametrize("name, cmdline, expected", [
     ("python.exe", ["python", "-u", "install\\agent\\main.py", "MaaAgent_1"], "agent"),
-    ("python.exe", ["python", "-u", "tools/live/bot.py", "tasker", "--install", "install"], "tasker"),
+    ("python.exe", ["python", "-u", "install\\runner\\__main__.py"], "tasker"),  # the runner (#812)
     ("python.exe", ["python", "-u", "tools/live/bot.py", "run", "--install", "install"], "other"),
     ("mxu.exe", ["mxu.exe"], "client"),
     ("MFAAvalonia.exe", ["MFAAvalonia.exe"], "client"),

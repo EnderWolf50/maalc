@@ -5,16 +5,18 @@
     uv run python tools/live/bot.py prep --install DIR [--source INSTALL] [--set KEY=VALUE ...]
     uv run python tools/live/bot.py awake [--minutes 240]
 
-**run** starts the task the way MXU does (the install's resource/base, agent/main.py and maafw/, so its
-patched MaaFramework.dll) on the MuMu instance at `--port`, and writes every line the tasker and the agent
-print to `--log`, each with its wall time (`HH:MM:SS.fff <line>`): the `[maalc]` lines and the controller's
-touch lines that `tools/live/evidence.py` reads. `--task A,B` posts several tasks up front, as a client queues its
-task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
+**run** runs the tasks through the install's runner (`DIR/runner/`, #812), the one the settings window and the
+daily use: the install's resource/base, agent/main.py and maafw/ (its patched MaaFramework.dll), on the MuMu instance
+at `--port`. It writes every log line the runner sends to `--log` at the line's own wall time (`HH:MM:SS.fff <line>`):
+the runner's `[run]` lines, the bot's `[maalc]` lines and the controller's touch lines that `tools/live/evidence.py`
+reads; the runner keeps the same lines in DIR/logs/runner/. `--task A,B` posts several tasks up front, as a client
+queues its task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
 (`tools/live/queue.py detach`), as the maalc-live-test skill says. Each task goes with the override MXU would send
-(#778, `tools/client_override.py`): DIR's interface.json and its imports, every option at its default but those
-`--option NAME=VALUE` sets (a select's case, a switch's Yes or No, an input's text), the same values for every task of
-the list. A line per task says the values it used, `(default)` after one no `--option` set. An option, case or task
-interface.json lacks stops it, exit 1, before the device is touched.
+(#778, `tools/client_override.py`), which the runner passes on as it is: DIR's interface.json and its imports, every
+option at its default but those `--option NAME=VALUE` sets (a select's case, a switch's Yes or No, an input's text),
+the same values for every task of the list. A line per task says the values it used, `(default)` after one no
+`--option` set. An option, case or task interface.json lacks stops it, exit 1, before the runner starts. A runner that
+reports it cannot stop MaaFramework (after the bot exited mid-run) has its process tree ended.
 
 **prep** copies `config/settings.json`, `config/maa_option.json` and, when the source has them, the team options file
 `config/team_options.json` the settings GUI writes (#780: `run --option ExpTeam=<team id>` picks from its cases, and
@@ -63,28 +65,37 @@ def clock() -> str:
 DRAIN = 5.0
 
 
-def stamped(cmd, log: Path, clock=clock) -> int:
-    """Run cmd, appending each line it prints to log with the wall time; its exit code. The run ends with the child,
-    not with the end of its output: a process the child started can inherit the output and outlive it, as the adb
-    server that MaaFramework's `adb kill-server` and `adb connect` start does (#663), and it never closes it. That
-    server is meant to outlive the run, so it is left running; the run stops reading instead."""
+def stamped(cmd, log: Path, clock=clock, send: str | None = None, line=None) -> int:
+    """Run cmd, appending each line it prints to log with the wall time; its exit code. send: a line written to its
+    stdin once it started (the runner's start command), which stays open until it exits. line(text): the (time, text)
+    log gets for one line it printed, or None for none (the runner's events, RunnerEvents); by default the line as it
+    came, at clock(). The run ends with the child, not with the end of its output: a process the child started can
+    inherit the output and outlive it, as the adb server that MaaFramework's `adb kill-server` and `adb connect` start
+    does (#663), and it never closes it. That server is meant to outlive the run, so it is left running; the run stops
+    reading instead."""
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+    line = line or (lambda text: (clock(), text))
     read, write = os.pipe()
     with open(log, "a", encoding="utf-8", buffering=1) as f:
         try:
-            p = subprocess.Popen(cmd, stdout=write, stderr=subprocess.STDOUT, env=env)
+            p = subprocess.Popen(cmd, stdout=write, stderr=subprocess.STDOUT, env=env,
+                                 stdin=subprocess.PIPE if send is not None else None)
         except BaseException:
             os.close(read)
             raise
         finally:
             os.close(write)
         f.write(f"{clock()} [run] child pid {p.pid}\n")
+        if send is not None:
+            p.stdin.write(send.encode("utf-8") + b"\n")
+            p.stdin.flush()
         lock, done, tail = threading.Lock(), threading.Event(), bytearray()  # tail: what follows the last newline
 
         def write_lines(raw: bytes):
             # a lone \r ends a line too, as it did when the output was read in text mode
             for part in raw.rstrip(b"\r").split(b"\r"):
-                f.write(f"{clock()} {part.decode('utf-8', 'replace').rstrip()}\n")
+                if stamp := line(part.decode("utf-8", "replace").rstrip()):
+                    f.write(f"{stamp[0]} {stamp[1]}\n")
 
         def pump():
             # os.read, not a file object: the reader may still be blocked in it when this process exits, and a
@@ -112,7 +123,71 @@ def stamped(cmd, log: Path, clock=clock) -> int:
         if reader.is_alive():
             f.write(f"{clock()} [run] output still open {DRAIN:g} s after the child exited: a process it started holds it\n")
         f.write(f"{clock()} [run] exit {code}\n")
+        if p.stdin:
+            try:
+                p.stdin.close()
+            except OSError:  # the child is gone and its end with it
+                pass
     return code
+
+
+def kill_tree(pid: int) -> None:
+    """End pid and every process under it (taskkill /T; the live tools run on Windows, elsewhere pid alone ends)."""
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True)
+    else:
+        os.kill(pid, 9)
+
+
+class RunnerEvents:
+    """The runner's events (runner/protocol.py) as run.log lines: a log event at its own time, the rest none (the
+    runner logs its errors and task states too). Its pid comes with ready; a stop_timeout (MaaFramework does not stop,
+    after the bot exited mid-run) ends its process tree, as the window would."""
+
+    def __init__(self, clock=clock, kill=kill_tree):
+        self.clock, self.kill, self.pid, self.result = clock, kill, None, None
+
+    def __call__(self, text: str):
+        try:
+            e = json.loads(text)
+        except ValueError:
+            return self.clock(), text  # not the protocol: kept as it came
+        if not isinstance(e, dict):
+            return self.clock(), text
+        kind = e.get("event")
+        if kind == "log":
+            return e.get("t", self.clock()), e.get("line", "")
+        if kind == "ready":
+            self.pid = e.get("pid")
+        elif kind == "end":
+            self.result = e.get("result")
+        elif kind == "error" and e.get("kind") == "stop_timeout" and self.pid:
+            self.kill(self.pid)
+            return self.clock(), f"[run] the runner cannot stop MaaFramework: its process tree {self.pid} ended"
+        return None
+
+
+def run(root: Path, tasks: list[str], port: int, options: list[str], log: Path) -> int:
+    """The tasks through root's runner, its log lines in log; the runner's exit code (0: every task succeeded)."""
+    said = []
+    try:
+        jobs = plan(root, tasks, options, said.append)
+    except SystemExit as e:
+        said.append(str(e))
+        jobs = None
+    runner = root / "runner" / "__main__.py"
+    if jobs is not None and not runner.is_file():
+        said.append(f"[run] {root} has no runner/: assemble the install with tools/install.py")
+        jobs = None
+    with open(log, "a", encoding="utf-8") as f:
+        f.writelines(f"{clock()} {line}\n" for line in said)
+    if jobs is None:
+        return 1
+    # v: runner/protocol.py VERSION (tests/test_live_bot.py ties the two)
+    start = {"v": 1, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
+             "tasks": [{"entry": entry, "override": override} for _, entry, override in jobs]}
+    return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),
+                   line=RunnerEvents())
 
 
 def plan(root: Path, tasks: list[str], options: list[str], say=print) -> list[tuple[str, str, list]]:
@@ -128,61 +203,6 @@ def plan(root: Path, tasks: list[str], options: list[str], say=print) -> list[tu
     for name, _, _, used in jobs:
         say(f"[run] {name} options: {', '.join(used) or 'none'}")
     return [(name, entry, override) for name, entry, override, _ in jobs]
-
-
-def run_tasks(t, jobs: list[tuple[str, str, list]], say=print, sleep=time.sleep) -> list[str]:
-    """Post the whole list of (task, entry, override) up front, as a client queues its task list (an account-level
-    stop's post_stop leaves the rest pending, unrun), then follow each in turn by its detail until it is done or the
-    tasker has stopped, as MXU does (G1: wait() and status go through a runner id a clear_cache drops), and return only
-    once the tasker has stopped, so the agent is not closed under a task still running: their states."""
-    states = []
-    for name, job in [(name, t.post_task(entry, override)) for name, entry, override in jobs]:
-        t0 = time.time()
-        while (detail := job.get()) and not detail.status.done and t.running:
-            sleep(1)
-        detail = job.get()  # read again: the tasker may have stopped after the read above
-        s = detail and detail.status
-        state = "none" if not s else "succeeded" if s.succeeded else "failed" if s.failed else "running" if s.running else "pending"
-        say(f"[run] {name} status={state} t={time.time() - t0:.0f}s")
-        for n in (detail.nodes[-10:] if detail else []):
-            say(f"[run] node {n.name} {n.completed}")
-        states.append(state)
-    while t.running:
-        sleep(1)
-    return states
-
-
-def tasker(root: Path, tasks: list[str], port: int, options: list[str]) -> int:
-    """The tasks, run in this process in turn: MaaFramework from root/maafw, the agent as a child. Their options are
-    checked before MaaFramework loads or the device is touched."""
-    def say(line):
-        print(line, flush=True)
-
-    jobs = plan(root, tasks, options, say)
-    os.environ["MAAFW_BINARY_PATH"] = str(root / "maafw")
-    from maa.agent_client import AgentClient
-    from maa.resource import Resource
-    from maa.tasker import Tasker
-    from maa.toolkit import Toolkit
-
-    from live.device import connect
-
-    Toolkit.init_option(str(root / "debug"))
-    Tasker.set_save_on_error(True)
-    ctl = connect(port)
-    res = Resource()
-    res.post_bundle(str(root / "resource/base")).wait()
-    client = AgentClient()
-    client.bind(res)
-    agent = subprocess.Popen([sys.executable, "-u", str(root / "agent/main.py"), client.identifier])
-    client.connect()
-    t = Tasker()
-    t.bind(res, ctl)
-    say(f"[run] start {','.join(tasks)} pid {os.getpid()} agent {agent.pid} install {root}")
-    states = run_tasks(t, jobs, say)
-    client.disconnect()
-    agent.terminate()
-    return 0 if set(states) == {"succeeded"} else 1
 
 
 AGENT_OPTIONS = TOOLS.parent / "agent" / "task_options.schema.json"
@@ -270,15 +290,13 @@ def awake(minutes: float, set_state=None, sleep=time.sleep) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="command", required=True)
-    for name in ("run", "tasker"):
-        p = sub.add_parser(name)
-        p.add_argument("--install", type=Path, required=True)
-        p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
-        p.add_argument("--port", type=int, default=16384)
-        p.add_argument("--option", action="append", default=[], metavar="NAME=VALUE",
-                       help="a task or global option of interface.json, as the client sets it; repeatable")
-        if name == "run":
-            p.add_argument("--log", type=Path, required=True)
+    p = sub.add_parser("run")
+    p.add_argument("--install", type=Path, required=True)
+    p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
+    p.add_argument("--port", type=int, default=16384)
+    p.add_argument("--option", action="append", default=[], metavar="NAME=VALUE",
+                   help="a task or global option of interface.json, as the client sets it; repeatable")
+    p.add_argument("--log", type=Path, required=True)
     p = sub.add_parser("prep")
     p.add_argument("--install", type=Path, required=True)
     p.add_argument("--source", type=Path)
@@ -287,12 +305,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.command == "run":
-        root = a.install.resolve()
-        options = [arg for pair in a.option for arg in ("--option", pair)]
-        return stamped([sys.executable, "-u", __file__, "tasker", "--install", str(root), "--task", a.task, "--port", str(a.port),
-                        *options], a.log)
-    if a.command == "tasker":
-        return tasker(a.install, a.task.split(","), a.port, a.option)
+        return run(a.install.resolve(), a.task.split(","), a.port, a.option, a.log)
     if a.command == "prep":
         prep(a.install, a.source or main_checkout() / "install", a.set)
         print(f"prep: {a.install / 'config/settings.json'} written, {len(a.set)} key(s) set", flush=True)

@@ -23,6 +23,7 @@ def game(monkeypatch, tmp_path):
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: np.full((720, 1280, 3), 7, np.uint8)
     ctx.tasker.controller.post_click.side_effect = lambda x, y: state.taps.append((x, y)) or MagicMock()
     ctx.tasker.controller.post_click_key.side_effect = lambda k: state.keys.append(k) or MagicMock()
+    ctx.tasker.stopping = False  # a running task: until() gives up its wait on a stopping one (#812)
     patch_all(monkeypatch, "ROOT", tmp_path)
     actions.RUN.clear()
     actions.DISMISSED_AT.clear()

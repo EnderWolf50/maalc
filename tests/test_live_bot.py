@@ -5,13 +5,13 @@ import sys
 import shutil
 import threading
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 import client_override
 from client_options import TEAM_OPTIONS, override
 from live import bot
+from runner import protocol
 
 
 def test_run_stamps_every_line_of_the_child_and_its_exit(tmp_path):
@@ -226,54 +226,68 @@ def test_run_stops_before_posting_any_task_on_an_option_case_or_task_the_interfa
     assert not any("[run] start" in line or " options: " in line for line in lines)  # no device, no task, no values
 
 
-def test_run_tasks_posts_the_list_up_front_and_follows_each_task_by_its_detail():
-    # #364: a client queues its whole task list; an account-level stop (post_stop) leaves the rest pending, unrun.
-    # G1: as MXU, a task is done when its detail says so, not when wait() returns, and the agent stays up until the
-    # tasker has stopped.
-    status = dict(done=False, succeeded=False, failed=False, running=False, pending=False)
-    running = SimpleNamespace(**{**status, "running": True})
-    details = {
-        "MirrorDungeon": [running, running, SimpleNamespace(**{**status, "done": True, "succeeded": True})],
-        "MirrorDungeon2": [SimpleNamespace(**{**status, "pending": True})],
-        "ExpLuxcavation": [None],
-    }
-    posted, polls = [], []
+FAKE_RUNNER = """
+import json, os, sys
+from pathlib import Path
+start = sys.stdin.readline()
+Path(__file__).with_name("start.json").write_text(start, encoding="utf-8")
+for e in [{"event": "ready", "pid": os.getpid()}, {"event": "task", "index": 0, "entry": "MirrorEntry", "state": "running"},
+          {"event": "log", "t": "10:00:00.001", "source": "agent", "line": "[maalc] 開始"},
+          {"event": "log", "t": "10:00:00.002", "source": "console", "line": "x: 960, y: 540, width: 1920, height: 1080"},
+          {"event": "end", "result": "succeeded"}]:
+    print(json.dumps({"v": 1, **e}), flush=True)
+raise SystemExit({code})
+"""
 
-    class Tasker:
-        ticks = 0
 
-        @property
-        def running(self):  # the account-level stop: the first task ends it, the rest stay pending
-            return self.ticks < 4
+def fake_install(tmp_path, code=0):
+    (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
+    (tmp_path / "runner").mkdir()
+    (tmp_path / "runner/__main__.py").write_text(FAKE_RUNNER.replace("{code}", str(code)), encoding="utf-8")
+    return tmp_path
 
-        def post_task(self, entry, override):
-            posted.append((entry, override))
-            return Job(entry if entry not in [e for e, _ in posted[:-1]] else entry + "2")
 
-    class Job:
-        def __init__(self, name):
-            self.name = name
+def test_run_goes_through_the_installs_runner_with_each_tasks_override_and_logs_its_lines(tmp_path):
+    # #812: the runner posts each task with the override bot.py built from --option (#778), as it came; run.log gets
+    # the runner's log lines at their own time, and nothing for its other events
+    root, log = fake_install(tmp_path), tmp_path / "run.log"
+    code = bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror,Mirror", "--port", "16416",
+                     "--option", "Difficulty=hard"])
+    assert code == 0
+    start = json.loads((root / "runner/start.json").read_text(encoding="utf-8"))
+    hard = [{"MirrorEntry": {"attach": {"difficulty": "hard"}}}]
+    assert start == {"v": protocol.VERSION, "cmd": "start", "root": str(root.resolve()),
+                     "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry", "override": hard}] * 2}
+    assert protocol.command(json.dumps(start))["tasks"] == start["tasks"]  # a start the runner takes as it is
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert [ln.split(" ", 1)[1] for ln in lines[:2]] == ["[run] Mirror options: Difficulty=hard"] * 2
+    assert " [run] child pid " in lines[2]  # tools/live/preflight.py's BOT_START
+    assert lines[3:5] == ["10:00:00.001 [maalc] 開始", "10:00:00.002 x: 960, y: 540, width: 1920, height: 1080"]
+    assert lines[5].endswith(" [run] exit 0") and len(lines) == 6
 
-        def wait(self):
-            raise AssertionError("wait() returns early once a task's runner id is gone")
 
-        def get(self):
-            polls.append(self.name)
-            reads = details[self.name]
-            s = reads.pop(0) if len(reads) > 1 else reads[0]
-            return s and type("Detail", (), {"status": s, "nodes": []})()
+@pytest.mark.parametrize("code", [1, 2])
+def test_run_exits_with_the_runners_code_when_a_task_did_not_succeed(tmp_path, code):
+    root, log = fake_install(tmp_path, code), tmp_path / "run.log"
+    assert bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror"]) == code
 
-    tasker = Tasker()
 
-    def sleep(seconds):
-        tasker.ticks += 1
+def test_run_stops_before_any_child_when_the_install_has_no_runner(tmp_path):
+    (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
+    log = tmp_path / "run.log"
+    assert bot.main(["run", "--install", str(tmp_path), "--log", str(log), "--task", "Mirror"]) == 1
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert lines[-1].endswith("has no runner/: assemble the install with tools/install.py")
+    assert not any("child pid" in line for line in lines)
 
-    lines = []
-    hard, normal = [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}], [{"MirrorDungeon": {"attach": {"difficulty": "normal"}}}]
-    jobs = [("MirrorDungeon", "MirrorDungeon", hard), ("MirrorDungeon", "MirrorDungeon", normal), ("ExpLuxcavation", "ExpLuxcavation", [])]
-    assert bot.run_tasks(tasker, jobs, lines.append, sleep) == ["succeeded", "pending", "none"]
-    assert posted == [("MirrorDungeon", hard), ("MirrorDungeon", normal), ("ExpLuxcavation", [])]  # each its own override
-    assert polls[:3] == ["MirrorDungeon"] * 3  # polled until its detail said done
-    assert not tasker.running  # returned (the agent closes) only once the tasker had stopped
-    assert [ln.split(" t=")[0] for ln in lines if "status=" in ln] == [
-        "[run] MirrorDungeon status=succeeded", "[run] MirrorDungeon status=pending", "[run] ExpLuxcavation status=none"]
+
+def test_a_runner_that_cannot_stop_has_its_process_tree_ended():
+    # the bot exited mid-run and MaaFramework does not stop (#812): the runner says so, its caller ends its tree
+    killed = []
+    events = bot.RunnerEvents(clock=lambda: "12:00:00.000", kill=killed.append)
+    assert events('{"v": 1, "event": "ready", "pid": 4242}') is None
+    assert events('{"v": 1, "event": "error", "kind": "agent_exit", "message": "the bot exited with code 3"}') is None
+    assert events('{"v": 1, "event": "error", "kind": "stop_timeout", "message": "MaaFramework did not stop"}') == (
+        "12:00:00.000", "[run] the runner cannot stop MaaFramework: its process tree 4242 ended")
+    assert killed == [4242]
+    assert events("Fatal Python error: not the protocol") == ("12:00:00.000", "Fatal Python error: not the protocol")
