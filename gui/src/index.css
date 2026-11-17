@@ -120,7 +120,7 @@ body { margin: 0; }
 h1 { font-size: 16px; margin: 0; }
 h3, h4 { margin: 0 0 6px; font-size: 13.5px; color: var(--fg-2); }
 /* There for a screen reader's list of headings, not for the eye (and the header's language label when it gives way). */
-.sr-only, header[data-fit~="label"] .lang > span { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sr-only, header[data-fit~="label"] .lang > span, header[data-fit~="label"] .update > .words { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 * { scrollbar-color: var(--line-2) var(--bg); }
 
 /* Controls: standard ones, in the game's chamfered plates. */
@@ -214,6 +214,21 @@ header button.primary:not(.armed):hover { border-color: var(--accent-line); }
 /* Save refused: the stripe gives way to a crimson frame until the problems are fixed. */
 header button.primary.refused { border: 2px solid var(--bad); background: var(--bad-soft); color: var(--bad); padding: 5px 25px; }
 header button.primary.refused:hover { background: var(--bad-soft); border-color: var(--bad); }
+/* A newer release (#817, Update.tsx UpdateChip): a plate in the accent's soft colour; while a step runs, its name, with the
+ * download's share as a bar along its foot; crimson after a failure. */
+header .update {
+  position: relative; flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px; font-size: 13px;
+  white-space: nowrap; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: 4px; corner-shape: bevel;
+}
+header .update svg { flex: none; width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+/* label: the mark alone (the words go with .sr-only) */
+header[data-fit~="label"] .update { padding-inline: 5px; }
+header button.update:hover:not(:disabled) { background: var(--stripe); border-color: var(--accent-line); }
+header .update.busy { overflow: hidden; color: var(--fg-2); background: var(--raise); border-color: var(--line-2); font-variant-numeric: tabular-nums; }
+header .update.busy::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: var(--done, 0%); background: var(--accent); }
+header .update.bad { color: var(--bad); background: var(--bad-soft); border-color: var(--bad); }
+header button.update.bad:hover:not(:disabled) { background: var(--bad-soft); border-color: var(--bad); }
 /* A window too narrow for the header's parts (#746): the file path shrinks to nothing first, by itself; then TitleBar
  * (WindowControls.tsx FIT_STEPS) takes these steps one at a time until the parts fit. The save state keeps to one line until
  * the last one. With the path gone, the name plate's end margin takes the room the path took, so the controls and the window
@@ -279,6 +294,18 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .readback ul { margin: 0 0 8px; padding-left: 22px; font-size: 13px; color: var(--fg); }
 .readback li + li { margin-top: 2px; }
 .readback ul.missed li { color: var(--accent-ink); }
+
+/* The update's notices (#817, Update.tsx): above the tab's content until dismissed, as the read-back's; crimson when an
+ * update failed, the backend's own words under the sentence. */
+.update-notice {
+  margin: 0 0 16px; padding: 10px 16px 12px; background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: 10px 0 10px 0; corner-shape: bevel;
+}
+.update-notice.bad { background: var(--bad-soft); border-color: var(--bad); }
+.update-notice h3 { margin: 0 0 6px; font-size: 14px; color: var(--accent-ink); }
+.update-notice.bad h3 { color: var(--bad); }
+.update-notice p { margin: 0 0 8px; font-size: 13px; color: var(--fg); max-width: 64em; }
+.update-notice p.why { font-size: 12px; color: var(--fg-2); overflow-wrap: anywhere; }
 
 /* The close prompt (WindowControls.tsx LeavePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }

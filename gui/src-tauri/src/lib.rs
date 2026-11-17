@@ -1,5 +1,6 @@
 //! File access for the settings GUI (docs/spec/04-settings.md sections 1, 2 and 12), and the runner it starts (#815,
 //! src/runner.rs): its messages go to the page through a channel, and closing the window during a run hides it in the tray.
+//! The window updates itself from maalc's newest release (#817, src/update.rs), never during a run.
 //! The scheduled runs (#816): one window per maalc folder (src/instance.rs), the `--run <id>` of a start handed to the page,
 //! and the Task Scheduler's tasks brought in line with the settings' schedules (src/schedule.rs).
 //! Validation lives in the frontend; this side only reads and writes files under <root>.
@@ -10,7 +11,9 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::ipc::Channel;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -18,6 +21,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 mod instance;
 mod runner;
+mod update;
 mod schedule;
 
 /// <root> is the folder holding this executable (spec 04 section 1), so the user never picks it.
@@ -56,7 +60,7 @@ fn read_if_there(path: &Path) -> std::io::Result<Option<String>> {
 
 /// Write text to a temp file next to path, then rename it over path once `ready` agrees, so a crash never leaves half a
 /// file. Nothing is written when `ready` refuses or a step fails.
-fn replace(path: &Path, text: &str, ready: impl FnOnce() -> std::io::Result<()>) -> Result<(), String> {
+pub(crate) fn replace(path: &Path, text: &str, ready: impl FnOnce() -> std::io::Result<()>) -> Result<(), String> {
     let dir = path.parent().unwrap();
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let tmp = dir.join(format!("{}.tmp", path.file_name().unwrap().to_string_lossy()));
@@ -355,13 +359,16 @@ impl Runs {
     }
 }
 
+/// The error of what a run refuses: a second start, an update's apply.
+const RUN_UNDER_WAY: &str = "a run is under way";
+
 /// Start the runner on `tasks` (their entry nodes, in run order) and `device`; its messages go to `on_message`. Each task reads
 /// its options from config/settings.json at its start (#813), so the page saves first. Refused while a run is under way.
 #[tauri::command]
 fn start_run(runs: tauri::State<Runs>, tasks: Vec<String>, device: DeviceWant, on_message: Channel<Message>) -> Result<(), String> {
     let mut slot = runs.0.lock().unwrap();
     if slot.as_ref().is_some_and(Active::under_way) {
-        return Err("a run is under way".into());
+        return Err(RUN_UNDER_WAY.into());
     }
     let root = root()?;
     let spawn = runner::runner_spawn(&root)?;
@@ -394,6 +401,105 @@ fn attach_run(runs: tauri::State<Runs>, on_message: Channel<Message>) -> bool {
 async fn scan_devices() -> Result<Vec<runner::Device>, String> {
     let spawn = runner::runner_spawn(&root()?)?;
     tauri::async_runtime::spawn_blocking(move || runner::scan(&spawn, runner::SCAN_WAIT)).await.map_err(|e| e.to_string())?
+}
+
+/// The update (src/update.rs): how the last apply went, read once at the start; the release this start's check found, asked
+/// once per start (a page loaded again gets the same answer); whether a download is under way.
+#[derive(Default)]
+struct Updates {
+    outcome: Option<update::Outcome>,
+    checked: Mutex<Option<Option<update::Release>>>,
+    downloading: AtomicBool,
+}
+
+impl Updates {
+    /// The release this start's check found, when it is newer than this build.
+    fn newer(&self) -> Option<update::Release> {
+        self.checked.lock().unwrap().clone().flatten().filter(|r| update::newer(&r.version, update::current()))
+    }
+}
+
+/// What the page shows of the update: this build's version, and the newer release the check found.
+#[derive(Serialize)]
+struct UpdateCheck {
+    current: String,
+    release: Option<update::Release>,
+}
+
+fn now() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// The latest release, when it is newer than this build: asked of GitHub at most once a day (update::check), and once per
+/// start. A check that fails is no release: the page says nothing.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> Result<UpdateCheck, String> {
+    let root = root()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let updates = app.state::<Updates>();
+        let mut slot = updates.checked.lock().unwrap(); // held through the check: a second call waits for its answer
+        if slot.is_none() {
+            *slot = Some(update::check(&root, &update::api_base(), now()));
+        }
+        drop(slot);
+        UpdateCheck { current: update::current().into(), release: updates.newer() }
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// How the last update's apply went (update::settle), for the page to show; None when there was none to show.
+#[tauri::command]
+fn last_update(updates: tauri::State<Updates>) -> Option<update::Outcome> {
+    updates.outcome.clone()
+}
+
+/// Download the release the check found, check its sha256 and unpack it (update::download); `on_progress` hears how far it
+/// is. A run may go on meanwhile: only the apply waits for it.
+#[tauri::command]
+async fn download_update(app: AppHandle, on_progress: Channel<update::Progress>) -> Result<(), String> {
+    let root = root()?;
+    let release = app.state::<Updates>().newer().ok_or("no newer release to download")?;
+    if app.state::<Updates>().downloading.swap(true, Ordering::SeqCst) {
+        return Err("a download is under way".into());
+    }
+    let done = tauri::async_runtime::spawn_blocking(move || {
+        let got = update::download(&root, &release, &mut |p| {
+            let _ = on_progress.send(p);
+        });
+        app.state::<Updates>().downloading.store(false, Ordering::SeqCst);
+        got
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    done.map(|_| ())
+}
+
+/// Refused while a run is under way: an update never replaces the files a run uses (spec #811 「自動更新」). A scheduled run
+/// due soon is not waited for.
+fn ready_to_apply(runs: &Runs) -> Result<(), String> {
+    if runs.running().is_some() { Err(RUN_UNDER_WAY.into()) } else { Ok(()) }
+}
+
+/// Apply the downloaded release: its maalc-gui.exe starts in the apply-update mode (update::launch), and this window exits for
+/// it, which replaces the files and starts the new window. Refused while a run is under way, before the download, and while
+/// cache/update/old/ holds the only copy of what an earlier update could not put back (update::holds_files).
+#[tauri::command]
+fn apply_update(app: AppHandle, runs: tauri::State<Runs>, updates: tauri::State<Updates>) -> Result<(), String> {
+    ready_to_apply(&runs)?;
+    let root = root()?;
+    let old = update::old_dir(&root);
+    if update::holds_files(&old) {
+        return Err(update::old_left(&old));
+    }
+    let release = updates.newer().ok_or("no newer release to apply")?;
+    let staged = update::staged_dir(&root, &release.parsed_version()?);
+    if !staged.join(update::EXE).is_file() {
+        return Err(format!("v{} is not downloaded", release.version));
+    }
+    update::launch(&root, &staged, std::process::id())?;
+    app.exit(0);
+    Ok(())
 }
 
 /// The tray icon's texts, in the page's language.
@@ -468,6 +574,11 @@ fn second_start(app: &AppHandle, start: instance::SecondStart) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // the apply-update mode replaces the files and ends, before the one window per folder and Tauri: no window, and no
+    // hand-off to a window that is still open
+    if let Some(code) = update::apply_mode(&std::env::args().collect::<Vec<_>>()) {
+        std::process::exit(code);
+    }
     // One window per maalc folder: a start of a folder whose window is open hands it its arguments and ends here. The lock
     // lives as long as this process. With no folder to key it by (no path of this exe), every start opens a window.
     let this = instance::SecondStart::of_this_process();
@@ -514,6 +625,20 @@ pub fn run() {
                     eprintln!("asset protocol: cannot open {}: {e}", dir.display());
                 }
             }
+            // How the last update went, and what it left in cache/update/. The apply-update process that started this
+            // window may hold its own files a moment longer, so the cleanup tries again a few times.
+            let root = root().ok();
+            app.manage(Updates { outcome: root.as_deref().and_then(update::settle), ..Updates::default() });
+            if let Some(root) = root {
+                std::thread::spawn(move || {
+                    for _ in 0..10 {
+                        if update::clean(&root) {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_secs(3));
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -529,6 +654,10 @@ pub fn run() {
             attach_run,
             scan_devices,
             hide_to_tray,
+            check_update,
+            last_update,
+            download_update,
+            apply_update,
             take_scheduled,
             log_schedule,
             sync_schedules
@@ -603,6 +732,29 @@ mod tests {
         assert_eq!(h.messages[1], log(5));
         assert_eq!(h.messages[LOG_KEEP], log(LOG_KEEP + 4));
         assert!(matches!(h.messages.back(), Some(Message::Exit { .. })));
+    }
+
+    /// A run whose runner is cmd.exe waiting a minute (it never says ready), as the window holds it once started.
+    fn hanging_run() -> Arc<Run> {
+        let spawn = runner::Spawn {
+            program: "cmd.exe".into(),
+            args: vec!["/d".into(), "/c".into(), "ping -n 60 127.0.0.1 >nul".into()],
+            dir: std::env::temp_dir(),
+        };
+        let start = Command::Start { root: None, device: DeviceWant::default(), tasks: vec![TaskSpec::new("ClaimMail".into())] };
+        Run::spawn(&spawn, &start, runner::STOP_WAIT, Box::new(|_| {})).unwrap()
+    }
+
+    #[test]
+    fn an_update_is_not_applied_while_a_run_is_under_way() {
+        let runs = Runs::default();
+        assert_eq!(ready_to_apply(&runs), Ok(()), "no run yet");
+        let run = hanging_run();
+        *runs.0.lock().unwrap() = Some(Active { run: run.clone(), relay: Arc::default() });
+        assert_eq!(ready_to_apply(&runs), Err(RUN_UNDER_WAY.into()));
+        run.kill("the test ends it".into());
+        assert!(run.wait(Duration::from_secs(10)));
+        assert_eq!(ready_to_apply(&runs), Ok(()), "the run ended");
     }
 
     #[test]

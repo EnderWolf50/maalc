@@ -22,6 +22,10 @@
     "allow-attach-run",
     "allow-scan-devices",
     "allow-hide-to-tray",
+    "allow-check-update",
+    "allow-last-update",
+    "allow-download-update",
+    "allow-apply-update",
     "allow-take-scheduled",
     "allow-log-schedule",
     "allow-sync-schedules"
