@@ -1,6 +1,6 @@
 // The team options file's generator (#780, #805): teams only appended, a deleted team kept and marked, a rename only its
-// label, the queue's order left alone, a first file's default_case from the settings file, the start team's option added
-// to a file that has none, and nothing to write when nothing changed.
+// label, the order of the team list and of the team queue left alone, a first file's default_case from the settings file,
+// the start team's option added to a file that has none, and nothing to write when nothing changed.
 import { expect, test } from "vitest";
 import fixture from "../../tests/team_options.json";
 import libRs from "../src-tauri/src/lib.rs?raw";
@@ -19,7 +19,7 @@ const caseOf = (text: string, name: string, key: FileOption = "ExpTeam") =>
   option(text, key).cases.find((c) => c.name === name)!;
 const KEYS = Object.keys(FILE_OPTIONS) as FileOption[];
 
-test("a new team goes last, after the teams the file has, wherever it is in the queue", () => {
+test("a new team goes last, after the teams the file has, wherever it is in the team list", () => {
   const first = teamOptionsText(null, settings([A, B]))!;
   const next = teamOptionsText(first, settings([C, A, B]))!;
   expect(names(next)).toEqual([NONE, "a", "b", "c"]);
@@ -48,11 +48,13 @@ test("a rename changes only the team's label", () => {
   expect(caseOf(next, "b")).toEqual({ ...caseOf(first, "b"), label: "Beta 2（TEAMS #7）" });
 });
 
-test("a new order of the team queue leaves the cases where they are: nothing to write", () => {
-  // the agent moves a team to the end of the queue after each claim (ADR 0011)
+test("a new order of the team list or of the team queue leaves the cases where they are: nothing to write", () => {
+  // the user arranges the team list; the agent moves a team to the end of the queue after each claim, and a start team
+  // to its head (ADR 0014)
   const first = teamOptionsText(null, settings([A, B, C]))!;
   expect(teamOptionsText(first, settings([C, A, B]))).toBeNull();
   expect(teamOptionsText(first, settings([B, C, A], "zh_tw"))).toBeNull();
+  expect(teamOptionsText(first, { ...settings([A, B, C]), team_queue: ["c", "a", "b"] })).toBeNull();
 });
 
 test("a first file's default_case is the team the version 20 file picked for that task; a later file keeps its own", () => {

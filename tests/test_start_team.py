@@ -22,24 +22,14 @@ import run_start_actions
 import test_actions
 from client_options import send
 from team_queue import to_head
-from test_resumed_run import claim
+from test_resumed_run import claim, queue  # queue: the team queue on disk; no move changes the list's order, a then b
 from test_task_chain import ENTRY_OPTIONS, entry_page
+from test_team_queue import old_settings_file, on_disk, settings_file
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
 MIRROR_WHERE = "the options of the MirrorDungeon task in the client's task list"
 INSTEAD = f"pick another team, or 「照隊伍佇列」 (follow the team queue), in {MIRROR_WHERE}"
-
-
-def on_disk():
-    return json.loads((actions.ROOT / "config" / "settings.json").read_text(encoding="utf-8"))
-
-
-def queue():
-    """The team queue on disk; no start team changes the list's order, a then b (#803)."""
-    data = on_disk()
-    assert [t["id"] for t in data["teams"]] == ["a", "b"]
-    return data["team_queue"]
 
 
 def said():
@@ -205,35 +195,21 @@ def test_a_start_team_the_agent_cannot_read_is_follow_the_queue(context, value):
     assert plan_run(context)["team"]["id"] == "a" and queue() == ["a", "b"] and start_lines() == []
 
 
-def settings_file(root, version, ids):
-    """A settings file of ids' teams: at version 22 with its queue in the order ids, older (20, 21: the GUI has not
-    written it back) with none, its queue the order of its teams. Returns what it holds."""
-    path = root / "config" / "settings.json"
-    path.parent.mkdir(exist_ok=True)
-    data = {"version": version, "teams": [{"id": i, "name": f"隊 {i}", "enabled": True} for i in ids]}
-    if version >= 22:
-        data["team_queue"] = list(ids)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    return data
-
-
-def file_now(root):
-    return json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
-
-
 @pytest.mark.parametrize("version", [20, 21])
 def test_a_file_the_gui_has_not_written_back_moves_the_start_team_in_its_list(tmp_path, version):
     # as a claim's move (spec 04 section 2): the file stays at its version, only the order of its teams changes, and
     # the migration to 22 makes team_queue of that order
-    before = settings_file(tmp_path, version, ["a", "b", "c"])
+    old_settings_file(tmp_path, version, ["a", "b", "c"])
+    before = on_disk(tmp_path)
     assert to_head(tmp_path, "c") == "team queue: start team '隊 c' (MirrorStartTeam) to the head"
-    assert file_now(tmp_path) == {**before, "teams": [before["teams"][i] for i in (2, 0, 1)]}
+    assert on_disk(tmp_path) == {**before, "teams": [before["teams"][i] for i in (2, 0, 1)]}
 
 
 def test_a_version_22_file_moves_only_its_queue(tmp_path):
-    before = settings_file(tmp_path, 22, ["a", "b", "c"])
+    settings_file(tmp_path, ["a", "b", "c"])
+    before = on_disk(tmp_path)
     to_head(tmp_path, "b")
-    assert file_now(tmp_path) == {**before, "team_queue": ["b", "a", "c"]}
+    assert on_disk(tmp_path) == {**before, "team_queue": ["b", "a", "c"]}
 
 
 @pytest.mark.parametrize("text", [None, "{"])
@@ -246,8 +222,7 @@ def test_an_unusable_settings_file_is_logged_not_raised(tmp_path, text):
 
 
 def test_a_team_deleted_since_the_tasks_start_leaves_the_file_alone(tmp_path):
-    settings_file(tmp_path, 22, ["a", "b"])
-    path = tmp_path / "config" / "settings.json"
+    path = settings_file(tmp_path, ["a", "b"])
     before = path.read_bytes()
     assert to_head(tmp_path, "gone") == "team queue: start team 'gone' (MirrorStartTeam) is no longer listed, the queue stays"
     assert path.read_bytes() == before

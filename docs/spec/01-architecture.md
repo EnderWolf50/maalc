@@ -152,7 +152,7 @@
 - 「限制局數」只算這個任務開始後完成的局數，不存檔；清單裡第二個鏡牢任務從 0 局算起（#364）。「每週獎勵用完就停」的剩餘次數從畫面讀。（#8）
 - 難度、每週獎勵用法這類策略是鏡牢的任務選項（[04](04-settings.md) 第 5 節），Agent 不另外存檔。（#8、#19、#776）
 - 刷新次數這類以層為單位的計數記在 Agent 記憶體，不存檔。（#10）
-- Agent 寫的檔案都在 `<root>` 底下，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中 `teams` 的順序，先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
+- Agent 寫的檔案都在 `<root>` 底下，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中的隊伍佇列 `team_queue`（GUI 還沒寫回的版本 20、21 檔改 `teams` 的順序，[04](04-settings.md) 第 2 節），先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
 
 ## 執行記錄 runs.jsonl
 
