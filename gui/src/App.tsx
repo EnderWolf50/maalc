@@ -101,10 +101,12 @@ export default function App() {
     setReport(pending.current);
     pending.current = null;
   };
-  /** A file's settings as the editor holds them: migrated, and an older one's run values read back. */
+  /** A file's settings as the editor holds them: migrated, and an older one's run values read back from the files the load
+   * read; with the read-back's report, null when there was none. */
   const settingsOf = (text: string) => {
     const parsed = parseSettings(text);
-    return parsed.old && backFiles.current ? readBack(parsed.data, parsed.old.version, backFiles.current).data : parsed.data;
+    const back = parsed.old && backFiles.current ? readBack(parsed.data, parsed.old.version, backFiles.current) : null;
+    return { ...parsed, data: back?.data ?? parsed.data, report: back?.report ?? null };
   };
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
@@ -116,7 +118,7 @@ export default function App() {
     if (text === disk.current || !draft) return draft;
     let data: Settings | undefined;
     try {
-      data = text === null ? undefined : settingsOf(text);
+      data = text === null ? undefined : settingsOf(text).data;
     } catch {
       return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
     }
@@ -147,19 +149,16 @@ export default function App() {
       if (text === null) return setS(newSettings());
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
-        const parsed = parseSettings(text);
-        const { unknown, old } = parsed;
-        let data = parsed.data;
+        const { old } = parseSettings(text);
         // An older file is kept aside before anything writes over it, a save of a file the checks refuse too (#782). When
         // it cannot be, the load fails with why, and nothing is written.
         if (old) {
           await api.saveOldSettings(old.version, text);
           // the run values a v1.0.0 install held outside the file come back once (#814); a version 23 file reads none
           backFiles.current = await readBackFiles();
-          const back = readBack(data, old.version, backFiles.current);
-          data = back.data;
-          pending.current = back.report;
         }
+        const { data, unknown, report } = settingsOf(text);
+        pending.current = report;
         const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet

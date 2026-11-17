@@ -81,9 +81,9 @@ fn save_old_settings(version: u32, text: String) -> Result<(), String> {
     replace(&path, &text, || Ok(())).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// The files of an older install's config/ the GUI reads back once, when it migrates a settings file of version 22 or older
-/// to 23 (#814, readBack.ts READ_BACK_FILES): MXU's config, the team options file v1.0.0's GUI wrote, and the settings file
-/// it kept before its own migration (#782). The GUI only reads them.
+/// The files of an older install's config/ the GUI reads back once, when it migrates a settings file older than version 23
+/// (20, 21 or 22; #814, readBack.ts READ_BACK_FILES): MXU's config, the team options file v1.0.0's GUI wrote, and the
+/// settings file it kept before its own migration (#782). The GUI only reads them.
 const READ_BACK: [&str; 3] = ["mxu-maalc.json", "team_options.json", "settings.v20.json"];
 
 /// Where a read-back file is under `root`; any other name is refused.

@@ -205,7 +205,7 @@ export function Mark({ as: Tag = "div", path, className, marked = true, children
 export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} />;
 export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} />;
 
-export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
+export function Field({ label, path, note, children }: { label: ReactNode; path?: string; note?: string; children: ReactNode }) {
   return (
     <Mark as="label" className="field" path={path}>
       <span>{label}</span>
@@ -250,7 +250,7 @@ export function Decimal({ value, min, onChange }: { value: number; min: number; 
 
 /** A switch with its number (#137): off is null and greys the number out; switched on, it starts at `on`. */
 export function ToggleNum({ label, path, value, on, min, max, note, onChange }: {
-  label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
+  label: ReactNode; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
   onChange: (v: number | null) => void;
 }) {
   return (

@@ -197,6 +197,14 @@ describe("the global options and the emulator", () => {
     expect(r.settings().emulator).toEqual({ address: null, mumu_index: null, mumu_manager: null });
   });
 
+  test("each field shows its settings key beside its label, as the agent's stop lines name it; a screen reader reads the label", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    for (const key of ["run/start_team", "run/difficulty", "run/runs", "run/webhook_url", "emulator/address"]) expect(screen.getByText(key)).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: zh["run.auto_download"] })).toBeInTheDocument();
+    await r.user.click(within(rows()[3]).getByText("經驗本"));
+    for (const key of ["luxcavation/exp/team", "luxcavation/exp/consecutive"]) expect(screen.getByText(key)).toBeVisible();
+  });
+
   test("the tab's long notes show one topic to a line", () => {
     renderEditor(<RunTab />, newSettings());
     for (const key of ["tasks.note", "run.start_team_note", "emu.note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);

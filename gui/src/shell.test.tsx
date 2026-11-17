@@ -247,6 +247,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     render(<App />);
     const shown = await notice();
     expect(shown).toHaveTextContent(fill(zh["rb.from_defaults"], { version: 22 }));
+    expect(shown).toHaveTextContent(fill(zh["rb.absent"], { files: "mxu-maalc.json、settings.v20.json" }));
     expect(shown).toHaveTextContent(zh["rb.read_none"]);
     expect(shown).toHaveTextContent(zh["rb.tasks_default"]);
     expect(JSON.parse(file.saved[0]).tasks).toEqual(cases.valid.tasks);
@@ -301,6 +302,9 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     const shown = await notice();
     expect(shown).toHaveTextContent(fill(zh["rb.problem"], { why: "mxu-maalc.json: Error: access denied" }));
     expect(shown).toHaveTextContent(fill(zh["rb.from_v20"], { version: 22 }));
+    expect(shown).not.toHaveTextContent("config/ 裡沒有這些檔"); // it is there, and could not be read
+    // settings.v20.json's other task options at their defaults: run's 14, 5 for each Luxcavation task and Charge's 1, less the one
+    expect(shown).toHaveTextContent(fill(zh["rb.same"], { n: 24 }));
     expect(JSON.parse(file.saved[0]).run.difficulty).toBe("normal");
   });
 

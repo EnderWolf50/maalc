@@ -86,6 +86,9 @@ describe("from MXU's config file", () => {
       "luxcavation/exp/consecutive", "charge_enkephalin/count", "run/auto_accept_terms", "run/keep_dismissed_screens",
     ]);
     expect(report.read.find((r) => r.path === "run/start_team")!.value).toBe("b");
+    // read too, at their defaults: Thread Luxcavation's mode, team, retries and Consecutive Battle, and AutoDownload
+    expect(report.same).toBe(5);
+    expect(report.absent).toEqual(["team_options.json", "settings.v20.json"]);
   });
 
   test("a tick MXU keeps for the controller wins over the plain one; the runs come from MirrorRuns while the limit is on", () => {
@@ -210,7 +213,8 @@ describe("without MXU's file", () => {
     const { data, report } = readBack(migrated(), 22, none);
     expect(data.run).toEqual(newSections().run);
     expect(report).toEqual({
-      from: 22, source: "defaults", instance: null, instances: 0, problems: [], read: [], tasks: null, address: null, missed: [],
+      from: 22, source: "defaults", instance: null, instances: 0, problems: [], read: [], same: 0,
+      absent: ["mxu-maalc.json", "team_options.json", "settings.v20.json"], tasks: null, address: null, missed: [],
     });
   });
 

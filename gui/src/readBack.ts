@@ -38,6 +38,10 @@ export interface Report {
   problems: string[];
   /** Each task option off its default after the read-back, as its settings path and value, in the Run tab's order. */
   read: { path: string; value: unknown }[];
+  /** How many values were read back at their default: the notice says so, as it lists only those off it. */
+  same: number;
+  /** The files of READ_BACK_FILES that are not there, by name. */
+  absent: string[];
   /** The task list as MXU had it; null when it stayed at the defaults (every task, none ticked). */
   tasks: Settings["tasks"] | null;
   /** MXU's last device address; null when none came back. */
@@ -47,9 +51,9 @@ export interface Report {
 
 type Kind = "select" | "switch" | "int" | "team" | "limit" | "secret";
 /** An MXU option: the settings path it fed, how its value reads, and its input's name (an input option). */
-type Spec = { path: string; kind: Kind; input?: string };
-const spec = (path: string, kind: Kind, input?: string): Spec => ({ path, kind, input });
-const lux = (task: "exp" | "thread", prefix: "Exp" | "Thread"): Record<string, Spec> => ({
+type MxuOption = { path: string; kind: Kind; input?: string };
+const spec = (path: string, kind: Kind, input?: string): MxuOption => ({ path, kind, input });
+const lux = (task: "exp" | "thread", prefix: "Exp" | "Thread"): Record<string, MxuOption> => ({
   [`${prefix}Mode`]: spec(`luxcavation/${task}/mode`, "select"),
   [`${prefix}Count`]: spec(`luxcavation/${task}/count`, "int", "count"),
   [`${prefix}Team`]: spec(`luxcavation/${task}/team`, "team"),
@@ -58,7 +62,7 @@ const lux = (task: "exp" | "thread", prefix: "Exp" | "Thread"): Record<string, S
 });
 /** v1.0.0's task options by task, in the Run tab's order (the order the report lists them in). MirrorRunsLimit's No is
  * runs null; its Yes takes MirrorRuns. */
-const TASK_OPTIONS: Record<string, Record<string, Spec>> = {
+const TASK_OPTIONS: Record<string, Record<string, MxuOption>> = {
   MirrorDungeon: {
     MirrorDifficulty: spec("run/difficulty", "select"),
     MirrorTargetFloor: spec("run/target_floor", "select"),
@@ -78,7 +82,7 @@ const TASK_OPTIONS: Record<string, Record<string, Spec>> = {
   ChargeEnkephalin: { ChargeCount: spec("charge_enkephalin/count", "int", "count") },
 };
 /** v1.0.0's global options: MXU keeps them apart from the tasks (globalOptionValues). The webhook is a password input. */
-const GLOBAL_OPTIONS: Record<string, Spec> = {
+const GLOBAL_OPTIONS: Record<string, MxuOption> = {
   WebhookUrl: spec("run/webhook_url", "secret", "url"),
   AutoAcceptTerms: spec("run/auto_accept_terms", "switch"),
   AutoDownload: spec("run/auto_download", "switch"),
@@ -86,6 +90,8 @@ const GLOBAL_OPTIONS: Record<string, Spec> = {
 };
 /** Each task option's settings path once, in the Run tab's order: the report lists the values off their defaults in it. */
 export const OPTION_PATHS: string[] = [...new Set([...Object.values(TASK_OPTIONS), GLOBAL_OPTIONS].flatMap((o) => Object.values(o).map((x) => x.path)))];
+/** The settings paths that hold a team id (the start team, a Luxcavation task's team). */
+export const TEAM_PATHS = new Set(Object.values(TASK_OPTIONS).flatMap((o) => Object.values(o)).filter((x) => x.kind === "team").map((x) => x.path));
 /** The team options' case 0, which picks no team: 「未選擇」 and 「照隊伍佇列」 (v1.0.0 teamOptions.ts NONE, QUEUE). */
 const NO_TEAM = new Set(["none", "queue"]);
 const TASK_IDS: string[] = schema.$defs.task.enum;
@@ -119,44 +125,51 @@ const shown = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v) ?? 
 /** What reads the values back into the settings: it sets a value, or notes one that did not come back. */
 class Reader {
   missed: Missed[] = [];
+  /** The paths a value was read back into. */
+  read = new Set<string>();
   constructor(readonly data: Settings, readonly labels: Map<string, string>) {}
+
+  put(path: string, v: unknown) {
+    setAt(this.data, path, v);
+    this.read.add(path);
+  }
 
   /** A team id: none picked, one of the teams, or one deleted since, which is noted and picks none. */
   team(path: string, id: unknown) {
-    if (id === null || (typeof id === "string" && NO_TEAM.has(id))) return setAt(this.data, path, null);
+    if (id === null || (typeof id === "string" && NO_TEAM.has(id))) return this.put(path, null);
     if (typeof id !== "string") return this.missed.push({ kind: "value", path, value: shown(id) });
-    if (this.data.teams.some((t) => t.id === id)) return setAt(this.data, path, id);
+    if (this.data.teams.some((t) => t.id === id)) return this.put(path, id);
     this.missed.push({ kind: "team", path, id, label: this.labels.get(id) ?? null });
   }
 
   /** A value of the settings' own type (settings.v20.json): kept when it passes the schema's rule, noted when not. */
   value(path: string, v: unknown) {
-    if (fits(prop(path), v)) setAt(this.data, path, v);
+    if (fits(prop(path), v)) this.put(path, v);
     else this.missed.push({ kind: "value", path, value: shown(v) });
   }
 
   /** An MXU option value (OptionValue): by its kind, a select by its case's name, a switch's true the case Yes. */
-  mxu(s: Spec, o: unknown) {
+  mxu(s: MxuOption, o: unknown) {
     if (!isObject(o)) return;
     const bad = () => this.missed.push({ kind: "value", path: s.path, value: shown(o.caseName ?? o.value ?? o.values) });
     const text = isObject(o.values) && typeof o.values[s.input!] === "string" ? (o.values[s.input!] as string) : null;
     if (s.kind === "team") return o.type === "select" ? this.team(s.path, o.caseName) : bad();
     if (s.kind === "select") {
       const v = prop(s.path).enum!.find((x) => String(x) === o.caseName);
-      return o.type === "select" && v !== undefined ? setAt(this.data, s.path, v) : bad();
+      return o.type === "select" && v !== undefined ? this.put(s.path, v) : bad();
     }
     if (s.kind === "switch" || s.kind === "limit") {
       if (o.type !== "switch" || typeof o.value !== "boolean") return bad();
-      if (s.kind === "switch") return setAt(this.data, s.path, o.value);
-      if (!o.value) setAt(this.data, s.path, null); // Yes leaves the runs to MirrorRuns
+      if (s.kind === "switch") return this.put(s.path, o.value);
+      if (!o.value) this.put(s.path, null); // Yes leaves the runs to MirrorRuns
       return;
     }
     if (s.kind === "int") {
       const v = text !== null && /^\d+$/.test(text.trim()) ? Number(text.trim()) : NaN;
-      return o.type === "input" && fits(prop(s.path), v) ? setAt(this.data, s.path, v) : bad();
+      return o.type === "input" && fits(prop(s.path), v) ? this.put(s.path, v) : bad();
     }
     // the webhook: MXU keeps a password input encrypted (encryptedValues); an older one kept it as plain text (values)
-    if (text) return setAt(this.data, s.path, text);
+    if (text) return this.put(s.path, text);
     const sealed = isObject(o.encryptedValues) ? o.encryptedValues[s.input!] : undefined;
     if (typeof sealed === "string" && sealed !== "") this.missed.push({ kind: "webhook" });
   }
@@ -169,9 +182,9 @@ function mxuFile(text: string): { instance: Instance; instances: number; globals
   const raw: unknown = JSON.parse(text);
   const list = isObject(raw) && Array.isArray(raw.instances) ? raw.instances.filter(isObject) : [];
   if (!list.length) throw new Error("no instance");
-  const raw2 = raw as Record<string, unknown>;
-  const instance = list.find((i) => i.id === raw2.lastActiveInstanceId) ?? list[0];
-  return { instance, instances: list.length, globals: isObject(raw2.globalOptionValues) ? raw2.globalOptionValues : {} };
+  const root = raw as Record<string, unknown>;
+  const instance = list.find((i) => i.id === root.lastActiveInstanceId) ?? list[0];
+  return { instance, instances: list.length, globals: isObject(root.globalOptionValues) ? root.globalOptionValues : {} };
 }
 
 /** The deleted teams' labels the team options file still has: its cases' labels by team id, the deleted mark dropped. */
@@ -220,7 +233,7 @@ export function readBack(data: Settings, version: number, files: ReadBackFiles):
       for (const path of OPTION_PATHS) {
         const v = getAt(old, path);
         if (v === undefined) continue;
-        if (path.endsWith("team")) reader.team(path, v);
+        if (TEAM_PATHS.has(path)) reader.team(path, v);
         else reader.value(path, v);
       }
     } catch (e) {
@@ -268,10 +281,12 @@ export function readBack(data: Settings, version: number, files: ReadBackFiles):
     const v = getAt(out, path);
     return JSON.stringify(v) === JSON.stringify(getAt(defaults, path)) ? [] : [{ path, value: v }];
   });
+  const same = [...reader.read].filter((path) => !read.some((r) => r.path === path)).length;
+  const absent = (Object.keys(READ_BACK_FILES) as FileKey[]).filter((k) => files[k] === null).map((k) => READ_BACK_FILES[k]);
   const instance = mxu && typeof mxu.instance.name === "string" ? mxu.instance.name : null;
   return {
     data: out,
-    report: { from: version, source, instance, instances: mxu?.instances ?? 0, problems, read, tasks, address, missed: reader.missed },
+    report: { from: version, source, instance, instances: mxu?.instances ?? 0, problems, read, same, absent, tasks, address, missed: reader.missed },
   };
 }
 
