@@ -181,7 +181,7 @@ export function nextTab<T>(tabs: readonly T[], at: T, key: string): T | undefine
 const MarkContext = createContext("");
 
 /** The ids of more text the controls inside take as their description, after their problems' (useMark): the settings key a
- * field of the Run tab shows (Run.tsx Keyed). */
+ * field of the Run tab shows (Run.tsx DescribedByKey). */
 export const DescribeContext = createContext("");
 
 /** A control's aria attributes: in a field marked red, invalid and described by the problems' text, which a screen reader

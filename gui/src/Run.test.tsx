@@ -335,7 +335,8 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
     expect(box.querySelector(":scope > span")).toHaveTextContent(`${zh["lux.consecutive"]}luxcavation/exp/consecutive`);
   });
 
-  // the browser marks a focus the keyboard moved (:focus-visible), not one a click gave: the real window's check shows that
+  // which focus draws a ring (:focus-visible) is the browser's call: one the keyboard moved, and a text box's either way, not a
+  // click on a switch or a choice; the real window's check showed it
   test("shows while the keyboard focus is in its field, on its control or its number", async () => {
     const r = renderEditor(<RunTab />, newSettings());
     await show(r, "鏡牢");

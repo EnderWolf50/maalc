@@ -442,8 +442,9 @@ fieldset.queue { align-items: stretch; }
 .task-list h3, .task-options h3 { margin: 0; font: 700 15px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
 .task-options h3 code { margin-left: 8px; font: 500 12.5px/1 Consolas, monospace; letter-spacing: 0; color: var(--muted); }
 /* a field's settings key after its label, as the agent's stop lines name it (run/start_team): shown while the pointer is over
- * the field, its label included, or the keyboard focus is in it. Hidden, it keeps its room, so nothing moves when it shows;
- * a screen reader reads it either way, as the field's description (Run.tsx Keyed). */
+ * the field, its label included, or the field draws a focus ring (:focus-visible: the keyboard moved the focus in, or a text
+ * or number box has it, clicked or not; a click on a switch or a choice leaves it to the pointer). Hidden, it keeps its room,
+ * so nothing moves when it shows; a screen reader reads it either way, as the field's description (Run.tsx DescribedByKey). */
 .run-page code.key { margin-left: 8px; font: 400 11.5px/1 Consolas, monospace; color: var(--muted); visibility: hidden; }
 .run-page :is(.field, .toggle):hover code.key, .run-page :is(.field, .toggle):has(:focus-visible) code.key { visibility: visible; }
 /* the task's options: a select's longest choice (每日模式（打今天還沒打的）) fits its column */

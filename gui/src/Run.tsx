@@ -3,10 +3,10 @@
 // and the picked task's options on the right; the global options in a frame of their own; the scheduled runs
 // (Schedules.tsx); the runner's Start and Stop, each posted task's state and the live log at the bottom. Each control
 // writes the settings key the runner or the agent reads at a task's start, and shows that key after its label while the pointer
-// is over the field or the keyboard focus is in it: the agent's stop lines name an option by it ("run/start_team: team 'x' was
+// is over the field or the field draws a focus ring: the agent's stop lines name an option by it ("run/start_team: team 'x' was
 // deleted ..."). A team pick lists the settings' teams as they are now. During a run the settings it reads are locked
 // (LockContext): a task still shows its options when clicked.
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
 import { LOG_LINES, crashed, isRunning, sameAddress, useRunner, type Device, type LogLine, type RunView } from "./runner";
@@ -45,36 +45,40 @@ export const optionLabel = (path: string): Key => {
   return (parts[0] === "luxcavation" ? `lux.${key}` : parts[0] === "charge_enkephalin" ? `charge.${key}` : `run.${key}`) as Key;
 };
 
-/** The page's one element for each settings key it shows (KeyLabel), which the field's controls take as their description. */
+/** The id of the element that shows settings key `path` (KeyLabel), which its field's controls take as their description. The
+ * tab shows each key once. */
 const keyId = (path: string) => `key:${path}`;
 /** A field's label with its settings key after it, small: the key a stop line names. The key shows while the pointer is over
- * the field or the keyboard focus is in it, and keeps its room while hidden, so nothing moves when it shows (index.css). One
+ * the field or the field draws a focus ring, and keeps its room while hidden, so nothing moves when it shows (index.css). One
  * inline span, so a switch's flex row (.check) keeps the label and its key as one item. `text` is the label, by default the
  * task option's (optionLabel). */
 function KeyLabel({ path, text }: { path: string; text?: string }) {
   const { t } = useEditor();
   return <span className="keyed">{text ?? t(optionLabel(path))}<code className="key" id={keyId(path)} aria-hidden>{path}</code></span>;
 }
-/** The frame of a field that shows its settings key (KeyLabel): the controls inside take the key as their description, so a
- * screen reader reads the label as the name and the key after it, whether or not the key shows. */
-const Keyed = ({ path, children }: { path: string; children: ReactNode }) =>
+/** The controls inside take settings key `path` as their description, so a screen reader reads the field's label as its name and
+ * the key after it, whether or not the key shows. Every field of the tab that shows a key is one of the three below. */
+const DescribedByKey = ({ path, children }: { path: string; children: ReactNode }) =>
   <DescribeContext.Provider value={keyId(path)}>{children}</DescribeContext.Provider>;
 /** A field of the tab: its label and settings key, the control, a note. */
 const KeyField = ({ path, label, note, children }: { path: string; label?: string; note?: string; children: ReactNode }) =>
-  <Keyed path={path}><Field label={<KeyLabel path={path} text={label} />} path={path} note={note}>{children}</Field></Keyed>;
+  <DescribedByKey path={path}><Field label={<KeyLabel path={path} text={label} />} path={path} note={note}>{children}</Field></DescribedByKey>;
 /** A switch of the tab with its note under it (#721): the label's text the size of the fields', its key after it. */
 function Switch({ path, checked, note, onChange }: { path: string; checked: boolean; note?: string; onChange: (on: boolean) => void }) {
   return (
-    <Keyed path={path}>
+    <DescribedByKey path={path}>
       <Mark className="toggle" path={path}>
         <label className="check">
           <Input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /><KeyLabel path={path} />
         </label>
         {note && <small>{withBreaks(note)}</small>}
       </Mark>
-    </Keyed>
+    </DescribedByKey>
   );
 }
+/** A switch with its number (ToggleNum), its key after the switch's label. */
+const KeyToggleNum = ({ path, ...rest }: Omit<ComponentProps<typeof ToggleNum>, "label">) =>
+  <DescribedByKey path={path}><ToggleNum label={<KeyLabel path={path} />} path={path} {...rest} /></DescribedByKey>;
 
 /** How many entries of entry j's task come before it (a task may be listed more than once, #811). */
 const nthOf = (tasks: { id: string }[], j: number) => tasks.slice(0, j).filter((x) => x.id === tasks[j].id).length;
@@ -278,10 +282,7 @@ function MirrorOptions() {
             {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
             {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
           </KeyField>
-          <Keyed path="run/runs">
-            <ToggleNum label={<KeyLabel path="run/runs" />} path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")}
-              onChange={(v) => set({ runs: v })} />
-          </Keyed>
+          <KeyToggleNum path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")} onChange={(v) => set({ runs: v })} />
           {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
           <KeyField path="run/start_team" note={t("run.start_team_note")}>
             <TeamPick value={run.start_team} none={t("run.start_team_queue")} markOff onChange={(v) => set({ start_team: v })} />

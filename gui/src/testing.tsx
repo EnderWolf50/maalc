@@ -86,9 +86,9 @@ const selectorsOf = (list: string) => {
  * inside @media counts whether or not its query holds (`cssRules` drops the @media), there are no layers, and a shorthand and
  * its longhands count as different properties. `at` is where the pointer or the keyboard focus is: true, a `:hover` in a
  * selector matches as with the pointer over it; an element, the pointer is over that one (`:hover` matches it and the elements
- * around it); `{ focus }`, the keyboard focus is on that element (`:focus-visible` matches it, as the browser marks a focus
- * the keyboard moved). Without, neither ever matches: jsdom's own `:focus-visible` gives another answer the second time it is
- * asked. With `pseudo` ("::after"), the value its pseudo-element gets: only the selectors that end in it count, matched without
+ * around it); `{ focus }`, that element has a focus that draws its ring (`:focus-visible` matches it, as the browser marks a
+ * focus the keyboard moved). Without, neither ever matches: jsdom's own `:focus-visible` gives another answer the second time
+ * it is asked. With `pseudo` ("::after"), the value its pseudo-element gets: only the selectors that end in it count, matched without
  * it; without, a selector with a pseudo-element never counts. */
 export function cssValueOf(text: string, el: Element, prop: string, at: boolean | Element | { focus: Element } = false, pseudo = "") {
   // the elements the pointer is over (the one under it and its ancestors) and the one with the focus, marked while matching
