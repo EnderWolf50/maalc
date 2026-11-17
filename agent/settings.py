@@ -4,6 +4,7 @@ An older version is migrated in memory only, one older than OLDEST_VERSION refus
 queue (team_queue.py).
 """
 
+import copy
 import json
 import os
 import tempfile
@@ -29,8 +30,8 @@ def _queue_in_list_order(data):
 
 def defaults():
     """The sections version 23 added (#813) as a new file has them, from the schema's defaults: run, luxcavation (Thread's
-    count 3, the day's bonuses), charge_enkephalin, emulator; tasks every task in the schema's order, none ticked;
-    schedules none."""
+    count 3, the day's bonuses), charge_enkephalin, emulator; tasks the README's suggested order, AssembleModules twice,
+    none ticked (#811); schedules none."""
     props, lux = SCHEMA["properties"], SCHEMA["$defs"]["luxcavation"]["properties"]
 
     def of(properties):
@@ -40,7 +41,7 @@ def defaults():
         "run": of(props["run"]["properties"]),
         "luxcavation": {"exp": of(lux), "thread": {**of(lux), "count": 3}},
         "charge_enkephalin": of(props["charge_enkephalin"]["properties"]),
-        "tasks": [{"id": t, "enabled": False} for t in SCHEMA["$defs"]["task"]["enum"]],
+        "tasks": copy.deepcopy(props["tasks"]["default"]),
         "emulator": of(props["emulator"]["properties"]),
         "schedules": [],
     }
@@ -315,6 +316,5 @@ def cross_check(data):
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")
-    dupes("tasks", [t["id"] for t in data["tasks"]], "id")
     dupes("schedules", [s["id"] for s in data["schedules"]], "id")
     return errors

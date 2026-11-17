@@ -233,6 +233,17 @@ def test_a_start_connects_loads_starts_the_bot_and_reports_each_task_in_turn(tmp
     assert "[run] MirrorDungeon status=succeeded t=" in " ".join(runner) and runner[-1] == "[run] end succeeded"
 
 
+def test_a_task_listed_twice_is_posted_twice_and_reports_each_entry_by_its_place(tmp_path):
+    # #811: the README's order runs AssembleModules before and after the Luxcavations
+    world = World({"AssembleModules": (1, "succeeded"), "ExpLuxcavation": (2, "failed")})
+    run = Run(tmp_path, world)
+    assert run.start([{"entry": "AssembleModules"}, {"entry": "ExpLuxcavation"}, {"entry": "AssembleModules"}]) == "failed"
+    assert world.posted == ["AssembleModules", "ExpLuxcavation", "AssembleModules"]
+    assert [(e["index"], e["entry"], e["state"]) for e in run.of("task") if e["state"] != "pending"] == [
+        (0, "AssembleModules", "running"), (0, "AssembleModules", "succeeded"), (1, "ExpLuxcavation", "running"),
+        (1, "ExpLuxcavation", "failed"), (2, "AssembleModules", "running"), (2, "AssembleModules", "succeeded")]
+
+
 def test_the_run_log_holds_every_log_line_stamped_as_the_live_tools_write_it(tmp_path):
     world = World({"MirrorDungeon": (2, "succeeded")})
     run = Run(tmp_path, world, "[maalc] hello")

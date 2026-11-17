@@ -27,7 +27,8 @@ export interface Ctx {
 /** The lists whose tab shows one item at a time: the Run tab shows the picked task's options (#814). */
 export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans", "tasks"] as const;
 export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams" | "tasks">;
-/** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
+/** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id;
+ * a task list entry by its task's id and its place among that task's entries (Run.tsx entryKey). */
 export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
 export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);
 export const EditorContext = createContext<Ctx>(null!);

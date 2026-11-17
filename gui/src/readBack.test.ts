@@ -157,17 +157,43 @@ describe("from MXU's config file", () => {
     expect(b.report.read).toEqual([{ path: "run/webhook_url", value: "https://hook.invalid/x" }]);
   });
 
-  test("a task MXU lists twice counts once, ticked when either is, with the first ticked one's options; one maalc lacks is listed", () => {
+  test("each entry of a task MXU lists twice stays an entry with its own tick, in MXU's order; one maalc lacks is listed (#811)", () => {
     const text = mxu([
-      { taskName: "ExpLuxcavation", enabled: false, optionValues: { ExpRetries: input({ retries: "4" }) } },
+      { taskName: "AssembleModules", enabled: true },
+      { taskName: "ExpLuxcavation", enabled: false },
       { taskName: "Gone", enabled: true },
-      { taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpRetries: input({ retries: "2" }) } },
+      { taskName: "AssembleModules", enabled: false },
+      { taskName: "ClaimMail", enabled: true },
     ]);
     const { data, report } = readBack(migrated(), 22, files(text));
-    expect(data.tasks[0]).toEqual({ id: "ExpLuxcavation", enabled: true });
-    expect(data.tasks.map((t) => t.id).sort()).toEqual([...newSections().tasks.map((t) => t.id)].sort());
-    expect(data.luxcavation.exp.retries).toBe(2);
-    expect(report.missed).toEqual([{ kind: "task", name: "Gone" }, { kind: "twice", task: "ExpLuxcavation", n: 2 }]);
+    // the tasks MXU did not list go last, unticked, once each in a new file's order
+    expect(data.tasks).toEqual([
+      { id: "AssembleModules", enabled: true }, { id: "ExpLuxcavation", enabled: false }, { id: "AssembleModules", enabled: false },
+      { id: "ClaimMail", enabled: true }, { id: "ChargeEnkephalin", enabled: false }, { id: "ThreadLuxcavation", enabled: false },
+      { id: "ClaimPassMissions", enabled: false }, { id: "MirrorDungeon", enabled: false },
+    ]);
+    expect(report.tasks).toEqual(data.tasks);
+    expect(report.missed).toEqual([{ kind: "task", name: "Gone" }]); // the two Assemble Modules have no options to differ
+  });
+
+  test("a task's options come from its first ticked entry, else its first; copies whose options differ are named", () => {
+    const text = mxu([
+      { taskName: "ExpLuxcavation", enabled: false, optionValues: { ExpRetries: input({ retries: "4" }) } },
+      { taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpRetries: input({ retries: "2" }) } },
+      { taskName: "ThreadLuxcavation", enabled: false, optionValues: { ThreadRetries: input({ retries: "3" }) } },
+      { taskName: "ThreadLuxcavation", enabled: false, optionValues: { ThreadRetries: input({ retries: "1" }) } },
+      // the same values (keys in another order) and an option maalc does not read: nothing to name
+      { taskName: "MirrorDungeon", enabled: true, optionValues: { MirrorDifficulty: select("hard"), MirrorRuns: input({ runs: "2" }) } },
+      { taskName: "MirrorDungeon", enabled: true, optionValues: {
+        MirrorRuns: { values: { runs: "2" }, type: "input" }, MirrorDifficulty: select("hard"), MirrorOld: select("x"),
+      } },
+    ]);
+    const { data, report } = readBack(migrated(), 22, files(text));
+    expect([data.luxcavation.exp.retries, data.luxcavation.thread.retries, data.run.difficulty]).toEqual([2, 3, "hard"]);
+    expect(data.tasks.slice(0, 6).map((x) => x.enabled)).toEqual([false, true, false, false, true, true]);
+    expect(report.missed).toEqual([
+      { kind: "differ", task: "ExpLuxcavation", n: 2 }, { kind: "differ", task: "ThreadLuxcavation", n: 2 },
+    ]);
   });
 
   test("MXU's file is read the same for a version 21 file", () => {

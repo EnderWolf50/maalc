@@ -154,7 +154,7 @@ describe("the update", () => {
 
   test("unsaved edits are saved before the window closes for the update", async () => {
     const user = await open();
-    await user.click(screen.getByRole("checkbox", { name: fill(zh["tasks.tick"], { name: zh["task.AssembleModules"] }) }));
+    await user.click(screen.getByRole("checkbox", { name: fill(zh["tasks.tick_nth"], { name: zh["task.AssembleModules"], n: 1 }) }));
     await user.click(await screen.findByRole("button", { name: fill(zh["update.available"], v) }));
     await finish();
     expect(back.applies).toBe(1);

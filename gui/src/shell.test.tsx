@@ -334,8 +334,10 @@ test("a save keeps the task options, the task list, the emulator and the schedul
   expect(saved.teams[0].name).toBe("Ta!");
   const kept = ["run", "luxcavation", "charge_enkephalin", "emulator", "schedules"] as const;
   expect(Object.fromEntries(kept.map((k) => [k, saved[k]]))).toEqual(Object.fromEntries(kept.map((k) => [k, s[k]])));
-  // the tasks the list left out come last, unticked (#814)
-  expect(saved.tasks).toEqual([...s.tasks, ...cases.valid.tasks.filter((x) => !s.tasks.some((y) => y.id === x.id))]);
+  // the tasks the list left out come last, unticked, once each in a new file's order (#814)
+  expect(saved.tasks).toEqual([
+    ...s.tasks, ...["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
+  ]);
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

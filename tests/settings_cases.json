@@ -58,13 +58,14 @@
     "luxcavation": {"exp": {"mode": "daily", "count": 1, "team": null, "retries": 0, "consecutive": true}, "thread": {"mode": "daily", "count": 3, "team": null, "retries": 0, "consecutive": true}},
     "charge_enkephalin": {"count": 0},
     "tasks": [
-      {"id": "MirrorDungeon", "enabled": false},
+      {"id": "ChargeEnkephalin", "enabled": false},
       {"id": "AssembleModules", "enabled": false},
-      {"id": "ClaimMail", "enabled": false},
       {"id": "ExpLuxcavation", "enabled": false},
       {"id": "ThreadLuxcavation", "enabled": false},
+      {"id": "AssembleModules", "enabled": false},
       {"id": "ClaimPassMissions", "enabled": false},
-      {"id": "ChargeEnkephalin", "enabled": false}
+      {"id": "ClaimMail", "enabled": false},
+      {"id": "MirrorDungeon", "enabled": false}
     ],
     "emulator": {"address": null, "mumu_index": null, "mumu_manager": null},
     "schedules": []
@@ -299,8 +300,8 @@
     {"name": "a task the task list does not know", "edits": [{"set": "tasks/0/id", "value": "Railway"}], "schema": ["tasks/0/id"]},
     {"name": "the task list may leave tasks out and run them in any order",
      "edits": [{"set": "tasks", "value": [{"id": "ClaimMail", "enabled": true}, {"id": "MirrorDungeon", "enabled": true}]}], "cross": []},
-    {"name": "a task listed twice", "edits": [{"set": "tasks/-", "value": {"id": "ClaimMail", "enabled": true}}],
-     "cross": ["tasks: id 'ClaimMail' appears 2 times"]},
+    {"name": "a task listed more than once, each entry with its own tick (#811: valid lists AssembleModules twice, the README's order)",
+     "edits": [{"set": "tasks/1/enabled", "value": true}, {"set": "tasks/-", "value": {"id": "ClaimMail", "enabled": true}}], "cross": []},
     {"name": "an emulator a scan found", "edits": [{"set": "emulator", "value": {"address": "127.0.0.1:16384", "mumu_index": 0, "mumu_manager": "MuMu/nx_main/MuMuManager.exe"}}],
      "cross": []},
     {"name": "a MuMu instance is 0 or more", "edits": [{"set": "emulator/mumu_index", "value": -1}], "schema": ["emulator/mumu_index"]},

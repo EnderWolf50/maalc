@@ -52,8 +52,8 @@ vi.mock("./api", async (original) => ({
 function settings() {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "T1")]));
-  s.tasks = [{ id: "ClaimMail", enabled: true }, ...s.tasks.filter((x) => x.id !== "ClaimMail")];
-  s.tasks.find((x) => x.id === "MirrorDungeon")!.enabled = true;
+  s.tasks = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true },
+    ...s.tasks.filter((x) => x.id !== "ClaimMail" && x.id !== "MirrorDungeon")];
   s.emulator = { address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" };
   return s;
 }
@@ -84,7 +84,9 @@ async function open() {
 }
 const startButton = () => screen.getByRole("button", { name: zh["runner.start"] });
 const stopButton = () => screen.getByRole("button", { name: new RegExp(`^(${zh["runner.stop"]}|${zh["runner.stopping"]})$`) });
-const tick = (name: string) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick"], { name }) });
+/** A task's tick; `n` (from 1) the tick of its nth entry, for a task listed more than once. */
+const tick = (name: string, n?: number) =>
+  screen.getByRole("checkbox", { name: n ? fill(zh["tasks.tick_nth"], { name, n }) : fill(zh["tasks.tick"], { name }) });
 const runTasks = () => within(screen.getByRole("list", { name: zh["runner.tasks"] })).getAllByRole("listitem");
 // its rows by tag: a role query over 2000 rows takes seconds
 const logLines = () => [...screen.getByRole("list", { name: zh["runner.log"] }).querySelectorAll("li")];
@@ -173,6 +175,21 @@ describe("what the run shows", () => {
       expect(within(rows[i]).getByText(zh[`runner.state.${state}`])).toBeVisible();
     });
     expect(within(rows[5]).getByText("maintenance")).toBeVisible();
+  });
+
+  test("a task with both its entries ticked is posted twice, and each entry shows its own state (#811)", async () => {
+    const user = await open();
+    await user.click(tick(zh["task.AssembleModules"], 1));
+    await user.click(tick(zh["task.AssembleModules"], 2));
+    await started(user);
+    expect(back.starts[0].entries).toEqual(["ClaimMail", "MirrorDungeon", "AssembleModules", "AssembleModules"]);
+    send(task(2, "AssembleModules", "succeeded"), task(3, "AssembleModules", "running"));
+    expect(runTasks().map((x) => [x.textContent, x.dataset.state])).toEqual([
+      [`${zh["task.ClaimMail"]}${zh["runner.state.pending"]}`, "pending"],
+      [`${zh["task.MirrorDungeon"]}${zh["runner.state.pending"]}`, "pending"],
+      [`${zh["task.AssembleModules"]}${zh["runner.state.succeeded"]}`, "succeeded"],
+      [`${zh["task.AssembleModules"]}${zh["runner.state.running"]}`, "running"],
+    ]);
   });
 
   test("the status says what the run is doing: the connection and the resource", async () => {
@@ -344,6 +361,10 @@ describe("during a run", () => {
     await user.click(list.getByText(zh["task.ExpLuxcavation"]));
     expect(screen.getByRole("heading", { name: /經驗本.*ExpLuxcavation/ })).toBeVisible();
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.mode"]}`) })).toBeDisabled();
+    // no entry added or removed (#811)
+    await user.click(list.getAllByText(zh["task.AssembleModules"])[1]);
+    expect(screen.getByRole("button", { name: fill(zh["tasks.again"], { name: zh["task.AssembleModules"] }) })).toBeDisabled();
+    expect(screen.getByRole("button", { name: zh["tasks.remove"] })).toBeDisabled();
     send(exit(0, true));
     expect(tick("領信")).toBeEnabled();
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeEnabled();

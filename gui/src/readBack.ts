@@ -8,7 +8,7 @@
 // v1.0.0's assets/interface.json options: their cases are the schema's values, a team case's name the team's id
 // (v1.0.0 gui/src/teamOptions.ts). MFAAvalonia's file is not read: it stores a case's index (spec #811 範圍外).
 import schema from "../../agent/settings.schema.json";
-import { newSections, type Settings } from "./model";
+import { TASK_ORDER, newSections, type Settings } from "./model";
 
 /** The files of config/ the read-back reads (lib.rs load_read_back allows only these). */
 export const READ_BACK_FILES = { mxu: "mxu-maalc.json", teamOptions: "team_options.json", v20: "settings.v20.json" } as const;
@@ -20,13 +20,14 @@ export type ReadBackFiles = Record<FileKey, string | null | { error: string }>;
 export type Source = "mxu" | "v20" | "defaults" | "file";
 /** A value that did not come back, which the user sets again in the Run tab: MXU's encrypted webhook; a value that is not
  * one the option takes (its text as the file had it); a team deleted since (its label in the team options file, when it
- * has one); a task MXU lists that maalc does not have; a task MXU lists n times, whose first ticked entry's options count. */
+ * has one); a task MXU lists that maalc does not have; a task MXU lists n times with options that differ between its
+ * entries, whose first ticked entry's options count (its entries share them, #811). */
 export type Missed =
   | { kind: "webhook" }
   | { kind: "value"; path: string; value: string }
   | { kind: "team"; path: string; id: string; label: string | null }
   | { kind: "task"; name: string }
-  | { kind: "twice"; task: string; n: number };
+  | { kind: "differ"; task: string; n: number };
 export interface Report {
   /** The version the file had. */
   from: number;
@@ -42,7 +43,7 @@ export interface Report {
   same: number;
   /** The files of READ_BACK_FILES that are not there, by name. */
   absent: string[];
-  /** The task list as MXU had it; null when it stayed at the defaults (every task, none ticked). */
+  /** The task list as MXU had it, each MXU entry with its own tick; null when it stayed at a new file's (none ticked). */
   tasks: Settings["tasks"] | null;
   /** MXU's last device address; null when none came back. */
   address: string | null;
@@ -121,6 +122,11 @@ function setAt(d: Settings, path: string, v: unknown) {
 }
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
 const shown = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v) ?? String(v));
+/** A value as text that does not depend on the order of an object's keys: two MXU entries' options compared. */
+const canonical = (v: unknown): string =>
+  Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
+    : isObject(v) ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
+      : JSON.stringify(v) ?? "undefined";
 
 /** What reads the values back into the settings: it sets a value, or notes one that did not come back. */
 class Reader {
@@ -250,27 +256,31 @@ export function readBack(data: Settings, version: number, files: ReadBackFiles):
       const by = isObject(t.enabledByController) ? t.enabledByController[ctrl] : undefined;
       return typeof by === "boolean" ? by : t.enabled === true;
     };
-    const groups = new Map<string, MxuTask[]>();
+    // each MXU entry an entry of the task list, with its own tick, in MXU's order (#811: a task may be listed twice)
+    const entries: { id: string; task: MxuTask }[] = [];
     for (const t of (Array.isArray(instance.tasks) ? instance.tasks : []).filter(isObject) as MxuTask[]) {
       const name = String(t.taskName);
       if (!TASK_IDS.includes(name)) {
         if (!reader.missed.some((m) => m.kind === "task" && m.name === name)) reader.missed.push({ kind: "task", name });
         continue;
       }
-      groups.set(name, [...(groups.get(name) ?? []), t]);
+      entries.push({ id: name, task: t });
     }
-    tasks = [...groups].map(([id, list]) => ({ id, enabled: list.some(ticked) }));
-    tasks.push(...TASK_IDS.filter((id) => !groups.has(id)).map((id) => ({ id, enabled: false })));
+    tasks = entries.map(({ id, task }) => ({ id, enabled: ticked(task) }));
+    tasks.push(...TASK_ORDER.filter((id) => !entries.some((e) => e.id === id)).map((id) => ({ id, enabled: false })));
     out.tasks = structuredClone(tasks);
     const device = isObject(instance.savedDevice) ? instance.savedDevice.adbDeviceAddress : undefined;
     if (typeof device === "string" && device.trim() !== "") out.emulator.address = address = device.trim();
     if (source === "mxu") {
-      for (const [id, list] of groups) {
-        if (list.length > 1) reader.missed.push({ kind: "twice", task: id, n: list.length });
-        const entry = list.find(ticked) ?? list[0];
-        const values = isObject(entry.optionValues) ? entry.optionValues : {};
-        // the runs' switch before the runs: its No wins over a count MXU still holds
+      for (const id of new Set(entries.map((e) => e.id))) {
+        const list = entries.filter((e) => e.id === id).map((e) => e.task);
         const specs = Object.entries(TASK_OPTIONS[id] ?? {});
+        const valuesOf = (t: MxuTask) => (isObject(t.optionValues) ? t.optionValues : {});
+        // the task's entries share its options: the first ticked one's count, and copies that had others are named
+        const read = (t: MxuTask) => canonical(specs.map(([name]) => valuesOf(t)[name]));
+        if (new Set(list.map(read)).size > 1) reader.missed.push({ kind: "differ", task: id, n: list.length });
+        const values = valuesOf(list.find(ticked) ?? list[0]);
+        // the runs' switch before the runs: its No wins over a count MXU still holds
         const limitOff = isObject(values.MirrorRunsLimit) && values.MirrorRunsLimit.value === false;
         for (const [name, s] of specs) if (name in values && !(limitOff && name === "MirrorRuns")) reader.mxu(s, values[name]);
       }

@@ -168,9 +168,8 @@ export function crossCheck(data: Settings): Problem[] {
 
   dupes("event_overrides", data.event_overrides.map((o) => o.question), "question", "question", twice("problem.dupeQuestion"));
   dupes("trial_risk_overrides", data.trial_risk_overrides.map((o) => o.trial), "trial", "trial", twice("problem.dupeTrial"));
-  // the task list and the schedules (#813): the Run tab only ticks and orders the tasks and makes each schedule's id (#816),
-  // so only a hand edit lists one twice, and the way out is the file's
-  dupes("tasks", data.tasks.map((x) => x.id), "id", "id", twice("problem.dupeTask"));
+  // the schedules (#816): the Run tab makes each one's id, so only a hand edit lists one twice, and the way out is the file's.
+  // A task may be listed more than once (#811: the README's order runs AssembleModules twice).
   dupes("schedules", data.schedules.map((x) => x.id), "id", "id", twice("problem.dupeSchedule"));
   return errors;
 }

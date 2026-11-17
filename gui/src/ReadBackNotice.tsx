@@ -35,7 +35,7 @@ export function ReadBackNotice({ report, onDismiss }: { report: Report; onDismis
     if (m.kind === "value") return fill(t("rb.value"), { where: where(m.path), value: m.value });
     if (m.kind === "team") return fill(t("rb.team"), { where: where(m.path), team: m.label ?? m.id, none: none(m.path) });
     if (m.kind === "task") return fill(t("rb.task"), { name: m.name });
-    return fill(t("rb.twice"), { task: taskName(t, m.task), n: m.n });
+    return fill(t("rb.differ"), { task: taskName(t, m.task), n: m.n });
   };
   const ticked = report.tasks?.filter((x) => x.enabled).map((x) => taskName(t, x.id)) ?? [];
   const absent = LOOKED[report.source].filter((f) => report.absent.includes(f));

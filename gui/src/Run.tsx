@@ -1,5 +1,6 @@
 // The Run tab (#814, #815, #816, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device
-// scan; the task list on the left (ticks, drag or ↑↓: the run order) and the picked task's options on the right; the global
+// scan; the task list on the left (ticks, drag or ↑↓: the run order; a task listed again, or an extra entry removed, #811)
+// and the picked task's options on the right; the global
 // options in a frame of their own; the scheduled runs (Schedules.tsx); the runner's Start and Stop, each posted task's state
 // and the live log at the bottom. Each control
 // writes the settings key the runner or the agent reads at a task's start, and shows that key beside its label: the agent's
@@ -16,7 +17,7 @@ import { Choice, Field, Input, LockContext, Mark, Num, ReorderList, Select, Togg
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
 const runEnum = (k: string) => RUN[k].enum!.map(String);
 const LUX_MODES: string[] = schema.$defs.luxcavation.properties.mode.enum;
-/** The task ids, in the order a new file lists them (agent/settings.schema.json $defs.task). */
+/** The task ids (agent/settings.schema.json $defs.task); a new file lists them as model.ts newSections says. */
 export const TASKS: string[] = schema.$defs.task.enum;
 /** The run keys every task reads (the global options): the rest of run is the Mirror Dungeon task's. */
 export const GLOBAL_KEYS = ["webhook_url", "auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const;
@@ -63,14 +64,34 @@ function Switch({ path, checked, note, onChange }: { path: string; checked: bool
   );
 }
 
+/** An entry's pick key: its task's id for the task's first entry, `<id>#<n>` for the one after n others (a task may be listed
+ * more than once, #811), so the pick stays on its entry when the list is reordered; a pick by id alone is the first entry. */
+const entryKey = (tasks: { id: string }[], j: number) => {
+  const n = tasks.slice(0, j).filter((x) => x.id === tasks[j].id).length;
+  return n ? `${tasks[j].id}#${n}` : tasks[j].id;
+};
+
 export function RunTab() {
   const { s, update, t, bad } = useEditor();
-  const [i, setSel] = usePick("tasks", s.tasks);
-  // a task listed twice (a hand edit, which the check names) gets a row of its own: `repeat` counts its rows before this one
-  const seen = new Map<string, number>();
-  const rows = s.tasks.map((x) => { const repeat = seen.get(x.id) ?? 0; seen.set(x.id, repeat + 1); return { ...x, repeat }; });
-  const picked = s.tasks[i];
+  // each entry a row of its own: `nth` is its place among its task's entries (from 0), `of` how many the task has
+  const rows = s.tasks.map((x, j) => ({
+    ...x, key: entryKey(s.tasks, j), nth: s.tasks.slice(0, j).filter((y) => y.id === x.id).length,
+    of: s.tasks.filter((y) => y.id === x.id).length,
+  }));
+  const [i, setSel] = usePick("tasks", rows.map((x) => ({ id: x.key })));
+  const picked = rows[i];
   const locked = isRunning(useRunner().view);
+  // the picked task once more, unticked, right after the picked entry, and picked: a new entry runs only once ticked
+  const again = () => {
+    const tasks = [...s.tasks.slice(0, i + 1), { id: picked.id, enabled: false }, ...s.tasks.slice(i + 1)];
+    update((d) => { d.tasks = tasks; });
+    setSel(entryKey(tasks, i + 1));
+  };
+  // a task's last entry stays (the button is only there while it has another): every task is listed, to be ticked
+  const remove = () => {
+    update((d) => { d.tasks.splice(i, 1); });
+    setSel(picked.id);
+  };
   return (
     <div className="run-page">
       <LockContext.Provider value={locked}>
@@ -80,25 +101,35 @@ export function RunTab() {
         <aside className="task-list" data-path="tasks">
           <h3>{t("tasks.title")}</h3>
           <p className="muted">{withBreaks(t("tasks.note"))}</p>
-          <ReorderList items={rows} keyOf={(x) => (x.repeat ? `${x.id}#${x.repeat}` : x.id)} selected={i}
-            onSelect={(j, list) => setSel(list[j].id)}
+          {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
+          <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
             badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
             onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
             render={(x, j) => (
               <span className="task-row">
                 {/* the tick's own hit area, larger than the bare box; a click there ticks and leaves the picked task as it is */}
                 <label className="tick" onClick={(e) => e.stopPropagation()}>
-                  <Input type="checkbox" checked={x.enabled} aria-label={fill(t("tasks.tick"), { name: taskName(t, x.id) })}
+                  <Input type="checkbox" checked={x.enabled}
+                    aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name: taskName(t, x.id), n: x.nth + 1 })}
                     onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
                 </label>
                 <span className={x.enabled ? "" : "muted"}>{taskName(t, x.id)}</span>
               </span>
             )} />
+          {picked && (
+            <div className="task-actions">
+              <button type="button" disabled={locked} onClick={again}>
+                <span aria-hidden>+ </span>{fill(t("tasks.again"), { name: taskName(t, picked.id) })}
+              </button>
+              {picked.of > 1 && <button type="button" className="danger" disabled={locked} onClick={remove}>{t("tasks.remove")}</button>}
+            </div>
+          )}
         </aside>
         <section className="task-options">
           {picked && <>
             {/* the task's id beside its name: the agent's stop lines name a task by it ("the MirrorDungeon task") */}
             <h3>{taskName(t, picked.id)} <code>{picked.id}</code></h3>
+            {picked.of > 1 && <p className="muted">{fill(t("tasks.entries"), { n: picked.of })}</p>}
             <TaskOptions id={picked.id} />
           </>}
         </section>
