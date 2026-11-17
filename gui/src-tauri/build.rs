@@ -10,6 +10,11 @@ fn main() {
             "save_old_settings",
             "load_read_back",
             "append_runs_log",
+            "start_run",
+            "stop_run",
+            "attach_run",
+            "scan_devices",
+            "hide_to_tray",
         ]),
     ))
     .unwrap();
