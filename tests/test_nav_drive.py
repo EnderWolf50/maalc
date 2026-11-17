@@ -64,6 +64,11 @@ def drive_lines(o):
     return [line for line in o["log"] if "NavDrive:" in line]
 
 
+def waited(line):
+    """The seconds a NavDrive line says its wait took."""
+    return float(line.split("after ")[1].split(" s")[0])
+
+
 def test_an_entry_page_that_comes_late_gets_one_tap():
     # #58: NavDrive slept 3 s after its tap whatever came; without the sleep the hub tapped the card again.
     o = run_child(__file__)["late"]
@@ -74,7 +79,7 @@ def test_an_entry_page_that_comes_late_gets_one_tap():
 def test_the_entry_page_shown_at_once_ends_the_wait_at_once():
     o = run_child(__file__)["at_once"]
     assert o["succeeded"] and len(o["clicks"]) == 1, json.dumps(o)
-    assert drive_lines(o) and float(drive_lines(o)[0].split("after ")[1].split(" s")[0]) < 1, json.dumps(o)
+    assert drive_lines(o) and waited(drive_lines(o)[0]) < 1, json.dumps(o)
 
 
 def test_a_card_whose_tap_opens_nothing_is_tapped_again_after_the_old_3_s():
@@ -84,10 +89,12 @@ def test_a_card_whose_tap_opens_nothing_is_tapped_again_after_the_old_3_s():
     o = run_child(__file__)["never"]
     assert "EntryUp" not in o["nodes"] and len(o["clicks"]) >= 2, json.dumps(o)  # stopped at LIMIT
     # every wait the stop at LIMIT left whole took the old 3 s; the one it came in ends with it (#812: until() gives up
-    # on a stopping task), so it may be shorter
-    *whole, last = drive_lines(o)
-    assert whole and all(f"no change after {timeout}." in line for line in whole), json.dumps(o)
-    assert float(last.split("after ")[1].split(" s")[0]) < timeout + 1, json.dumps(o)
+    # on a stopping task), so that one may be shorter, never longer
+    lines = drive_lines(o)
+    assert len(lines) >= 2, json.dumps(o)
+    *whole, last = lines
+    assert all(f"no change after {timeout}." in line for line in whole), json.dumps(o)
+    assert "no change after" in last and waited(last) < timeout + 1, json.dumps(o)
 
 
 def test_the_entry_text_navdrive_waits_for_is_the_entry_nodes():
