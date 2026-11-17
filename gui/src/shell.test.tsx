@@ -69,7 +69,7 @@ beforeEach(() => {
 
 test("the arrow keys move along the main tabs and open the one they reach; Home and End go to the ends", async () => {
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   const teams = await screen.findByRole("tab", { name: zh["tab.teams"] });
   expect(teams).toHaveAttribute("tabindex", "0");
   expect(screen.getByRole("tab", { name: zh["tab.gifts"] })).toHaveAttribute("tabindex", "-1");
@@ -89,7 +89,7 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
 });
 
 test("the tabs come in four groups: what runs, the team, the plans, the overrides (#721, #814)", async () => {
-  render(<App />);
+  render(<App start="teams" />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   // a separator between two groups shows as "|"
   const row = [...screen.getByRole("tablist").children].map((x) => (x.getAttribute("role") === "tab" ? x.textContent : "|"));
@@ -99,14 +99,15 @@ test("the tabs come in four groups: what runs, the team, the plans, the override
   ]);
 });
 
-test("one Run tab holds what the Run options and Daily tabs held, with the task list (#814); the window opens on the teams", async () => {
+test("one Run tab holds what the Run options and Daily tabs held, with the task list (#814); the window opens on it (#815)", async () => {
   render(<App />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   const tabs = screen.getAllByRole("tab").map((x) => x.textContent);
   expect(tabs).not.toContain("執行選項");
   expect(tabs).not.toContain("日常");
   expect(tabs.filter((x) => x === zh["tab.run"])).toHaveLength(1);
-  expect(screen.getByRole("tab", { name: zh["tab.teams"] })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("button", { name: zh["runner.start"] })).toBeVisible();
 });
 
 test("a problem in a task's option opens the Run tab with that task picked, its field focused", async () => {
@@ -114,7 +115,7 @@ test("a problem in a task's option opens the Run tab with that task picked, its 
   s.luxcavation.thread.retries = -1; // the schema's minimum is 0
   file.text = JSON.stringify(s, null, 2) + "\n";
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   const problems = await screen.findByRole("alert");
   expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveClass("bad");
   await user.click(within(problems).getByRole("button"));
@@ -128,7 +129,7 @@ describe("an older file (#782, #813)", () => {
 
   test("a version 20 file is kept beside it, then written back as version 23 with its own run options", async () => {
     const text = write(v20File([{ set: "run/difficulty", value: "hard" }, { set: "luxcavation/exp/team", value: "b" }]));
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect([file.old, file.writes]).toEqual([[[20, text]], ["old", "settings"]]);
     const saved = JSON.parse(file.saved[0]);
@@ -139,7 +140,7 @@ describe("an older file (#782, #813)", () => {
 
   test("a version 22 file gets the task options at their defaults", async () => {
     write(olderFile(22));
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(file.old[0][0]).toBe(22);
     const saved = JSON.parse(file.saved[0]);
@@ -150,7 +151,7 @@ describe("an older file (#782, #813)", () => {
     // the list b, a: the queue starts at b, as before the upgrade
     const old = v21File([{ set: "teams/0/id", value: "b" }, { set: "teams/1/id", value: "a" }]);
     const text = write(old);
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(file.old).toEqual([[21, text]]);
     expect(JSON.parse(file.saved[0]).team_queue).toEqual(["b", "a"]);
@@ -159,7 +160,7 @@ describe("an older file (#782, #813)", () => {
   test("a file the checks refuse is kept aside and waits for a save", async () => {
     write(v20File([{ set: "teams/1/game_team", value: 1 }])); // two enabled teams on TEAMS #1
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
     expect(file.writes).toEqual(["old"]);
     await user.click(within(document.querySelector("aside")!).getByText("Team b"));
@@ -173,7 +174,7 @@ describe("an older file (#782, #813)", () => {
   test("when it cannot be kept aside the window says why and writes nothing", async () => {
     write(v20File());
     file.oldFail = "access denied";
-    render(<App />);
+    render(<App start="teams" />);
     expect(await screen.findByText(zh.loadError)).toBeInTheDocument();
     expect(screen.getByText(/access denied/)).toBeInTheDocument();
     expect(file.writes).toEqual([]);
@@ -208,7 +209,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     write(olderFile(22));
     file.back = { "mxu-maalc.json": mxu };
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
     expect([saved.version, saved.run.difficulty, saved.run.start_team, saved.luxcavation.exp.team, saved.emulator.address])
@@ -236,7 +237,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
   test("in English too", async () => {
     write(olderFile(22, [{ set: "language", value: "en_us" }]));
     file.back = { "mxu-maalc.json": mxu };
-    render(<App />);
+    render(<App start="teams" />);
     const shown = await screen.findByRole("region", { name: TEXT.en_us["rb.title"] });
     expect(shown).toHaveTextContent(fill(TEXT.en_us["rb.row"], { where: "Mirror Dungeon · Difficulty", value: "Hard" }));
     expect(shown).toHaveTextContent(TEXT.en_us["rb.webhook"]);
@@ -244,7 +245,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
 
   test("with neither MXU's file nor settings.v20.json, the notice says the options are at their defaults, no task ticked", async () => {
     write(olderFile(22));
-    render(<App />);
+    render(<App start="teams" />);
     const shown = await notice();
     expect(shown).toHaveTextContent(fill(zh["rb.from_defaults"], { version: 22 }));
     expect(shown).toHaveTextContent(fill(zh["rb.absent"], { files: "mxu-maalc.json、settings.v20.json" }));
@@ -255,7 +256,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
 
   test("a version 23 file reads nothing back and shows no notice", async () => {
     file.back = { "mxu-maalc.json": mxu };
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("button", { name: zh.save });
     expect(file.reads).toEqual([]);
     expect(screen.queryByRole("region", { name: zh["rb.title"] })).toBeNull();
@@ -265,7 +266,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     write(olderFile(22, [{ set: "teams/1/game_team", value: 1 }])); // two enabled teams on TEAMS #1
     file.back = { "mxu-maalc.json": mxu };
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
     expect(screen.queryByRole("region", { name: zh["rb.title"] })).toBeNull();
     await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
@@ -284,7 +285,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     // the Agent moves team a to the end of the queue and writes the file at its own version (spec 04 section 2)
     file.agentFirst = JSON.stringify({ ...old, team_queue: ["b", "a"] }, null, 2) + "\n";
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(file.agentFirst).toBeNull());
     act(() => { window.dispatchEvent(new Event("focus")); }); // the editor reads the file again
     expect(await screen.findByText(zh.diskChanged)).toBeInTheDocument();
@@ -298,7 +299,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
   test("an unreadable file is said so, and the next one is read", async () => {
     write(olderFile(22));
     file.back = { "mxu-maalc.json": new Error("access denied"), "settings.v20.json": JSON.stringify(v20File([{ set: "run/difficulty", value: "normal" }])) };
-    render(<App />);
+    render(<App start="teams" />);
     const shown = await notice();
     expect(shown).toHaveTextContent(fill(zh["rb.problem"], { why: "mxu-maalc.json: Error: access denied" }));
     expect(shown).toHaveTextContent(fill(zh["rb.from_v20"], { version: 22 }));
@@ -325,7 +326,7 @@ test("a save keeps the task options, the task list, the emulator and the schedul
   s.schedules = [{ id: "s1", days: ["mon", "thu"], time: "05:10", wake: false }];
   file.text = JSON.stringify(s, null, 2) + "\n";
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
   await user.click(screen.getByRole("button", { name: zh.save }));
   await waitFor(() => expect(file.saved).toHaveLength(1));
@@ -338,7 +339,7 @@ test("a save keeps the task options, the task list, the emulator and the schedul
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {
-  render(<App />);
+  render(<App start="teams" />);
   await screen.findByRole("button", { name: zh.save });
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "clean");
   expect(document.querySelector(".status")).toHaveTextContent(zh["saveState.clean"]);
@@ -350,7 +351,7 @@ test("a write that fails shows as a failure in the header, not as plain unsaved 
   file.text = JSON.stringify(s, null, 2) + "\n";
   file.fail = "disk full";
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
   const save = screen.getByRole("button", { name: zh.save });
   await user.click(save);
@@ -366,7 +367,7 @@ test("a write that fails shows as a failure in the header, not as plain unsaved 
 test("a refused save shows in the header with the number of problems, also when nothing was edited", async () => {
   file.text = clash();
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(save);
   await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked"));
@@ -380,7 +381,7 @@ test("a problem made after a good save asks to fix it before saving: no save was
   Object.assign(ok, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
   file.text = JSON.stringify(ok, null, 2) + "\n";
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(save);
   await waitFor(() => expect(document.querySelector(".status")).toHaveAttribute("data-state", "saved"));
@@ -398,7 +399,7 @@ test("a problem made after a good save asks to fix it before saving: no save was
 test("an edit after a refused save still shows the refusal, with the unsaved changes", async () => {
   file.text = clash();
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await user.click(await screen.findByRole("button", { name: zh.save }));
   await user.type(screen.getByRole("textbox", { name: zh.name }), "!");
   expect(document.querySelector(".status")).toHaveAttribute("data-state", "blocked");
@@ -411,7 +412,7 @@ test("a problem typed before any save says Save must wait, on the plate and on S
   Object.assign(ok, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
   file.text = JSON.stringify(ok, null, 2) + "\n";
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   const save = await screen.findByRole("button", { name: zh.save });
   await user.click(sideList().getAllByRole("listitem")[1]);
   const slot = screen.getByRole("spinbutton", { name: zh["team.game_team"] });
@@ -434,13 +435,13 @@ describe("Revert", () => {
     Object.assign(ok, queuedTeams([newTeam(1, "Ta")]));
     file.text = JSON.stringify(ok, null, 2) + "\n";
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
     return user;
   };
 
   test("shows only while there are unsaved changes", async () => {
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("button", { name: zh.save });
     expect(screen.queryByRole("button", { name: zh.revert })).toBeNull();
   });
@@ -468,7 +469,7 @@ describe("Revert", () => {
 });
 
 test("the header's file path, cut short in a narrow window, shows in full on hover", async () => {
-  render(<App />);
+  render(<App start="teams" />);
   await screen.findByRole("button", { name: zh.save });
   expect(document.querySelector("header .path")).toHaveAttribute("title", "root\\config\\settings.json");
 });
@@ -478,7 +479,7 @@ test("after 放棄變更, an edit and its undoing drop the Undo: the edits it wo
   Object.assign(ok, queuedTeams([newTeam(1, "Ta")]));
   file.text = JSON.stringify(ok, null, 2) + "\n";
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
   await user.click(screen.getByRole("button", { name: zh.revert }));
   await user.type(screen.getByRole("textbox", { name: zh.name }), "?{Backspace}");

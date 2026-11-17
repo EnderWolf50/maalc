@@ -31,6 +31,18 @@ describe("the task list", () => {
     expect(r.settings().tasks[0]).toEqual({ id: "ClaimMail", enabled: false });
   });
 
+  test("a tick's hit area is larger than its box, and a click there leaves the picked task as it is", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    const area = tick("領信").closest("label")!;
+    expect(area).toHaveClass("tick");
+    await r.user.click(area); // beside the box, inside its area
+    expect(r.settings().tasks.find((x) => x.id === "ClaimMail")!.enabled).toBe(true);
+    expect(screen.getByRole("heading", { name: /鏡牢.*MirrorDungeon/ })).toBeVisible();
+    await r.user.click(tick("領信"));
+    expect(r.settings().tasks.find((x) => x.id === "ClaimMail")!.enabled).toBe(false);
+    expect(rows()[0]).toHaveAttribute("aria-current", "true");
+  });
+
   test("↑↓ and a drag change the run order, ticks moving with their tasks", async () => {
     const s = newSettings();
     s.tasks[0].enabled = true; // MirrorDungeon

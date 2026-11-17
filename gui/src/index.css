@@ -403,11 +403,15 @@ fieldset.queue { align-items: stretch; }
 .queue-body ol.reorder { flex: 0 1 480px; }
 .queue-body > p.muted { flex: 1 1 260px; font-size: 12.5px; }
 .qtag.next { color: var(--accent-ink); border-color: var(--accent-line); background: var(--sel); }
-/* The Run tab (#814): the emulator on top, the task list beside the picked task's options, the global options, then the
- * runner's place (its Start, Stop and live log come with #811's next ticket). */
+/* The Run tab (#814, #815): the emulator on top, the task list beside the picked task's options, the global options, then
+ * the runner: Start and Stop with the run's status, the posted tasks' states beside the live log. */
 .run-page { display: flex; flex-direction: column; gap: 18px; }
-.run-page fieldset.emulator, .run-page fieldset.globals { align-items: stretch; }
+.run-page fieldset.emulator, .run-page fieldset.globals, .run-page fieldset.runner { align-items: stretch; }
 .run-page .emulator .row .field { min-width: 15em; }
+.run-page .emulator .row.scan { align-items: flex-start; }
+.run-page .emulator .row.scan > button { margin-top: 2px; }
+.run-page .emulator .row.scan .field { min-width: 22em; }
+.run-page .emulator input.wide { min-width: 26em; }
 .task-list h3, .task-options h3 { margin: 0; font: 700 15px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
 .task-options h3 code { margin-left: 8px; font: 500 12.5px/1 Consolas, monospace; letter-spacing: 0; color: var(--muted); }
 /* a field's settings key after its label, as the agent's stop lines name it (run/start_team) */
@@ -415,13 +419,45 @@ fieldset.queue { align-items: stretch; }
 /* the task's options: a select's longest choice (每日模式（打今天還沒打的）) fits its column */
 .task-options .grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
 .task-row { display: flex; align-items: center; gap: 8px; }
-.task-row > input[type="checkbox"] { margin: 0; flex: none; }
+/* the tick's hit area: 27 px around the 15 px box, the row's height, and the row's own click (it picks the task) kept off it */
+.task-row .tick { display: inline-flex; flex: none; padding: 6px; margin: -6px -2px -6px -6px; cursor: pointer; }
 /* the Mirror Dungeon task's options in groups, two side by side where they fit */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
 .groups .grid, fieldset.globals .grid { width: 100%; }
 .groups .grid > .check.wide { grid-column: 1 / -1; }
 .field small.caution { color: var(--fg); }
-.runner-slot { padding: 12px 14px; border: 1px dashed var(--line-2); border-radius: 10px 0 10px 0; corner-shape: bevel; }
+.runner-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.runner-bar button { font-size: 15px; padding: 6px 26px; }
+.runner-status { color: var(--fg-2); font-weight: 600; }
+.runner-status[data-phase="idle"] { color: var(--muted); font-weight: 400; }
+.runner-status[data-phase="stopping"] { color: var(--accent-ink); }
+.runner h3 { margin: 0 0 6px; font: 700 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
+.runner-body { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.run-tasks ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.run-tasks li {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 5px 10px;
+  border: 1px solid var(--line); border-radius: 2px; corner-shape: bevel; background: var(--raise);
+}
+.run-tasks li small { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.run-tasks .state { font: 700 13px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--muted); }
+.run-tasks li[data-state="running"] { border-color: var(--accent-line); background: var(--sel); }
+.run-tasks li[data-state="running"] .state, .run-tasks li[data-state="stopped"] .state { color: var(--accent-ink); }
+.run-tasks li[data-state="succeeded"] .state { color: var(--keep); }
+.run-tasks li[data-state="failed"] { border-color: var(--bad); }
+.run-tasks li[data-state="failed"] .state { color: var(--bad); }
+.run-tasks li[data-state="cancelled"] { border-style: dashed; background: none; }
+.run-log-pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.run-log {
+  list-style: none; margin: 0; padding: 6px 10px; height: 340px; overflow: auto; background: var(--field);
+  border: 1px solid var(--line-2); border-radius: 2px; font: 12.5px/1.45 Consolas, "Microsoft JhengHei UI", monospace;
+}
+.run-log li { display: flex; gap: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.run-log time { flex: none; color: var(--muted); }
+.run-log .src-runner span { color: var(--accent-ink); } /* the runner's own [run] lines: the run's steps */
+.run-log .src-console span, .run-log .src-raw span { color: var(--muted); }
+.runner .crash { padding: 8px 12px; border: 1px solid var(--bad); border-radius: 2px; background: var(--bad-soft); }
+.runner .crash p { margin: 0 0 6px; color: var(--bad); font-weight: 600; }
+.runner .crash pre { margin: 0; max-height: 200px; overflow: auto; white-space: pre-wrap; font: 12.5px/1.45 Consolas, monospace; }
 /* a team's slot, as the game's TEAMS number plate shows it */
 .team-list ol.reorder .item small, .queue ol.reorder .item small {
   margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
@@ -836,6 +872,7 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   .skill-pillcell { flex: 1 1 auto; width: auto; }
   .sinners { gap: 6px; }
   .groups { grid-template-columns: 1fr; }
+  .runner-body { grid-template-columns: 1fr; }
 }
 
 /* A short window: the side column scrolls with the page, so its last buttons are never cut off below the fold. */
