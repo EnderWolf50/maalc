@@ -178,20 +178,21 @@ def run(root: Path, tasks: list[str], port: int, log: Path) -> int:
         return 1
     # v: runner/protocol.py VERSION (tests/test_live_bot.py ties the two)
     start = {"v": 1, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
-             "tasks": [{"entry": entry, "override": override} for _, entry, override in jobs]}
+             "tasks": [{"entry": entry} for _, entry in jobs]}
     return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),
                    line=RunnerEvents())
 
 
-def plan(root: Path, tasks: list[str]) -> list[tuple[str, str, dict]]:
-    """(task, entry, override) of each task: its entry node from root's interface.json (whole-line // comments dropped),
-    no override. A task the interface lacks stops it before any task is posted."""
+def plan(root: Path, tasks: list[str]) -> list[tuple[str, str]]:
+    """(task, entry) of each task: its entry node from root's interface.json (whole-line // comments dropped); it goes
+    with no override, as its options are the settings file's (#813). A task the interface lacks stops it before any task
+    is posted."""
     lines = (root / "interface.json").read_text(encoding="utf-8").splitlines()
     entries = {t["name"]: t["entry"] for t in json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))["task"]}
     for name in tasks:
         if name not in entries:
             raise SystemExit(f"[run] interface.json has no task {name} (tasks: {', '.join(entries)}): stopped before posting any task")
-    return [(name, entries[name], {}) for name in tasks]
+    return [(name, entries[name]) for name in tasks]
 
 
 def prep(install: Path, source: Path, sets: list[str]) -> dict:

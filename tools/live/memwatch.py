@@ -6,9 +6,10 @@ before/after (CODING_STANDARDS.md "Fixes"). Windows only: private bytes are Wind
 ROOT is the bot's pid (the one `queue.py detach` prints for `bot.py run`) or the settings window's (`maalc-gui.exe`,
 which runs the tasks, ADR 0015). Each sample lists the tree again, so the runner and the agent, which start after the
 root, are counted. The CSV has one row per process per sample: time, pid, role, name, working set and private bytes in
-MB. The role comes from the command line: `runner` (`runner/__main__.py`, #812, where MaaFramework recognises), `agent`
-(`agent/main.py`), `window` (`maalc-gui.exe` and its WebView2 processes), `other`. A venv's python.exe is a launcher that starts the real interpreter under it with the same
-command line, so a role counts both; the launcher is about 12 MB of working set and 3 MB private. When the root ends
+MB. The role comes from the command line: `runner` (`runner/__main__.py`, or `python runner` from the root, #812,
+where MaaFramework recognises), `agent` (`agent/main.py`), `window` (`maalc-gui.exe` and its WebView2 processes),
+`other`. A venv's python.exe is a launcher that starts the real interpreter under it with the same command line, so a
+role counts both; the launcher is about 12 MB of working set and 3 MB private. When the root ends
 it prints the peak and the last sample of the whole tree and of each role.
 """
 from __future__ import annotations
@@ -33,7 +34,7 @@ def role(name: str, cmdline: list[str]) -> str:
     args = [a.replace("\\", "/") for a in cmdline]
     if any(a.endswith("agent/main.py") for a in args):
         return "agent"
-    if any(a.endswith("runner/__main__.py") for a in args):
+    if any(a.endswith("runner/__main__.py") or a == "runner" for a in args):
         return "runner"
     if name.lower() in ("maalc-gui.exe", "msedgewebview2.exe"):
         return "window"

@@ -125,15 +125,15 @@ INTERFACE = """{
 }"""
 
 
-def test_plan_posts_each_task_on_its_entry_node_with_no_override(tmp_path):
-    # #813: a task's options are the settings file's, so nothing goes with the post
+def test_plan_names_each_tasks_entry_node(tmp_path):
+    # #813: a task's options are the settings file's, so nothing else goes with the post
     (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
-    assert bot.plan(tmp_path, ["Mirror", "Mirror"]) == [("Mirror", "MirrorEntry", {})] * 2
+    assert bot.plan(tmp_path, ["Mirror", "Mirror"]) == [("Mirror", "MirrorEntry")] * 2
 
 
 def test_plan_takes_every_task_of_the_repos_interface():
     tasks = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))["$defs"]["task"]["enum"]
-    assert bot.plan(REPO / "assets", tasks) == [(name, name, {}) for name in tasks]
+    assert bot.plan(REPO / "assets", tasks) == [(name, name) for name in tasks]
 
 
 def test_run_stops_before_posting_any_task_on_a_task_the_interface_lacks(tmp_path):
@@ -175,15 +175,17 @@ def fake_install(tmp_path, code=0):
 
 
 def test_run_goes_through_the_installs_runner_with_each_tasks_entry_and_logs_its_lines(tmp_path):
-    # #812: the runner posts each task with the override it is given, as it came; #813: the options are the settings
-    # file's, so bot.py gives none. run.log gets the runner's log lines at their own time, and nothing for its other events
+    # #812: the runner posts each task with the override it is given, as it came; #813: the options are the
+    # settings file's, so bot.py gives none. run.log gets the runner's log lines at their own time, and nothing for
+    # its other events
     root, log = fake_install(tmp_path), tmp_path / "run.log"
     code = bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror,Mirror", "--port", "16416"])
     assert code == 0
     start = json.loads((root / "runner/start.json").read_text(encoding="utf-8"))
     assert start == {"v": protocol.VERSION, "cmd": "start", "root": str(root.resolve()),
-                     "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry", "override": {}}] * 2}
-    assert protocol.command(json.dumps(start))["tasks"] == start["tasks"]  # a start the runner takes as it is
+                     "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry"}] * 2}
+    # a start the runner takes, each task with no override
+    assert protocol.command(json.dumps(start))["tasks"] == [{"entry": "MirrorEntry", "override": {}}] * 2
     lines = log.read_text(encoding="utf-8").splitlines()
     assert " [run] child pid " in lines[0]  # tools/live/preflight.py's BOT_START
     assert lines[1:3] == ["10:00:00.001 [maalc] 開始", "10:00:00.002 x: 960, y: 540, width: 1920, height: 1080"]

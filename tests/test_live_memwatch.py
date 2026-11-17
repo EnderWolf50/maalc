@@ -38,11 +38,11 @@ def test_a_child_started_after_the_root_is_counted_under_its_role_until_the_root
     ("python.exe", ["python", "-u", "install\\agent\\main.py", "MaaAgent_1"], "agent"),
     # the runner (#812), which bot.py run and the settings window start
     ("python.exe", ["python\\python.exe", "-u", "install\\runner\\__main__.py"], "runner"),
+    ("python.exe", ["python", "runner"], "runner"),  # from the root, as runner/__main__.py says it may start
     ("python.exe", ["python", "-u", "tools/live/bot.py", "run", "--install", "install"], "other"),
     # the settings window runs the tasks (ADR 0015): the window itself and its WebView2
     ("maalc-gui.exe", ["maalc-gui.exe"], "window"),
     ("msedgewebview2.exe", ["msedgewebview2.exe", "--embedded-browser-webview=1"], "window"),
-    ("mxu.exe", ["mxu.exe"], "other"),
     ("uv.exe", ["uv", "run", "python", "tools/live/bot.py", "run"], "other"),
     ("python.exe", [], "other"),
 ])

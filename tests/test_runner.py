@@ -225,7 +225,7 @@ def test_a_start_connects_loads_starts_the_bot_and_reports_each_task_in_turn(tmp
                      "awake off", "end"]
     assert [e["state"] for e in run.of("connection")] == ["connecting", "connected"]
     assert run.of("end") == [{"v": 1, "event": "end", "result": "succeeded"}]
-    # each task goes with its own override, as it came (#813 builds them; the runner passes them through)
+    # each task goes with its own override, as it came: the runner passes it through
     assert world.posted == [("MirrorDungeon", [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}]), ("ExpLuxcavation", {})]
     assert world.roots == [run.root] and world.bundles == [str(run.root / "resource" / "base")]
     assert world.controllers == ["127.0.0.1:16384"] and world.disconnected
