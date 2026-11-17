@@ -8,7 +8,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
-import { LOG_LINES, crashed, isRunning, useRunner, type Device, type LogLine, type RunView } from "./runner";
+import { LOG_LINES, crashed, isRunning, sameAddress, useRunner, type Device, type LogLine, type RunView } from "./runner";
 import * as api from "./api";
 import { SchedulesSection } from "./Schedules";
 import { Choice, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
@@ -375,7 +375,7 @@ function EmulatorFields() {
     api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
   };
   const found = scan.state === "found" ? scan.devices : null;
-  const at = found ? found.findIndex((d) => d.address === s.emulator.address) : -1;
+  const at = found && s.emulator.address !== null ? found.findIndex((d) => sameAddress(d.address, s.emulator.address!)) : -1;
   const pick = (d: Device) => set({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
   return (
     <fieldset className="emulator" data-path="emulator">

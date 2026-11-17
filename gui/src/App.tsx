@@ -426,7 +426,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
    * nothing started, null when the run did. */
   type NotStarted = Extract<Outcome, { kind: "refused" }>["why"];
   const startRun = async (): Promise<NotStarted | null> => {
-    if (startingRef.current || isRunning(runRef.current)) return { error: "a run is under way" };
+    if (startingRef.current || isRunning(runRef.current)) return { error: api.RUN_UNDER_WAY };
     if (problems.length) return "problems";
     startingRef.current = true;
     setStarting(true);

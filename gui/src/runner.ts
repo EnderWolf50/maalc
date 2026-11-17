@@ -119,6 +119,17 @@ function event(v: RunView, e: RunnerEvent): RunView {
   }
 }
 
+const LOOPBACK = ["127.0.0.1", "localhost"];
+
+/** Whether two adb addresses name one device, as the runner picks it (runner/devices.py same_address): the same text, or
+ * the same port on the loopback host. */
+export function sameAddress(a: string, b: string): boolean {
+  if (a === b) return true;
+  const split = (x: string) => { const i = x.lastIndexOf(":"); return i < 0 ? ["", ""] : [x.slice(0, i), x.slice(i + 1)]; };
+  const [ha, pa] = split(a), [hb, pb] = split(b);
+  return pa !== "" && pa === pb && LOOPBACK.includes(ha) && LOOPBACK.includes(hb);
+}
+
 /** Whether the run ended because the runner crashed: its process ended before its end event, and the window did not end
  * it (after a stop that did not stop, `killed` says why). The run failed (spec #811 「執行器」). */
 export const crashed = (v: RunView) => !!v.exit && !v.exit.ended && !v.killed;

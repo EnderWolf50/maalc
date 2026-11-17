@@ -253,11 +253,11 @@ fn stamp() -> String {
 /// The `--run <id>` of this window's own start, and of each second start since, in order; the page takes them once its
 /// settings are read (and on each `scheduled` event), so one that comes while the page loads waits for it.
 #[derive(Default)]
-struct Pending(Mutex<Vec<Scheduled>>);
+struct ScheduledStarts(Mutex<Vec<Scheduled>>);
 
 #[tauri::command]
-fn take_scheduled(pending: tauri::State<Pending>) -> Vec<Scheduled> {
-    std::mem::take(&mut *pending.0.lock().unwrap())
+fn take_scheduled(starts: tauri::State<ScheduledStarts>) -> Vec<Scheduled> {
+    std::mem::take(&mut *starts.0.lock().unwrap())
 }
 
 /// One sync with the Task Scheduler at a time: the one after the load and a save soon after must not cross.
@@ -282,7 +282,8 @@ async fn sync_schedules(schedules: Vec<schedule::Schedule>) -> Result<schedule::
     .map_err(|e| e.to_string())?
 }
 
-/// The log lines of a run the window keeps for a page that attaches later, as many as the page shows (Run.tsx LOG_LINES).
+/// The log lines of a run the window keeps for a page that attaches later, as many as the page shows (runner.ts LOG_LINES,
+/// which runner.test.tsx ties to this).
 const LOG_KEEP: usize = 2000;
 
 /// A message that is a line of the run's log.
@@ -567,7 +568,7 @@ fn hide_to_tray(app: AppHandle, runs: tauri::State<Runs>, text: TrayText) -> Res
 fn second_start(app: &AppHandle, start: instance::SecondStart) {
     show_window(app);
     if let Some(scheduled) = Scheduled::of(&start.args, false) {
-        app.state::<Pending>().0.lock().unwrap().push(scheduled);
+        app.state::<ScheduledStarts>().0.lock().unwrap().push(scheduled);
         let _ = app.emit("scheduled", ());
     }
 }
@@ -609,7 +610,7 @@ pub fn run() {
     let launch = Scheduled::of(&this.args, true);
     tauri::Builder::default()
         .manage(Runs::default())
-        .manage(Pending(Mutex::new(launch.into_iter().collect())))
+        .manage(ScheduledStarts(Mutex::new(launch.into_iter().collect())))
         .setup(move |app| {
             let handle = app.handle().clone();
             if let Some(key) = &key {

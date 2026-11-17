@@ -512,7 +512,8 @@ def stop(context, reason, line=None, whole_list=False):
             log(f"webhook failed: {e}")
     if whole_list:
         log("account-level stop: the rest of the task list is cancelled")
-        STUCK["halted"] = reason  # a client that posts one task at a time is not reached by post_stop
+        STUCK["halted"] = reason  # post_stop cancels the list the runner posted up front; a caller that posts one task
+        # at a time (MaaDebugger) is not reached by it
         context.tasker.post_stop()
     return False
 
