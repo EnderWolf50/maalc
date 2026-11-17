@@ -212,7 +212,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setAsking((was) => (kind === "close" ? kind : was || kind)); // a close outranks a reload; a reload keeps the prompt that shows
   };
   // During a run the window hides in the tray instead, the run going on, unsaved edits and all (#815); a run that ended
-  // meanwhile (the backend says it hid nothing) closes as below.
+  // meanwhile (the backend says it hid nothing) closes as below. A hide that fails keeps the window open and says why:
+  // closing it would end the run with the app.
   useEffect(() => {
     const askIfUnsaved = () => {
       const keep = unsaved();
@@ -223,7 +224,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       if (!isRunning(runRef.current)) return askIfUnsaved();
       const { t } = translate(latest.current.s?.language ?? "zh_tw");
       return api.hideToTray({ tip: t("tray.tip"), show: t("tray.show"), stop: t("tray.stop") })
-        .catch(() => false).then((hid) => hid || askIfUnsaved());
+        .then((hid) => hid || askIfUnsaved(), (e: unknown) => { setStatus(String(e)); return true; });
     });
   }, []);
   // F5 and Ctrl+R would reload the page and drop the edits (WebView2 keeps the browser's keys on). With unsaved changes the

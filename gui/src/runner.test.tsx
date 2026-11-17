@@ -19,7 +19,7 @@ const back = vi.hoisted(() => ({
   text: "", saved: [] as string[], starts: [] as { entries: string[]; device: unknown }[],
   send: undefined as ((m: Message) => void) | undefined, startFail: "", stops: 0,
   devices: [] as unknown, scans: 0, history: null as null | { messages: Message[]; active: boolean },
-  keepOpen: undefined as undefined | (() => boolean | Promise<boolean>), hid: 0,
+  keepOpen: undefined as undefined | (() => boolean | Promise<boolean>), hid: 0, hideFail: "",
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -41,7 +41,7 @@ vi.mock("./api", async (original) => ({
   },
   scanDevices: () => { back.scans++; return back.devices instanceof Error ? Promise.reject(back.devices) : Promise.resolve(back.devices); },
   onCloseRequested: (keepOpen: () => boolean | Promise<boolean>) => { back.keepOpen = keepOpen; return () => {}; },
-  hideToTray: () => { back.hid++; return Promise.resolve(true); },
+  hideToTray: () => { back.hid++; return back.hideFail ? Promise.reject(new Error(back.hideFail)) : Promise.resolve(true); },
 }));
 
 /** Settings with Claim Mail and Mirror Dungeon ticked, in that order, on the MuMu instance at 16416, and one team. */
@@ -68,6 +68,7 @@ beforeEach(() => {
   back.history = null;
   back.keepOpen = undefined;
   back.hid = 0;
+  back.hideFail = "";
 });
 
 /** The window, on the Run tab it opens on, once the settings are read. */
@@ -327,5 +328,15 @@ describe("during a run", () => {
     send(exit(0, true));
     expect(back.keepOpen!()).toBe(false);
     expect(back.hid).toBe(1);
+  });
+
+  test("a hide that fails keeps the window open and says why: closing it would end the run", async () => {
+    back.hideFail = "the app has no icon";
+    const user = await open();
+    await started(user);
+    let kept: boolean | Promise<boolean> = false;
+    act(() => { kept = back.keepOpen!(); });
+    await expect(kept).resolves.toBe(true);
+    expect(await screen.findByText("Error: the app has no icon")).toBeVisible();
   });
 });
