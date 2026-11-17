@@ -83,7 +83,11 @@ def test_a_card_whose_tap_opens_nothing_is_tapped_again_after_the_old_3_s():
     timeout = load_nodes("navigation.json")["NavDrive"]["custom_action_param"]["timeout"]
     o = run_child(__file__)["never"]
     assert "EntryUp" not in o["nodes"] and len(o["clicks"]) >= 2, json.dumps(o)  # stopped at LIMIT
-    assert drive_lines(o) and all(f"no change after {timeout}." in line for line in drive_lines(o)), json.dumps(o)
+    # every wait the stop at LIMIT left whole took the old 3 s; the one it came in ends with it (#812: until() gives up
+    # on a stopping task), so it may be shorter
+    *whole, last = drive_lines(o)
+    assert whole and all(f"no change after {timeout}." in line for line in whole), json.dumps(o)
+    assert float(last.split("after ")[1].split(" s")[0]) < timeout + 1, json.dumps(o)
 
 
 def test_the_entry_text_navdrive_waits_for_is_the_entry_nodes():
