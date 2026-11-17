@@ -1,5 +1,5 @@
 {
-  "about": "The runner's JSON-lines protocol (runner/protocol.py, #812): what a command line parses to and which events are well-formed. tests/test_runner_protocol.py runs every case; the window's backend runs them too. An error case's `error` is a part of the runner's message; another reader only checks that the line is refused.",
+  "about": "The runner's JSON-lines protocol (runner/protocol.py, #812): what a command line parses to and which events are well-formed. tests/test_runner_protocol.py runs every case; the window's backend runs them too, and the page folds the valid events. An error case's `error` is a part of the runner's message; another reader only checks that the line is refused. `addresses`: two adb addresses and whether the runner takes them for one device (runner/devices.py same_address; the page's runner.ts sameAddress picks the scanned device by it).",
   "version": 1,
   "commands": [
     {"line": "{\"v\": 1, \"cmd\": \"scan\"}", "command": {"cmd": "scan"}},
@@ -7,19 +7,18 @@
     {
       "line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}",
       "command": {"cmd": "start", "root": null, "device": {"address": null, "mumu_index": null, "mumu_manager": null},
-                  "tasks": [{"entry": "MirrorDungeon", "override": {}}]}
+                  "tasks": [{"entry": "MirrorDungeon"}]}
     },
     {
-      "line": "{\"v\": 1, \"cmd\": \"start\", \"root\": \"C:/maalc\", \"device\": {\"address\": \"127.0.0.1:16384\", \"mumu_index\": 0, \"mumu_manager\": \"C:/MuMu/nx_main/MuMuManager.exe\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\", \"override\": [{\"MirrorDungeon\": {\"attach\": {\"difficulty\": \"hard\"}}}]}, {\"entry\": \"ExpLuxcavation\", \"override\": {\"ExpLuxcavation\": {\"attach\": {\"team\": \"t3\"}}}}]}",
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"root\": \"C:/maalc\", \"device\": {\"address\": \"127.0.0.1:16384\", \"mumu_index\": 0, \"mumu_manager\": \"C:/MuMu/nx_main/MuMuManager.exe\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}, {\"entry\": \"ExpLuxcavation\"}]}",
       "command": {"cmd": "start", "root": "C:/maalc",
                   "device": {"address": "127.0.0.1:16384", "mumu_index": 0, "mumu_manager": "C:/MuMu/nx_main/MuMuManager.exe"},
-                  "tasks": [{"entry": "MirrorDungeon", "override": [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}]},
-                            {"entry": "ExpLuxcavation", "override": {"ExpLuxcavation": {"attach": {"team": "t3"}}}}]}
+                  "tasks": [{"entry": "MirrorDungeon"}, {"entry": "ExpLuxcavation"}]}
     },
     {
       "line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"address\": \"127.0.0.1:16416\"}, \"tasks\": [{\"entry\": \"ClaimMail\"}]}",
       "command": {"cmd": "start", "root": null, "device": {"address": "127.0.0.1:16416", "mumu_index": null, "mumu_manager": null},
-                  "tasks": [{"entry": "ClaimMail", "override": {}}]}
+                  "tasks": [{"entry": "ClaimMail"}]}
     },
     {"line": "not json", "error": "not JSON"},
     {"line": "[1, 2]", "error": "not a JSON object"},
@@ -30,11 +29,21 @@
     {"line": "{\"v\": 1, \"cmd\": \"start\"}", "error": "start: tasks"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": []}", "error": "start: tasks"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": [{\"entry\": \"\"}]}", "error": "start: tasks[0].entry"},
-    {"line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": [{\"entry\": \"MirrorDungeon\", \"override\": \"hard\"}]}", "error": "start: tasks[0].override"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": [{\"entry\": \"MirrorDungeon\", \"override\": {}}]}", "error": "start: tasks[0]: unknown field 'override'"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": [{\"entry\": \"MirrorDungeon\", \"options\": {}}]}", "error": "start: tasks[0]: unknown field 'options'"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"address\": 16384}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.address"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"mumu_index\": \"0\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.mumu_index"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"port\": 16384}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device: unknown field 'port'"}
+  ],
+  "addresses": [
+    ["127.0.0.1:16384", "127.0.0.1:16384", true],
+    ["localhost:16384", "127.0.0.1:16384", true],
+    ["127.0.0.1:16416", "localhost:16416", true],
+    ["127.0.0.1:16384", "127.0.0.1:16416", false],
+    ["192.168.1.2:5555", "127.0.0.1:5555", false],
+    ["emulator-5554", "emulator-5554", true],
+    ["emulator-5554", "127.0.0.1:5554", false],
+    ["localhost:", "127.0.0.1:", false]
   ],
   "events": [
     {"event": {"v": 1, "event": "ready", "pid": 4242}, "valid": true},
@@ -47,12 +56,30 @@
       {"name": "emulator-5554", "address": "emulator-5554", "adb_path": "C:/adb/adb.exe", "mumu": null}]}, "valid": true},
     {"event": {"v": 1, "event": "devices", "devices": []}, "valid": true},
     {"event": {"v": 1, "event": "connection", "state": "launching", "address": "127.0.0.1:16384"}, "valid": true},
+    {"event": {"v": 1, "event": "connection", "state": "waiting", "address": "127.0.0.1:16384"}, "valid": true},
+    {"event": {"v": 1, "event": "connection", "state": "connecting", "address": "127.0.0.1:16384"}, "valid": true},
     {"event": {"v": 1, "event": "connection", "state": "connected", "address": "127.0.0.1:16384"}, "valid": true},
+    {"event": {"v": 1, "event": "resource", "state": "loading"}, "valid": true},
     {"event": {"v": 1, "event": "resource", "state": "loaded"}, "valid": true},
     {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "pending"}, "valid": true},
+    {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "running"}, "valid": true},
+    {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "succeeded"}, "valid": true},
+    {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "failed"}, "valid": true},
+    {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "stopped"}, "valid": true},
     {"event": {"v": 1, "event": "task", "index": 1, "entry": "ExpLuxcavation", "state": "cancelled", "reason": "maintenance"}, "valid": true},
+    {"event": {"v": 1, "event": "task", "index": 1, "entry": "ExpLuxcavation", "state": "cancelled", "reason": null}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "agent_exit", "message": "the bot exited with code 3", "code": 3, "tail": ["Traceback (most recent call last):"]}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "stop_timeout", "message": "MaaFramework did not stop in 60 s"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "protocol", "message": "not JSON: 'x'"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "device_missing", "message": "no device at 127.0.0.1:16384"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "launch_failed", "message": "MuMuManager.exe exited with code 1"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "device_timeout", "message": "MuMu instance 0 did not come up in 120 s"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "connect_failed", "message": "the controller did not connect"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "resource_failed", "message": "the resource did not load"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "agent_failed", "message": "the bot did not start", "code": 1, "tail": []}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "internal", "message": "Traceback (most recent call last):"}, "valid": true},
+    {"event": {"v": 1, "event": "end", "result": "succeeded"}, "valid": true},
+    {"event": {"v": 1, "event": "end", "result": "failed"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "stopped"}, "valid": true},
     {"event": {"v": 2, "event": "end", "result": "stopped"}, "valid": false},
     {"event": {"v": 1, "event": "progress"}, "valid": false},

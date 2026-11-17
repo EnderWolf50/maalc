@@ -8,7 +8,7 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
-import { LOG_LINES, isRunning, useRunner, type Device, type LogLine, type RunView } from "./runner";
+import { LOG_LINES, crashed, isRunning, sameAddress, useRunner, type Device, type LogLine, type RunView } from "./runner";
 import * as api from "./api";
 import { SchedulesSection } from "./Schedules";
 import { Choice, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
@@ -116,7 +116,7 @@ export function RunTab() {
 function statusOf(t: (k: Key) => string, v: RunView) {
   if (v.phase === "idle") return t("runner.status_idle");
   // ended before its end event: the window ended its tree after a stop, or it crashed and the run failed (spec #811)
-  if (v.phase === "ended") return t(v.exit && !v.exit.ended ? (v.killed ? "runner.result.stopped" : "runner.result.crashed")
+  if (v.phase === "ended") return t(crashed(v) ? "runner.result.crashed" : v.exit && !v.exit.ended ? "runner.result.stopped"
     : `runner.result.${v.result ?? "failed"}`);
   const parts = [
     v.phase === "stopping" && t("runner.stopping"),
@@ -150,7 +150,6 @@ function RunnerSection() {
   const pane = useRef<HTMLOListElement>(null);
   const follow = useRef(true);
   useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole]);
-  const crashed = view.exit && !view.exit.ended && !view.killed;
   return (
     <fieldset className="runner" ref={box}>
       <legend>{t("runner.title")}</legend>
@@ -164,7 +163,7 @@ function RunnerSection() {
       {blocked && !running ? <p className="caution">{t(`runner.blocked_${blocked}`)}</p> : <p className="muted">{t("runner.start_note")}</p>}
       {view.refused && <p className="caution" role="alert">{fill(t("runner.refused"), { error: view.refused })}</p>}
       {view.killed && <p className="caution" role="alert">{fill(t("runner.killed"), { reason: view.killed })}</p>}
-      {crashed && (
+      {crashed(view) && (
         <div className="crash" role="alert">
           <p>{fill(t("runner.crash"), { code: view.exit!.code ?? "—" })}</p>
           <pre>{view.exit!.tail.join("\n")}</pre>
@@ -376,7 +375,7 @@ function EmulatorFields() {
     api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
   };
   const found = scan.state === "found" ? scan.devices : null;
-  const at = found ? found.findIndex((d) => d.address === s.emulator.address) : -1;
+  const at = found && s.emulator.address !== null ? found.findIndex((d) => sameAddress(d.address, s.emulator.address!)) : -1;
   const pick = (d: Device) => set({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
   return (
     <fieldset className="emulator" data-path="emulator">

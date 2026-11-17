@@ -8,7 +8,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import type { Synced } from "./api";
+import type { Synced, UpdateOutcome } from "./api";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import type { Message } from "./runner";
@@ -18,8 +18,9 @@ const zh = TEXT.zh_tw;
 const PREFIX = "maalc-1a2b3c4d-";
 const back = vi.hoisted(() => ({
   text: "", saved: [] as string[], starts: [] as string[][], send: undefined as ((m: Message) => void) | undefined,
-  scheduled: [] as { id: string; opened: boolean }[], more: undefined as (() => void) | undefined,
+  scheduled: [] as { id: string; opened: boolean; update_unfinished?: boolean }[], more: undefined as (() => void) | undefined,
   logged: [] as string[], syncs: [] as unknown[], syncFail: "", syncErrors: [] as string[], closed: 0,
+  update: null as UpdateOutcome | null,
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -45,6 +46,7 @@ vi.mock("./api", async (original) => ({
     return Promise.resolve(done);
   },
   closeWindow: () => { back.closed++; return Promise.resolve(); },
+  lastUpdate: () => Promise.resolve(back.update),
 }));
 
 const EVERY_DAY = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -72,6 +74,7 @@ beforeEach(() => {
   back.syncFail = "";
   back.syncErrors = [];
   back.closed = 0;
+  back.update = null;
 });
 
 /** The window, on the Run tab it opens on, once the settings are read. */
@@ -92,7 +95,8 @@ const logged = (text: string) => back.logged.some((l) => /^\d{4}-\d\d-\d\d \d\d:
 const send = (...messages: Message[]) => act(() => { for (const m of messages) back.send!(m); });
 const exit = (code: number | null, ended: boolean): Message => ({ type: "exit", code, ended, tail: [] });
 /** A second start brings a scheduled run: the backend keeps it and fires its event. */
-const secondStart = (id: string) => act(() => { back.scheduled.push({ id, opened: false }); back.more!(); });
+const secondStart = (id: string, update_unfinished = false) =>
+  act(() => { back.scheduled.push({ id, opened: false, update_unfinished }); back.more!(); });
 
 describe("the schedules' editor", () => {
   test("a new schedule runs every day at 05:10 and wakes the PC; its days, time and switch change, and a save writes them and their task", async () => {
@@ -255,6 +259,47 @@ describe("a scheduled run's start (--run <id>)", () => {
     expect(back.starts).toHaveLength(1);
     expect(logLines().some((l) => l?.endsWith("[schedule] s1: skipped: a run is under way"))).toBe(true);
     expect(screen.getByText(/排程 s1 略過：已經在執行/)).toBeVisible();
+  });
+
+  test("a scheduled start while an update left the folder half replaced is skipped, and its window stays open", async () => {
+    // the backend read apply.json and old/ as the start came (update.rs left_unfinished): an apply under way, cut short, or
+    // failed with not all of it back
+    back.scheduled = [{ id: "s1", opened: true, update_unfinished: true }];
+    await open();
+    await waitFor(() => expect(logged("[schedule] s1: skipped: an update is under way or left the folder half replaced")).toBe(true));
+    expect(back.starts).toEqual([]);
+    expect(logLines().some((l) => l?.endsWith("[schedule] s1: skipped: an update is under way or left the folder half replaced"))).toBe(true);
+    expect(screen.getByText(/排程 s1 略過：程式更新正在套用，或沒做完、沒能全部還原，資料夾只換了一半/)).toBeVisible();
+    expect(back.closed).toBe(0);
+  });
+
+  test("the open window goes by the state each scheduled start brings, not by its own start's", async () => {
+    // the window opened while an apply had left old/; the user then put the files back: the next start runs
+    back.update = { state: "applying", from: "2.0.0", to: "2.1.0", error: null, restored: false };
+    await open();
+    secondStart("s1", true);
+    await waitFor(() => expect(logged("[schedule] s1: skipped: an update is under way or left the folder half replaced")).toBe(true));
+    secondStart("s1");
+    await waitFor(() => expect(back.starts).toEqual([["ClaimMail", "MirrorDungeon"]]));
+  });
+
+  test("a window the schedule opened stays open when the runner ends unexpectedly, and schedule.log has its exit code", async () => {
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toHaveLength(1));
+    send(exit(3, false)); // no end event: the runner crashed
+    await waitFor(() => expect(logged("[schedule] s1: the runner ended unexpectedly (exit code 3); the window stays open")).toBe(true));
+    expect(back.closed).toBe(0);
+    expect(screen.getByText(/排程 s1 的執行器意外結束（結束碼 3），視窗留著/)).toBeVisible();
+  });
+
+  test("a window the schedule opened closes after a stop that ended the runner's tree, as after any stop", async () => {
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toHaveLength(1));
+    send({ type: "stopping" }, { type: "killed", reason: "the runner did not stop" }, exit(null, false));
+    await waitFor(() => expect(back.closed).toBe(1));
+    expect(logged("[schedule] s1: the run ended; the window closes")).toBe(true);
   });
 
   test("two schedules at one time: the first runs, the second is skipped", async () => {

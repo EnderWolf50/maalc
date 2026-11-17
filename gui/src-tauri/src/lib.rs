@@ -222,18 +222,22 @@ fn log_schedule(line: String) -> Result<(), String> {
     append_log("schedule.log", &line)
 }
 
-/// A scheduled run the page has not taken yet: its schedule's id, and whether this window was opened for it (it closes when
-/// the run ends) or was open already.
+/// A scheduled run the page has not taken yet: its schedule's id; whether this window was opened for it (it closes when
+/// the run ends) or was open already; and whether an update's apply left the folder half replaced when it came
+/// (update::left_unfinished), which skips it (#817).
 #[derive(Serialize, Clone, Debug, PartialEq)]
 struct Scheduled {
     id: String,
     opened: bool,
+    update_unfinished: bool,
 }
 
 impl Scheduled {
-    /// The scheduled run a start's arguments bring (`--run <id>`), if any: `opened` for this window's own start.
-    fn of(args: &[String], opened: bool) -> Option<Scheduled> {
-        schedule::run_arg(args).map(|id| Scheduled { id, opened })
+    /// The scheduled run a start's arguments bring (`--run <id>`), if any: `opened` for this window's own start; `root` the
+    /// folder whose update state it reads now, as it comes.
+    fn of(args: &[String], opened: bool, root: Option<&Path>) -> Option<Scheduled> {
+        let update_unfinished = || root.is_some_and(update::left_unfinished); // read only for a start that brings --run
+        schedule::run_arg(args).map(|id| Scheduled { id, opened, update_unfinished: update_unfinished() })
     }
 }
 
@@ -253,11 +257,11 @@ fn stamp() -> String {
 /// The `--run <id>` of this window's own start, and of each second start since, in order; the page takes them once its
 /// settings are read (and on each `scheduled` event), so one that comes while the page loads waits for it.
 #[derive(Default)]
-struct Pending(Mutex<Vec<Scheduled>>);
+struct ScheduledStarts(Mutex<Vec<Scheduled>>);
 
 #[tauri::command]
-fn take_scheduled(pending: tauri::State<Pending>) -> Vec<Scheduled> {
-    std::mem::take(&mut *pending.0.lock().unwrap())
+fn take_scheduled(starts: tauri::State<ScheduledStarts>) -> Vec<Scheduled> {
+    std::mem::take(&mut *starts.0.lock().unwrap())
 }
 
 /// One sync with the Task Scheduler at a time: the one after the load and a save soon after must not cross.
@@ -282,7 +286,8 @@ async fn sync_schedules(schedules: Vec<schedule::Schedule>) -> Result<schedule::
     .map_err(|e| e.to_string())?
 }
 
-/// The log lines of a run the window keeps for a page that attaches later, as many as the page shows (Run.tsx LOG_LINES).
+/// The log lines of a run the window keeps for a page that attaches later, as many as the page shows (runner.ts LOG_LINES,
+/// which runner.test.tsx ties to this).
 const LOG_KEEP: usize = 2000;
 
 /// A message that is a line of the run's log.
@@ -566,8 +571,8 @@ fn hide_to_tray(app: AppHandle, runs: tauri::State<Runs>, text: TrayText) -> Res
 /// `--run <id>` goes to the page, which runs it or says why not (spec #811 「定時執行」).
 fn second_start(app: &AppHandle, start: instance::SecondStart) {
     show_window(app);
-    if let Some(scheduled) = Scheduled::of(&start.args, false) {
-        app.state::<Pending>().0.lock().unwrap().push(scheduled);
+    if let Some(scheduled) = Scheduled::of(&start.args, false, root().ok().as_deref()) {
+        app.state::<ScheduledStarts>().0.lock().unwrap().push(scheduled);
         let _ = app.emit("scheduled", ());
     }
 }
@@ -590,7 +595,7 @@ pub fn run() {
             Ok(None) => {
                 if let Err(e) = instance::forward(k, &this, instance::FORWARD_WAIT) {
                     // the window that is open never got it: a scheduled run says so where the user looks for it
-                    match Scheduled::of(&this.args, false) {
+                    match Scheduled::of(&this.args, false, None) {
                         Some(s) => {
                             let line = format!("{} [schedule] {}: not run: the open window did not take it: {e}", stamp(), s.id);
                             let _ = append_log("schedule.log", &line);
@@ -606,10 +611,10 @@ pub fn run() {
             }
         },
     };
-    let launch = Scheduled::of(&this.args, true);
+    let launch = Scheduled::of(&this.args, true, root().ok().as_deref());
     tauri::Builder::default()
         .manage(Runs::default())
-        .manage(Pending(Mutex::new(launch.into_iter().collect())))
+        .manage(ScheduledStarts(Mutex::new(launch.into_iter().collect())))
         .setup(move |app| {
             let handle = app.handle().clone();
             if let Some(key) = &key {
@@ -776,10 +781,27 @@ mod tests {
     #[test]
     fn a_start_with_run_brings_its_scheduled_run_and_one_without_brings_none() {
         let run = names(&["maalc-gui.exe", "--run", "s1"]);
+        let root = scratch("scheduled");
         // the window's own start opened it for the run (it closes after); a second start found it open
-        assert_eq!(Scheduled::of(&run, true), Some(Scheduled { id: "s1".into(), opened: true }));
-        assert_eq!(Scheduled::of(&run, false), Some(Scheduled { id: "s1".into(), opened: false }));
-        assert_eq!(Scheduled::of(&names(&["maalc-gui.exe"]), true), None);
+        let brought = |opened| Some(Scheduled { id: "s1".into(), opened, update_unfinished: false });
+        assert_eq!(Scheduled::of(&run, true, Some(&root)), brought(true));
+        assert_eq!(Scheduled::of(&run, false, Some(&root)), brought(false));
+        assert_eq!(Scheduled::of(&names(&["maalc-gui.exe"]), true, Some(&root)), None);
+    }
+
+    #[test]
+    fn a_scheduled_start_says_when_it_comes_whether_an_update_left_the_folder_half_replaced() {
+        let run = names(&["maalc-gui.exe", "--run", "s1"]);
+        let root = scratch("scheduled-update");
+        let old = update::old_dir(&root).join("python");
+        fs::create_dir_all(&old).unwrap();
+        fs::write(old.join("python.exe"), "moved aside").unwrap();
+        let journal = update::update_dir(&root).join("apply.json");
+        fs::write(&journal, r#"{"state": "applying", "from": "1.0.0", "to": "1.1.0", "restored": false}"#).unwrap();
+        assert_eq!(Scheduled::of(&run, false, Some(&root)).map(|s| s.update_unfinished), Some(true));
+        fs::remove_dir_all(&old).unwrap(); // the user put the files back: the next scheduled start runs
+        assert_eq!(Scheduled::of(&run, false, Some(&root)).map(|s| s.update_unfinished), Some(false));
+        assert_eq!(Scheduled::of(&run, false, None).map(|s| s.update_unfinished), Some(false));
     }
 
     #[cfg(windows)]

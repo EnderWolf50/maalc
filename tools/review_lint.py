@@ -53,7 +53,8 @@ def diff_lines(base: str) -> tuple[dict[str, list[tuple[int, str]]], dict[str, l
 def avoid_terms(glossary: str) -> list[tuple[str, bool]]:
     """The `_Avoid_:` terms specific enough to search for. Text after `；` is the code-side wording, which is
     allowed. A bare word (`bonus`, `輪`, `場`, `獎勵`) is common prose, so it is left out unless its （…） note
-    begins 單說, which says the word alone is wrong (`模組`); so is a term whose note says 單指 or （寫程式時可用）."""
+    begins 單說, which says the word alone is wrong (`模組`); so is a term whose note says 單指 or that code may use it
+    (`run`（寫程式與英文介面時可用）)."""
     found = []
     for line in glossary.splitlines():
         if not line.startswith("_Avoid_:"):

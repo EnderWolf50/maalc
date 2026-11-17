@@ -11,11 +11,11 @@ the runner's `[run]` lines, the bot's `[maalc]` lines and the controller's touch
 reads; the runner keeps the same lines in DIR/logs/runner/. `--task A,B` posts several tasks up front, as a client
 queues its task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
 (`tools/live/queue.py detach`), as the maalc-live-test skill says. Each task reads its options from DIR's
-`config/settings.json` at its start (#813): `prep --set` sets them; the runner gets each task with no override. A task
+`config/settings.json` at its start (#813): `prep --set` sets them; the runner gets each task by its entry alone. A task
 DIR's interface.json lacks stops it, exit 1, before the runner starts. A runner that reports it cannot stop
 MaaFramework (after the bot exited mid-run) has its process tree ended.
 
-**prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
+**prep** copies `config/settings.json` and, when the source still has one, `state/`
 from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
 into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to VALUE
 (JSON, else a string):
@@ -30,7 +30,6 @@ it before DIR is touched. DIR comes from `tools/install.py` (a worktree's instal
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
 import os
 import shutil
@@ -41,16 +40,14 @@ import time
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[1]
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+for path in (TOOLS, TOOLS.parent):  # tools/ for local_dir, the repo for runner/'s helpers
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
 from local_dir import main_checkout  # noqa: E402
-
-ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
-
-
-def clock() -> str:
-    return f"{datetime.datetime.now():%H:%M:%S.%f}"[:-3]
+from runner import protocol  # noqa: E402
+from runner.runlog import clock  # noqa: E402
+from runner.session import keep_awake, split_lines  # noqa: E402
 
 
 # s the output is still read once the child has exited: what it printed is in the pipe by then and reads in
@@ -84,10 +81,9 @@ def stamped(cmd, log: Path, clock=clock, send: str | None = None, line=None) -> 
             p.stdin.flush()
         lock, done, tail = threading.Lock(), threading.Event(), bytearray()  # tail: what follows the last newline
 
-        def write_lines(raw: bytes):
-            # a lone \r ends a line too, as it did when the output was read in text mode
-            for part in raw.rstrip(b"\r").split(b"\r"):
-                if stamp := line(part.decode("utf-8", "replace").rstrip()):
+        def write_lines(texts: list[str]):
+            for text in texts:
+                if stamp := line(text):
                     f.write(f"{stamp[0]} {stamp[1]}\n")
 
         def pump():
@@ -97,10 +93,7 @@ def stamped(cmd, log: Path, clock=clock, send: str | None = None, line=None) -> 
                 with lock:
                     if done.is_set():
                         return
-                    *lines, rest = (tail + chunk).split(b"\n")
-                    tail[:] = rest
-                    for raw in lines:
-                        write_lines(raw)
+                    write_lines(split_lines(chunk, tail))  # a lone \r ends a line too, as text mode did
             os.close(read)
 
         reader = threading.Thread(target=pump, daemon=True)
@@ -112,7 +105,7 @@ def stamped(cmd, log: Path, clock=clock, send: str | None = None, line=None) -> 
             with lock:
                 done.set()
                 if tail:
-                    write_lines(bytes(tail))
+                    write_lines(split_lines(b"\n", tail))
         if reader.is_alive():
             f.write(f"{clock()} [run] output still open {DRAIN:g} s after the child exited: a process it started holds it\n")
         f.write(f"{clock()} [run] exit {code}\n")
@@ -176,16 +169,15 @@ def run(root: Path, tasks: list[str], port: int, log: Path) -> int:
         f.writelines(f"{clock()} {line}\n" for line in said)
     if jobs is None:
         return 1
-    # v: runner/protocol.py VERSION (tests/test_live_bot.py ties the two)
-    start = {"v": 1, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
+    start = {"v": protocol.VERSION, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
              "tasks": [{"entry": entry} for _, entry in jobs]}
     return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),
                    line=RunnerEvents())
 
 
 def plan(root: Path, tasks: list[str]) -> list[tuple[str, str]]:
-    """(task, entry) of each task: its entry node from root's interface.json (whole-line // comments dropped); it goes
-    with no override, as its options are the settings file's (#813). A task the interface lacks stops it before any task
+    """(task, entry) of each task: its entry node from root's interface.json (whole-line // comments dropped); the entry
+    is all the runner gets, as the options are the settings file's (#813). A task the interface lacks stops it before any task
     is posted."""
     lines = (root / "interface.json").read_text(encoding="utf-8").splitlines()
     entries = {t["name"]: t["entry"] for t in json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))["task"]}
@@ -217,7 +209,6 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
         except ValueError:
             node[last] = value
     (install / "config").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source / "config/maa_option.json", install / "config/maa_option.json")
     if (source / "state").is_dir():
         shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
     (install / "config/settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -225,15 +216,9 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
 
 
 def awake(minutes: float, set_state=None, sleep=time.sleep) -> None:
-    if set_state is None:
-        import ctypes
-
-        set_state = ctypes.windll.kernel32.SetThreadExecutionState
-    set_state(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
-    try:
+    """The display and the machine on for minutes, as the runner keeps them during a run (runner/session.py)."""
+    with keep_awake(set_state):
         sleep(minutes * 60)
-    finally:
-        set_state(ES_CONTINUOUS)
 
 
 def main(argv=None) -> int:

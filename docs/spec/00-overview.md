@@ -83,7 +83,7 @@
 |---|---|---|
 | 框架 | MaaFramework 5.x（Python 綁定 `maafw`，實測 5.14.3） | #4、#7 |
 | 架構 | 流程寫在 Pipeline 的 `MirrorHub`，決策寫在 Python Agent（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)） | #8 |
-| Agent | Python，由 `interface.json` 的 `agent.child_exec`／`child_args` 啟動 | #1、#4 |
+| Agent | Python。執行器（`runner/`）用它自己的 Python 啟動 `agent/main.py`（`runner/session.py` 的 `agent_command`）；`interface.json` 的 `agent.child_exec`／`child_args` 留給開發工具（MaaDebugger）啟動它 | #1、#4、#812 |
 | 專案骨架 | 以 MaaPracticeBoilerplate（MIT）為起點，手動搬入所需檔案，保留其版權聲明 | #4 |
 | 執行介面 | 下一版由設定視窗的執行器跑任務（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811）。ProjectInterface V2（`interface.json`）只留控制器、資源、各任務的入口與 Agent 的啟動設定，給開發工具（MaaDebugger、`maa-tools check`）用。v1.0.0 由 MXU 或 MFAAvalonia 執行，任務選項在 `interface.json`（ADR 0013） | #1、#6、#19、#813 |
 | 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。v1.0.0 只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；下一版也負責執行（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811） | #19、#811 |

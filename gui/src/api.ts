@@ -162,9 +162,10 @@ export const isMismatch = (e: unknown) => String(e).includes(MISMATCH);
 /** The error of what a run refuses, an apply too (lib.rs RUN_UNDER_WAY). */
 export const RUN_UNDER_WAY = "a run is under way";
 export const isRunUnderWay = (e: unknown) => String(e).includes(RUN_UNDER_WAY);
-/** A scheduled run's start the window was handed (`maalc-gui.exe --run <id>`, lib.rs take_scheduled): its schedule's id, and
- * whether this window was opened for it (it closes when the run ends) or was open already. */
-export interface Scheduled { id: string; opened: boolean }
+/** A scheduled run's start the window was handed (`maalc-gui.exe --run <id>`, lib.rs take_scheduled): its schedule's id;
+ * whether this window was opened for it (it closes when the run ends) or was open already; and whether an update's apply had
+ * left the folder half replaced when it came (update.rs left_unfinished), which skips it. */
+export interface Scheduled { id: string; opened: boolean; update_unfinished: boolean }
 
 /** The scheduled runs' starts the window got since the last call, in order: its own start's, then each second start's. */
 export const takeScheduled = (): Promise<Scheduled[]> => (tauri ? invoke("take_scheduled") : Promise.resolve([]));

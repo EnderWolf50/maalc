@@ -6,10 +6,12 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { StrictMode } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import libRs from "../src-tauri/src/lib.rs?raw";
+import cases from "../../tests/runner_cases.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
-import { LOG_LINES, type Device, type Message } from "./runner";
+import { IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message } from "./runner";
 import { queuedTeams } from "./testing";
 
 const zh = TEXT.zh_tw;
@@ -302,6 +304,17 @@ describe("the device scan", () => {
     expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" }));
   });
 
+  test("an address the runner takes for the same device shows as picked: localhost is 127.0.0.1 (runner/devices.py)", async () => {
+    const s = settings();
+    s.emulator.address = "localhost:16416";
+    back.text = JSON.stringify(s, null, 2) + "\n";
+    back.devices = [MUMU, { ...MUMU, address: "127.0.0.1:16416", mumu: { ...MUMU.mumu!, index: 1 } }];
+    const user = await open();
+    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
+    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
+    expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" }));
+  });
+
   test("a scan that finds none, and one that fails, say so", async () => {
     const user = await open();
     await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
@@ -382,4 +395,43 @@ describe("during a run", () => {
     await expect(kept).resolves.toBe(true);
     expect(await screen.findByText("Error: the app has no icon")).toBeVisible();
   });
+});
+
+describe("the runner's events as the page folds them (tests/runner_cases.json, which the runner and the backend run)", () => {
+  // the backend relays each event it took under type "event", its "v" dropped (runner.rs Message)
+  const valid = cases.events.filter((c) => c.valid).map((c) => {
+    const { v: _v, ...event } = c.event as Record<string, unknown>;
+    return { type: "event", ...event } as Message & { type: "event" };
+  });
+  const running = reduce(IDLE, { type: "begin", entries: ["MirrorDungeon", "ExpLuxcavation"] });
+
+  test("each valid event lands where the Run tab shows it", () => {
+    for (const m of valid) {
+      const v = reduce(running, m);
+      if (m.event === "log") expect(v.log[v.log.length - 1]).toMatchObject({ t: m.t, source: m.source, line: m.line });
+      else if (m.event === "task") expect(v.tasks[m.index]).toMatchObject({ entry: m.entry, state: m.state });
+      else if (m.event === "connection") expect(v.link).toEqual({ state: m.state, address: m.address });
+      else if (m.event === "resource") expect(v.resource).toBe(m.state);
+      else if (m.event === "end") expect(v.result).toBe(m.result);
+      else expect(v).toEqual(running); // ready, devices (a scan's), error (which the runner logs too)
+    }
+  });
+
+  test("the page knows every value the runner sends: the sources, link states, resource states, task states, results", () => {
+    const values = (event: string, field: string) =>
+      new Set(cases.events.filter((c) => c.valid && c.event.event === event).map((c) => (c.event as Record<string, unknown>)[field]));
+    expect(values("log", "source")).toEqual(new Set(SOURCES));
+    expect(values("connection", "state")).toEqual(new Set(LINK_STATES));
+    expect(values("resource", "state")).toEqual(new Set(RESOURCE_STATES));
+    expect(values("task", "state")).toEqual(new Set(TASK_STATES));
+    expect(values("end", "result")).toEqual(new Set(RESULTS));
+  });
+
+  test.each(cases.addresses as [string, string, boolean][])("%s and %s are one device: %s, as the runner picks it", (a, b, same) => {
+    expect(sameAddress(a, b)).toBe(same);
+  });
+});
+
+test("the window keeps as many log lines of a run for a page that attaches later as the page shows (lib.rs LOG_KEEP)", () => {
+  expect(libRs).toContain(`const LOG_KEEP: usize = ${LOG_LINES};`);
 });

@@ -56,3 +56,21 @@ describe("the UI text keeps the STE rules a program can check", () => {
     expect(words("zh_tw", "價格是 26、52、78。")).toBe(6);
   });
 });
+
+describe("English names a press of Start a session and keeps run for a Mirror Dungeon run (GLOSSARY 執行, 局)", () => {
+  // the texts whose "run" is a 局: the Mirror Dungeon task's options (run.*, but the global options under it), the team
+  // queue, a team's fields
+  const ofMirrorRuns = /^run\.(?!webhook_url|auto_|keep_dismissed_screens)|^(team|queue|weekly_bonus_amount|after_retries|skill|gl)\.|^resetConfirm$/;
+  // a lower-case run: "the Run tab" names the tab, after the verb (GLOSSARY 執行)
+  const runNoun = /\b([Aa]n?|[Tt]he|[Tt]his|[Ee]ach|[Pp]er|[Nn]ext) runs?\b|\bruns? (is|ends|failed)\b|\bScheduled runs\b|\brun order\b/;
+
+  test("no other English text calls something a run", () => {
+    expect(Object.entries(TEXT.en_us).filter(([k, text]) => !ofMirrorRuns.test(k) && runNoun.test(text))).toEqual([]);
+  });
+
+  test("the run's texts say session, the Mirror Dungeon's say run", () => {
+    expect(TEXT.en_us["runner.tasks"]).toBe("This session's tasks");
+    expect(TEXT.en_us["sched.title"]).toBe("Scheduled sessions");
+    expect(TEXT.en_us["run.group_run"]).toBe("Each run"); // 每一局
+  });
+});

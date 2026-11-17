@@ -2,10 +2,12 @@
 // options and the emulator's fields, each written to the settings key the runner and the agent read.
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
+import taskOptionsPy from "../../agent/task_options.py?raw";
 import { TABS } from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import { dragOnto, expectLines, queuedTeams, renderEditor } from "./testing";
+import { GLOBAL_KEYS } from "./Run";
 import { useEditor } from "./ui";
 
 const zh = TEXT.zh_tw;
@@ -14,6 +16,12 @@ const list = () => within(document.querySelector(".task-list")!);
 const rows = () => list().getAllByRole("listitem");
 const ids = (s: Settings) => s.tasks.map((x) => x.id);
 const tick = (name: string) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick"], { name }) });
+
+test("the global options the tab shows are the run keys every task reads in the agent (agent/task_options.py GLOBAL)", () => {
+  const tuple = /^GLOBAL = \(([^)]*)\)/m.exec(taskOptionsPy)?.[1] ?? "";
+  const agent = [...tuple.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  expect(agent).toEqual([...GLOBAL_KEYS]);
+});
 
 describe("the task list", () => {
   test("lists the file's tasks in its order with their ticks; a tick is saved", async () => {

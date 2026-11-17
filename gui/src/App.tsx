@@ -12,7 +12,7 @@ import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, taskOfPath } from "./Run";
-import { IDLE, RunnerContext, isRunning, reduce, type Runner } from "./runner";
+import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
 import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
@@ -325,11 +325,16 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     take();
     return api.onScheduled(take);
   }, [ready]);
-  // the window a schedule opened closes when its run ends, unless it has edits that closing would drop
+  // the window a schedule opened closes when its run ends, unless it has edits that closing would drop, or the runner crashed:
+  // the exit code and its last lines are only in this window (spec #811 「執行器」: the window stays and says why)
   useEffect(() => {
     const id = closeAfter.current;
     if (run.phase !== "ended" || id === null) return;
     closeAfter.current = null;
+    if (crashed(run)) {
+      noteScheduled(id, { kind: "crashed", code: run.exit!.code });
+      return;
+    }
     if (unsaved()) {
       noteScheduled(id, { kind: "kept_open" });
       return;
@@ -421,7 +426,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
    * nothing started, null when the run did. */
   type NotStarted = Extract<Outcome, { kind: "refused" }>["why"];
   const startRun = async (): Promise<NotStarted | null> => {
-    if (startingRef.current || isRunning(runRef.current)) return { error: "a run is under way" };
+    if (startingRef.current || isRunning(runRef.current)) return { error: api.RUN_UNDER_WAY };
     if (problems.length) return "problems";
     startingRef.current = true;
     setStarting(true);
@@ -471,10 +476,12 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     await applyUpdate();
   };
   /** A scheduled run's start (#816, spec #811 「定時執行」): the task list runs as Start runs it, on the Run tab; skipped while a
-   * run is under way, not run when its schedule is not in the settings (a task left from an older file) or Start would not
-   * start. The window it opened closes when the run ends (the effect above); one that stays open says why. */
-  scheduledRef.current = async ({ id, opened }) => {
+   * run is under way or while an update left the folder half replaced (lib.rs Scheduled, #817),
+   * not run when its schedule is not in the settings (a task left from an older file) or Start would not start. The window it
+   * opened closes when the run ends (the effect above); one that stays open says why. */
+  scheduledRef.current = async ({ id, opened, update_unfinished }) => {
     if (!latest.current.s?.schedules.some((x) => x.id === id)) return noteScheduled(id, { kind: "unknown" });
+    if (update_unfinished) return noteScheduled(id, { kind: "updating" }); // as the backend found it when the start came
     if (startingRef.current || isRunning(runRef.current)) return noteScheduled(id, { kind: "busy" });
     setTab("run");
     if (opened) closeAfter.current = id; // before the start: a run that ends at once still closes the window

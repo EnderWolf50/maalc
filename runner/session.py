@@ -273,7 +273,7 @@ class Session:
         self.say(f"start {','.join(task['entry'] for task in self.tasks)} pid {os.getpid()} agent {self.agent.pid} "
                  f"install {root}")
         self.tasker = t
-        jobs = [t.post_task(task["entry"], task["override"]) for task in self.tasks]
+        jobs = [t.post_task(task["entry"]) for task in self.tasks]
         if self.stop_at is not None:  # a stop that came before the list was posted
             self.post_stop()
         self.follow(jobs)

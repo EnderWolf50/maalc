@@ -144,23 +144,16 @@ pub struct DeviceWant {
     pub mumu_manager: Option<String>,
 }
 
-/// A task of a start: its entry node and a pipeline override that goes to MaaFramework as it is.
+/// A task of a start: its entry node. It reads its options from the settings file at its start (#813).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TaskSpec {
     pub entry: String,
-    #[serde(rename = "override", default = "no_override")]
-    pub override_: Value,
-}
-
-fn no_override() -> Value {
-    Value::Object(Map::new())
 }
 
 impl TaskSpec {
-    /// The task with no override: its options are the settings file's (#813).
     pub fn new(entry: String) -> TaskSpec {
-        TaskSpec { entry, override_: no_override() }
+        TaskSpec { entry }
     }
 }
 
@@ -211,8 +204,7 @@ impl Command {
         Ok(cmd)
     }
 
-    /// What the runner refuses beyond the fields' types: a start with no task, a task with no entry or an override that is
-    /// not a pipeline override.
+    /// What the runner refuses beyond the fields' types: a start with no task, or a task with no entry.
     pub fn check(&self) -> Result<(), String> {
         if let Command::Start { tasks, .. } = self {
             if tasks.is_empty() {
@@ -221,9 +213,6 @@ impl Command {
             for (i, t) in tasks.iter().enumerate() {
                 if t.entry.is_empty() {
                     return Err(format!("start: tasks[{i}].entry must name the task's entry node"));
-                }
-                if !(t.override_.is_object() || t.override_.is_array()) {
-                    return Err(format!("start: tasks[{i}].override must be a pipeline override (an object, or a list of them)"));
                 }
             }
         }
@@ -262,7 +251,8 @@ pub enum Message {
 // ---- the process tree ----
 
 /// A Job Object that ends every process in it when it is ended or its last handle closes (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE):
-/// a process the runner starts joins it.
+/// a process the runner starts joins it. One started with CREATE_BREAKAWAY_FROM_JOB does not (JOB_OBJECT_LIMIT_BREAKAWAY_OK):
+/// the runner starts MuMuManager so (runner/devices.py launch), and the emulator outlives the run.
 #[cfg(windows)]
 pub struct Job(windows_sys::Win32::Foundation::HANDLE);
 
@@ -281,7 +271,7 @@ impl Job {
         }
         let job = Job(handle);
         let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
         let size = std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32;
         let set = unsafe {
             SetInformationJobObject(job.0, JobObjectExtendedLimitInformation, &limits as *const _ as *const _, size)
@@ -301,6 +291,18 @@ impl Job {
     /// End every process in the job.
     pub fn terminate(&self) {
         unsafe { windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1) };
+    }
+
+    /// The job's limit flags.
+    #[cfg(test)]
+    pub fn limits(&self) -> u32 {
+        use windows_sys::Win32::System::JobObjects::*;
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        let size = std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32;
+        let read = unsafe {
+            QueryInformationJobObject(self.0, JobObjectExtendedLimitInformation, &mut info as *mut _ as *mut _, size, std::ptr::null_mut())
+        };
+        if read == 0 { 0 } else { info.BasicLimitInformation.LimitFlags }
     }
 
     /// How many processes of the job are still running.
@@ -649,6 +651,16 @@ mod tests {
     }
 
     #[test]
+    fn the_window_waits_out_the_runners_own_stop_before_it_ends_the_tree() {
+        // the runner reports stop_timeout after its STOP_LIMIT; only after STOP_WAIT does the window end the tree itself
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runner/session.py");
+        let session = fs::read_to_string(path).unwrap();
+        let limit: f64 = session.lines().find_map(|l| l.strip_prefix("STOP_LIMIT = "))
+            .and_then(|rest| rest.split_whitespace().next()).and_then(|n| n.parse().ok()).expect("session.py STOP_LIMIT");
+        assert!(STOP_WAIT.as_secs_f64() > limit, "STOP_WAIT {STOP_WAIT:?} <= STOP_LIMIT {limit} s");
+    }
+
+    #[test]
     fn each_event_is_taken_or_refused_as_the_cases_say() {
         for case in cases()["events"].as_array().unwrap() {
             let line = case["event"].to_string();
@@ -672,6 +684,16 @@ mod tests {
         let sent = serde_json::to_value(Message::Event(e)).unwrap();
         assert_eq!(sent, serde_json::json!({"type": "event", "event": "task", "index": 1, "entry": "ClaimMail", "state": "cancelled", "reason": "maintenance"}));
         assert_eq!(serde_json::to_value(Message::Stopping).unwrap(), serde_json::json!({"type": "stopping"}));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn the_job_ends_its_processes_and_lets_the_emulators_launch_break_away() {
+        use windows_sys::Win32::System::JobObjects::{JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE};
+        // runner/devices.py launch starts MuMuManager with CREATE_BREAKAWAY_FROM_JOB: MuMu outlives the run
+        let flags = Job::new().unwrap().limits();
+        assert_eq!(flags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE);
+        assert_eq!(flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_BREAKAWAY_OK);
     }
 
     #[test]
