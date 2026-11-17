@@ -86,10 +86,10 @@ const runTasks = () => within(screen.getByRole("list", { name: zh["runner.tasks"
 const logLines = () => [...screen.getByRole("list", { name: zh["runner.log"] }).querySelectorAll("li")];
 const send = (...messages: Message[]) => act(() => { for (const m of messages) back.send!(m); });
 const log = (line: string, source: "runner" | "agent" | "console" = "agent"): Message =>
-  ({ kind: "event", event: "log", t: "10:00:00.000", source, line });
+  ({ type: "event", event: "log", t: "10:00:00.000", source, line });
 const task = (index: number, entry: string, state: string, reason?: string): Message =>
-  ({ kind: "event", event: "task", index, entry, state, ...(reason ? { reason } : {}) } as Message);
-const exit = (code: number | null, ended: boolean, tail: string[] = []): Message => ({ kind: "exit", code, ended, tail });
+  ({ type: "event", event: "task", index, entry, state, ...(reason ? { reason } : {}) } as Message);
+const exit = (code: number | null, ended: boolean, tail: string[] = []): Message => ({ type: "exit", code, ended, tail });
 
 /** Start from the window and wait until the backend got the start. */
 async function started(user: ReturnType<typeof userEvent.setup>) {
@@ -121,10 +121,10 @@ describe("Start and Stop", () => {
     expect(stopButton()).toBeEnabled();
     await user.click(stopButton());
     expect(back.stops).toBe(1);
-    send({ kind: "stopping" });
+    send({ type: "stopping" });
     expect(stopButton()).toHaveTextContent(zh["runner.stopping"]);
     expect(stopButton()).toBeDisabled();
-    send({ kind: "event", event: "end", result: "stopped" }, exit(1, true));
+    send({ type: "event", event: "end", result: "stopped" }, exit(1, true));
     expect(startButton()).toBeEnabled();
     expect(stopButton()).toBeDisabled();
     expect(screen.getByText(zh["runner.result.stopped"])).toBeVisible();
@@ -175,10 +175,10 @@ describe("what the run shows", () => {
     const user = await open();
     await started(user);
     expect(screen.getByText(zh["runner.status_starting"])).toBeVisible();
-    send({ kind: "event", event: "connection", state: "launching", address: "127.0.0.1:16416" });
+    send({ type: "event", event: "connection", state: "launching", address: "127.0.0.1:16416" });
     expect(screen.getByText(fill(zh["runner.link.launching"], { address: "127.0.0.1:16416" }))).toBeVisible();
-    send({ kind: "event", event: "connection", state: "connected", address: "127.0.0.1:16416" },
-      { kind: "event", event: "resource", state: "loaded" });
+    send({ type: "event", event: "connection", state: "connected", address: "127.0.0.1:16416" },
+      { type: "event", event: "resource", state: "loaded" });
     expect(screen.getByText(`${fill(zh["runner.link.connected"], { address: "127.0.0.1:16416" })} · ${zh["runner.resource.loaded"]}`)).toBeVisible();
   });
 
@@ -190,7 +190,7 @@ describe("what the run shows", () => {
     expect(lines).toHaveLength(LOG_LINES);
     expect(lines[0]).toHaveTextContent("[maalc] line 5");
     expect(lines[LOG_LINES - 1]).toHaveTextContent(`[maalc] line ${LOG_LINES + 4}`);
-    send(log("x: 960, y: 540, width: 1920, height: 1080", "console"), { kind: "output", line: "Traceback (most recent call last):" });
+    send(log("x: 960, y: 540, width: 1920, height: 1080", "console"), { type: "output", line: "Traceback (most recent call last):" });
     lines = logLines();
     expect(lines).toHaveLength(LOG_LINES - 1); // the console line is one of the 2000 kept, and hidden
     expect(lines[lines.length - 1]).toHaveTextContent("Traceback (most recent call last):");
@@ -228,15 +228,23 @@ describe("what the run shows", () => {
     expect(runTasks().map((x) => x.dataset.state)).toEqual(["failed", "cancelled"]);
     back.starts = [];
     await started(user);
-    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"), { kind: "stopping" },
-      { kind: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"), { type: "stopping" },
+      { type: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
     expect(runTasks().map((x) => x.dataset.state)).toEqual(["succeeded", "stopped"]);
+  });
+
+  test("the runner's error event, whose own kind names the error, leaves the view as it was", async () => {
+    const user = await open();
+    await started(user);
+    send(log("[run] stop requested"), { type: "event", event: "error", kind: "stop_timeout", message: "MaaFramework did not stop in 60 s" } as Message);
+    expect(logLines()).toHaveLength(1);
+    expect(stopButton()).toBeEnabled();
   });
 
   test("a tree the window ended says why, in place of a crash", async () => {
     const user = await open();
     await started(user);
-    send({ kind: "stopping" }, { kind: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
+    send({ type: "stopping" }, { type: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
     expect(screen.getByRole("alert")).toHaveTextContent(fill(zh["runner.killed"], { reason: "the runner cannot stop MaaFramework" }));
     expect(screen.queryByText(fill(zh["runner.crash"], { code: 1 }), { exact: false })).toBeNull();
   });

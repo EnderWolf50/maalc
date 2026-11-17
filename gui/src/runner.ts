@@ -20,7 +20,7 @@ export interface Device {
   mumu: { index: number; manager: string; path: string } | null;
 }
 
-/** An event of the runner, as the backend relays it under `kind: "event"`. */
+/** An event of the runner, as the backend relays it under `type: "event"` (an error event has a field named kind). */
 export type RunnerEvent =
   | { event: "ready"; pid: number }
   | { event: "log"; t: string; source: Source; line: string }
@@ -33,15 +33,15 @@ export type RunnerEvent =
 
 /** What the backend sends of a run (runner.rs Message), in order; `exit` comes last. */
 export type Message =
-  | ({ kind: "event" } & RunnerEvent)
-  | { kind: "invalid"; line: string; error: string }
-  | { kind: "output"; line: string }
-  | { kind: "stopping" }
-  | { kind: "killed"; reason: string }
-  | { kind: "exit"; code: number | null; ended: boolean; tail: string[] };
+  | ({ type: "event" } & RunnerEvent)
+  | { type: "invalid"; line: string; error: string }
+  | { type: "output"; line: string }
+  | { type: "stopping" }
+  | { type: "killed"; reason: string }
+  | { type: "exit"; code: number | null; ended: boolean; tail: string[] };
 
 /** What the page itself adds: a start it asked for (the entries it posts), and a start the backend refused. */
-export type Action = Message | { kind: "begin"; entries: string[] } | { kind: "refused"; error: string };
+export type Action = Message | { type: "begin"; entries: string[] } | { type: "refused"; error: string };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
  * protocol). `n` numbers the lines of a run. */
@@ -80,16 +80,17 @@ const addLine = (v: RunView, source: LogLine["source"], line: string, t = now())
 /** The view after one more action. A message with no start before it (a page that attached to a run under way) starts the
  * view as running. */
 export function reduce(v: RunView, a: Action): RunView {
-  if (a.kind === "begin") return { phase: "running", tasks: a.entries.map((entry) => ({ entry, state: "pending" })), log: [] };
-  if (a.kind === "refused") return { ...IDLE, refused: a.error };
-  if (v.phase === "idle" || (v.phase === "ended" && a.kind !== "exit")) v = { ...IDLE, phase: "running" };
-  switch (a.kind) {
+  if (a.type === "begin") return { phase: "running", tasks: a.entries.map((entry) => ({ entry, state: "pending" })), log: [] };
+  if (a.type === "refused") return { ...IDLE, refused: a.error };
+  if (v.phase === "idle" || (v.phase === "ended" && a.type !== "exit")) v = { ...IDLE, phase: "running" };
+  switch (a.type) {
     case "invalid": return addLine(v, "raw", a.line);
     case "output": return addLine(v, "raw", a.line);
     case "stopping": return v.phase === "running" ? { ...v, phase: "stopping" } : v;
     case "killed": return { ...v, killed: a.reason };
     case "exit": return { ...v, phase: "ended", exit: { code: a.code, ended: a.ended, tail: a.tail }, tasks: a.ended ? v.tasks : unfinished(v) };
     case "event": return event(v, a);
+    default: return v; // a message this page does not know (a newer backend's)
   }
 }
 

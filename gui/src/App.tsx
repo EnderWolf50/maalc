@@ -351,8 +351,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       const { s: now } = latest.current;
       const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
       if (!entries.length) return;
-      dispatch({ kind: "begin", entries });
-      await api.startRun(entries, now!.emulator, dispatch).catch((e: unknown) => dispatch({ kind: "refused", error: String(e) }));
+      dispatch({ type: "begin", entries });
+      await api.startRun(entries, now!.emulator, dispatch).catch((e: unknown) => dispatch({ type: "refused", error: String(e) }));
     } finally {
       setStarting(false);
     }

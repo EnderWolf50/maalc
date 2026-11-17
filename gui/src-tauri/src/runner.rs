@@ -235,7 +235,7 @@ impl Command {
 
 /// What the page gets of a run, in the order it happened. `Exit` comes last, once.
 #[derive(Serialize, Debug, Clone, PartialEq)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")] // "type": the error event has a field named kind
 pub enum Message {
     /// An event of the runner.
     Event(Event),
@@ -648,11 +648,20 @@ mod tests {
     }
 
     #[test]
-    fn the_page_gets_an_event_with_its_fields_under_kind_event() {
+    fn an_error_event_keeps_its_own_kind_beside_the_message_type() {
+        let e = Event::parse(r#"{"v":1,"event":"error","kind":"stop_timeout","message":"MaaFramework did not stop in 60 s"}"#).unwrap();
+        let sent = serde_json::to_string(&Message::Event(e)).unwrap();
+        let read: Value = serde_json::from_str(&sent).unwrap();
+        assert_eq!(read, serde_json::json!({"type": "event", "event": "error", "kind": "stop_timeout", "message": "MaaFramework did not stop in 60 s"}));
+        assert_eq!(sent.matches("\"kind\"").count(), 1, "{sent}");
+    }
+
+    #[test]
+    fn the_page_gets_an_event_with_its_fields_under_type_event() {
         let e = Event::parse(r#"{"v":1,"event":"task","index":1,"entry":"ClaimMail","state":"cancelled","reason":"maintenance"}"#).unwrap();
         let sent = serde_json::to_value(Message::Event(e)).unwrap();
-        assert_eq!(sent, serde_json::json!({"kind": "event", "event": "task", "index": 1, "entry": "ClaimMail", "state": "cancelled", "reason": "maintenance"}));
-        assert_eq!(serde_json::to_value(Message::Stopping).unwrap(), serde_json::json!({"kind": "stopping"}));
+        assert_eq!(sent, serde_json::json!({"type": "event", "event": "task", "index": 1, "entry": "ClaimMail", "state": "cancelled", "reason": "maintenance"}));
+        assert_eq!(serde_json::to_value(Message::Stopping).unwrap(), serde_json::json!({"type": "stopping"}));
     }
 
     #[test]
