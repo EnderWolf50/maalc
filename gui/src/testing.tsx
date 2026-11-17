@@ -84,25 +84,41 @@ const selectorsOf = (list: string) => {
 /** The value the stylesheet gives `el` for `prop` (`filter`, `background`), as the cascade picks it: of the rules that set it
  * and match `el`, an !important one first, then the most specific, the later one on a tie. What it does not read: a rule
  * inside @media counts whether or not its query holds (`cssRules` drops the @media), there are no layers, and a shorthand and
- * its longhands count as different properties. With `hover`, a `:hover` in a selector matches as with the pointer over it;
- * without, it never does. With `pseudo` ("::after"), the value its pseudo-element gets: only the selectors that end in it count,
- * matched without it; without, a selector with a pseudo-element never counts. */
-export function cssValueOf(text: string, el: Element, prop: string, hover = false, pseudo = "") {
+ * its longhands count as different properties. `at` is where the pointer or the keyboard focus is: true, a `:hover` in a
+ * selector matches as with the pointer over it; an element, the pointer is over that one (`:hover` matches it and the elements
+ * around it); `{ focus }`, the keyboard focus is on that element (`:focus-visible` matches it, as the browser marks a focus
+ * the keyboard moved). Without, neither ever matches: jsdom's own `:focus-visible` gives another answer the second time it is
+ * asked. With `pseudo` ("::after"), the value its pseudo-element gets: only the selectors that end in it count, matched without
+ * it; without, a selector with a pseudo-element never counts. */
+export function cssValueOf(text: string, el: Element, prop: string, at: boolean | Element | { focus: Element } = false, pseudo = "") {
+  // the elements the pointer is over (the one under it and its ancestors) and the one with the focus, marked while matching
+  const pointed: Element[] = [];
+  for (let x = at instanceof Element ? at : null; x; x = x.parentElement) pointed.push(x);
+  const focused = typeof at === "object" && !(at instanceof Element) ? at.focus : null;
+  for (const x of pointed) x.setAttribute(HOVERED, "");
+  focused?.setAttribute(FOCUSED, "");
   let best: { rank: number; value: string } | undefined;
-  for (const { selector, body } of cssRules(text)) {
-    const declared = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+)`))?.[1].trim();
-    if (!declared) continue;
-    const value = declared.replace(/\s*!important$/, "");
-    for (const whole of selectorsOf(selector)) {
-      if (pseudo ? !whole.endsWith(pseudo) : whole.includes("::")) continue;
-      const one = pseudo ? whole.slice(0, -pseudo.length) : whole;
-      if ((!hover && one.includes(":hover")) || !el.matches(one.replace(/:hover/g, ""))) continue;
-      const rank = specificity(one) + (value === declared ? 0 : 1e9);
-      if (!best || rank >= best.rank) best = { rank, value };
+  try {
+    for (const { selector, body } of cssRules(text)) {
+      const declared = body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+)`))?.[1].trim();
+      if (!declared) continue;
+      const value = declared.replace(/\s*!important$/, "");
+      for (const whole of selectorsOf(selector)) {
+        if (pseudo ? !whole.endsWith(pseudo) : whole.includes("::")) continue;
+        const one = pseudo ? whole.slice(0, -pseudo.length) : whole;
+        if ((at !== true && !pointed.length && one.includes(":hover")) || (!focused && one.includes(":focus-visible"))) continue;
+        if (!el.matches(one.replace(/:hover/g, pointed.length ? `[${HOVERED}]` : "").replace(/:focus-visible/g, `[${FOCUSED}]`))) continue;
+        const rank = specificity(one) + (value === declared ? 0 : 1e9);
+        if (!best || rank >= best.rank) best = { rank, value };
+      }
     }
+  } finally {
+    for (const x of pointed) x.removeAttribute(HOVERED);
+    focused?.removeAttribute(FOCUSED);
   }
   return best?.value;
 }
+const HOVERED = "data-test-hovered", FOCUSED = "data-test-focused";
 
 /** What a `filter` value does to an image: `light`, the share of its light left (its brightness() steps multiplied), and
  * `colour`, the share of its colour left (its saturate() steps and 1 - grayscale() multiplied: both move toward the same grey,
