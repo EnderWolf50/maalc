@@ -22,9 +22,11 @@ import run_start_actions
 import test_actions
 from client_options import send
 from team_queue import to_head
-from test_resumed_run import claim, queue  # queue: the team queue on disk; no move changes the list's order, a then b
+# queue(): the team queue of the agent's settings file (actions.ROOT); no move changes the list's order, a then b
+from test_resumed_run import claim, queue
 from test_task_chain import ENTRY_OPTIONS, entry_page
-from test_team_queue import old_settings_file, on_disk, settings_file
+from test_team_queue import old_settings_file, settings_file
+from test_team_queue import on_disk as file_at  # file_at(root): the settings file under root as it is now
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
@@ -200,16 +202,16 @@ def test_a_file_the_gui_has_not_written_back_moves_the_start_team_in_its_list(tm
     # as a claim's move (spec 04 section 2): the file stays at its version, only the order of its teams changes, and
     # the migration to 22 makes team_queue of that order
     old_settings_file(tmp_path, version, ["a", "b", "c"])
-    before = on_disk(tmp_path)
+    before = file_at(tmp_path)
     assert to_head(tmp_path, "c") == "team queue: start team '隊 c' (MirrorStartTeam) to the head"
-    assert on_disk(tmp_path) == {**before, "teams": [before["teams"][i] for i in (2, 0, 1)]}
+    assert file_at(tmp_path) == {**before, "teams": [before["teams"][i] for i in (2, 0, 1)]}
 
 
 def test_a_version_22_file_moves_only_its_queue(tmp_path):
     settings_file(tmp_path, ["a", "b", "c"])
-    before = on_disk(tmp_path)
+    before = file_at(tmp_path)
     to_head(tmp_path, "b")
-    assert on_disk(tmp_path) == {**before, "team_queue": ["b", "a", "c"]}
+    assert file_at(tmp_path) == {**before, "team_queue": ["b", "a", "c"]}
 
 
 @pytest.mark.parametrize("text", [None, "{"])

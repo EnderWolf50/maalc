@@ -9,9 +9,10 @@ import enUs from "../../assets/locales/en_us.json";
 import zhTw from "../../assets/locales/zh_tw.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
-import { addTeam, movedToEnd, newSettings, newTeam, nextRunPlaces, rebase, type Settings } from "./model";
+import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
 import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
 import css from "./index.css?raw";
+import { PI, taskOf } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
@@ -198,21 +199,24 @@ describe("the team queue block above the list and the editor (#804)", () => {
 
   // tests/settings_cases.json next_run: the agent's pick_team gives the same teams (tests/test_team_queue.py).
   test.each(cases.next_run as { name: string; edits: FileEdit[]; hard: string | null; normal: string | null }[])(
-    "the next run is the team the agent picks: $name", ({ edits, hard, normal }) => {
+    "the marks name the teams the agent picks: $name", ({ edits, hard, normal }) => {
       const s = applyEdits(cases.valid, edits) as unknown as Settings;
-      const places = nextRunPlaces(s);
-      expect([s.team_queue[places.hard] ?? null, s.team_queue[places.normal] ?? null]).toEqual([hard, normal]);
+      const mark = (id: string) => (hard === id && normal === id ? zh["queue.next"]
+        : hard === id ? zh["queue.next_hard"] : normal === id ? zh["queue.next_normal"] : "");
+      renderEditor(<TeamsTab />, s);
+      expect(marks()).toEqual(s.team_queue.map(mark));
     });
 
-  // The note names the client's option by the label the client shows (assets/locales, interface.json's MirrorStartTeam),
-  // in the language's quotes, and the task it is under.
+  // The note names the client's option and its task by the labels the client shows them with: interface.json's text
+  // keys in the language's locale file, the option's in the language's quotes.
   test.each([
     ["zh_tw", zhTw, "「", "」"],
     ["en_us", enUs, "\"", "\""],
   ] as const)("its note in %s names the start team option as the client labels it", (lang, client, open, close) => {
+    const said = (label: unknown) => (client as Record<string, string>)[String(label).replace(/^\$/, "")];
     const note = TEXT[lang]["queue.note"];
-    expect(note).toContain(`${open}${client.MirrorStartTeam}${close}`);
-    expect(note).toContain(client.MirrorDungeon);
+    expect(note).toContain(`${open}${said(PI.option.MirrorStartTeam.label)}${close}`);
+    expect(note).toContain(said(taskOf("MirrorStartTeam")!.label));
   });
 
   test("its ↑↓ move a team in the queue, not in the list", async () => {
