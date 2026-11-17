@@ -88,10 +88,17 @@ export function reduce(v: RunView, a: Action): RunView {
     case "output": return addLine(v, "raw", a.line);
     case "stopping": return v.phase === "running" ? { ...v, phase: "stopping" } : v;
     case "killed": return { ...v, killed: a.reason };
-    case "exit": return { ...v, phase: "ended", exit: { code: a.code, ended: a.ended, tail: a.tail } };
+    case "exit": return { ...v, phase: "ended", exit: { code: a.code, ended: a.ended, tail: a.tail }, tasks: a.ended ? v.tasks : unfinished(v) };
     case "event": return event(v, a);
   }
 }
+
+/** The tasks of a run that ended before its end event (the runner crashed, or the window ended its tree): no state of the
+ * runner's comes for them any more, so the window ends them as the runner would have: the running task failed (stopped
+ * when a stop was under way) and the rest cancelled. The run is a failure (spec #811 「執行器」). */
+const unfinished = (v: RunView) => v.tasks.map((x) =>
+  x.state === "running" ? { ...x, state: v.phase === "stopping" ? "stopped" as const : "failed" as const }
+    : x.state === "pending" ? { ...x, state: "cancelled" as const } : x);
 
 function event(v: RunView, e: RunnerEvent): RunView {
   switch (e.event) {

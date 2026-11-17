@@ -221,6 +221,18 @@ describe("what the run shows", () => {
     expect(startButton()).toBeEnabled();
   });
 
+  test("a run that ends without its end event fails the running task and cancels the rest; after a stop, stops it", async () => {
+    const user = await open();
+    await started(user);
+    send(task(0, "ClaimMail", "running"), exit(3, false));
+    expect(runTasks().map((x) => x.dataset.state)).toEqual(["failed", "cancelled"]);
+    back.starts = [];
+    await started(user);
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"), { kind: "stopping" },
+      { kind: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
+    expect(runTasks().map((x) => x.dataset.state)).toEqual(["succeeded", "stopped"]);
+  });
+
   test("a tree the window ended says why, in place of a crash", async () => {
     const user = await open();
     await started(user);
