@@ -10,7 +10,8 @@ import { Field, Input, Mark, useEditor, withBreaks } from "./ui";
 function sayOutcome(t: (k: Key) => string, { id, at, outcome: o }: NonNullable<ScheduleView["last"]>) {
   const why = o.kind !== "refused" ? ""
     : typeof o.why === "object" ? o.why.error : t(o.why === "save" ? "sched.why_save" : `runner.blocked_${o.why}` as Key);
-  return fill(t(`sched.last.${o.kind}` as Key), { id, at, why });
+  const code = o.kind === "crashed" ? o.code ?? "—" : ""; // as the Run tab writes a crash's exit code
+  return fill(t(`sched.last.${o.kind}` as Key), { id, at, why, code });
 }
 
 export function SchedulesSection() {

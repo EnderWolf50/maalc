@@ -12,7 +12,7 @@ import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, taskOfPath } from "./Run";
-import { IDLE, RunnerContext, isRunning, reduce, type Runner } from "./runner";
+import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
 import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
@@ -325,11 +325,16 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     take();
     return api.onScheduled(take);
   }, [ready]);
-  // the window a schedule opened closes when its run ends, unless it has edits that closing would drop
+  // the window a schedule opened closes when its run ends, unless it has edits that closing would drop, or the runner crashed:
+  // the exit code and its last lines are only in this window (spec #811 「執行器」: the window stays and says why)
   useEffect(() => {
     const id = closeAfter.current;
     if (run.phase !== "ended" || id === null) return;
     closeAfter.current = null;
+    if (crashed(run)) {
+      noteScheduled(id, { kind: "crashed", code: run.exit!.code });
+      return;
+    }
     if (unsaved()) {
       noteScheduled(id, { kind: "kept_open" });
       return;
@@ -471,10 +476,13 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     await applyUpdate();
   };
   /** A scheduled run's start (#816, spec #811 「定時執行」): the task list runs as Start runs it, on the Run tab; skipped while a
-   * run is under way, not run when its schedule is not in the settings (a task left from an older file) or Start would not
-   * start. The window it opened closes when the run ends (the effect above); one that stays open says why. */
+   * run is under way or while an update is being applied (or was cut short: the folder may hold half the new version, #817),
+   * not run when its schedule is not in the settings (a task left from an older file) or Start would not start. The window it
+   * opened closes when the run ends (the effect above); one that stays open says why. */
   scheduledRef.current = async ({ id, opened }) => {
     if (!latest.current.s?.schedules.some((x) => x.id === id)) return noteScheduled(id, { kind: "unknown" });
+    const last = await api.lastUpdate().catch(() => null); // apply.json as this window's start read it (update.rs settle)
+    if (last?.state === "applying") return noteScheduled(id, { kind: "updating" });
     if (startingRef.current || isRunning(runRef.current)) return noteScheduled(id, { kind: "busy" });
     setTab("run");
     if (opened) closeAfter.current = id; // before the start: a run that ends at once still closes the window

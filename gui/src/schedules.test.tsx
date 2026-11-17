@@ -8,7 +8,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
-import type { Synced } from "./api";
+import type { Synced, UpdateOutcome } from "./api";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import type { Message } from "./runner";
@@ -20,6 +20,7 @@ const back = vi.hoisted(() => ({
   text: "", saved: [] as string[], starts: [] as string[][], send: undefined as ((m: Message) => void) | undefined,
   scheduled: [] as { id: string; opened: boolean }[], more: undefined as (() => void) | undefined,
   logged: [] as string[], syncs: [] as unknown[], syncFail: "", syncErrors: [] as string[], closed: 0,
+  update: null as UpdateOutcome | null,
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -45,6 +46,7 @@ vi.mock("./api", async (original) => ({
     return Promise.resolve(done);
   },
   closeWindow: () => { back.closed++; return Promise.resolve(); },
+  lastUpdate: () => Promise.resolve(back.update),
 }));
 
 const EVERY_DAY = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -72,6 +74,7 @@ beforeEach(() => {
   back.syncFail = "";
   back.syncErrors = [];
   back.closed = 0;
+  back.update = null;
 });
 
 /** The window, on the Run tab it opens on, once the settings are read. */
@@ -255,6 +258,44 @@ describe("a scheduled run's start (--run <id>)", () => {
     expect(back.starts).toHaveLength(1);
     expect(logLines().some((l) => l?.endsWith("[schedule] s1: skipped: a run is under way"))).toBe(true);
     expect(screen.getByText(/排程 s1 略過：已經在執行/)).toBeVisible();
+  });
+
+  test("while an update is being applied, or its apply did not finish, a scheduled start is skipped and its window stays open", async () => {
+    // apply.json says `applying` (update.rs settle): the folder may hold half the new version's files
+    back.update = { state: "applying", from: "2.0.0", to: "2.1.0", error: null, restored: false };
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(logged("[schedule] s1: skipped: an update is being applied or did not finish")).toBe(true));
+    expect(back.starts).toEqual([]);
+    expect(logLines().some((l) => l?.endsWith("[schedule] s1: skipped: an update is being applied or did not finish"))).toBe(true);
+    expect(screen.getByText(/排程 s1 略過：程式更新正在套用，或上次沒有做完/)).toBeVisible();
+    expect(back.closed).toBe(0);
+  });
+
+  test("an update that went through or went back does not hold a scheduled start", async () => {
+    back.update = { state: "failed", from: "2.0.0", to: "2.1.0", error: "disk full", restored: true };
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toEqual([["ClaimMail", "MirrorDungeon"]]));
+  });
+
+  test("a window the schedule opened stays open when the runner ends unexpectedly, and schedule.log has its exit code", async () => {
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toHaveLength(1));
+    send(exit(3, false)); // no end event: the runner crashed
+    await waitFor(() => expect(logged("[schedule] s1: the runner ended unexpectedly (exit code 3); the window stays open")).toBe(true));
+    expect(back.closed).toBe(0);
+    expect(screen.getByText(/排程 s1 的執行器意外結束（結束碼 3），視窗留著/)).toBeVisible();
+  });
+
+  test("a window the schedule opened closes after a stop that ended the runner's tree, as after any stop", async () => {
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toHaveLength(1));
+    send({ type: "stopping" }, { type: "killed", reason: "the runner did not stop" }, exit(null, false));
+    await waitFor(() => expect(back.closed).toBe(1));
+    expect(logged("[schedule] s1: the run ended; the window closes")).toBe(true);
   });
 
   test("two schedules at one time: the first runs, the second is skipped", async () => {

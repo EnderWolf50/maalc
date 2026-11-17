@@ -119,6 +119,10 @@ function event(v: RunView, e: RunnerEvent): RunView {
   }
 }
 
+/** Whether the run ended because the runner crashed: its process ended before its end event, and the window did not end
+ * it (after a stop that did not stop, `killed` says why). The run failed (spec #811 「執行器」). */
+export const crashed = (v: RunView) => !!v.exit && !v.exit.ended && !v.killed;
+
 /** Whether a run holds the settings it reads: the task list, the task options, the global options and the emulator can be
  * neither changed nor saved until it ends (#815). */
 export const isRunning = (v: RunView) => v.phase === "running" || v.phase === "stopping";

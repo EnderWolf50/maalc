@@ -569,7 +569,7 @@ fn wait_for_exit(_pid: u32, _limit: Duration) -> bool {
 /// user empties old/. An old/ with no journal is a leftover, and goes.
 pub fn settle(root: &Path) -> Option<Outcome> {
     let journal = journal_path(root);
-    let outcome = fs::read_to_string(&journal).ok().and_then(|text| serde_json::from_str::<Outcome>(&text).ok());
+    let outcome = read_journal(root);
     let old = old_dir(root);
     if outcome.as_ref().is_some_and(Outcome::keeps_old) {
         if old.exists() {
@@ -582,10 +582,20 @@ pub fn settle(root: &Path) -> Option<Outcome> {
     outcome.filter(|o| !o.keeps_old())
 }
 
+/// cache/update/apply.json as the last apply-update mode wrote it; None when there is none, or it cannot be read.
+fn read_journal(root: &Path) -> Option<Outcome> {
+    fs::read_to_string(journal_path(root)).ok().and_then(|text| serde_json::from_str(&text).ok())
+}
+
 /// Delete what an update left in cache/update/ that no update needs any more: the unpacked versions up to this one, and the
 /// zips and part files. A newer version unpacked stays, for an update that waits (a run was under way, the window restarted).
+/// Nothing goes while the journal says `applying`: a window that starts halfway through an apply (a scheduled start, #816)
+/// may be the new version, whose unpacked folder the apply still copies from; the start after the apply cleans up.
 /// True when nothing was left: a file still held (the apply-update process that just started this window) waits for a try.
 pub fn clean(root: &Path) -> bool {
+    if read_journal(root).is_some_and(|o| o.state == State::Applying) {
+        return true;
+    }
     let Ok(entries) = fs::read_dir(update_dir(root)) else { return true };
     let current = Version::parse(current()).ok();
     let mut clean = true;
@@ -1076,6 +1086,22 @@ mod tests {
         ]);
         assert!(clean(&root));
         assert_eq!(tree(&update_dir(&root)).keys().cloned().collect::<Vec<_>>(), ["check.json".to_string(), format!("v{ahead}/maalc-gui.exe")]);
+    }
+
+    #[test]
+    fn a_window_that_starts_while_an_apply_runs_leaves_the_version_it_copies_from() {
+        // a scheduled start opens this version's window halfway through its own apply: apply.json says `applying`
+        let root = scratch("clean-applying");
+        put(&update_dir(&root), &[(&format!("v{}/maalc-gui.exe", current()), "the version the apply copies from")]);
+        put(&old_dir(&root), &[("python/python.exe", "moved aside")]);
+        let applying = Outcome { state: State::Applying, from: "1.0.0".into(), to: current().into(), error: None, restored: false };
+        write_json(&journal_path(&root), &applying).unwrap();
+        assert!(clean(&root));
+        assert!(staged_dir(&root, &Version::parse(current()).unwrap()).join(EXE).is_file());
+        // once it went through, the next start cleans up
+        write_json(&journal_path(&root), &Outcome { state: State::Done, restored: true, ..applying }).unwrap();
+        assert!(clean(&root));
+        assert!(!staged_dir(&root, &Version::parse(current()).unwrap()).exists());
     }
 
     #[test]
