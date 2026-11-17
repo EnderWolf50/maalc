@@ -2,7 +2,7 @@
 // how far its update is, and the page's notices of what went wrong and of how the last apply went. App.tsx holds the state
 // and runs the steps: the click downloads, the download checks the sha256 and unpacks, and the apply waits for no run.
 import type { CSSProperties } from "react";
-import type { Release, UpdateOutcome } from "./api";
+import { keepsOld, type Release, type UpdateOutcome } from "./api";
 import { fill } from "./i18n";
 import { useEditor, withBreaks } from "./ui";
 
@@ -99,7 +99,7 @@ export function OutcomeNotice({ outcome, onDismiss }: { outcome: UpdateOutcome; 
     : outcome.restored ? "update.failed_restored" : "update.failed_left";
   const v = { from: outcome.from, to: outcome.to, error: outcome.error ?? "" };
   // where the old files are, when the update left them for the user (update.rs Outcome::keeps_old)
-  const left = outcome.state === "applying" || (outcome.state === "failed" && !outcome.restored);
+  const left = keepsOld(outcome);
   const text = [fill(t(key), v), ...(left ? [fill(t("update.old_files"), v)] : [])].join("\n");
   return <Notice text={text} bad={outcome.state !== "done"} onDismiss={onDismiss} />;
 }

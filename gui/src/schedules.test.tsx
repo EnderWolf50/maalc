@@ -272,6 +272,14 @@ describe("a scheduled run's start (--run <id>)", () => {
     expect(back.closed).toBe(0);
   });
 
+  test("an update that failed and did not all go back holds a scheduled start too: old/ has the only copy", async () => {
+    back.update = { state: "failed", from: "2.0.0", to: "2.1.0", error: "disk full", restored: false };
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(logged("[schedule] s1: skipped: an update is being applied or did not finish")).toBe(true));
+    expect(back.starts).toEqual([]);
+  });
+
   test("an update that went through or went back does not hold a scheduled start", async () => {
     back.update = { state: "failed", from: "2.0.0", to: "2.1.0", error: "disk full", restored: true };
     back.scheduled = [{ id: "s1", opened: true }];

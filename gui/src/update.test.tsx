@@ -224,5 +224,7 @@ describe("how the last apply went", () => {
     const said = await screen.findByRole("alert", { name: zh["update.notice"] });
     expect(said).toHaveTextContent(fill(zh["update.cut_short"], { from: "1.0.0", to: "1.1.0" }).split("\n")[0]);
     expect(said).toHaveTextContent("cache\\update\\old\\");
+    // why the next update will not apply, and why the schedules are skipped, at each start until old/ is empty
+    expect(said).toHaveTextContent("在那之前不能套用更新，定時執行也會略過。");
   });
 });

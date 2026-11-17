@@ -134,6 +134,10 @@ export interface Release { version: string; zip: string; size: number; sha256: s
 export type UpdateProgress = { step: "download"; received: number; total: number } | { step: "verify" } | { step: "extract" };
 /** How the last apply went (update.rs Outcome): `applying` is one cut short; `restored`, for `failed`: all of it went back. */
 export interface UpdateOutcome { state: "applying" | "done" | "failed"; from: string; to: string; error: string | null; restored: boolean }
+/** Whether the last apply left cache/update/old/ holding the only copy of what it replaced (update.rs Outcome::keeps_old):
+ * cut short, or failed with not all of it back. Until the user empties old/, the folder may hold half the new version: no
+ * update applies, and a scheduled start is skipped. */
+export const keepsOld = (o: UpdateOutcome | null) => !!o && (o.state === "applying" || (o.state === "failed" && !o.restored));
 
 /** This build's version and the newer release GitHub has, asked at most once a day (lib.rs check_update); none when the check
  * fails. A plain browser has no update. */

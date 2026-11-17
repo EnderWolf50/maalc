@@ -9,7 +9,10 @@
 //!   maalc-gui.exe in its apply-update mode and exits; that process waits for it, moves each root entry the zip has into
 //!   cache/update/old/, copies the new one in and starts the new window. config/, logs/, state/, cache/ and debug/ are never
 //!   touched (KEEP). A step that fails puts back what it moved and starts the old window. cache/update/apply.json says how it
-//!   went, which the next window shows (`settle`); that window deletes old/.
+//!   went, which the next window shows (`settle`); that window deletes old/. The exception: an apply cut short, or one that
+//!   failed and could not put everything back, leaves in old/ the only copy of what it replaced, so old/ stays until the
+//!   user empties it. Until then each start shows why, no apply runs (`holds_files`) and a scheduled start is skipped
+//!   (App.tsx, api.ts keepsOld).
 //!
 //! The game data's resource package keeps its own hot update (ADR 0012), at a task's start: an update never runs beside one.
 

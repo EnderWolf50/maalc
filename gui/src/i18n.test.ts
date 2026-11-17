@@ -49,6 +49,16 @@ describe("the UI text keeps the STE rules a program can check", () => {
     expect(bad).toEqual([]);
   });
 
+  test("English calls a press of Start a session and keeps run for a Mirror Dungeon run (GLOSSARY 執行, 局)", () => {
+    // the runner's, the tray's, the schedules' and the update's texts speak of the 執行, never of a 局
+    const sessionTexts = Object.entries(TEXT.en_us).filter(([k]) => /^(runner|tray|sched|update)\./.test(k));
+    expect(sessionTexts.length).toBeGreaterThan(40);
+    expect(sessionTexts.filter(([, text]) => /\b(a|the|this|each|per) runs?\b|\bruns? (is|ends|failed)\b|\bScheduled runs\b/i.test(text)))
+      .toEqual([]);
+    expect(TEXT.en_us["runner.tasks"]).toBe("This session's tasks");
+    expect(TEXT.en_us["run.group_run"]).toBe("Each run"); // 每一局
+  });
+
   test("the counts follow the rules' own examples", () => {
     // R8.5/R8.6: "(Lunacy)" and a placeholder count as one word each; a Chinese label in 「」 counts as one.
     expect(words("en_us", "It spends Lunacy (free first, then paid) on {n} charges.")).toBe(7);

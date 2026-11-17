@@ -476,13 +476,13 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     await applyUpdate();
   };
   /** A scheduled run's start (#816, spec #811 「定時執行」): the task list runs as Start runs it, on the Run tab; skipped while a
-   * run is under way or while an update is being applied (or was cut short: the folder may hold half the new version, #817),
+   * run is under way or while an update is being applied or left old/ (the folder may hold half the new version, #817),
    * not run when its schedule is not in the settings (a task left from an older file) or Start would not start. The window it
    * opened closes when the run ends (the effect above); one that stays open says why. */
   scheduledRef.current = async ({ id, opened }) => {
     if (!latest.current.s?.schedules.some((x) => x.id === id)) return noteScheduled(id, { kind: "unknown" });
     const last = await api.lastUpdate().catch(() => null); // apply.json as this window's start read it (update.rs settle)
-    if (last?.state === "applying") return noteScheduled(id, { kind: "updating" });
+    if (api.keepsOld(last)) return noteScheduled(id, { kind: "updating" });
     if (startingRef.current || isRunning(runRef.current)) return noteScheduled(id, { kind: "busy" });
     setTab("run");
     if (opened) closeAfter.current = id; // before the start: a run that ends at once still closes the window
