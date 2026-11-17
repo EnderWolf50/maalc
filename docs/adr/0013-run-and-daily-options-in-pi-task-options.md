@@ -1,6 +1,8 @@
 ---
-status: accepted（修訂 ADR 0006、ADR 0010）
+status: superseded by ADR 0015（曾修訂 ADR 0006、ADR 0010）
 ---
+
+> 由 [ADR 0015](0015-settings-window-runs-the-tasks.md) 取代：設定視窗自己執行任務，執行選項、日常參數與全域選項回到設定檔（版本 23），任務選項、全域選項、隊伍選項檔與 `zh_cn` 語系都拿掉。下文只記錄 v1.0.0（MXU 版）時的做法。（#813，2026-11-17）
 
 # 執行選項與日常參數放在 PI 任務選項，隊伍下拉由設定 GUI 產生的引入檔提供
 

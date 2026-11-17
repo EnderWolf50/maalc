@@ -4,7 +4,7 @@
 
 所有判斷都以當下畫面為準。Agent 沒有狀態檔：隊伍輪到誰在設定檔的隊伍佇列（`team_queue`，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)），其他數值每次都從畫面重新讀取（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。需要判斷的選擇寫成 Agent 的 custom action 或 custom recognition，畫面之間的流程留在 `MirrorHub`（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）。
 
-本章用「每隊」標示設定檔裡每支隊伍的欄位，用「全域」標示鏡牢任務選項與全域選項（client 的任務選項，[04](04-settings.md) 第 5 節，[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)），用「資料檔」標示遊戲資料（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)、[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。
+本章用「每隊」標示設定檔裡每支隊伍的欄位，用「全域」標示鏡牢任務選項與全域選項（設定檔的 `run`，[04](04-settings.md) 第 5 節，[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)），用「資料檔」標示遊戲資料（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)、[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）。
 
 ## 1. 選隊與輪替
 
@@ -20,8 +20,8 @@
 
 - 輪替：隊伍佇列是設定檔的 `team_queue`，`teams` 每個 id 各一次；隊伍清單（`teams`）的順序只用來顯示和整理，選隊不看它。每一局由佇列裡第一支用途符合的隊伍出戰，領到結算獎勵後移到佇列最後，所以啟用的隊伍依序各跑一局、循環下去。停用的隊伍留在原位。GUI 的「隊伍佇列」區塊調整佇列就決定下一局輪到誰（#804）。（#9、#19、#501、#803，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
 - 開新局前先決定這一局的難度（見第 2 節），再從佇列第一支往後找第一支用途符合的隊伍。用途不符的隊伍跳過，留在原位。（#9、#501）
-- 起頭隊伍：鏡牢任務的選項「這次從哪一支隊伍開始」（`MirrorStartTeam`）選了隊伍時，任務的第一局新局把它當成佇列第一來選隊，開局時把它移到佇列第一，寫法和領獎後相同，記一行已排到第一或本來就在第一；沒開局就結束的任務不動佇列；用途不符這一局的難度時照上一項往後找，記一行說它被跳過，它留在第一。任務開始時已經在跑的那一局照移動前的佇列推回隊伍（本節最後一項）。這支隊伍已刪除或停用，任務在點任何東西之前停下。（#805，[04](04-settings.md) 第 5、9 節，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
-- 整個佇列都沒有用途符合的隊伍，就以成功結束任務：沒有事可做不是錯誤，client 的清單繼續下一個任務。（#9、#364）
+- 起頭隊伍：鏡牢任務的選項「這次從哪一支隊伍開始」（`run.start_team`）選了隊伍時，任務的第一局新局把它當成佇列第一來選隊，開局時把它移到佇列第一，寫法和領獎後相同，記一行已排到第一或本來就在第一；沒開局就結束的任務不動佇列；用途不符這一局的難度時照上一項往後找，記一行說它被跳過，它留在第一。任務開始時已經在跑的那一局照移動前的佇列推回隊伍（本節最後一項）。這支隊伍已刪除或停用，任務在點任何東西之前停下。（#805，[04](04-settings.md) 第 5、9 節，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
+- 整個佇列都沒有用途符合的隊伍，就以成功結束任務：沒有事可做不是錯誤，任務清單繼續下一個任務。（#9、#364）
 - 在選隊頁選出該隊的遊戲內隊伍欄位，確認畫面上的標題是 `TEAMS #N` 後再按確認。標題已經是 `TEAMS #N` 就不點也不捲；清單上看得到 `#N` 的列就直接點；都沒有，就從清單目前的位置往 `#N` 的方向捲（清單開啟時停在上次捲到的地方）；一列都讀不到時，才先拖回最上面（讀到的列號不再變為止，不比列的 y：OCR 框在靜止時也會差 1–2 px）。只認編號，不認名稱：隊伍名稱是玩家自己取的。（#8、#9、#226；實機 2026-10-27：`#3` 一開始就在畫面上，舊做法仍拖了 10 下）
 - 只有 bot 親眼看到某隊完成一局並領到結算獎勵後，Agent 才把它移到佇列最後：這時重新讀設定檔，只改 `team_queue` 再寫回，`teams` 的順序與 GUI 這局中途存的修改照留（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)；GUI 還沒寫回版本 22 的舊檔，佇列就是 `teams` 的順序，見 [04](04-settings.md) 第 2 節）。手動跑的局不影響佇列；手動開、交給 bot 接續的局見本節最後一項。（#8，[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）
 - 放棄的局（全滅後重打用完而放棄，或沒過第 5 層而放棄獎勵）沒有領獎，佇列不動：下一局仍是同一支隊伍。停止的局也一樣。（#95，2026-10-18 定案）
@@ -613,7 +613,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 經驗本（`ExpLuxcavation`）與紐本（`ThreadLuxcavation`）的腦啡肽模組檢查、打贏才算一次、戰敗重打。判斷是純函式 `luxcavation.decide`、`fights`（`tests/test_luxcavation.py` 列舉情況），兩個任務共用，只有每場的消耗與今天已打的讀法不同：經驗本 3、紐本 2（Level Select 每級都是 2）。（#367、#368、#362、#429、#431）
 
 - **讀腦啡肽模組數**（`lux_actions.module_count`）：左下面板有兩個數字：黃色卡片圖示旁的是 Enkephalin Box，**圓形圖示旁的是 Enkephalin Module**（實機 2026-10-26）。面板的 x 隨頁面移動（主畫面、Drive 在 393，Luxcavation 頁在 242），所以先用模板 `ModuleIcon` 找圓形圖示，再把圖示右邊那一行當一個數字 OCR。圖示不在畫面上或數字讀不出來回 None。鏡牢開局前的門檻（#369）重用這個函式。截圖：`tests/screens/MainWindow.png`、`Drive.png`、`LuxExp.png` 等，`tests/test_module_count.py`。
-- **兩種模式**（任務選項 `ExpMode`／`ThreadMode`，#431、#781，使用者 2026-11-05；兩個任務預設都是每日模式）。這次要打的場數是 `luxcavation.fights(mode, 目標, 今天已贏)`，判斷在 `lux_actions.plan`，兩個任務共用：
+- **兩種模式**（任務選項 `luxcavation.<task>.mode`，#431、#813，使用者 2026-11-05；兩個任務預設都是每日模式）。這次要打的場數是 `luxcavation.fights(mode, 目標, 今天已贏)`，判斷在 `lux_actions.plan`，兩個任務共用：
   - **自訂次數**（`count`，#362 D5）：這次打贏 `count` 場，不讀今天打過幾場：經驗本不走通行證頁（`ExpLuxcavation` 先試 `ExpCountMode`，自訂辨識 `LuxCountMode` 在這個模式命中，直接到 `ExpHome`），紐本不讀 Daily Bonuses。`LuxHome` 讀完腦啡肽模組就 `plan`，log 例如 `EXP Luxcavation: count mode, 1 this run: Modules 182 >= 3 needed, fight 1`。
   - **每日模式**（`daily`，#429）：打今天還沒打的。當天的場數 `luxcavation.DAILY`：經驗本 1（通行證 Daily 的一列），紐本 3（3 次 Daily Bonuses）；當天已經打贏的場數（手動打的也算）先扣掉，這次只打 max(0, 當天的場數 − 今天已贏) 場。不用 `count`。
   - **經驗本（每日模式）**：開頭先 `GoHome`，走通行證頁（`ExpPassHub`，同 `ClaimPassMissions` 的 `PassBanner` → `PassMissionsTab`，停在 Weekly／Seasonal 分頁就點 Daily，`ExpPassDaily`），在 Daily 分頁用 OCR 找 `Clear EXP Luxcavation 1 time(s)` 那一列（`PassExpRow`，最近的 `pass_missions.ROWS_Y`），看它的樣子（`pass_missions.row_done`：進度條滿或蓋了 CLEAR 章，可領或已領）：完成算今天已贏 1 場，進行中算 0 場（`ExpPassRead`）。這一列只分得出 0 和「至少 1」。不點任何一列。60 秒都沒到通行證頁（`ExpPassLost`）或 3 秒內找不到這一列：算讀不到。然後 `ExpHome`（`LuxHome`）回主畫面讀腦啡肽模組、`plan`。
@@ -623,7 +623,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **開始時檢查一次**：主畫面讀到的腦啡肽模組數 m（`LuxHome`）；m < 最難關每場消耗 × 這次要打的場數（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed for k, skipped`，回主畫面、以成功結束（`finish()`），清單繼續。面板讀不出來：停止程序，不花任何腦啡肽模組。之後不再檢查。
 - **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿這次要打的場數（`RUN["lux"]["fights"]`）就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
 - **戰敗**：不算次數，不扣腦啡肽模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。`retries` 是每一場各自的次數，打贏就重算（同鏡牢的全滅重打）：`retries` 1、這次要打 3 場時，每一場都可以輸一次再打。`lose` 的訊號是結算頁的紅字 `Defeat`（實機 2026-10-27：手動 Give Up，沒有確認框；戰敗不扣腦啡肽模組、不吃紐本的 Daily Bonuses，verified）。回到分頁卻沒看到結算頁，也走停止程序，不算一次。（live-1 F2、F3）
-- **連戰**（任務選項 `ExpConsecutive`／`ThreadConsecutive`，預設開，#375、#781）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
+- **連戰**（任務選項 `luxcavation.<task>.consecutive`，預設開，#375、#813）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
 - 計數存在記憶體（`RUN["lux"]`：`mode` 模式、`target` 目標（自訂次數是 `count`，每日模式是 `DAILY` 的當天場數）、`today` 讀到的今天已贏、`fights` 這次要打的場數，`plan` 之前是 None），每個任務開始時由 `TaskStart` 清掉（ADR 0003：不存檔；今天已做的次數每次從畫面讀，不記憶）。
 
 ## 16. 狂氣換腦啡肽的價格核對
