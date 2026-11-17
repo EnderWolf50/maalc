@@ -173,8 +173,13 @@ describe("in the whole editor", () => {
 });
 
 describe("deleting a team", () => {
+  const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
+  function AgentClaimsA() { // what the editor holds once the Agent's requeue of a is read (#501, #803)
+    const { update } = useEditor();
+    return <button onClick={() => update((s) => { s.team_queue.push(...s.team_queue.splice(0, 1)); })}>claim a</button>;
+  }
+
   test("can be undone: the team comes back in its place, in the editor", async () => {
-    const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
     const r = renderEditor(<TeamsTab />, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
     await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
@@ -187,11 +192,6 @@ describe("deleting a team", () => {
   });
 
   test("undone after the Agent moved the queue, it goes back there before the team that followed it, not to its old index", async () => {
-    const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
-    function AgentClaimsA() { // what the editor holds once the Agent's requeue of a is read (#501, #803)
-      const { update } = useEditor();
-      return <button onClick={() => update((s) => { s.team_queue.push(...s.team_queue.splice(0, 1)); })}>claim a</button>;
-    }
     const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
     await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
@@ -202,11 +202,6 @@ describe("deleting a team", () => {
   });
 
   test("the last team of the queue, undone after the Agent moved the queue, goes back last", async () => {
-    const teams = ["a", "b", "c"].map((id, n) => ({ ...newTeam(n + 1, `T${id}`), id }));
-    function AgentClaimsA() {
-      const { update } = useEditor();
-      return <button onClick={() => update((s) => { s.team_queue.push(...s.team_queue.splice(0, 1)); })}>claim a</button>;
-    }
     const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
     await pickInList(r.user, "Tc");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));

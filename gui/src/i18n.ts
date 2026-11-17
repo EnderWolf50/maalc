@@ -414,7 +414,7 @@ const en_us: typeof zh_tw = {
   "team.main_keyword": "Main keyword",
   "team.sections": "Jump to",
   "queue.title": "Team queue (one run each, in turn)",
-  "queue.note": "Each run, the first enabled team that may play its difficulty plays. After a team claims its rewards, it moves to the end.\nTo pick the team a task starts from, use \"Team to start from\" in the Mirror Dungeon task options of MXU or MFAAvalonia.",
+  "queue.note": "Each run, the first enabled team that may play its difficulty plays. After a team claims its rewards, it moves to the end.\nTo pick the team a task starts from, use \"Start this task from team\" in the Mirror Dungeon task options of MXU or MFAAvalonia.",
   "queue.next": "Next run", "queue.next_hard": "Next run (Hard)", "queue.next_normal": "Next run (Normal)",
   hasProblem: "has a problem",
   colon: ": ",

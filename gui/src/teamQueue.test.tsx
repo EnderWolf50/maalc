@@ -5,11 +5,14 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import enUs from "../../assets/locales/en_us.json";
+import zhTw from "../../assets/locales/zh_tw.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
-import { cases } from "./settingsCases";
+import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
 import css from "./index.css?raw";
+import { PI, taskOf } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
@@ -192,6 +195,28 @@ describe("the team queue block above the list and the editor (#804)", () => {
     edits.forEach((e, j) => Object.assign(inQueue[j], e));
     renderEditor(<TeamsTab />, s);
     expect(marks()).toEqual(expected);
+  });
+
+  // tests/settings_cases.json next_run: the agent's pick_team gives the same teams (tests/test_team_queue.py).
+  test.each(cases.next_run as { name: string; edits: FileEdit[]; hard: string | null; normal: string | null }[])(
+    "the marks name the teams the agent picks: $name", ({ edits, hard, normal }) => {
+      const s = applyEdits(cases.valid, edits) as unknown as Settings;
+      const mark = (id: string) => (hard === id && normal === id ? zh["queue.next"]
+        : hard === id ? zh["queue.next_hard"] : normal === id ? zh["queue.next_normal"] : "");
+      renderEditor(<TeamsTab />, s);
+      expect(marks()).toEqual(s.team_queue.map(mark));
+    });
+
+  // The note names the client's option and its task by the labels the client shows them with: interface.json's text
+  // keys in the language's locale file, the option's in the language's quotes.
+  test.each([
+    ["zh_tw", zhTw, "「", "」"],
+    ["en_us", enUs, "\"", "\""],
+  ] as const)("its note in %s names the start team option as the client labels it", (lang, client, open, close) => {
+    const said = (label: unknown) => (client as Record<string, string>)[String(label).replace(/^\$/, "")];
+    const note = TEXT[lang]["queue.note"];
+    expect(note).toContain(`${open}${said(PI.option.MirrorStartTeam.label)}${close}`);
+    expect(note).toContain(said(taskOf("MirrorStartTeam")!.label));
   });
 
   test("its ↑↓ move a team in the queue, not in the list", async () => {
