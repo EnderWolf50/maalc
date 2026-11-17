@@ -128,7 +128,7 @@ export const hideToTray = (text: { tip: string; show: string; stop: string }): P
   tauri ? invoke("hide_to_tray", { text }) : Promise.resolve(false);
 
 /** A release newer than this build that the window can update to (lib.rs check_update, update.rs Release). */
-export interface Release { tag: string; version: string; page: string; zip: string; size: number; sha256: string }
+export interface Release { version: string; zip: string; size: number; sha256: string }
 /** How far a download is (update.rs Progress): the bytes so far, then the sha256 check, then the unpack. */
 export type UpdateProgress = { step: "download"; received: number; total: number } | { step: "verify" } | { step: "extract" };
 /** How the last apply went (update.rs Outcome): `applying` is one cut short; `restored`, for `failed`: all of it went back. */

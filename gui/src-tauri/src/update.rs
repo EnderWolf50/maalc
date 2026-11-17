@@ -61,26 +61,26 @@ pub fn api_base() -> String {
 // ---- the folders ----
 
 /// cache/update/: what the update keeps between its steps.
-pub fn dir(root: &Path) -> PathBuf {
+pub fn update_dir(root: &Path) -> PathBuf {
     root.join("cache").join("update")
 }
 
 /// Where the apply moves the root entries it replaces, until the next start deletes them.
 pub fn old_dir(root: &Path) -> PathBuf {
-    dir(root).join("old")
+    update_dir(root).join("old")
 }
 
 /// Where a release's zip is unpacked: cache/update/v<version>/, which holds maalc-gui.exe at its top.
 pub fn staged_dir(root: &Path, version: &Version) -> PathBuf {
-    dir(root).join(format!("v{version}"))
+    update_dir(root).join(format!("v{version}"))
 }
 
 fn record_path(root: &Path) -> PathBuf {
-    dir(root).join("check.json")
+    update_dir(root).join("check.json")
 }
 
 fn journal_path(root: &Path) -> PathBuf {
-    dir(root).join("apply.json")
+    update_dir(root).join("apply.json")
 }
 
 /// A value as JSON in `path`, written whole (a temp file, then a rename).
@@ -96,23 +96,20 @@ pub fn version_of(tag: &str) -> Option<Version> {
     Version::parse(tag.strip_prefix('v').unwrap_or(tag)).ok()
 }
 
-/// Whether the release tagged `tag` comes after version `current`. A tag that is no version never does.
-pub fn newer(tag: &str, current: &str) -> bool {
-    match (version_of(tag), Version::parse(current)) {
-        (Some(tag), Ok(current)) => tag > current,
+/// Whether release version or tag `version` comes after version `current`. One that is no version never does.
+pub fn newer(version: &str, current: &str) -> bool {
+    match (version_of(version), Version::parse(current)) {
+        (Some(version), Ok(current)) => version > current,
         _ => false,
     }
 }
 
 // ---- the release ----
 
-/// A release this window can update to: its zip and the sha256 GitHub gives for it.
+/// A release this window can update to: its version (`1.2.0`), its zip and the sha256 GitHub gives for it.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Release {
-    pub tag: String,
     pub version: String,
-    /// The release's page on GitHub.
-    pub page: String,
     pub zip: String,
     pub size: u64,
     /// Lower-case hex.
@@ -121,7 +118,7 @@ pub struct Release {
 
 impl Release {
     pub fn parsed_version(&self) -> Result<Version, String> {
-        version_of(&self.tag).ok_or_else(|| format!("{}: not a version", self.tag))
+        Version::parse(&self.version).map_err(|e| format!("{}: {e}", self.version))
     }
 }
 
@@ -140,9 +137,7 @@ pub fn release_of(text: &str) -> Result<Release, String> {
         .filter(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
         .ok_or_else(|| format!("{name}: {digest} is not a sha256"))?;
     Ok(Release {
-        tag: tag.into(),
         version: version.to_string(),
-        page: json["html_url"].as_str().unwrap_or_default().into(),
         zip: asset["browser_download_url"].as_str().ok_or_else(|| format!("{name} has no browser_download_url"))?.into(),
         size: asset["size"].as_u64().unwrap_or(0),
         sha256: sha256.to_ascii_lowercase(),
@@ -225,7 +220,7 @@ pub fn download(root: &Path, release: &Release, progress: &mut dyn FnMut(Progres
     if !release.zip.starts_with("https://") && !cfg!(debug_assertions) {
         return Err(format!("{}: not an https address", release.zip));
     }
-    let dir = dir(root);
+    let dir = update_dir(root);
     fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let zip = dir.join(format!("maalc-v{version}.zip"));
     let part = dir.join(format!("maalc-v{version}.zip.part"));
@@ -346,7 +341,7 @@ fn kept(name: &OsString) -> bool {
 }
 
 /// `f`, tried TRIES times while it fails.
-fn again<T>(mut f: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+fn retry<T>(mut f: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     let mut tries = 1;
     loop {
         match f() {
@@ -381,9 +376,21 @@ fn remove_tree(path: &Path) -> io::Result<()> {
     }
 }
 
-/// Replace each entry of `root` that `staged` has, but the KEEP folders, with staged's: the root's moves into `old` (made
-/// fresh first), then staged's is copied in; an entry the zip does not have stays. A step that fails puts back what it moved
-/// and removes what it copied, newest first, and `Failure::restored` says whether all of it went back.
+/// Whether `old` holds files: an earlier apply that was cut short or could not put everything back left there the only copy
+/// of what it replaced (`settle` keeps it), and a new apply would take its place.
+pub fn holds_files(old: &Path) -> bool {
+    fs::read_dir(old).is_ok_and(|mut entries| entries.next().is_some())
+}
+
+/// The error of an apply refused while `old` holds files (`holds_files`).
+pub fn old_left(old: &Path) -> String {
+    format!("{} holds the files an earlier update left: move them back into the maalc folder, or delete them, first", old.display())
+}
+
+/// Replace each entry of `root` that `staged` has, but the KEEP folders, with staged's: the root's moves into `old`, then
+/// staged's is copied in; an entry the zip does not have stays. A step that fails puts back what it moved and removes what
+/// it copied, newest first, and `Failure::restored` says whether all of it went back. An `old` that holds files is never
+/// written over: the apply stops before it moves anything.
 pub fn apply(root: &Path, staged: &Path, old: &Path) -> Result<(), Failure> {
     let early = |error: String| Failure { error, restored: true };
     let mut names: Vec<OsString> = fs::read_dir(staged)
@@ -395,15 +402,18 @@ pub fn apply(root: &Path, staged: &Path, old: &Path) -> Result<(), Failure> {
     if !names.iter().any(|n| n == EXE) {
         return Err(early(format!("{} has no {EXE}", staged.display())));
     }
+    if holds_files(old) {
+        return Err(early(old_left(old)));
+    }
     remove_tree(old).and_then(|()| fs::create_dir_all(old)).map_err(|e| early(format!("{}: {e}", old.display())))?;
     let mut steps: Vec<Step> = Vec::new();
-    let mut go = || -> Result<(), String> {
+    let mut replace_all = || -> Result<(), String> {
         for name in &names {
             let (at, aside) = (root.join(name), old.join(name));
             steps.push(Step { name: name.clone(), existed: fs::symlink_metadata(&at).is_ok(), moved: false, copying: false });
             let step = steps.last_mut().unwrap();
             if step.existed {
-                again(|| fs::rename(&at, &aside)).map_err(|e| format!("cannot move {} aside: {e}", at.display()))?;
+                retry(|| fs::rename(&at, &aside)).map_err(|e| format!("cannot move {} aside: {e}", at.display()))?;
                 step.moved = true;
             }
             step.copying = true;
@@ -411,15 +421,15 @@ pub fn apply(root: &Path, staged: &Path, old: &Path) -> Result<(), Failure> {
         }
         Ok(())
     };
-    let Err(error) = go() else { return Ok(()) };
+    let Err(error) = replace_all() else { return Ok(()) };
     let mut restored = true;
     for step in steps.iter().rev() {
         let (at, aside) = (root.join(&step.name), old.join(&step.name));
-        if step.copying && (step.moved || !step.existed) && again(|| remove_tree(&at)).is_err() {
+        if step.copying && (step.moved || !step.existed) && retry(|| remove_tree(&at)).is_err() {
             restored = false;
             continue; // the new copy is still there: the old one stays aside
         }
-        if step.moved && again(|| fs::rename(&aside, &at)).is_err() {
+        if step.moved && retry(|| fs::rename(&aside, &at)).is_err() {
             restored = false;
         }
     }
@@ -491,18 +501,28 @@ pub fn apply_mode(args: &[String]) -> Option<i32> {
         return Some(2);
     };
     let root = PathBuf::from(root);
-    let outcome = finish(&root, &staged, &from, wait_for_exit(pid, WAIT_OLD));
-    // the new window when it went through, the old one when it did not: either way the user has a window, which says how it went
-    let _ = Command::new(root.join(EXE)).current_dir(&root).spawn();
+    let exited = wait_for_exit(pid, WAIT_OLD);
+    let outcome = finish(&root, &staged, &from, exited);
+    // The new window when it went through, the old one when it did not: either way the user has a window, which says how it
+    // went. A window that never exited is still there (one started now would only hand itself to it), and says it at its
+    // next start.
+    if exited {
+        let _ = Command::new(root.join(EXE)).current_dir(&root).spawn();
+    }
     Some(if outcome.state == State::Done { 0 } else { 1 })
 }
 
 /// The apply-update mode's work once it waited for the old window (`exited`: it did), from version `from` to this one: the
 /// journal says `applying`, the apply runs, and the journal says how it ended. A window that did not exit, or a journal that
-/// cannot be written, moves nothing.
+/// cannot be written, moves nothing. Nor does an old/ that holds an earlier update's files (lib.rs apply_update refuses that
+/// before the window closes): its journal stays as it is, so the next start keeps those files and says so again.
 fn finish(root: &Path, staged: &Path, from: &str, exited: bool) -> Outcome {
     let journal = journal_path(root);
     let outcome = |state, error: Option<String>, restored| Outcome { state, from: from.into(), to: current().into(), error, restored };
+    let old = old_dir(root);
+    if holds_files(&old) {
+        return outcome(State::Failed, Some(old_left(&old)), true);
+    }
     if !exited {
         let o = outcome(State::Failed, Some(format!("the old window did not exit within {} s", WAIT_OLD.as_secs())), true);
         let _ = write_json(&journal, &o);
@@ -511,7 +531,7 @@ fn finish(root: &Path, staged: &Path, from: &str, exited: bool) -> Outcome {
     if let Err(e) = write_json(&journal, &outcome(State::Applying, None, false)) {
         return outcome(State::Failed, Some(e), true);
     }
-    let o = match apply(root, staged, &old_dir(root)) {
+    let o = match apply(root, staged, &old) {
         Ok(()) => outcome(State::Done, None, true),
         Err(f) => outcome(State::Failed, Some(f.error), f.restored),
     };
@@ -566,7 +586,7 @@ pub fn settle(root: &Path) -> Option<Outcome> {
 /// zips and part files. A newer version unpacked stays, for an update that waits (a run was under way, the window restarted).
 /// True when nothing was left: a file still held (the apply-update process that just started this window) waits for a try.
 pub fn clean(root: &Path) -> bool {
-    let Ok(entries) = fs::read_dir(dir(root)) else { return true };
+    let Ok(entries) = fs::read_dir(update_dir(root)) else { return true };
     let current = Version::parse(current()).ok();
     let mut clean = true;
     for entry in entries.filter_map(Result::ok) {
@@ -684,10 +704,12 @@ mod tests {
             let (h, r) = (hits.clone(), routes.clone());
             thread::spawn(move || {
                 for stream in listener.incoming() {
-                    let Ok(mut stream) = stream else { continue };
-                    let mut reader = io::BufReader::new(stream.try_clone().unwrap());
+                    let Ok(stream) = stream else { continue };
+                    let mut reader = io::BufReader::new(&stream);
                     let mut first = String::new();
-                    reader.read_line(&mut first).unwrap();
+                    if reader.read_line(&mut first).is_err() {
+                        continue;
+                    }
                     let mut line = String::new();
                     while reader.read_line(&mut line).is_ok_and(|n| n > 2) {
                         line.clear();
@@ -696,7 +718,11 @@ mod tests {
                     h.lock().unwrap().push(path.clone());
                     let (status, body) = r.lock().unwrap().get(&path).cloned().unwrap_or((404, b"not found".to_vec()));
                     let head = format!("HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
-                    let _ = stream.write_all(head.as_bytes()).and_then(|()| stream.write_all(&body));
+                    let _ = (&stream).write_all(head.as_bytes()).and_then(|()| (&stream).write_all(&body));
+                    // a graceful close: the write side shuts, and the socket stays until the client closes its own
+                    let _ = stream.shutdown(std::net::Shutdown::Write);
+                    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                    let _ = io::copy(&mut reader, &mut io::sink());
                 }
             });
             Stub { base, hits, routes }
@@ -748,7 +774,6 @@ mod tests {
         let digest = format!("sha256:{}", "AB".repeat(32));
         stub.release("v1.1.0", b"zip", &digest);
         let release = fetch_latest(&stub.base).unwrap();
-        assert_eq!(release.tag, "v1.1.0");
         assert_eq!(release.version, "1.1.0");
         assert_eq!(release.zip, format!("{}/dl/maalc-v1.1.0.zip", stub.base));
         assert_eq!(release.size, 3);
@@ -780,18 +805,18 @@ mod tests {
         stub.release("v1.1.0", b"zip", &format!("sha256:{}", "0".repeat(64)));
         let day = CHECK_EVERY.as_secs();
         let t0 = 1_800_000_000;
-        assert_eq!(check(&root, &stub.base, t0).unwrap().tag, "v1.1.0");
-        assert_eq!(check(&root, &stub.base, t0 + 3600).unwrap().tag, "v1.1.0", "the day's check, from the record");
-        assert_eq!(check(&root, &stub.base, t0 + day - 1).unwrap().tag, "v1.1.0");
+        assert_eq!(check(&root, &stub.base, t0).unwrap().version, "1.1.0");
+        assert_eq!(check(&root, &stub.base, t0 + 3600).unwrap().version, "1.1.0", "the day's check, from the record");
+        assert_eq!(check(&root, &stub.base, t0 + day - 1).unwrap().version, "1.1.0");
         assert_eq!(stub.hits().len(), 1);
         // a day later it asks again, and GitHub fails: the release the last check found stays, and that was the day's check
         stub.serve(&latest, 500, "down");
-        assert_eq!(check(&root, &stub.base, t0 + day).unwrap().tag, "v1.1.0");
-        assert_eq!(check(&root, &stub.base, t0 + day + 60).unwrap().tag, "v1.1.0");
+        assert_eq!(check(&root, &stub.base, t0 + day).unwrap().version, "1.1.0");
+        assert_eq!(check(&root, &stub.base, t0 + day + 60).unwrap().version, "1.1.0");
         assert_eq!(stub.hits().len(), 2);
         // a clock set back before the last check asks again
         stub.release("v1.2.0", b"zip", &format!("sha256:{}", "0".repeat(64)));
-        assert_eq!(check(&root, &stub.base, t0 - 1).unwrap().tag, "v1.2.0");
+        assert_eq!(check(&root, &stub.base, t0 - 1).unwrap().version, "1.2.0");
         assert_eq!(stub.hits().len(), 3);
     }
 
@@ -820,7 +845,7 @@ mod tests {
         assert_eq!(heard.first(), Some(&Progress::Download { received: 0, total }));
         assert_eq!(heard[heard.len() - 3..], [Progress::Download { received: total, total }, Progress::Verify, Progress::Extract]);
         // the zip and the part files are gone; a second download takes the unpacked folder as it is
-        assert_eq!(fs::read_dir(dir(&root)).unwrap().count(), 1);
+        assert_eq!(fs::read_dir(update_dir(&root)).unwrap().count(), 1);
         let asked = stub.hits().len();
         assert_eq!(download(&root, &release, &mut |_| {}).unwrap(), staged);
         assert_eq!(stub.hits().len(), asked);
@@ -838,7 +863,7 @@ mod tests {
         assert!(err.starts_with(MISMATCH), "{err}");
         assert!(err.contains(&sha256_of(&zip)) && err.contains(&sha256_of(b"another zip")), "{err}");
         assert!(!heard.contains(&Progress::Extract));
-        assert_eq!(fs::read_dir(dir(&root)).unwrap().count(), 0, "no zip, part file or folder is left");
+        assert_eq!(fs::read_dir(update_dir(&root)).unwrap().count(), 0, "no zip, part file or folder is left");
     }
 
     #[test]
@@ -849,7 +874,7 @@ mod tests {
         stub.serve("/dl/maalc-v1.1.0.zip", 404, "gone");
         let release = fetch_latest(&stub.base).unwrap();
         assert!(download(&root, &release, &mut |_| {}).unwrap_err().contains("404"));
-        assert_eq!(fs::read_dir(dir(&root)).unwrap().count(), 0);
+        assert_eq!(fs::read_dir(update_dir(&root)).unwrap().count(), 0);
     }
 
     #[test]
@@ -992,12 +1017,29 @@ mod tests {
     #[test]
     fn a_window_that_never_exits_moves_nothing() {
         let (root, staged) = staged_install("stays");
-        let before = tree(&root);
+        let before = outside_cache(&root);
         let outcome = finish(&root, &staged, "1.0.0", false);
         assert_eq!((outcome.state, outcome.restored), (State::Failed, true));
         assert!(outcome.error.as_deref().unwrap().contains("did not exit"));
-        assert_eq!(outside_cache(&root), before.into_iter().filter(|(k, _)| !k.starts_with("cache/")).collect());
+        assert_eq!(outside_cache(&root), before);
         assert_eq!(settle(&root), Some(outcome));
+    }
+
+    #[test]
+    fn the_files_an_earlier_update_left_in_old_are_never_written_over() {
+        let (root, staged) = staged_install("again");
+        put(&old_dir(&root), &[("python/python.exe", "the only copy of python 0.9.0")]);
+        let left = Outcome { state: State::Failed, from: "0.9.0".into(), to: "1.0.0".into(), error: Some("disk full".into()), restored: false };
+        write_json(&journal_path(&root), &left).unwrap();
+        let before = tree(&root);
+        let outcome = finish(&root, &staged, "1.0.0", true);
+        assert_eq!((outcome.state, outcome.restored), (State::Failed, true));
+        assert!(outcome.error.as_deref().unwrap().contains("earlier update"), "{outcome:?}");
+        assert_eq!(tree(&root), before, "nothing moved, old/ and the earlier journal as they were");
+        assert_eq!(settle(&root), Some(left), "the next start still keeps old/ and says why");
+        assert!(old_dir(&root).join("python/python.exe").is_file());
+        let failed = apply(&root, &staged, &old_dir(&root)).unwrap_err();
+        assert!(failed.restored && failed.error.contains("earlier update"));
     }
 
     #[test]
@@ -1023,7 +1065,7 @@ mod tests {
         let root = scratch("clean");
         let ahead = Version::parse(current()).unwrap();
         let ahead = Version::new(ahead.major, ahead.minor + 1, 0);
-        put(&dir(&root), &[
+        put(&update_dir(&root), &[
             ("check.json", "{}"),
             (&format!("v{}/maalc-gui.exe", current()), "this one, applied"),
             ("v0.1.0/maalc-gui.exe", "older"),
@@ -1033,7 +1075,7 @@ mod tests {
             (&format!("v{ahead}.part/x"), "half an unpack"),
         ]);
         assert!(clean(&root));
-        assert_eq!(tree(&dir(&root)).keys().cloned().collect::<Vec<_>>(), ["check.json".to_string(), format!("v{ahead}/maalc-gui.exe")]);
+        assert_eq!(tree(&update_dir(&root)).keys().cloned().collect::<Vec<_>>(), ["check.json".to_string(), format!("v{ahead}/maalc-gui.exe")]);
     }
 
     #[test]

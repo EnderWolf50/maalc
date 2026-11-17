@@ -339,7 +339,7 @@ struct Updates {
 impl Updates {
     /// The release this start's check found, when it is newer than this build.
     fn newer(&self) -> Option<update::Release> {
-        self.checked.lock().unwrap().clone().flatten().filter(|r| update::newer(&r.tag, update::current()))
+        self.checked.lock().unwrap().clone().flatten().filter(|r| update::newer(&r.version, update::current()))
     }
 }
 
@@ -406,15 +406,20 @@ fn ready_to_apply(runs: &Runs) -> Result<(), String> {
 }
 
 /// Apply the downloaded release: its maalc-gui.exe starts in the apply-update mode (update::launch), and this window exits for
-/// it, which replaces the files and starts the new window. Refused while a run is under way, and before the download.
+/// it, which replaces the files and starts the new window. Refused while a run is under way, before the download, and while
+/// cache/update/old/ holds the only copy of what an earlier update could not put back (update::holds_files).
 #[tauri::command]
 fn apply_update(app: AppHandle, runs: tauri::State<Runs>, updates: tauri::State<Updates>) -> Result<(), String> {
     ready_to_apply(&runs)?;
     let root = root()?;
+    let old = update::old_dir(&root);
+    if update::holds_files(&old) {
+        return Err(update::old_left(&old));
+    }
     let release = updates.newer().ok_or("no newer release to apply")?;
     let staged = update::staged_dir(&root, &release.parsed_version()?);
     if !staged.join(update::EXE).is_file() {
-        return Err(format!("{} is not downloaded", release.tag));
+        return Err(format!("v{} is not downloaded", release.version));
     }
     update::launch(&root, &staged, std::process::id())?;
     app.exit(0);

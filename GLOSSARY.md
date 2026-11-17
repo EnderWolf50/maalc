@@ -230,3 +230,6 @@ _Avoid_: 資料包
 
 **模板版本**：
 資源包裡模板圖與 pipeline 的版本，一個整數，要配新的 Agent 程式或 `assets/interface.json` 時才加一；程式只套用自己認得的模板版本（ADR 0012）。
+
+**程式更新**：
+設定視窗把整個 maalc 換成 GitHub 上較新的正式版：下載那一版的 zip、比對 GitHub 給的 sha256、解壓，再換掉 zip 裡有的根目錄項目，`config/`、`logs/`、`state/`、`cache/`、`debug/` 不動（#817）。和資源包的更新不同：資源包只換 `resource/base/` 的資料、圖與 pipeline，Agent 在任務開始時自己換；程式更新由使用者按，只在沒有執行中的任務時套用。

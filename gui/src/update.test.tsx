@@ -5,17 +5,23 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import libRs from "../src-tauri/src/lib.rs?raw";
+import updateRs from "../src-tauri/src/update.rs?raw";
 import App from "./App";
-import type { Release, UpdateOutcome, UpdateProgress } from "./api";
+import { MISMATCH, RUN_UNDER_WAY, type Release, type UpdateOutcome, type UpdateProgress } from "./api";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam } from "./model";
 import type { Message } from "./runner";
 import { queuedTeams } from "./testing";
 
 const zh = TEXT.zh_tw;
+
+test("the errors the page tells apart start with the backend's own words", () => {
+  expect(updateRs).toContain(`pub const MISMATCH: &str = "${MISMATCH}";`);
+  expect(libRs).toContain(`const RUN_UNDER_WAY: &str = "${RUN_UNDER_WAY}";`);
+});
 const RELEASE: Release = {
-  tag: "v1.1.0", version: "1.1.0", page: "https://github.com/x/releases/tag/v1.1.0", zip: "https://github.com/x/maalc-v1.1.0.zip",
-  size: 1000, sha256: "a".repeat(64),
+  version: "1.1.0", zip: "https://github.com/x/maalc-v1.1.0.zip", size: 1000, sha256: "a".repeat(64),
 };
 // release: what the check finds; checks: its calls; outcome: how the last apply went; progress: the download's channel;
 // download: settles the download (an Error: it fails); applies: the apply's calls; applyFail: the apply's error; saved: each
@@ -138,7 +144,7 @@ describe("the update", () => {
   });
 
   test("an apply that cannot start says why", async () => {
-    back.applyFail = "C:\\maalc\\cache\\update\\v1.1.0\\maalc-gui.exe: Access is denied. (os error 5)";
+    back.applyFail = "cache\\update\\v1.1.0\\maalc-gui.exe: Access is denied. (os error 5)";
     const user = await open();
     await user.click(await screen.findByRole("button", { name: fill(zh["update.available"], v) }));
     await finish();
@@ -198,10 +204,10 @@ describe("how the last apply went", () => {
   });
 
   test("an update that failed and went back says why", async () => {
-    back.outcome = outcome({ state: "failed", error: "cannot move C:\\maalc\\python aside: in use", restored: true });
+    back.outcome = outcome({ state: "failed", error: "cannot move python aside: in use", restored: true });
     await open();
     expect(await screen.findByRole("alert", { name: zh["update.notice"] }))
-      .toHaveTextContent(fill(zh["update.failed_restored"], { from: "1.0.0", to: "1.1.0", error: "cannot move C:\\maalc\\python aside: in use" }));
+      .toHaveTextContent(fill(zh["update.failed_restored"], { from: "1.0.0", to: "1.1.0", error: "cannot move python aside: in use" }));
   });
 
   test("an update that did not all go back, or was cut short, says where the old files are", async () => {

@@ -395,7 +395,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setFailure(null);
     stepTo({ step: "download", received: 0, total: update?.release.size ?? 0 });
     try {
-      await api.downloadUpdate((p) => stepTo(p.step === "download" ? { step: "download", received: p.received, total: p.total } : { step: p.step }));
+      await api.downloadUpdate(stepTo); // each progress is a step of the update
     } catch (e) {
       setFailure({ why: api.isMismatch(e) ? "mismatch" : "download", error: String(e) });
       return stepTo({ step: "failed" });

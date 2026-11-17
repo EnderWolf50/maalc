@@ -25,7 +25,7 @@ export interface Update { current: string; release: Release; at: UpdateStep }
 
 /** The notice's words beside its mark, an arrow into a tray. In a header too narrow for its parts (the `label` step of
  * WindowControls.tsx FIT_STEPS) the mark shows alone and the words leave the eye only: they stay the notice's name. */
-const said = (text: string) => (<>
+const markAndWords = (text: string) => (<>
   <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 .5v6M2.5 4 5 6.5 7.5 4M.5 9.5h9" /></svg>
   <span className="words">{text}</span>
 </>);
@@ -41,30 +41,30 @@ export function UpdateChip({ update, running, onUpdate, onApply }: {
   const v = { version, current };
   switch (at.step) {
     case "available":
-      return <button type="button" className="update" title={fill(t("update.title"), v)} onClick={onUpdate}>{said(fill(t("update.available"), v))}</button>;
+      return <button type="button" className="update" title={fill(t("update.title"), v)} onClick={onUpdate}>{markAndWords(fill(t("update.available"), v))}</button>;
     case "download": {
       const pct = at.total > 0 ? Math.min(100, Math.floor((at.received / at.total) * 100)) : null;
       const text = pct === null ? fill(t("update.downloading_mb"), { mb: Math.floor(at.received / 2 ** 20) }) : fill(t("update.downloading"), { pct });
       return (
         <span className="update busy" role="progressbar" aria-label={fill(t("update.label"), v)} aria-valuemin={0} aria-valuemax={100}
           aria-valuenow={pct ?? undefined} title={text} style={{ "--done": `${pct ?? 0}%` } as CSSProperties}>
-          {said(text)}
+          {markAndWords(text)}
         </span>
       );
     }
     case "verify":
     case "extract":
     case "applying":
-      return <span className="update busy" role="status" title={t(`update.${at.step}`)}>{said(t(`update.${at.step}`))}</span>;
+      return <span className="update busy" role="status" title={t(`update.${at.step}`)}>{markAndWords(t(`update.${at.step}`))}</span>;
     case "ready":
       return (
         <button type="button" className="update" disabled={running} onClick={onApply}
           title={fill(t(running ? "update.after_run_title" : "update.apply_title"), v)}>
-          {said(fill(t(running ? "update.after_run" : "update.apply"), v))}
+          {markAndWords(fill(t(running ? "update.after_run" : "update.apply"), v))}
         </button>
       );
     case "failed":
-      return <button type="button" className="update bad" title={fill(t("update.retry_title"), v)} onClick={onUpdate}>{said(t("update.retry"))}</button>;
+      return <button type="button" className="update bad" title={fill(t("update.retry_title"), v)} onClick={onUpdate}>{markAndWords(t("update.retry"))}</button>;
   }
 }
 
@@ -97,6 +97,9 @@ export function OutcomeNotice({ outcome, onDismiss }: { outcome: UpdateOutcome; 
   const { t } = useEditor();
   const key = outcome.state === "done" ? "update.done" : outcome.state === "applying" ? "update.cut_short"
     : outcome.restored ? "update.failed_restored" : "update.failed_left";
-  const text = fill(t(key), { from: outcome.from, to: outcome.to, error: outcome.error ?? "" });
+  const v = { from: outcome.from, to: outcome.to, error: outcome.error ?? "" };
+  // where the old files are, when the update left them for the user (update.rs Outcome::keeps_old)
+  const left = outcome.state === "applying" || (outcome.state === "failed" && !outcome.restored);
+  const text = [fill(t(key), v), ...(left ? [fill(t("update.old_files"), v)] : [])].join("\n");
   return <Notice text={text} bad={outcome.state !== "done"} onDismiss={onDismiss} />;
 }
