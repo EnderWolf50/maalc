@@ -237,6 +237,18 @@ test("parseThemePacks reads the season's data file", () => {
   expect(parseThemePacks("")).toEqual({ packs: {}, pack_ids: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
 });
 
+test("loading puts each task the task list leaves out last, unticked, so the Run tab can tick it (#814)", () => {
+  const file = applyEdits(cases.valid, [{ set: "tasks", value: [{ id: "ClaimMail", enabled: true }, { id: "Gone", enabled: true }] }]);
+  const { data, old } = parseSettings(JSON.stringify(file));
+  expect(old).toBeNull();
+  expect(data.tasks).toEqual([
+    { id: "ClaimMail", enabled: true }, { id: "Gone", enabled: true }, // the schema check names the one it does not know
+    ...cases.valid.tasks.filter((x) => x.id !== "ClaimMail"),
+  ]);
+  // a task list broken by hand stays, for the check to name it
+  expect(parseSettings(JSON.stringify(applyEdits(cases.valid, [{ set: "tasks", value: "x" }]))).data.tasks).toBe("x");
+});
+
 test("loading leaves a gift list with a wrong shape to the schema check", () => {
   const file = structuredClone(cases.valid) as unknown as { gift_lists: Record<string, unknown>[] };
   file.gift_lists[0].want = ["x"];

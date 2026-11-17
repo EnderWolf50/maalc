@@ -413,6 +413,15 @@ function queueInListOrder(teams: unknown): unknown[] {
   return teams.filter((t) => t !== null && typeof t === "object" && !Array.isArray(t) && "id" in t).map((t) => t.id);
 }
 
+/** The task list with each task it leaves out last, unticked, in the schema's order, so the Run tab can tick it (#814): the
+ * schema lets a hand edit leave one out, and a task not ticked does not run, so nothing changes what runs. A list broken by
+ * hand stays as it is, for the schema check to name; so does an entry it does not know. */
+function withEveryTask(tasks: unknown): unknown {
+  if (!Array.isArray(tasks)) return tasks;
+  const listed = new Set(tasks.map((x) => (isObject(x) ? x.id : undefined)));
+  return [...tasks, ...(schema.$defs.task.enum as string[]).filter((id) => !listed.has(id)).map((id) => ({ id, enabled: false }))];
+}
+
 /** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
  * (spec 04 section 2). old: the file's version and the file as it read, before its migration (null when it needed none),
  * for what the caller does with an older file before it writes it back (App.tsx). */
@@ -435,6 +444,7 @@ export function parseSettings(text: string): {
   let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
   data = {
     ...data,
+    tasks: withEveryTask(data.tasks),
     gift_lists: lists.map((l: unknown) => {
       if (!wellFormed(l)) return l; // the schema check names what is wrong
       const cleaned = cleanGiftList(l);

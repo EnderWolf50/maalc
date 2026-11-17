@@ -216,7 +216,11 @@ test("the team page says what a target past floor 5 asks of a team, which the Mi
   // rule shows beside usage
   renderEditor(<TeamsTab />, settings());
   expect(screen.getByText(zh["team.target_floor_note"])).toBeVisible();
-  expect(zh["team.min_alive_note"]).toContain("鏡牢任務選項");
+  // each names the option where the Run tab shows it (#814)
+  for (const key of ["team.target_floor_note", "team.min_alive_note", "team.hard_from_floor_note"] as const) {
+    expect(zh[key]).toContain("「執行」分頁鏡牢");
+    expect(TEXT.en_us[key]).toContain("Mirror Dungeon in the Run tab");
+  }
 });
 
 test("the team page's long notes show one topic to a line", () => {

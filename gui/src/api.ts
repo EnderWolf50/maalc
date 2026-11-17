@@ -79,6 +79,11 @@ export function saveOldSettings(version: number, text: string): Promise<void> {
   return Promise.resolve();
 }
 
+/** A file of config/ the read-back reads once (#814, readBack.ts READ_BACK_FILES; lib.rs load_read_back refuses any
+ * other): its text, null when it is not there. Nothing here writes one. */
+export const loadReadBack = (name: string): Promise<string | null> =>
+  tauri ? invoke("load_read_back", { name }) : Promise.resolve(localStorage.getItem(name));
+
 /** Ask `keepOpen` each time the user closes the window (its ✕, Alt+F4): true keeps it open. Returns the function that stops
  * asking. With a listener, Tauri leaves the closing to the page, which destroys the window (needs core:window:allow-destroy,
  * capabilities/default.json). A plain browser has no window to keep. */

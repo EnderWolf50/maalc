@@ -205,11 +205,11 @@ describe("the team queue block above the list and the editor (#804)", () => {
     });
 
   // The note sends the user to the Mirror Dungeon task's start team option (run.start_team, #805), which the settings
-  // window holds now, not a client's (#813).
+  // window's Run tab holds now, not a client's (#813, #814).
   test.each([
-    ["zh_tw", "鏡牢任務選項的「這次從哪一支隊伍開始」"],
-    ["en_us", "\"Start this task from team\" in the Mirror Dungeon task options"],
-  ] as const)("its note in %s names the start team option of the Mirror Dungeon task", (lang, option) => {
+    ["zh_tw", "到「執行」分頁點鏡牢，用「這次從哪一支隊伍開始」"],
+    ["en_us", "click Mirror Dungeon in the Run tab and use \"Start this task from team\""],
+  ] as const)("its note in %s names the start team option of the Mirror Dungeon task in the Run tab", (lang, option) => {
     const note = TEXT[lang]["queue.note"];
     expect(note).toContain(option);
     expect(note).not.toMatch(/MXU|MFAAvalonia/);

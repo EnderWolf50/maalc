@@ -15,6 +15,7 @@
     "allow-load-game-data",
     "allow-save-settings",
     "allow-save-old-settings",
+    "allow-load-read-back",
     "allow-append-runs-log"
   ]
 }

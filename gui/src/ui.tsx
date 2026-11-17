@@ -24,9 +24,9 @@ export interface Ctx {
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
 }
-/** The lists whose tab shows one item at a time. */
-export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans"] as const;
-export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams">;
+/** The lists whose tab shows one item at a time: the Run tab shows the picked task's options (#814). */
+export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans", "tasks"] as const;
+export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams" | "tasks">;
 /** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
 export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
 export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);
@@ -205,7 +205,7 @@ export function Mark({ as: Tag = "div", path, className, marked = true, children
 export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} />;
 export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} />;
 
-export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
+export function Field({ label, path, note, children }: { label: ReactNode; path?: string; note?: string; children: ReactNode }) {
   return (
     <Mark as="label" className="field" path={path}>
       <span>{label}</span>
@@ -250,7 +250,7 @@ export function Decimal({ value, min, onChange }: { value: number; min: number; 
 
 /** A switch with its number (#137): off is null and greys the number out; switched on, it starts at `on`. */
 export function ToggleNum({ label, path, value, on, min, max, note, onChange }: {
-  label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
+  label: ReactNode; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
   onChange: (v: number | null) => void;
 }) {
   return (
