@@ -20,7 +20,17 @@
 
 視窗用 `python/` 內附的 Python 跑執行器（`runner/`）與 bot，不需要另外安裝 Python。
 
-這一版起由設定視窗自己執行任務，zip 不再附 MXU，也不再支援 MFAAvalonia（[ADR 0015](docs/adr/0015-settings-window-runs-the-tasks.md)）。定時執行與自動更新由 #811 的其他票加入。v1.0.0 仍用 zip 附的 MXU 執行，說明見 v1.0.0 的 README。
+這一版起由設定視窗自己執行任務，zip 不再附 MXU，也不再支援 MFAAvalonia（[ADR 0015](docs/adr/0015-settings-window-runs-the-tasks.md)）。定時執行由 #811 的其他票加入。v1.0.0 仍用 zip 附的 MXU 執行，說明見 v1.0.0 的 README。
+
+### 自動更新
+
+視窗打開時查 GitHub 上最新的正式版，每天最多查一次。比目前新時，標頭出現「更新到 v<版本>」；查不到（沒有網路、GitHub 沒回應）時什麼都不顯示。
+
+- 按「更新到 v<版本>」：zip 下載到 `cache/update/`，標頭顯示進度。下載完用 GitHub 給的 sha256 比對，不符就刪掉、不套用，分頁上方寫明原因；按「更新失敗，重試」重新下載。
+- 比對通過就解壓、套用：有未儲存的變更時先存檔，視窗關閉，新版換掉程式檔案後自己開啟。執行中不套用：標頭改寫「執行結束後套用 v<版本>」，這次執行結束後再按。
+- 套用只換掉 zip 裡有的項目（`maalc-gui.exe`、`python/`、`agent/`、`runner/`、`maafw/`、`resource/` 等），`config/`、`logs/`、`state/`、`cache/`、`debug/` 不動。換下來的舊版放在 `cache/update/old/`，新版下次打開時刪掉。
+- 任何一步失敗，就把舊版搬回來、開啟舊版，分頁上方寫明原因。沒能全部搬回時，舊版的檔案留在 `cache/update/old/`，要自己搬回 maalc 的資料夾。
+- 遊戲資料的資源包照舊在任務開始時自己更新（[ADR 0012](docs/adr/0012-resource-package-hot-update.md)），和程式更新互不影響。
 
 從 v1.0.0 升級：把新 zip 解壓到新資料夾，再把舊資料夾的 `config/` 複製過去。設定視窗第一次打開時把設定檔升到版本 23，舊檔另存成 `config/settings.v22.json`。同時從 `config/mxu-maalc.json`（MXU 上次用的實例）讀回任務選項、任務清單的勾選與順序、模擬器位址；沒有 MXU 的檔就從 `config/settings.v20.json` 讀回任務選項，再沒有就用預設值。讀到什麼、哪些沒讀到要重填，在分頁上方列一次。MXU 的檔只讀不寫。webhook 在 MXU 裡加密存放，一定要重填。用 MFAAvalonia 的人要自己重設任務選項。
 

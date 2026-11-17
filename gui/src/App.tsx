@@ -15,6 +15,7 @@ import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
 import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
+import { FailureNotice, OutcomeNotice, UpdateChip, type Failure, type Update, type UpdateStep } from "./Update";
 import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
@@ -124,6 +125,19 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
     return () => { live = false; };
   }, []);
+  // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
+  // its last step failed and how the last apply went (read at the window's start), each above every tab until dismissed.
+  const [update, setUpdate] = useState<Update | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [outcome, setOutcome] = useState<api.UpdateOutcome | null>(null);
+  useEffect(() => {
+    // a check that fails says nothing; the development build asks twice, and the backend answers both from one check
+    api.checkUpdate().then(({ current, release }) => {
+      if (release) setUpdate((u) => u ?? { current, release, at: { step: "available" } });
+    }, () => {});
+    api.lastUpdate().then((o) => { if (o) setOutcome(o); }, () => {});
+  }, []);
+  const stepTo = (at: UpdateStep) => setUpdate((u) => u && { ...u, at });
 
   /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
   const sync = async () => {
@@ -361,6 +375,34 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       setStarting(false);
     }
   };
+  /** Apply the downloaded update: the window closes for it, so unsaved edits are saved first, as Start saves them; a save the
+   * checks refuse applies nothing, and says why as any save does. It waits while a run is under way, as the backend does. */
+  const applyUpdate = async () => {
+    if (isRunning(runRef.current)) return;
+    stepTo({ step: "applying" });
+    if (unsaved() && !(await save())) return stepTo({ step: "ready" });
+    try {
+      await api.applyUpdate(); // the window exits: the new version opens once it replaced the files
+    } catch (e) {
+      if (api.isRunUnderWay(e)) return stepTo({ step: "ready" }); // a run started meanwhile
+      setFailure({ why: "apply", error: String(e) });
+      stepTo({ step: "failed" });
+    }
+  };
+  /** Download the newer release, check its sha256 and unpack it, then apply it unless a run is under way. A run may start
+   * meanwhile: the apply then waits for it to end. */
+  const startUpdate = async () => {
+    setFailure(null);
+    stepTo({ step: "download", received: 0, total: update?.release.size ?? 0 });
+    try {
+      await api.downloadUpdate((p) => stepTo(p.step === "download" ? { step: "download", received: p.received, total: p.total } : { step: p.step }));
+    } catch (e) {
+      setFailure({ why: api.isMismatch(e) ? "mismatch" : "download", error: String(e) });
+      return stepTo({ step: "failed" });
+    }
+    stepTo({ step: "ready" });
+    await applyUpdate();
+  };
   const runner: Runner = {
     view: run,
     start: () => { startRun(); },
@@ -429,6 +471,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       <TitleBar inert={!!asking}>
         <h1>{t("title")}</h1>
         <span className="muted path" title={`${root}\\config\\settings.json`}>{root}\config\settings.json</span>
+        {update && <UpdateChip update={update} running={isRunning(run)} onUpdate={() => { startUpdate(); }} onApply={() => { applyUpdate(); }} />}
         <label className="lang"><span>{t("language")}</span>
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
@@ -463,6 +506,9 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
           <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
+          {/* why the update stopped, and how the last apply went (#817) */}
+          {failure && update && <FailureNotice version={update.release.version} failure={failure} onDismiss={() => setFailure(null)} />}
+          {outcome && <OutcomeNotice outcome={outcome} onDismiss={() => setOutcome(null)} />}
           {/* an older file's run values read back, once (#814) */}
           {report && <ReadBackNotice report={report} onDismiss={() => setReport(null)} />}
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}

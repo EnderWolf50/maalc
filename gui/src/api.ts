@@ -127,6 +127,41 @@ export const scanDevices = (): Promise<Device[]> =>
 export const hideToTray = (text: { tip: string; show: string; stop: string }): Promise<boolean> =>
   tauri ? invoke("hide_to_tray", { text }) : Promise.resolve(false);
 
+/** A release newer than this build that the window can update to (lib.rs check_update, update.rs Release). */
+export interface Release { tag: string; version: string; page: string; zip: string; size: number; sha256: string }
+/** How far a download is (update.rs Progress): the bytes so far, then the sha256 check, then the unpack. */
+export type UpdateProgress = { step: "download"; received: number; total: number } | { step: "verify" } | { step: "extract" };
+/** How the last apply went (update.rs Outcome): `applying` is one cut short; `restored`, for `failed`: all of it went back. */
+export interface UpdateOutcome { state: "applying" | "done" | "failed"; from: string; to: string; error: string | null; restored: boolean }
+
+/** This build's version and the newer release GitHub has, asked at most once a day (lib.rs check_update); none when the check
+ * fails. A plain browser has no update. */
+export const checkUpdate = (): Promise<{ current: string; release: Release | null }> =>
+  tauri ? invoke("check_update") : Promise.resolve({ current: "", release: null });
+
+/** How the last apply went, for the page to show (lib.rs last_update); null when there is nothing to show. */
+export const lastUpdate = (): Promise<UpdateOutcome | null> => (tauri ? invoke("last_update") : Promise.resolve(null));
+
+/** Download the newer release, check its sha256 and unpack it (lib.rs download_update); `onProgress` hears how far it is. */
+export function downloadUpdate(onProgress: (p: UpdateProgress) => void): Promise<void> {
+  if (!tauri) return Promise.reject(new Error("the update runs only in the app"));
+  const c = new Channel<UpdateProgress>();
+  c.onmessage = onProgress;
+  return invoke("download_update", { onProgress: c });
+}
+
+/** Apply the downloaded release: this window exits, and the new version replaces the files and opens (lib.rs apply_update).
+ * Refused while a run is under way. */
+export const applyUpdate = (): Promise<void> =>
+  tauri ? invoke("apply_update") : Promise.reject(new Error("the update runs only in the app"));
+
+/** The start of the error of a download whose sha256 is not GitHub's (update.rs MISMATCH). */
+export const MISMATCH = "sha256 mismatch";
+export const isMismatch = (e: unknown) => String(e).includes(MISMATCH);
+/** The error of what a run refuses, an apply too (lib.rs RUN_UNDER_WAY). */
+export const RUN_UNDER_WAY = "a run is under way";
+export const isRunUnderWay = (e: unknown) => String(e).includes(RUN_UNDER_WAY);
+
 /** Ask the window to close, as Alt+F4 does: the page's title bar ✕ (tauri.conf.json has no system bar). The request goes
  * to the onCloseRequested listener, which keeps the window open while it asks. */
 export const requestClose = (): Promise<void> => (tauri ? getCurrentWindow().close() : Promise.resolve());

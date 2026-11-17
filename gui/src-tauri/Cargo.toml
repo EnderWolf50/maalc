@@ -19,6 +19,12 @@ serde_json = "1"
 tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
 # a second start hands its arguments to the window that is open (#815)
 tauri-plugin-single-instance = "2"
+# The self-update (src/update.rs, #817): the release check and the download over Windows' own TLS and certificate store, the
+# zip's sha256 (the version tauri-codegen already locks), the release's version against this one, and the zip it unpacks.
+semver = "1"
+sha2 = "0.10"
+ureq = { version = "3", default-features = false, features = ["native-tls-no-default"] }
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 # The runner's process tree in a Job Object (src/runner.rs); the version Tauri's own dependencies already lock.
 [target.'cfg(windows)'.dependencies]

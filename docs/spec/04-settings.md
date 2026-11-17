@@ -432,9 +432,10 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 | `<root>/config/settings.v<版本>.json` | GUI | 遷移前的舊設定檔，原樣另存（第 2 節） | 從舊版升級後查看或讀回舊值 | #782、#813 |
 | `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算每層時間上限；不用於接續判斷 | #14、#19 |
 | `<root>/logs/evidence/<時間>/` | Agent | 停止時保存的證據 | 除錯與通知 | #14、#19 |
+| `<root>/cache/update/` | GUI | 程式自動更新（`gui/src-tauri/src/update.rs`）：`check.json` 是上次查 GitHub 最新正式版的時間與找到的版本，每天最多查一次，失敗也算；`v<版本>/` 是下載、比對 sha256 後解壓、等著套用的新版；`old/` 是套用時換下來的舊版，下次啟動時刪掉；`apply.json` 是套用的結果，下次啟動的視窗顯示一次。套用沒做完或沒能全部還原時，`old/` 與 `apply.json` 留著，視窗每次啟動都提醒，直到使用者清掉 `old/` | 更新 | #811、#817 |
 
 - Agent 沒有狀態檔：下一局輪到誰在設定檔的隊伍佇列（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)），其他狀態每次都從畫面讀（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。（#8、#501）
-- 這些檔案都放在 `<root>` 底下 maalc 自己的子目錄（`config/`、`logs/`）。從 v1.0.0 複製過來的 `config/` 可能還有 MXU 的 `mxu-maalc.json` 與隊伍選項檔 `team_options.json`；版本 23 起沒有程式寫它們：設定視窗遷移版本 21、22 的檔時讀一次 `mxu-maalc.json`、`team_options.json` 與 `settings.v20.json`（第 2 節版本 23），只讀不寫；Tauri 的 `load_read_back` 只肯讀這三個檔（#814）。（#6、#19、#813）
+- 這些檔案都放在 `<root>` 底下 maalc 自己的子目錄（`config/`、`logs/`、`cache/`）；程式自動更新不動 `config/`、`logs/`、`state/`、`cache/`、`debug/`（#817）。從 v1.0.0 複製過來的 `config/` 可能還有 MXU 的 `mxu-maalc.json` 與隊伍選項檔 `team_options.json`；版本 23 起沒有程式寫它們：設定視窗遷移版本 21、22 的檔時讀一次 `mxu-maalc.json`、`team_options.json` 與 `settings.v20.json`（第 2 節版本 23），只讀不寫；Tauri 的 `load_read_back` 只肯讀這三個檔（#814）。（#6、#19、#813）
 - 寫入設定檔必須先寫暫存檔再改名，GUI 與 Agent 都一樣。（#6、#501）
 - 時間上限每隊各自計算，每層一份：45 分鐘；該隊有 10 局以上的記錄、p95 × 2 平分到這局的 `target_floor` 層（只算同一目標的局）比 45 分鐘長時用它。見 [06-recovery.md](06-recovery.md)。（#14、#19，2026-10-14 定案；#66 改成每層）
 - 「重置時間記錄」在 `runs.jsonl` 附加一行該隊 id 的重置標記。只有最新一個標記之後的記錄算進時間上限；舊記錄保留，不刪除。（#14、#19，2026-10-14 定案）
