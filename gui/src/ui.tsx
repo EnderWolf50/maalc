@@ -24,9 +24,9 @@ export interface Ctx {
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
 }
-/** The lists whose tab shows one item at a time. */
-export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans"] as const;
-export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams">;
+/** The lists whose tab shows one item at a time: the Run tab shows the picked task's options (#814). */
+export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans", "tasks"] as const;
+export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams" | "tasks">;
 /** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
 export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
 export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);

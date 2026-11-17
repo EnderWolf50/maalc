@@ -268,6 +268,18 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .problems li button:hover { color: var(--bad); }
 .problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
+/* The values a migrated file read back once (#814): above the tab's content, as the problems, until dismissed. */
+.readback {
+  margin: 0 0 16px; padding: 10px 16px 12px; background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: 10px 0 10px 0; corner-shape: bevel;
+}
+.readback h3 { margin: 0 0 6px; font-size: 14px; color: var(--accent-ink); }
+.readback p { margin: 0 0 6px; font-size: 13px; color: var(--fg-2); max-width: 64em; }
+.readback h4 { margin: 8px 0 4px; font-size: 13px; color: var(--fg); }
+.readback ul { margin: 0 0 8px; padding-left: 22px; font-size: 13px; color: var(--fg); }
+.readback li + li { margin-top: 2px; }
+.readback ul.missed li { color: var(--accent-ink); }
+
 /* The close prompt (WindowControls.tsx LeavePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ask {
@@ -391,6 +403,21 @@ fieldset.queue { align-items: stretch; }
 .queue-body ol.reorder { flex: 0 1 480px; }
 .queue-body > p.muted { flex: 1 1 260px; font-size: 12.5px; }
 .qtag.next { color: var(--accent-ink); border-color: var(--accent-line); background: var(--sel); }
+/* The Run tab (#814): the emulator on top, the task list beside the picked task's options, the global options, then the
+ * runner's place (its Start, Stop and live log come with #811's next ticket). */
+.run-page { display: flex; flex-direction: column; gap: 18px; }
+.run-page fieldset.emulator, .run-page fieldset.globals { align-items: stretch; }
+.run-page .emulator .row .field { min-width: 15em; }
+.task-list h3, .task-options h3 { margin: 0; font: 700 15px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
+.task-options h3 code { margin-left: 8px; font: 500 12.5px/1 Consolas, monospace; letter-spacing: 0; color: var(--muted); }
+.task-row { display: flex; align-items: center; gap: 8px; }
+.task-row > input[type="checkbox"] { margin: 0; flex: none; }
+/* the Mirror Dungeon task's options in groups, two side by side where they fit */
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
+.groups .grid, fieldset.globals .grid { width: 100%; }
+.groups .grid > .check.wide { grid-column: 1 / -1; }
+.field small.caution { color: var(--fg); }
+.runner-slot { padding: 12px 14px; border: 1px dashed var(--line-2); border-radius: 10px 0 10px 0; corner-shape: bevel; }
 /* a team's slot, as the game's TEAMS number plate shows it */
 .team-list ol.reorder .item small, .queue ol.reorder .item small {
   margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
@@ -804,6 +831,7 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   ol.skill-sinners > li { flex-wrap: wrap; row-gap: 4px; }
   .skill-pillcell { flex: 1 1 auto; width: auto; }
   .sinners { gap: 6px; }
+  .groups { grid-template-columns: 1fr; }
 }
 
 /* A short window: the side column scrolls with the page, so its last buttons are never cut off below the fold. */

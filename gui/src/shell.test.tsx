@@ -1,27 +1,42 @@
 // The editor's shell (App.tsx): the main tabs from the keyboard, and the save state in the header when a save is refused.
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam } from "./model";
+import { READ_BACK_FILES } from "./readBack";
 import { queuedTeams, sideList } from "./testing";
 import { cases, olderFile, v20File, v21File } from "./settingsCases";
 
 const zh = TEXT.zh_tw;
-// old: each [version, text] kept aside, oldFail the error that meets (#782); writes: the files written, in turn
+// old: each [version, text] kept aside, oldFail the error that meets (#782); writes: the files written, in turn; back: the
+// read-back files of config/ by name (#814), an Error one that cannot be read, reads the names read; agentFirst: the
+// file the Agent writes just before the next save, which that save then meets (#501)
 const file = vi.hoisted(() => ({
   text: "", saved: [] as string[], fail: "", old: [] as [number, string][], oldFail: "", writes: [] as string[],
+  back: {} as Record<string, string | Error>, reads: [] as string[], agentFirst: null as string | null,
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
   loadSettings: () => Promise.resolve(file.text),
   saveSettings: (text: string) => {
     if (file.fail) return Promise.reject(new Error(file.fail));
+    if (file.agentFirst !== null) {
+      file.text = file.agentFirst;
+      file.agentFirst = null;
+      return Promise.reject("settings.json changed on disk");
+    }
     file.saved.push(text);
     file.writes.push("settings");
+    file.text = text;
     return Promise.resolve();
+  },
+  loadReadBack: (name: string) => {
+    file.reads.push(name);
+    const f = file.back[name];
+    return f instanceof Error ? Promise.reject(f) : Promise.resolve(f ?? null);
   },
   saveOldSettings: (version: number, text: string) => {
     if (file.oldFail) return Promise.reject(new Error(file.oldFail));
@@ -47,6 +62,9 @@ beforeEach(() => {
   file.old = [];
   file.oldFail = "";
   file.writes = [];
+  file.back = {};
+  file.reads = [];
+  file.agentFirst = null;
 });
 
 test("the arrow keys move along the main tabs and open the one they reach; Home and End go to the ends", async () => {
@@ -65,28 +83,44 @@ test("the arrow keys move along the main tabs and open the one they reach; Home 
   await user.keyboard("{End}");
   expect(screen.getByRole("tab", { name: zh["tab.trials"] })).toHaveAttribute("aria-selected", "true");
   await user.keyboard("{Home}");
-  expect(teams).toHaveAttribute("aria-selected", "true");
-  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", teams.id);
+  const run = screen.getByRole("tab", { name: zh["tab.run"] });
+  expect(run).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("tabpanel")).toHaveAttribute("aria-labelledby", run.id);
 });
 
-test("the tabs come in three groups: the team, the plans, the overrides (#721)", async () => {
+test("the tabs come in four groups: what runs, the team, the plans, the overrides (#721, #814)", async () => {
   render(<App />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   // a separator between two groups shows as "|"
   const row = [...screen.getByRole("tablist").children].map((x) => (x.getAttribute("role") === "tab" ? x.textContent : "|"));
   expect(row).toEqual([
-    zh["tab.teams"], zh["tab.gifts"], "|",
+    zh["tab.run"], "|", zh["tab.teams"], zh["tab.gifts"], "|",
     zh["tab.deployment"], zh["tab.starlight"], zh["tab.themepacks"], "|", zh["tab.events"], zh["tab.trials"],
   ]);
 });
 
-test("no Run options or Daily tab: the task options are the settings file's again (#813), and the runner's tab edits them (#811)", async () => {
+test("one Run tab holds what the Run options and Daily tabs held, with the task list (#814); the window opens on the teams", async () => {
   render(<App />);
   await screen.findByRole("tab", { name: zh["tab.teams"] });
   const tabs = screen.getAllByRole("tab").map((x) => x.textContent);
   expect(tabs).not.toContain("執行選項");
   expect(tabs).not.toContain("日常");
-  expect(tabs).toHaveLength(7);
+  expect(tabs.filter((x) => x === zh["tab.run"])).toHaveLength(1);
+  expect(screen.getByRole("tab", { name: zh["tab.teams"] })).toHaveAttribute("aria-selected", "true");
+});
+
+test("a problem in a task's option opens the Run tab with that task picked, its field focused", async () => {
+  const s = newSettings();
+  s.luxcavation.thread.retries = -1; // the schema's minimum is 0
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App />);
+  const problems = await screen.findByRole("alert");
+  expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveClass("bad");
+  await user.click(within(problems).getByRole("button"));
+  expect(screen.getByRole("heading", { name: /紐本.*ThreadLuxcavation/ })).toBeVisible();
+  await waitFor(() => expect(screen.getByRole("spinbutton", { name: new RegExp(zh["lux.retries"]) })).toHaveFocus());
+  expect(document.querySelector(".task-list li.selected")).toHaveClass("bad");
 });
 
 describe("an older file (#782, #813)", () => {
@@ -115,10 +149,10 @@ describe("an older file (#782, #813)", () => {
   test("a version 21 file is written back with the queue in the order of its list", async () => {
     // the list b, a: the queue starts at b, as before the upgrade
     const old = v21File([{ set: "teams/0/id", value: "b" }, { set: "teams/1/id", value: "a" }]);
-    write(old);
+    const text = write(old);
     render(<App />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
-    expect(file.old).toEqual([[21, file.text]]);
+    expect(file.old).toEqual([[21, text]]);
     expect(JSON.parse(file.saved[0]).team_queue).toEqual(["b", "a"]);
   });
 
@@ -151,6 +185,131 @@ describe("an older file (#782, #813)", () => {
   });
 });
 
+describe("the read-back of a v1.0.0 install's run values (#814)", () => {
+  const write = (data: unknown) => (file.text = JSON.stringify(data, null, 2) + "\n");
+  const opt = (type: string, v: Record<string, unknown>) => ({ type, ...v });
+  /** MXU's config file: Mirror Dungeon on hard from a team deleted since, EXP Luxcavation on team a, the webhook encrypted. */
+  const mxu = JSON.stringify({
+    version: "1.0", lastActiveInstanceId: "i1",
+    instances: [{
+      id: "i1", name: "Main", controllerName: "MuMu", savedDevice: { adbDeviceName: "MuMu", adbDeviceAddress: "127.0.0.1:16384" },
+      tasks: [
+        { id: "t1", taskName: "MirrorDungeon", enabled: true, optionValues: {
+          MirrorDifficulty: opt("select", { caseName: "hard" }), MirrorStartTeam: opt("select", { caseName: "gone" }),
+        } },
+        { id: "t2", taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpTeam: opt("select", { caseName: "a" }) } },
+      ],
+    }],
+    globalOptionValues: { WebhookUrl: opt("input", { values: { url: "" }, encryptedValues: { url: "eA==" } }) },
+  });
+  const notice = () => screen.findByRole("region", { name: zh["rb.title"] });
+
+  test("a version 22 file is written as 23 with MXU's values, and the notice lists what came back and what did not, once", async () => {
+    write(olderFile(22));
+    file.back = { "mxu-maalc.json": mxu };
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    const saved = JSON.parse(file.saved[0]);
+    expect([saved.version, saved.run.difficulty, saved.run.start_team, saved.luxcavation.exp.team, saved.emulator.address])
+      .toEqual([23, "hard", null, "a", "127.0.0.1:16384"]);
+    expect(saved.tasks.slice(0, 2)).toEqual([{ id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true }]);
+    // MXU's file and the others are only read
+    expect(file.writes).toEqual(["old", "settings"]);
+    expect([...file.reads].sort()).toEqual(["mxu-maalc.json", "settings.v20.json", "team_options.json"]);
+    const shown = await notice();
+    for (const text of [
+      fill(zh["rb.from_mxu"], { version: 22, instance: "Main" }),
+      fill(zh["rb.row"], { where: "鏡牢 · 難度", value: "困難" }),
+      fill(zh["rb.row"], { where: "經驗本 · 隊伍", value: "Team a（TEAMS #1）" }),
+      fill(zh["rb.tasks"], { tasks: "鏡牢、經驗本" }),
+      fill(zh["rb.address"], { address: "127.0.0.1:16384" }),
+      zh["rb.missed"], zh["rb.webhook"],
+      fill(zh["rb.team"], { where: "鏡牢 · 這次從哪一支隊伍開始", team: "gone", none: "照隊伍佇列" }),
+    ]) expect(shown).toHaveTextContent(text);
+    // over every tab, until dismissed
+    await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));
+    await user.click(within(await notice()).getByRole("button", { name: zh["rb.dismiss"] }));
+    expect(screen.queryByRole("region", { name: zh["rb.title"] })).toBeNull();
+  });
+
+  test("in English too", async () => {
+    write(olderFile(22, [{ set: "language", value: "en_us" }]));
+    file.back = { "mxu-maalc.json": mxu };
+    render(<App />);
+    const shown = await screen.findByRole("region", { name: TEXT.en_us["rb.title"] });
+    expect(shown).toHaveTextContent(fill(TEXT.en_us["rb.row"], { where: "Mirror Dungeon · Difficulty", value: "Hard" }));
+    expect(shown).toHaveTextContent(TEXT.en_us["rb.webhook"]);
+  });
+
+  test("with neither MXU's file nor settings.v20.json, the notice says the options are at their defaults, no task ticked", async () => {
+    write(olderFile(22));
+    render(<App />);
+    const shown = await notice();
+    expect(shown).toHaveTextContent(fill(zh["rb.from_defaults"], { version: 22 }));
+    expect(shown).toHaveTextContent(zh["rb.read_none"]);
+    expect(shown).toHaveTextContent(zh["rb.tasks_default"]);
+    expect(JSON.parse(file.saved[0]).tasks).toEqual(cases.valid.tasks);
+  });
+
+  test("a version 23 file reads nothing back and shows no notice", async () => {
+    file.back = { "mxu-maalc.json": mxu };
+    render(<App />);
+    await screen.findByRole("button", { name: zh.save });
+    expect(file.reads).toEqual([]);
+    expect(screen.queryByRole("region", { name: zh["rb.title"] })).toBeNull();
+  });
+
+  test("a file the checks refuse shows its notice once the save that fixes it writes it", async () => {
+    write(olderFile(22, [{ set: "teams/1/game_team", value: 1 }])); // two enabled teams on TEAMS #1
+    file.back = { "mxu-maalc.json": mxu };
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
+    expect(screen.queryByRole("region", { name: zh["rb.title"] })).toBeNull();
+    await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
+    await user.click(within(document.querySelector("aside")!).getByText("Team b"));
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["team.game_team"] }), { target: { value: "2" } });
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect(JSON.parse(file.saved[0]).run.difficulty).toBe("hard");
+    expect(await notice()).toHaveTextContent(fill(zh["rb.from_mxu"], { version: 22, instance: "Main" }));
+  });
+
+  test("the Agent's write of the old file before the write-back keeps the values read back", async () => {
+    const old = olderFile(22);
+    write(old);
+    file.back = { "mxu-maalc.json": mxu };
+    // the Agent moves team a to the end of the queue and writes the file at its own version (spec 04 section 2)
+    file.agentFirst = JSON.stringify({ ...old, team_queue: ["b", "a"] }, null, 2) + "\n";
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(file.agentFirst).toBeNull());
+    act(() => { window.dispatchEvent(new Event("focus")); }); // the editor reads the file again
+    expect(await screen.findByText(zh.diskChanged)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    const saved = JSON.parse(file.saved[0]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([23, ["b", "a"], "hard", "a"]);
+    expect(await notice()).toBeVisible();
+  });
+
+  test("an unreadable file is said so, and the next one is read", async () => {
+    write(olderFile(22));
+    file.back = { "mxu-maalc.json": new Error("access denied"), "settings.v20.json": JSON.stringify(v20File([{ set: "run/difficulty", value: "normal" }])) };
+    render(<App />);
+    const shown = await notice();
+    expect(shown).toHaveTextContent(fill(zh["rb.problem"], { why: "mxu-maalc.json: Error: access denied" }));
+    expect(shown).toHaveTextContent(fill(zh["rb.from_v20"], { version: 22 }));
+    expect(JSON.parse(file.saved[0]).run.difficulty).toBe("normal");
+  });
+
+  test("the files it reads are the three lib.rs load_read_back allows", () => {
+    const names = Object.values(READ_BACK_FILES).map((x) => `"${x}"`).join(", ");
+    expect(libRs).toContain(`const READ_BACK: [&str; 3] = [${names}];`);
+  });
+});
+
 test("a save keeps the task options, the task list, the emulator and the schedules it has no editor for (#813)", async () => {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "Ta")]));
@@ -168,8 +327,10 @@ test("a save keeps the task options, the task list, the emulator and the schedul
   await waitFor(() => expect(file.saved).toHaveLength(1));
   const saved = JSON.parse(file.saved[0]);
   expect(saved.teams[0].name).toBe("Ta!");
-  const kept = ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules"] as const;
+  const kept = ["run", "luxcavation", "charge_enkephalin", "emulator", "schedules"] as const;
   expect(Object.fromEntries(kept.map((k) => [k, saved[k]]))).toEqual(Object.fromEntries(kept.map((k) => [k, s[k]])));
+  // the tasks the list left out come last, unticked (#814)
+  expect(saved.tasks).toEqual([...s.tasks, ...cases.valid.tasks.filter((x) => !s.tasks.some((y) => y.id === x.id))]);
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

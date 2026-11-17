@@ -81,6 +81,26 @@ fn save_old_settings(version: u32, text: String) -> Result<(), String> {
     replace(&path, &text, || Ok(())).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// The files of an older install's config/ the GUI reads back once, when it migrates a settings file of version 22 or older
+/// to 23 (#814, readBack.ts READ_BACK_FILES): MXU's config, the team options file v1.0.0's GUI wrote, and the settings file
+/// it kept before its own migration (#782). The GUI only reads them.
+const READ_BACK: [&str; 3] = ["mxu-maalc.json", "team_options.json", "settings.v20.json"];
+
+/// Where a read-back file is under `root`; any other name is refused.
+fn read_back_path(root: &Path, name: &str) -> Result<PathBuf, String> {
+    if READ_BACK.contains(&name) {
+        Ok(root.join("config").join(name))
+    } else {
+        Err(format!("{name}: not a file the read-back reads"))
+    }
+}
+
+/// A read-back file's text, or None when it is not there.
+#[tauri::command]
+fn load_read_back(name: String) -> Result<Option<String>, String> {
+    read_if_there(&read_back_path(&root()?, &name)?).map_err(|e| e.to_string())
+}
+
 /// <root>/resource/base/data: resource/ sits under <root> in a release and under assets/ in the repo, the same lookup as
 /// agent/actions.py.
 fn data_dir() -> Result<PathBuf, String> {
@@ -194,6 +214,7 @@ pub fn run() {
             load_game_data,
             save_settings,
             save_old_settings,
+            load_read_back,
             append_runs_log
         ])
         .run(tauri::generate_context!())
@@ -236,6 +257,17 @@ mod tests {
     #[test]
     fn an_old_settings_file_is_named_by_its_version() {
         assert_eq!(old_settings_name(20), "settings.v20.json");
+    }
+
+    #[test]
+    fn the_read_back_reads_its_three_files_under_config_and_nothing_else() {
+        let root = Path::new("R");
+        for name in ["mxu-maalc.json", "team_options.json", "settings.v20.json"] {
+            assert_eq!(read_back_path(root, name).unwrap(), root.join("config").join(name));
+        }
+        for bad in ["settings.json", "settings.v22.json", "../mxu-maalc.json", "config/mxu-maalc.json", ""] {
+            assert!(read_back_path(root, bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

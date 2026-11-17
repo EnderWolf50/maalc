@@ -6,6 +6,9 @@ import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
+import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
+import { ReadBackNotice } from "./ReadBackNotice";
+import { RunTab, taskOfPath } from "./Run";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
@@ -14,6 +17,7 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
+  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator"]],
   ["teams", "tab.teams", TeamsTab, ["teams", "team_queue"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -25,15 +29,21 @@ export const TABS = [
 
 type TabId = (typeof TABS)[number][0];
 
-/** The tabs in groups (the team and its gift list; the plans; the overrides): the tabs that start a group after the first.
- * The task options (run, luxcavation, charge_enkephalin) and the task list, emulator and schedules are the settings
- * file's again since version 23 (#813); the tab that edits them comes with the runner (#811), and a save keeps them. */
-const GROUP_STARTS = new Set<TabId>(["deployment", "events"]);
+/** The tabs in groups (what runs: the task list and its options; the team and its gift list; the plans; the overrides): the
+ * tabs that start a group after the first. The Run tab edits the settings file's task options, task list and emulator
+ * (version 23, #813, #814); a save keeps the schedules, which no tab edits yet (#811). */
+const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
 const sayStatus = (lang: Settings["language"], status: string) =>
   Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
+/** config/'s files the read-back reads (#814), each as read: a file that cannot be read says why, which the notice shows. */
+async function readBackFiles(): Promise<ReadBackFiles> {
+  const read = (name: string) => api.loadReadBack(name).catch((e: unknown) => ({ error: String(e) }));
+  const [mxu, teamOptions, v20] = await Promise.all([READ_BACK_FILES.mxu, READ_BACK_FILES.teamOptions, READ_BACK_FILES.v20].map(read));
+  return { mxu, teamOptions, v20 };
+}
 /** The element id of the problem at this place in the problems block. */
 const problemId = (i: number) => `problem-${i}`;
 /** The tab that edits a settings path ("teams/1/name"), if any ("(root)" has none). */
@@ -79,6 +89,23 @@ export default function App() {
   const [revertedFrom, setRevertedFrom] = useState<Settings | null>(null);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
+  // An older file's read-back (#814): config/'s files as the load read them, so the old file read again (the Agent writes
+  // back the version it read, #501) reads the same values back; and its report, which shows once the file is written as
+  // the current version, until dismissed.
+  const backFiles = useRef<ReadBackFiles | null>(null);
+  const pending = useRef<Report | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
+  /** The file is written: an older one's read-back is done, and its notice shows. */
+  const wroteBack = () => {
+    if (!pending.current) return;
+    setReport(pending.current);
+    pending.current = null;
+  };
+  /** A file's settings as the editor holds them: migrated, and an older one's run values read back. */
+  const settingsOf = (text: string) => {
+    const parsed = parseSettings(text);
+    return parsed.old && backFiles.current ? readBack(parsed.data, parsed.old.version, backFiles.current).data : parsed.data;
+  };
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
 
@@ -89,7 +116,7 @@ export default function App() {
     if (text === disk.current || !draft) return draft;
     let data: Settings | undefined;
     try {
-      data = text === null ? undefined : parseSettings(text).data;
+      data = text === null ? undefined : settingsOf(text);
     } catch {
       return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
     }
@@ -120,11 +147,20 @@ export default function App() {
       if (text === null) return setS(newSettings());
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
-        const { data, unknown, old } = parseSettings(text);
-        const migratedText = toText(data);
+        const parsed = parseSettings(text);
+        const { unknown, old } = parsed;
+        let data = parsed.data;
         // An older file is kept aside before anything writes over it, a save of a file the checks refuse too (#782). When
         // it cannot be, the load fails with why, and nothing is written.
-        if (old) await api.saveOldSettings(old.version, text);
+        if (old) {
+          await api.saveOldSettings(old.version, text);
+          // the run values a v1.0.0 install held outside the file come back once (#814); a version 23 file reads none
+          backFiles.current = await readBackFiles();
+          const back = readBack(data, old.version, backFiles.current);
+          data = back.data;
+          pending.current = back.report;
+        }
+        const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
         // written back only when it passes the checks: a file they refuse waits for the user's fixes and a save
@@ -132,6 +168,7 @@ export default function App() {
           try {
             await api.saveSettings(migratedText, text);
             disk.current = migratedText;
+            wroteBack();
           } catch (e) {
             if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file, and a save writes it back
           }
@@ -272,6 +309,7 @@ export default function App() {
         disk.current = written;
         latest.current = { s: current, savedText: written };
         setSavedText(written);
+        wroteBack();
         setStatus("saved");
         return true;
       }
@@ -310,8 +348,10 @@ export default function App() {
   const goTo = (path: string) => {
     const [section, index] = path.split("/");
     const at = Number(index);
+    const task = taskOfPath(path); // a task option shows with its task picked
     if (section === "gift_lists" && s.gift_lists[at]) setGiftList(s.gift_lists[at].id);
     else if (isPickList(section) && s[section][at]) ctx.pick(section, s[section][at].id);
+    else if (task) ctx.pick("tasks", task);
     setTab(tabOf(path)![0]);
     setJump(path);
   };
@@ -375,6 +415,8 @@ export default function App() {
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
           <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
+          {/* an older file's run values read back, once (#814) */}
+          {report && <ReadBackNotice report={report} onDismiss={() => setReport(null)} />}
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
           {shown.length > 0 && (
             <div className="problems" role="alert">

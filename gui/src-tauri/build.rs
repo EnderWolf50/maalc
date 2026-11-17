@@ -8,6 +8,7 @@ fn main() {
             "load_game_data",
             "save_settings",
             "save_old_settings",
+            "load_read_back",
             "append_runs_log",
         ]),
     ))
