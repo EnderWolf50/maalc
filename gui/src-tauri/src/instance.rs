@@ -16,7 +16,7 @@ pub struct SecondStart {
 
 impl SecondStart {
     /// This process's own start.
-    pub fn this() -> SecondStart {
+    pub fn of_this_process() -> SecondStart {
         SecondStart {
             args: std::env::args_os().map(|a| a.to_string_lossy().into_owned()).collect(),
             cwd: std::env::current_dir().map(|d| d.display().to_string()).unwrap_or_default(),
@@ -27,7 +27,7 @@ impl SecondStart {
 /// How long a second start waits for the window's pipe (the window may be starting too).
 pub const FORWARD_WAIT: Duration = Duration::from_secs(10);
 /// The most a second start may send.
-const MOST: u64 = 64 * 1024;
+const MAX_FORWARD_BYTES: u64 = 64 * 1024;
 
 /// The mutex the window of a folder holds, per logon session.
 fn mutex_name(key: &str) -> String {
@@ -88,7 +88,7 @@ fn pipe(key: &str) -> Result<std::fs::File, String> {
     let name = wide(&pipe_name(key));
     let handle = unsafe {
         CreateNamedPipeW(name.as_ptr(), PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
-            PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, MOST as u32, 0, std::ptr::null())
+            PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 0, MAX_FORWARD_BYTES as u32, 0, std::ptr::null())
     };
     if handle == INVALID_HANDLE_VALUE {
         return Err(format!("CreateNamedPipe {}: {}", pipe_name(key), std::io::Error::last_os_error()));
@@ -96,33 +96,48 @@ fn pipe(key: &str) -> Result<std::fs::File, String> {
     Ok(unsafe { std::fs::File::from_raw_handle(handle as _) })
 }
 
+/// Wait for the second start that connects to `one`, the folder's pipe, and read what it wrote, then let it go: the pipe has
+/// one instance, which a start still connected (it wrote more than it may) would keep. None for what is not a start.
+#[cfg(windows)]
+fn take_start(one: &mut std::fs::File) -> Option<SecondStart> {
+    use std::io::Read;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_NO_DATA, ERROR_PIPE_CONNECTED};
+    use windows_sys::Win32::System::Pipes::{ConnectNamedPipe, DisconnectNamedPipe};
+    // A start that connected before this wait (ERROR_PIPE_CONNECTED), or that already wrote and closed its end
+    // (ERROR_NO_DATA), left its line in the pipe all the same: it is read either way.
+    let waited = unsafe { ConnectNamedPipe(one.as_raw_handle() as _, std::ptr::null_mut()) } != 0;
+    let connected = waited || matches!(unsafe { GetLastError() }, ERROR_PIPE_CONNECTED | ERROR_NO_DATA);
+    let mut text = String::new();
+    // the start writes one line and closes its end: the read ends there
+    let read = connected && one.by_ref().take(MAX_FORWARD_BYTES).read_to_string(&mut text).is_ok();
+    unsafe { DisconnectNamedPipe(one.as_raw_handle() as _) };
+    if read { serde_json::from_str(text.trim()).ok() } else { None }
+}
+
 /// Take each second start of the folder `key` on its pipe, in a thread of its own, and hand it to `each`. The first pipe is
 /// made before this returns, so a second start that comes at once finds it.
 #[cfg(windows)]
 pub fn serve(key: &str, each: impl Fn(SecondStart) + Send + 'static) -> Result<(), String> {
-    use std::io::Read;
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Foundation::{GetLastError, ERROR_PIPE_CONNECTED};
-    use windows_sys::Win32::System::Pipes::ConnectNamedPipe;
     let key = key.to_string();
     let first = pipe(&key)?;
     std::thread::spawn(move || {
-        let mut next = Some(first);
-        while let Some(mut one) = next.take() {
-            let connected = unsafe { ConnectNamedPipe(one.as_raw_handle() as _, std::ptr::null_mut()) } != 0
-                || unsafe { GetLastError() } == ERROR_PIPE_CONNECTED;
-            let mut text = String::new();
-            // the start writes one line and closes its end: the read ends there
-            if connected && (&mut one).take(MOST).read_to_string(&mut text).is_ok() {
-                if let Ok(start) = serde_json::from_str::<SecondStart>(text.trim()) {
-                    each(start);
+        let mut one = first;
+        loop {
+            if let Some(start) = take_start(&mut one) {
+                each(start);
+            }
+            drop(one);
+            // a pipe that cannot be made now is tried again: the window keeps taking second starts as long as it is open
+            one = loop {
+                match pipe(&key) {
+                    Ok(p) => break p,
+                    Err(e) => {
+                        eprintln!("second starts: {e}");
+                        std::thread::sleep(Duration::from_secs(1));
+                    }
                 }
-            }
-            drop(one); // the pipe has one instance: this one goes before the next is made
-            match pipe(&key) {
-                Ok(p) => next = Some(p),
-                Err(e) => eprintln!("second starts: {e}"),
-            }
+            };
         }
     });
     Ok(())
@@ -204,9 +219,19 @@ mod tests {
     }
 
     #[test]
+    fn a_second_start_that_wrote_and_ended_before_the_window_waited_for_it_is_still_taken() {
+        // the window was slow to wait on its pipe (a busy machine): the start connected, wrote its line and ended first
+        let k = key("early");
+        let mut one = pipe(&k).unwrap();
+        let start = SecondStart { args: vec!["maalc-gui.exe".into(), "--run".into(), "s1".into()], cwd: "C:\\".into() };
+        forward(&k, &start, FORWARD_WAIT).unwrap();
+        assert_eq!(take_start(&mut one), Some(start));
+    }
+
+    #[test]
     fn a_second_start_with_no_window_to_take_it_fails_after_its_wait() {
         let started = std::time::Instant::now();
-        let err = forward(&key("nobody"), &SecondStart::this(), Duration::from_millis(300)).unwrap_err();
+        let err = forward(&key("nobody"), &SecondStart::of_this_process(), Duration::from_millis(300)).unwrap_err();
         assert!(err.contains("maalc-gui-test-nobody"), "{err}");
         assert!(started.elapsed() >= Duration::from_millis(300));
     }

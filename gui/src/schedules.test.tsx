@@ -39,7 +39,9 @@ vi.mock("./api", async (original) => ({
   syncSchedules: (list: Settings["schedules"]) => {
     back.syncs.push(structuredClone(list));
     if (back.syncFail) return Promise.reject(new Error(back.syncFail));
-    const done: Synced = { prefix: "maalc-1a2b3c4d-", written: list.map((x) => `maalc-1a2b3c4d-${x.id}`), kept: [], deleted: [], errors: back.syncErrors };
+    // a schedule whose id an error names was not written
+    const written = list.map((x) => `maalc-1a2b3c4d-${x.id}`).filter((name) => !back.syncErrors.some((e) => e.startsWith(`${name}:`)));
+    const done: Synced = { prefix: "maalc-1a2b3c4d-", written, kept: [], deleted: [], errors: back.syncErrors };
     return Promise.resolve(done);
   },
   closeWindow: () => { back.closed++; return Promise.resolve(); },
@@ -152,11 +154,15 @@ describe("the schedules' editor", () => {
     expect(await screen.findByText(fill(zh["sched.sync_failed"], { error: "Error: Task Scheduler: connect: Access is denied." }))).toBeVisible();
   });
 
-  test("a task the Task Scheduler refused is named with why", async () => {
+  test("a task the Task Scheduler refused is named with why, and its schedule shows no task name", async () => {
+    back.text = fileOf(settings([{ id: "s1", days: ["mon"], time: "05:10", wake: true }, { id: "s2", days: ["tue"], time: "06:00", wake: true }]));
     back.syncErrors = [`${PREFIX}s1: Task Scheduler: register: Access is denied.`];
     await open();
     expect(await screen.findByText(zh["sched.sync_errors"])).toBeVisible();
     expect(screen.getByText(`${PREFIX}s1: Task Scheduler: register: Access is denied.`)).toBeVisible();
+    const [s1, s2] = rows();
+    expect(within(s1).queryByText(fill(zh["sched.task"], { name: `${PREFIX}s1` }))).toBeNull();
+    expect(within(s2).getByText(fill(zh["sched.task"], { name: `${PREFIX}s2` }))).toBeVisible();
   });
 
   test("schedules the checks refuse (two with one id, by hand) write no task until fixed and saved", async () => {
@@ -189,6 +195,24 @@ describe("a scheduled run's start (--run <id>)", () => {
     send({ type: "event", event: "end", result: "succeeded" }, exit(0, true));
     await waitFor(() => expect(back.closed).toBe(1));
     expect(logged("[schedule] s1: the run ended; the window closes")).toBe(true);
+  });
+
+  test("a scheduled run brings the live log and Stop into view, once", async () => {
+    const seen: Element[] = [];
+    const was = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) { seen.push(this); };
+    try {
+      back.scheduled = [{ id: "s1", opened: true }];
+      const user = await open();
+      await waitFor(() => expect(seen).toHaveLength(1));
+      expect(seen[0]).toHaveClass("runner");
+      expect(within(seen[0] as HTMLElement).getByRole("button", { name: zh["runner.stop"] })).toBeEnabled();
+      await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
+      await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
+      expect(seen).toHaveLength(1); // back on the Run tab later, the page stays where the user is
+    } finally {
+      Element.prototype.scrollIntoView = was;
+    }
   });
 
   test("a window the schedule opened that has unsaved edits when the run ends stays open and says why", async () => {

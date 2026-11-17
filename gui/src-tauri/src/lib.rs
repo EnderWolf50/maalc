@@ -226,6 +226,26 @@ struct Scheduled {
     opened: bool,
 }
 
+impl Scheduled {
+    /// The scheduled run a start's arguments bring (`--run <id>`), if any: `opened` for this window's own start.
+    fn of(args: &[String], opened: bool) -> Option<Scheduled> {
+        schedule::run_arg(args).map(|id| Scheduled { id, opened })
+    }
+}
+
+/// The local time as logs/schedule.log dates a line (the page's schedule.ts stamp): YYYY-MM-DD HH:MM:SS.
+#[cfg(windows)]
+fn stamp() -> String {
+    let mut t = windows_sys::Win32::Foundation::SYSTEMTIME::default();
+    unsafe { windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut t) };
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
+}
+
+#[cfg(not(windows))]
+fn stamp() -> String {
+    String::new()
+}
+
 /// The `--run <id>` of this window's own start, and of each second start since, in order; the page takes them once its
 /// settings are read (and on each `scheduled` event), so one that comes while the page loads waits for it.
 #[derive(Default)]
@@ -247,12 +267,12 @@ async fn sync_schedules(schedules: Vec<schedule::Schedule>) -> Result<schedule::
     if cfg!(debug_assertions) && std::env::var_os("MAALC_ROOT").is_some() {
         return Err("a development build on MAALC_ROOT writes no scheduled task".into());
     }
-    let root = schedule::real(&root()?);
-    let exe = schedule::real(&std::env::current_exe().map_err(|e| e.to_string())?);
+    let root = schedule::real_path(&root()?);
+    let exe = schedule::real_path(&std::env::current_exe().map_err(|e| e.to_string())?);
     tauri::async_runtime::spawn_blocking(move || {
         let _one = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
         let tasks = schedule::TaskService::connect()?;
-        schedule::sync(&tasks, &schedules, &exe, &root, &|p| p.is_file())
+        schedule::sync(&tasks, &schedules, &exe, &root, &schedule::program_there)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -440,8 +460,8 @@ fn hide_to_tray(app: AppHandle, runs: tauri::State<Runs>, text: TrayText) -> Res
 /// `--run <id>` goes to the page, which runs it or says why not (spec #811 「定時執行」).
 fn second_start(app: &AppHandle, start: instance::SecondStart) {
     show_window(app);
-    if let Some(id) = schedule::run_arg(&start.args) {
-        app.state::<Pending>().0.lock().unwrap().push(Scheduled { id, opened: false });
+    if let Some(scheduled) = Scheduled::of(&start.args, false) {
+        app.state::<Pending>().0.lock().unwrap().push(scheduled);
         let _ = app.emit("scheduled", ());
     }
 }
@@ -449,29 +469,37 @@ fn second_start(app: &AppHandle, start: instance::SecondStart) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // One window per maalc folder: a start of a folder whose window is open hands it its arguments and ends here. The lock
-    // lives as long as this process.
-    let key = root().map(|r| schedule::folder_key(&schedule::real(&r))).unwrap_or_default();
-    let _lock = match instance::claim(&key) {
-        Ok(Some(lock)) => Some(lock),
-        Ok(None) => {
-            if let Err(e) = instance::forward(&key, &instance::SecondStart::this(), instance::FORWARD_WAIT) {
-                eprintln!("the window of this folder did not take this start: {e}");
+    // lives as long as this process. With no folder to key it by (no path of this exe), every start opens a window.
+    let this = instance::SecondStart::of_this_process();
+    let key = root().ok().map(|r| schedule::folder_key(&schedule::real_path(&r)));
+    let _lock = match key.as_deref().map(instance::claim) {
+        Some(Ok(None)) => {
+            let key = key.as_deref().unwrap_or_default();
+            if let Err(e) = instance::forward(key, &this, instance::FORWARD_WAIT) {
+                // the window that is open never got it: a scheduled run says so where the user looks for it
+                if let Some(s) = Scheduled::of(&this.args, false) {
+                    let _ = append_log("schedule.log", &format!("{} [schedule] {}: not run: the open window did not take it: {e}", stamp(), s.id));
+                }
             }
             return;
         }
-        Err(e) => {
+        Some(Ok(lock)) => lock,
+        Some(Err(e)) => {
             eprintln!("one window per folder: {e}");
             None
         }
+        None => None,
     };
-    let launch = schedule::run_arg(&instance::SecondStart::this().args).map(|id| Scheduled { id, opened: true });
+    let launch = Scheduled::of(&this.args, true);
     tauri::Builder::default()
         .manage(Runs::default())
         .manage(Pending(Mutex::new(launch.into_iter().collect())))
         .setup(move |app| {
             let handle = app.handle().clone();
-            if let Err(e) = instance::serve(&key, move |start| second_start(&handle, start)) {
-                eprintln!("second starts: {e}");
+            if let Some(key) = &key {
+                if let Err(e) = instance::serve(key, move |start| second_start(&handle, start)) {
+                    eprintln!("second starts: {e}");
+                }
             }
             // The page loads the game's images from the data folder through the asset protocol, whose static scope
             // (tauri.conf.json) is empty: that folder alone is opened to it, found the way load_game_data finds it. Without
@@ -586,5 +614,22 @@ mod tests {
             assert!(read_data(&dir, &names(&[bad]), &[]).is_err(), "{bad}");
             assert!(read_data(&dir, &[], &names(&[bad])).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_start_with_run_brings_its_scheduled_run_and_one_without_brings_none() {
+        let run = names(&["maalc-gui.exe", "--run", "s1"]);
+        // the window's own start opened it for the run (it closes after); a second start found it open
+        assert_eq!(Scheduled::of(&run, true), Some(Scheduled { id: "s1".into(), opened: true }));
+        assert_eq!(Scheduled::of(&run, false), Some(Scheduled { id: "s1".into(), opened: false }));
+        assert_eq!(Scheduled::of(&names(&["maalc-gui.exe"]), true), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_schedule_log_line_is_dated_as_the_page_dates_it() {
+        let t = stamp();
+        let shape: String = t.chars().map(|c| if c.is_ascii_digit() { '9' } else { c }).collect();
+        assert_eq!(shape, "9999-99-99 99:99:99", "{t}");
     }
 }

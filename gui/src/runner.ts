@@ -130,6 +130,9 @@ export interface Runner {
   start: () => void;
   stop: () => void;
   blocked: null | "problems" | "no_task" | "saving";
+  /** a scheduled run started (#816): the Run tab brings its log and Stop into view, then calls revealed */
+  reveal?: boolean;
+  revealed?: () => void;
 }
 
 export const RunnerContext = createContext<Runner>({ view: IDLE, start: () => {}, stop: () => {}, blocked: null });

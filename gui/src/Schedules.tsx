@@ -3,11 +3,11 @@
 // the section says how that went, each task's name, and what came of the last scheduled run's start. A run reads none of
 // this, so it stays open to edits during a run.
 import { fill, type Key } from "./i18n";
-import { DAYS, newSchedule, useSchedules, type Outcome } from "./schedule";
+import { DAYS, newSchedule, useSchedules, type ScheduleView } from "./schedule";
 import { Field, Input, Mark, useEditor, withBreaks } from "./ui";
 
 /** The last scheduled start as the section says it, in the window's language. */
-function sayOutcome(t: (k: Key) => string, id: string, at: string, o: Outcome) {
+function sayOutcome(t: (k: Key) => string, { id, at, outcome: o }: NonNullable<ScheduleView["last"]>) {
   const why = o.kind !== "refused" ? ""
     : typeof o.why === "object" ? o.why.error : t(o.why === "save" ? "sched.why_save" : `runner.blocked_${o.why}` as Key);
   return fill(t(`sched.last.${o.kind}` as Key), { id, at, why });
@@ -18,7 +18,12 @@ export function SchedulesSection() {
   const { synced, saved, last } = useSchedules();
   const list = s.schedules;
   const unsaved = JSON.stringify(list) !== saved;
-  const prefix = synced && "done" in synced ? synced.done.prefix : null;
+  // the task of each schedule the last sync wrote or found as it should be: one it could not write has none to name
+  const done = synced && "done" in synced ? synced.done : null;
+  const taskOf = (id: string) => {
+    const name = done ? done.prefix + id : "";
+    return done && (done.written.includes(name) || done.kept.includes(name)) ? name : null;
+  };
   const setDay = (i: number, day: string, on: boolean) => update((d) => {
     const had = d.schedules[i].days;
     d.schedules[i].days = DAYS.filter((x) => (x === day ? on : had.includes(x)));
@@ -61,7 +66,7 @@ export function SchedulesSection() {
                 </Mark>
                 <button type="button" className="danger" aria-label={fill(t("sched.remove"), { n: i + 1 })}
                   onClick={() => update((d) => { d.schedules.splice(i, 1); })}>{t("remove")}</button>
-                {prefix && !unsaved && <small className="task-name">{fill(t("sched.task"), { name: prefix + x.id })}</small>}
+                {!unsaved && taskOf(x.id) && <small className="task-name">{fill(t("sched.task"), { name: taskOf(x.id)! })}</small>}
               </li>
             );
           })}
@@ -71,7 +76,7 @@ export function SchedulesSection() {
         <button type="button" onClick={() => update((d) => { d.schedules.push(newSchedule(d.schedules)); })}>{t("sched.add")}</button>
       </div>
       <SyncState unsaved={unsaved} />
-      {last && <p className="sched-last" role="status">{sayOutcome(t, last.id, last.at, last.outcome)}</p>}
+      {last && <p className="sched-last" role="status">{sayOutcome(t, last)}</p>}
     </fieldset>
   );
 }

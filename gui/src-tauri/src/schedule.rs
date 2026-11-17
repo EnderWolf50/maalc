@@ -34,7 +34,7 @@ const DAYS: [(&str, &str); 7] = [
 const PREFIX: &str = "maalc-";
 
 /// The text of a path as the key and the tasks take it: no `\\?\` before it, `\` between its parts, no `\` after it.
-pub fn plain(path: &Path) -> String {
+pub fn path_text(path: &Path) -> String {
     let text = path.display().to_string().replace('/', "\\");
     let text = match text.strip_prefix(r"\\?\UNC\") {
         Some(share) => format!(r"\\{share}"),
@@ -47,8 +47,8 @@ pub fn plain(path: &Path) -> String {
 
 /// The path the Task Scheduler and a second start see of `path`: the real one where it exists (a junction resolved, the case
 /// the disk has), as plain text.
-pub fn real(path: &Path) -> PathBuf {
-    PathBuf::from(plain(&std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())))
+pub fn real_path(path: &Path) -> PathBuf {
+    PathBuf::from(path_text(&std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())))
 }
 
 /// FNV-1a, 64 bits: the same text gives the same number on every build (Rust's own hasher promises no such thing).
@@ -59,7 +59,7 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// The key of a maalc folder: 8 hex digits of its path, its case ignored as Windows ignores it. The single-instance lock and
 /// the task names use it (spec #811: a schedule belongs to one folder).
 pub fn folder_key(root: &Path) -> String {
-    let h = fnv1a(plain(root).to_lowercase().as_bytes());
+    let h = fnv1a(path_text(root).to_lowercase().as_bytes());
     format!("{:08x}", (h ^ (h >> 32)) as u32)
 }
 
@@ -109,7 +109,7 @@ pub fn task_xml(s: &Schedule, exe: &Path, root: &Path) -> Result<String, String>
     if days.is_empty() || s.days.iter().any(|d| !DAYS.iter().any(|(k, _)| k == d)) {
         return Err(format!("schedule {}: days {:?} are not one or more of mon to sun", s.id, s.days));
     }
-    let (exe, root) = (escape(&plain(exe)), escape(&plain(root)));
+    let (exe, root) = (escape(&path_text(exe)), escape(&path_text(root)));
     Ok(format!(
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -164,21 +164,16 @@ fn inside<'a>(xml: &'a str, tag: &str) -> Option<&'a str> {
     while let Some(at) = xml[from..].find(&open) {
         let start = from + at + open.len();
         let rest = &xml[start..];
-        match rest.chars().next() {
-            Some('>') => {
-                let body = &rest[1..];
-                return body.find(&format!("</{tag}>")).map(|end| &body[..end]);
-            }
-            Some(c) if c.is_whitespace() || c == '/' => {
-                let close = rest.find('>')?;
-                if rest[..close].trim_end().ends_with('/') {
-                    return Some("");
-                }
-                let body = &rest[close + 1..];
-                return body.find(&format!("</{tag}>")).map(|end| &body[..end]);
-            }
-            _ => from = start, // a longer tag that starts the same (<Enabled> in <EnabledX>)
+        if !rest.starts_with(|c: char| c == '>' || c == '/' || c.is_whitespace()) {
+            from = start; // a longer tag that starts the same (<Enabled> in <EnabledX>)
+            continue;
         }
+        let close = rest.find('>')?;
+        if rest[..close].trim_end().ends_with('/') {
+            return Some("");
+        }
+        let body = &rest[close + 1..];
+        return body.find(&format!("</{tag}>")).map(|end| &body[..end]);
     }
     None
 }
@@ -282,7 +277,7 @@ fn other_install(name: &str, prefix: &str) -> bool {
 
 /// Bring the tasks of the folder `root` in line with its settings' `schedules`, each to start `exe`: a task that is missing or
 /// does something else is written again, a task of this folder whose schedule is gone is deleted. A task of another maalc
-/// folder whose program `exists` says is gone (that folder moved or was deleted) is deleted too; one whose program is there
+/// folder whose program `exists` says is gone (that folder moved or was deleted; `program_there`) is deleted too; one whose program is there
 /// is another install's, and stays. A schedule that cannot be a task (a hand-edited id, time or days) is left out with why,
 /// and a task of its id stays as it was.
 pub fn sync(tasks: &dyn Scheduler, schedules: &[Schedule], exe: &Path, root: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<Synced, String> {
@@ -336,6 +331,12 @@ pub fn sync(tasks: &dyn Scheduler, schedules: &[Schedule], exe: &Path, root: &Pa
         }
     }
     Ok(done)
+}
+
+/// Whether the program a task starts is there, as `sync` asks it of another folder's task: a program on a drive or share
+/// that is not there now (a USB drive out, a NAS off) counts as there, since its folder may come back.
+pub fn program_there(program: &Path) -> bool {
+    program.is_file() || program.ancestors().last().is_none_or(|volume| !volume.is_dir())
 }
 
 /// The id after `--run` in a start's arguments (the first is the program), if any.
@@ -578,8 +579,8 @@ mod tests {
         assert_ne!(folder_key(Path::new(r"D:\maalc2")), key);
         assert_ne!(folder_key(Path::new(r"E:\maalc")), key);
         assert_eq!(task_prefix(Path::new(r"D:\maalc")), format!("maalc-{key}-"));
-        assert_eq!(plain(Path::new(r"\\?\UNC\nas\games\maalc")), r"\\nas\games\maalc");
-        assert_eq!(plain(Path::new(r"D:\")), r"D:\");
+        assert_eq!(path_text(Path::new(r"\\?\UNC\nas\games\maalc")), r"\\nas\games\maalc");
+        assert_eq!(path_text(Path::new(r"D:\")), r"D:\");
     }
 
     #[test]
@@ -675,15 +676,15 @@ mod tests {
     #[test]
     fn a_deleted_schedule_deletes_its_task_and_leaves_other_tasks_alone() {
         let fake = Fake::default();
-        fake.tasks.borrow_mut().insert("Hermes_Gateway".into(), "<Task />".into());
+        fake.tasks.borrow_mut().insert("Other_App_Updater".into(), "<Task />".into());
         sync(&fake, &[sched("s1", &["mon"], "05:10"), sched("s2", &["tue"], "05:10")], &exe(A), Path::new(A), &|_| true).unwrap();
         let done = sync(&fake, &[sched("s2", &["tue"], "05:10")], &exe(A), Path::new(A), &|_| true).unwrap();
         let prefix = task_prefix(Path::new(A));
         assert_eq!(done.deleted, [format!("{prefix}s1")]);
-        assert_eq!(fake.names().unwrap(), ["Hermes_Gateway".to_string(), format!("{prefix}s2")]);
+        assert_eq!(fake.names().unwrap(), ["Other_App_Updater".to_string(), format!("{prefix}s2")]);
         let none = sync(&fake, &[], &exe(A), Path::new(A), &|_| true).unwrap();
         assert_eq!(none.deleted, [format!("{prefix}s2")]);
-        assert_eq!(fake.names().unwrap(), ["Hermes_Gateway"]);
+        assert_eq!(fake.names().unwrap(), ["Other_App_Updater"]);
     }
 
     #[test]
@@ -702,6 +703,20 @@ mod tests {
             assert_eq!(task.command, exe(B).display().to_string().to_lowercase());
             assert_eq!(task.dir, B.to_lowercase());
         }
+    }
+
+    #[test]
+    fn a_program_is_gone_only_when_its_drive_is_there_without_it() {
+        let here = std::env::temp_dir().join(format!("maalc-gui-there-{}", std::process::id()));
+        std::fs::create_dir_all(&here).unwrap();
+        let exe = here.join("maalc-gui.exe");
+        assert!(!program_there(&exe), "the drive is there and the program is not: gone");
+        std::fs::write(&exe, "").unwrap();
+        assert!(program_there(&exe));
+        // a drive letter no volume has now (a USB drive out): its program may come back
+        let free = ('D'..='Z').rev().map(|d| PathBuf::from(format!(r"{d}:\"))).find(|v| !v.is_dir()).expect("a free drive letter");
+        assert!(program_there(&free.join(r"maalc\maalc-gui.exe")));
+        assert!(program_there(Path::new(r"\\no-such-host-maalc\share\maalc\maalc-gui.exe")), "a share that is not there");
     }
 
     #[test]

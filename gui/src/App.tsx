@@ -127,6 +127,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   const [synced, setSynced] = useState<ScheduleView["synced"]>(null);
   const [lastScheduled, setLastScheduled] = useState<ScheduleView["last"]>(null);
   const closeAfter = useRef<string | null>(null);
+  const [reveal, setReveal] = useState(false); // a scheduled run started: the Run tab shows its log and Stop
   /** Bring the Task Scheduler's tasks in line with `list`, the schedules of the file as read or saved. */
   const writeTasks = (list: Settings["schedules"]) => {
     api.syncSchedules(list).then((done) => setSynced({ done }), (e: unknown) => setSynced({ error: String(e) }));
@@ -436,7 +437,10 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setTab("run");
     if (opened) closeAfter.current = id; // before the start: a run that ends at once still closes the window
     const why = await startRun();
-    if (why === null) return noteScheduled(id, { kind: "started" });
+    if (why === null) {
+      setReveal(true);
+      return noteScheduled(id, { kind: "started" });
+    }
     if (closeAfter.current === id) closeAfter.current = null;
     return noteScheduled(id, { kind: "refused", why });
   };
@@ -445,6 +449,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     start: () => { startRun(); },
     stop: () => { api.stopRun().catch(() => {}); },
     blocked: starting ? "saving" : problems.length ? "problems" : s.tasks.some((x) => x.enabled) ? null : "no_task",
+    reveal, revealed: () => setReveal(false),
   };
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
