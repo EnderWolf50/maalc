@@ -151,8 +151,9 @@ class Reader {
   /** An MXU option value (OptionValue): by its kind, a select by its case's name, a switch's true the case Yes. */
   mxu(s: MxuOption, o: unknown) {
     if (!isObject(o)) return;
-    const bad = () => this.missed.push({ kind: "value", path: s.path, value: shown(o.caseName ?? o.value ?? o.values) });
     const text = isObject(o.values) && typeof o.values[s.input!] === "string" ? (o.values[s.input!] as string) : null;
+    // what MXU had, as the user typed or picked it: an input's text, a case's name, a switch's value
+    const bad = () => this.missed.push({ kind: "value", path: s.path, value: shown(text ?? o.caseName ?? o.value ?? o.values) });
     if (s.kind === "team") return o.type === "select" ? this.team(s.path, o.caseName) : bad();
     if (s.kind === "select") {
       const v = prop(s.path).enum!.find((x) => String(x) === o.caseName);

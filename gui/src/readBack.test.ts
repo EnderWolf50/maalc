@@ -118,11 +118,12 @@ describe("from MXU's config file", () => {
     expect(report.missed).toEqual([
       { kind: "value", path: "run/difficulty", value: "insane" },
       { kind: "value", path: "run/target_floor", value: "20" },
-      { kind: "value", path: "run/runs", value: '{"runs":"0"}' },
-      { kind: "value", path: "run/wipe_retries", value: '{"wipe_retries":"-1"}' },
+      // an input's value as its text; an option of another type than v1.0.0's as what MXU stored
+      { kind: "value", path: "run/runs", value: "0" },
+      { kind: "value", path: "run/wipe_retries", value: "-1" },
       { kind: "value", path: "luxcavation/exp/mode", value: '{"mode":"count"}' },
       { kind: "value", path: "luxcavation/exp/consecutive", value: "yes" },
-      { kind: "value", path: "charge_enkephalin/count", value: '{"count":"11"}' },
+      { kind: "value", path: "charge_enkephalin/count", value: "11" },
     ]);
     expect(report.read).toEqual([]);
   });
