@@ -372,7 +372,7 @@ const zh_tw = {
   "emu.device_mumu": "MuMu 實例 {index}（{address}）",
   "emu.device": "{name}（{address}）",
   "emu.found_note": "MuMu 排在前面。選了就填入位址、MuMu 實例編號和 MuMuManager 路徑，儲存後生效。",
-  "emu.none_found": "沒偵測到開著的模擬器。MuMu 沒開時，填好實例編號，按「開始」時 maalc 會先開它。",
+  "emu.none_found": "沒偵測到開著的模擬器。開著 MuMu 偵測一次，選它並儲存。之後 MuMu 沒開時，按「開始」會先開它。",
   "emu.scan_failed": "偵測失敗：{error}",
   // the runner (#815): Start, Stop, the tasks' states and the live log
   "runner.title": "執行",
@@ -796,7 +796,7 @@ const en_us: typeof zh_tw = {
   "emu.device_mumu": "MuMu instance {index} ({address})",
   "emu.device": "{name} ({address})",
   "emu.found_note": "MuMu comes first. A pick fills in the address, the MuMu instance and the MuMuManager path. Save to keep them.",
-  "emu.none_found": "No running emulator was found. When MuMu is not running, fill in its instance: Start then starts it first.",
+  "emu.none_found": "No running emulator was found. Find it once while MuMu runs, pick it and save. Later, when MuMu is not running, Start starts it first.",
   "emu.scan_failed": "The scan failed: {error}",
   "runner.title": "Run",
   "runner.start": "Start",
