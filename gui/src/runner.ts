@@ -6,11 +6,17 @@ import { createContext, useContext } from "react";
 /** The lines of the live log the window keeps (lib.rs LOG_KEEP keeps as many for a page that attaches later). */
 export const LOG_LINES = 2000;
 
+// The values each field of the runner's events takes (runner/protocol.py; runner.test.tsx holds them to the shared cases).
 export const TASK_STATES = ["pending", "running", "succeeded", "failed", "stopped", "cancelled"] as const;
 export type TaskState = (typeof TASK_STATES)[number];
-export type Source = "runner" | "agent" | "console";
-export type RunResult = "succeeded" | "failed" | "stopped";
-export type LinkState = "launching" | "waiting" | "connecting" | "connected";
+export const SOURCES = ["runner", "agent", "console"] as const;
+export type Source = (typeof SOURCES)[number];
+export const RESULTS = ["succeeded", "failed", "stopped"] as const;
+export type RunResult = (typeof RESULTS)[number];
+export const LINK_STATES = ["launching", "waiting", "connecting", "connected"] as const;
+export type LinkState = (typeof LINK_STATES)[number];
+export const RESOURCE_STATES = ["loading", "loaded"] as const;
+export type ResourceState = (typeof RESOURCE_STATES)[number];
 
 /** A device a scan found (runner.rs Device): `mumu` null for one that is not MuMu. */
 export interface Device {
@@ -26,7 +32,7 @@ export type RunnerEvent =
   | { event: "log"; t: string; source: Source; line: string }
   | { event: "devices"; devices: Device[] }
   | { event: "connection"; state: LinkState; address: string }
-  | { event: "resource"; state: "loading" | "loaded" }
+  | { event: "resource"; state: ResourceState }
   | { event: "task"; index: number; entry: string; state: TaskState; reason?: string | null }
   | { event: "error"; kind: string; message: string; code?: number; tail?: string[] }
   | { event: "end"; result: RunResult };
@@ -56,7 +62,7 @@ export interface RunView {
   tasks: { entry: string; state: TaskState; reason?: string | null }[];
   log: LogLine[];
   link?: { state: LinkState; address: string };
-  resource?: "loading" | "loaded";
+  resource?: ResourceState;
   result?: RunResult;
   /** the runner's process ended: `ended` false when it ended before its end event (it crashed or was ended) */
   exit?: { code: number | null; ended: boolean; tail: string[] };

@@ -18,7 +18,8 @@ const ids = (s: Settings) => s.tasks.map((x) => x.id);
 const tick = (name: string) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick"], { name }) });
 
 test("the global options the tab shows are the run keys every task reads in the agent (agent/task_options.py GLOBAL)", () => {
-  const agent = /^GLOBAL = \(([^)]*)\)/m.exec(taskOptionsPy)?.[1].split(",").map((k) => k.trim().replace(/"/g, "")).filter(Boolean);
+  const tuple = /^GLOBAL = \(([^)]*)\)/m.exec(taskOptionsPy)?.[1] ?? "";
+  const agent = [...tuple.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   expect(agent).toEqual([...GLOBAL_KEYS]);
 });
 

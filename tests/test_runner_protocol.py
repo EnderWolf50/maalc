@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from runner import protocol
+from runner import devices, protocol
 
 CASES = json.loads((Path(__file__).resolve().parent / "runner_cases.json").read_text(encoding="utf-8"))
 
@@ -46,6 +46,11 @@ def test_every_event_kind_and_every_value_it_can_take_has_a_valid_case():
     assert values("task", "state") == set(protocol.STATES)
     assert values("error", "kind") == set(protocol.ERRORS)
     assert values("end", "result") == set(protocol.RESULTS)
+
+
+@pytest.mark.parametrize("a, b, same", CASES["addresses"], ids=lambda v: str(v))
+def test_two_addresses_are_one_device_as_the_shared_cases_say(a, b, same):
+    assert devices.same_address(a, b) is same
 
 
 def test_a_task_of_a_start_is_its_entry_alone():

@@ -46,8 +46,9 @@ def find(devices, address: str):
 
 LAUNCH_TIMEOUT = 60  # s MuMuManager may take to answer the launch; the instance boots after it returns
 # Out of the window's Job Object (gui/src-tauri/src/runner.rs Job), which ends its processes at the run's end: MuMu and what
-# MuMuManager starts for it outlive the run. A job that allows no breakaway refuses the flag; the launch then runs in it.
-CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+# MuMuManager starts for it outlive the run. A job that allows no breakaway refuses the flag; the launch then runs in it,
+# and says so. Off Windows there is no job, and both flags are 0.
+CREATE_BREAKAWAY_FROM_JOB = getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0)
 
 
 def launch_command(manager: str, index: int) -> list[str]:
@@ -60,16 +61,17 @@ def launch(manager: str, index: int, run=subprocess.run) -> tuple[int | None, st
     """Run the launch, out of the caller's job when it may (CREATE_BREAKAWAY_FROM_JOB): (its exit code, what it printed);
     (None, why) when it could not run."""
     quiet = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    r = None
-    for flags in (quiet | CREATE_BREAKAWAY_FROM_JOB, quiet):
+    r, note = None, ""
+    for flags in dict.fromkeys((quiet | CREATE_BREAKAWAY_FROM_JOB, quiet)):  # one try when both are the same
         try:
             r = run(launch_command(manager, index), capture_output=True, timeout=LAUNCH_TIMEOUT,
                     stdin=subprocess.DEVNULL, creationflags=flags)
             break
         except OSError as e:
-            if not flags & CREATE_BREAKAWAY_FROM_JOB:
+            if not (flags & CREATE_BREAKAWAY_FROM_JOB):
                 return None, f"{type(e).__name__}: {e}"
+            note = f"inside the caller's job (breakaway refused: {type(e).__name__}: {e}): MuMu ends with the run; "
         except subprocess.SubprocessError as e:
             return None, f"{type(e).__name__}: {e}"
     text = b"".join(x or b"" for x in (r.stdout, r.stderr)).decode("utf-8", "replace")
-    return r.returncode, " ".join(text.split())
+    return r.returncode, note + " ".join(text.split())

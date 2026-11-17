@@ -423,6 +423,7 @@ def test_launch_runs_mumumanager_and_returns_its_code_and_output():
     assert code is None and said.startswith("FileNotFoundError")
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="a Job Object is Windows'")
 def test_launch_starts_mumumanager_out_of_the_windows_job_so_the_emulator_outlives_the_run():
     # the window ends its job's processes at each run's end (runner.rs Job): MuMu, and what MuMuManager starts for it,
     # must not be among them. A job that allows no breakaway refuses the flag, and the launch then runs inside it.
@@ -441,8 +442,10 @@ def test_launch_starts_mumumanager_out_of_the_windows_job_so_the_emulator_outliv
         if creationflags & devices.CREATE_BREAKAWAY_FROM_JOB:
             raise PermissionError(13, "Access is denied")
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
-    assert devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 0, run=refused) == (0, "")
-    assert [bool(f & devices.CREATE_BREAKAWAY_FROM_JOB) for f in flags] == [True, False]
+    code, said = devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 0, run=refused)
+    assert code == 0 and [bool(f & devices.CREATE_BREAKAWAY_FROM_JOB) for f in flags] == [True, False]
+    # the run log says so: this MuMu ends with the run
+    assert said.startswith("inside the caller's job (breakaway refused: PermissionError: ") and "MuMu ends with the run" in said
 
 
 def test_keep_awake_holds_the_machine_and_the_display_and_lets_go_after():

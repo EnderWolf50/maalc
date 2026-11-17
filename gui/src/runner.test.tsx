@@ -11,7 +11,7 @@ import cases from "../../tests/runner_cases.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
-import { IDLE, LOG_LINES, TASK_STATES, reduce, type Device, type Message } from "./runner";
+import { IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message } from "./runner";
 import { queuedTeams } from "./testing";
 
 const zh = TEXT.zh_tw;
@@ -417,8 +417,21 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
     }
   });
 
-  test("the page knows every task state the runner sends, and keeps as many lines as the backend keeps for it", () => {
-    expect(new Set(valid.flatMap((m) => (m.event === "task" ? [m.state] : [])))).toEqual(new Set(TASK_STATES));
-    expect(libRs).toContain(`const LOG_KEEP: usize = ${LOG_LINES};`);
+  test("the page knows every value the runner sends: the sources, link states, resource states, task states, results", () => {
+    const values = (event: string, field: string) =>
+      new Set(cases.events.filter((c) => c.valid && c.event.event === event).map((c) => (c.event as Record<string, unknown>)[field]));
+    expect(values("log", "source")).toEqual(new Set(SOURCES));
+    expect(values("connection", "state")).toEqual(new Set(LINK_STATES));
+    expect(values("resource", "state")).toEqual(new Set(RESOURCE_STATES));
+    expect(values("task", "state")).toEqual(new Set(TASK_STATES));
+    expect(values("end", "result")).toEqual(new Set(RESULTS));
   });
+
+  test.each(cases.addresses as [string, string, boolean][])("%s and %s are one device: %s, as the runner picks it", (a, b, same) => {
+    expect(sameAddress(a, b)).toBe(same);
+  });
+});
+
+test("the window keeps as many log lines of a run for a page that attaches later as the page shows (lib.rs LOG_KEEP)", () => {
+  expect(libRs).toContain(`const LOG_KEEP: usize = ${LOG_LINES};`);
 });

@@ -201,7 +201,7 @@ _Avoid_: 隊伍清單檔
 _Avoid_: 指定隊伍、優先隊伍、首發隊伍
 
 **執行**：
-按一次「開始」，或一次定時執行：執行器把任務清單勾選的任務照順序跑一次，到跑完、停止或執行器結束為止。一次執行可以有好幾局（鏡牢任務的局數）。英文介面寫 session（`During a session`、`Scheduled sessions`）；程式、協定與記錄行寫 run（`start_run`、`logs/runner/`、`[schedule] … a run is under way`）。
+按一次「開始」，或一次定時執行：執行器把任務清單勾選的任務照順序跑一次，到跑完、停止或執行器結束為止。一次執行可以有好幾局（鏡牢任務的局數）。英文介面寫 session（`During a session`、`Scheduled sessions`）；「執行」分頁與「執行」一區的標題寫動詞 Run。程式、協定、記錄行與後端照原文顯示的英文錯誤寫 run（`start_run`、`logs/runner/`、`[schedule] … a run is under way`）。
 _Avoid_: 一局（局是鏡牢的一次挑戰）
 
 **執行器**：
