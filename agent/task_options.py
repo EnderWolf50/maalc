@@ -8,8 +8,9 @@ read checks both against task_options.schema.json; a value missing or wrong ends
 that names the option. There is no settings-file fallback. A Luxcavation task's team is its option too (ExpTeam,
 ThreadTeam: the cases of the team options file the settings GUI writes, #780).
 
-The rules that cross a task's options with the teams (MirrorDungeon's target floor, a Luxcavation task's team) are
-checked here too, at the task's start: the teams stay in the settings file."""
+The rules that cross a task's options with the teams (MirrorDungeon's target floor and start team, a Luxcavation task's
+team) are checked here too, at the task's start: the teams stay in the settings file. MirrorDungeon's start team
+(MirrorStartTeam, #805) comes from the team options file as a Luxcavation task's team does."""
 
 import json
 from pathlib import Path
@@ -85,11 +86,14 @@ def line(values):
 
 def options(task, values):
     """The options of task as its readers take them, from read's values: MirrorDungeon's runs is the run cap, None for
-    no limit (runs_limited false), as settlement.runs_done takes it."""
+    no limit (runs_limited false), as settlement.runs_done takes it; its start_team only when it is a team id, a
+    non-empty string. A value the agent cannot read is 「照隊伍佇列」, as the option sends none (spec #802)."""
     if task != "MirrorDungeon":
         return dict(values)
-    out = {k: v for k, v in values.items() if k not in ("runs_limited", "runs")}
-    return {**out, "runs": values["runs"] if values["runs_limited"] else None}
+    out = {k: v for k, v in values.items() if k not in ("runs_limited", "runs", "start_team")}
+    start = values.get("start_team")
+    return {**out, "runs": values["runs"] if values["runs_limited"] else None,
+            **({"start_team": start} if isinstance(start, str) and start else {})}
 
 
 def target_floor_errors(options, teams):
@@ -113,6 +117,22 @@ def target_floor_errors(options, teams):
         elif t["hard_from_floor"] != 1:
             errors.append(f"teams/{i}/hard_from_floor: team {t['name']!r} starts HARD at floor {t['hard_from_floor']}, {need} (hard_from_floor 1)")
     return errors
+
+
+def start_team_errors(team, teams):
+    """MirrorDungeon's start team (#805): MirrorStartTeam's id, None for 「照隊伍佇列」, names an enabled team of teams. An
+    id not in teams is a team deleted in the settings GUI, whose case the team options file keeps, so the client still
+    sends it (as team_errors'); a disabled team is one no run of the queue picks. Either stops the task before any tap."""
+    if team is None:
+        return []
+    option = f"{SCHEMA['$defs']['MirrorDungeon']['properties']['start_team']['title']} (start_team)"
+    instead = f"pick another team, or 「照隊伍佇列」 (follow the team queue), in {where('MirrorDungeon')}"
+    found = next((t for t in teams if t["id"] == team), None)
+    if found is None:
+        return [f"{option}: team {team!r} was deleted in the settings GUI; {instead}"]
+    if not found["enabled"]:
+        return [f"{option}: team {found['name']!r} (id {team!r}) is disabled; enable it in the settings GUI, or {instead}"]
+    return []
 
 
 def team_errors(node, team, teams):

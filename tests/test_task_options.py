@@ -30,17 +30,17 @@ GLOBAL_WHERE = "set it in the client's global options (MXU: Settings; MFAAvaloni
 NOT_DEFAULT = ("MirrorDifficulty=hard", "MirrorTargetFloor=15", "MirrorRunsLimit=Yes", "MirrorRuns=3",
                "MirrorThemePackRefresh=once", "MirrorWeeklyBonusUse=none", "MirrorWeeklyBonusAmount=one",
                "MirrorStopWhenBonusOut=Yes", "MirrorStarlightUnaffordable=stop", "MirrorWipeRetries=0",
-               "MirrorAfterRetries=stop", "WebhookUrl=http://hook.invalid/x", "AutoAcceptTerms=No", "AutoDownload=No",
-               "KeepDismissedScreens=No")
+               "MirrorAfterRetries=stop", "MirrorStartTeam=b", "WebhookUrl=http://hook.invalid/x", "AutoAcceptTerms=No",
+               "AutoDownload=No", "KeepDismissedScreens=No")
 NOT_DEFAULT_READ = {"webhook_url": "http://hook.invalid/x", "auto_accept_terms": False, "auto_download": False,
                     "keep_dismissed_screens": False, "difficulty": "hard", "target_floor": 15, "runs": 3,
                     "theme_pack_refresh": "once", "weekly_bonus_use": "none", "weekly_bonus_amount": "one",
                     "stop_when_weekly_bonus_out": True, "starlight_unaffordable": "stop", "wipe_retries": 0,
-                    "after_retries": "stop"}
+                    "after_retries": "stop", "start_team": "b"}
 NOT_DEFAULT_LINE = ("options: webhook_url (set), auto_accept_terms=false, auto_download=false, keep_dismissed_screens=false, "
                     "difficulty=hard, target_floor=15, runs_limited=true, runs=3, theme_pack_refresh=once, "
                     "weekly_bonus_use=none, weekly_bonus_amount=one, stop_when_weekly_bonus_out=true, "
-                    "starlight_unaffordable=stop, wipe_retries=0, after_retries=stop")
+                    "starlight_unaffordable=stop, wipe_retries=0, after_retries=stop, start_team=b")
 HARD_FROM_1 = [{"set": "teams/1/hard_from_floor", "value": 1}]  # the valid file's team b starts HARD at floor 3
 LUX_WHERE = "the options of the {task} task in the client's task list"
 # A Luxcavation task's team option (#780) with no team picked: 「未選擇」, or a list with no team in it.

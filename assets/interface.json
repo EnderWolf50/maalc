@@ -38,9 +38,10 @@
             "./agent/main.py"
         ]
     },
-    // ExpTeam's and ThreadTeam's cases, one per team, come from the team options file the settings GUI writes under
-    // config/ (#780, ADR 0013): an imported option replaces the definition below in MXU, its cases in MFAAvalonia. A
-    // client that finds no such file loads this one alone, and the two dropdowns are empty.
+    // ExpTeam's, ThreadTeam's and MirrorStartTeam's cases, one per team, come from the team options file the settings GUI
+    // writes under config/ (#780, #805, ADR 0013): an imported option replaces the definition below in MXU, its cases in
+    // MFAAvalonia. A client that finds no such file loads this one alone: the two team dropdowns are empty, and the
+    // start team's has only 「照隊伍佇列」.
     "import": [
         "config/team_options.json"
     ],
@@ -87,7 +88,8 @@
                 "MirrorStopWhenBonusOut",
                 "MirrorStarlightUnaffordable",
                 "MirrorWipeRetries",
-                "MirrorAfterRetries"
+                "MirrorAfterRetries",
+                "MirrorStartTeam"
             ]
         },
         {
@@ -247,6 +249,16 @@
         // The team options' placeholders: the team options file (import above) holds each one whole, these cases and
         // default_case filled in (gui/src/teamOptions.ts); nothing else differs. Its case 0 is 「未選擇」; its first
         // default_case is the team the settings file picked, which MXU starts a task on and MFAAvalonia does not.
+        // MirrorStartTeam's placeholder holds its case 0, 「照隊伍佇列」, which sends nothing and is its default_case.
+        "MirrorStartTeam": {
+            "type": "select",
+            "label": "$MirrorStartTeam",
+            "description": "$MirrorStartTeam_description",
+            "default_case": "queue",
+            "cases": [
+                {"name": "queue", "label": "$MirrorStartTeam_queue"}
+            ]
+        },
         "ExpTeam": {
             "type": "select",
             "label": "$LuxTeam",

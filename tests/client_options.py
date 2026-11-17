@@ -6,7 +6,8 @@ attach (send).
 The interface is the one an install's client loads once the settings GUI wrote its team options file (#780) for the
 teams of settings_cases.json's valid file: TEAM_OPTIONS in place of the config/team_options.json interface.json
 imports, which the repo has no copy of. Its ExpTeam and ThreadTeam take a (Team a), b (Team b), gone (a team since
-deleted) or none (「未選擇」, the default, which sends nothing); teams=None is a client that found no such file."""
+deleted) or none (「未選擇」, the default, which sends nothing); its MirrorStartTeam (#805) the same teams or queue
+(「照隊伍佇列」, the default, which sends nothing too); teams=None is a client that found no such file."""
 
 import sys
 from pathlib import Path

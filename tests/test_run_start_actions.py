@@ -31,9 +31,9 @@ def bgr(path):
 def test_plan_run_waits_for_the_enter_dialog_after_pressing_enter(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", run)
-    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "pick_team", lambda settings, difficulty: team)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -50,9 +50,9 @@ def test_a_planned_run_of_a_team_that_never_switches_to_hard(context, clock, mon
     # Only the global "hard" makes it HARD (every floor, hard_wanted).
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 0, "hard_from_floor": None, "gift_list": "default", "enabled": True}
     run = {"runs": None, "stop_when_weekly_bonus_out": False, "difficulty": setting, "target_floor": 5}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", run)
-    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "pick_team", lambda settings, difficulty: team)
     monkeypatch.setattr(run_start, "run_difficulty", lambda setting, weekly, target: "hard")
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)
@@ -195,7 +195,7 @@ def test_select_team_makes_a_plan_for_an_abandoned_empty_run_instead_of_backing_
     # #128 (live 2026-10-18): Resume on a run paused before team selection reaches the picker with no plan in memory;
     # backing out to the entry page, which only offers Resume, looped every 8 s.
     team = {"id": 1, "name": "t", "game_team": 3, "guard_turns": 0, "gift_list": "default", "enabled": True, "usage": "any"}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", {"difficulty": "normal", "target_floor": 5})
     actions.RUN.clear()
     team_picker(context, "TEAMS #3", lambda clicks, looks: "recommended level" if clicks else None)
@@ -664,9 +664,9 @@ def test_a_run_without_a_packs_note_stays_unknown_after_a_pull(context, monkeypa
 def test_a_new_run_starts_with_no_packs_taken(context, clock, monkeypatch):
     team = {"id": 1, "name": "t", "game_team": 1, "guard_turns": 3, "hard_from_floor": 1, "gift_list": "default", "enabled": True}
     run = {"runs": 0, "stop_when_weekly_bonus_out": False, "difficulty": "normal", "target_floor": 5}
-    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "gift_lists": []})
+    patch_all(monkeypatch, "load_settings", lambda root, need_team=False: {"teams": [team], "team_queue": [1], "gift_lists": []})
     monkeypatch.setitem(actions.TASK, "options", run)
-    patch_all(monkeypatch, "pick_team", lambda teams, difficulty: team)
+    patch_all(monkeypatch, "pick_team", lambda settings, difficulty: team)
     monkeypatch.setattr(settlement, "runs_done", lambda done, limit: False)
     monkeypatch.setattr(recovery, "read_runs", lambda root: [])
     monkeypatch.setattr(recovery, "floor_limit", lambda runs, team, target: 1800)

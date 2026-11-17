@@ -145,14 +145,14 @@
 ## 中途接續與隊伍佇列
 
 - 中途接續必須以畫面為準，不讀存檔。理由見 [ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)。（#8）
-- Agent 沒有狀態檔。設定裡隊伍清單的順序就是**隊伍佇列**：每一局由第一支用途符合的隊伍出戰。（#8、#9、#19、#501，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）
+- Agent 沒有狀態檔。設定檔的 `team_queue` 就是**隊伍佇列**，和隊伍清單的順序分開：每一局由佇列裡第一支用途符合的隊伍出戰。（#8、#9、#19、#501、#803，[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）
 - 只有 bot 親眼看到某隊完成一局並領到獎勵，Agent 才把它移到佇列最後。手動跑的局不影響輪替。選隊頁顯示的隊伍和佇列選出的不同時，以畫面為準。（#8、#501）
 - 用途和這一局難度不符的隊伍跳過，留在原位；沒有任何可用的隊伍就以成功結束任務（#364）。（#9）
 - 接續暫停中的局時，選隊之後沒有畫面顯示隊伍，Agent 從佇列推回這局的隊伍；推不回就不移動佇列（[03-decisions.md](03-decisions.md) 第 1 節，#436）。（#8、#19）
 - 「限制局數」只算這個任務開始後完成的局數，不存檔；清單裡第二個鏡牢任務從 0 局算起（#364）。「每週獎勵用完就停」的剩餘次數從畫面讀。（#8）
 - 難度、每週獎勵用法這類策略是鏡牢的任務選項（[04](04-settings.md) 第 5 節），Agent 不另外存檔。（#8、#19、#776）
 - 刷新次數這類以層為單位的計數記在 Agent 記憶體，不存檔。（#10）
-- Agent 寫的檔案都在 `<root>` 底下，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中 `teams` 的順序，先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
+- Agent 寫的檔案都在 `<root>` 底下，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中的隊伍佇列 `team_queue`（GUI 還沒寫回的版本 20、21 檔改 `teams` 的順序，[04](04-settings.md) 第 2 節），先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
 
 ## 執行記錄 runs.jsonl
 

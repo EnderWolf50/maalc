@@ -1,6 +1,7 @@
 // The team options file (#780, ADR 0013): config/team_options.json, which assets/interface.json imports, gives the client's
-// ExpTeam and ThreadTeam dropdowns a case per team. MXU replaces an option's whole definition with the imported one,
-// MFAAvalonia its cases, so each option here is interface.json's placeholder with its cases and default_case filled in.
+// ExpTeam and ThreadTeam dropdowns and the Mirror Dungeon task's MirrorStartTeam (#805) a case per team. MXU replaces an
+// option's whole definition with the imported one, MFAAvalonia its cases, so each option here is interface.json's
+// placeholder with its cases and default_case filled in.
 // The cases are only ever appended, in the file's own order: MFAAvalonia stores the index of the case picked and MXU its
 // name, so a case moved or gone would make a picked team another team or none, silently.
 import interfaceText from "../../assets/interface.json?raw";
@@ -27,34 +28,49 @@ export const NO_PICKS: TeamPicks = { ExpTeam: null, ThreadTeam: null };
 export const NONE = "none";
 /** Its label, a text key of interface.json's languages: the client says it in its own. */
 export const NONE_LABEL = "$LuxTeam_none";
+/** MirrorStartTeam's case 0, 「照隊伍佇列」, and its label: it sends nothing, so the task follows the team queue as it is.
+ * interface.json's placeholder holds it as the option's only case and default_case, for a client with no file yet. */
+export const QUEUE = "queue";
+export const QUEUE_LABEL = "$MirrorStartTeam_queue";
+
+/** Each option of the file: its case 0, which sends nothing, and the attach key a team's case writes the team's id to
+ * (agent/task_options.schema.json). The file holds them in this order. */
+export const FILE_OPTIONS = {
+  ExpTeam: { first: { name: NONE, label: NONE_LABEL }, attach: "team" },
+  ThreadTeam: { first: { name: NONE, label: NONE_LABEL }, attach: "team" },
+  MirrorStartTeam: { first: { name: QUEUE, label: QUEUE_LABEL }, attach: "start_team" },
+} as const;
+export type FileOption = keyof typeof FILE_OPTIONS;
 /** What a deleted team's label ends with, in each language of the GUI: its case stays and still sends its id, which
  * stops the task with a line saying so. */
 const DELETED = { zh_tw: "（已刪除）", en_us: " (deleted)" } as const;
 
-interface Case { name: string; label: string; pipeline_override?: Record<string, { attach: { team: string } }> }
+interface Case { name: string; label: string; pipeline_override?: Record<string, { attach: Record<string, string> }> }
 interface Option { cases: Case[]; default_case: string }
 
 /** The task whose options list key, undefined for a global option or one nested under a case. */
 export const taskOf = (key: string) => PI.task.find((t) => t.option?.includes(key));
-/** The entry node of the task whose options list key: its cases write team into that node's attach. */
-const entryOf = (key: TeamOption) => taskOf(key)!.entry;
+/** The entry node of the task whose options list key: its cases write the team's id into that node's attach. */
+const entryOf = (key: FileOption) => taskOf(key)!.entry;
 
 /** A team's label in the dropdown: its name and its in-game slot. The client shows it as it is: a name starting with $
  * would be read as a text key (MXU shows it without the $). */
 export const teamLabel = (t: Team, lang: Settings["language"]) =>
   lang === "zh_tw" ? `${t.name}（TEAMS #${t.game_team}）` : `${t.name} (TEAMS #${t.game_team})`;
 
-/** The previous file's cases and default_case of each team option; null when there is none or it does not read as one
- * this GUI wrote (then the file starts over). */
-function readPrevious(text: string | null): Partial<Record<TeamOption, Option>> | null {
+/** The previous file's cases and default_case of each option it has; null when there is none or it does not read as one
+ * this GUI wrote (then the file starts over). An option it lacks is one the GUI that wrote it did not have
+ * (MirrorStartTeam before #805): that one starts as in a new file, the others keep theirs. */
+function readPrevious(text: string | null): Partial<Record<FileOption, Option>> | null {
   if (text === null) return null;
   try {
     const option = (JSON.parse(text) as { option?: Record<string, Partial<Option>> }).option ?? {};
-    const out: Partial<Record<TeamOption, Option>> = {};
-    for (const key of Object.keys(TEAM_OPTIONS) as TeamOption[]) {
+    const out: Partial<Record<FileOption, Option>> = {};
+    for (const key of Object.keys(FILE_OPTIONS) as FileOption[]) {
       const o = option[key];
+      if (o === undefined) continue;
       const named = Array.isArray(o?.cases) && o.cases.every((c) => typeof c?.name === "string" && typeof c?.label === "string");
-      if (!named || o!.cases![0]?.name !== NONE || typeof o!.default_case !== "string") return null;
+      if (!named || o!.cases![0]?.name !== FILE_OPTIONS[key].first.name || typeof o!.default_case !== "string") return null;
       out[key] = { cases: o!.cases!, default_case: o!.default_case };
     }
     return out;
@@ -67,32 +83,33 @@ function readPrevious(text: string | null): Partial<Record<TeamOption, Option>> 
  * already says it, or when there is neither a file nor a team (nothing to write). A file that does not read as one this
  * GUI wrote starts over, as a new one. Each option keeps the file's cases in
  * their order: a team there gets its name and slot of now (a rename changes only the label), a team gone stays,
- * marked deleted, and each new team goes last, in the team queue's order. A new file's default_case is the team picks
- * gives that option, the one a version 20 file picked (teamPicks; MXU starts a task it has no value for on it,
- * MFAAvalonia starts on case 0), else 「未選擇」; an existing file's stays. */
+ * marked deleted, and each new team goes last, in the team list's order. A new option's default_case is the team picks
+ * gives it, the one a version 20 file picked (teamPicks; MXU starts a task it has no value for on it, MFAAvalonia starts
+ * on case 0), else its case 0 (「未選擇」, 「照隊伍佇列」); an existing one's stays. */
 export function teamOptionsText(previous: string | null, s: Settings, picks: TeamPicks = NO_PICKS): string | null {
   const before = readPrevious(previous);
   if (previous === null && !s.teams.length) return null;
   const ids = new Set(s.teams.map((t) => t.id));
   const option: Record<string, Record<string, unknown>> = {};
-  for (const key of Object.keys(TEAM_OPTIONS) as TeamOption[]) {
+  for (const key of Object.keys(FILE_OPTIONS) as FileOption[]) {
+    const { first, attach } = FILE_OPTIONS[key];
     const node = entryOf(key);
-    const send = (id: string) => ({ [node]: { attach: { team: id } } });
+    const send = (id: string) => ({ [node]: { attach: { [attach]: id } } });
     const teamCase = (t: Team): Case => ({ name: t.id, label: teamLabel(t, s.language), pipeline_override: send(t.id) });
     const gone = (c: Case): Case => {
       const base = Object.values(DELETED).reduce((l, mark) => (l.endsWith(mark) ? l.slice(0, -mark.length) : l), c.label);
       return { name: c.name, label: base + DELETED[s.language], pipeline_override: send(c.name) };
     };
     const old = before?.[key];
-    const kept = (old?.cases ?? [{ name: NONE, label: "" }]).map((c) => {
-      if (c.name === NONE) return { name: NONE, label: NONE_LABEL };
+    const kept = (old?.cases ?? [first]).map((c) => {
+      if (c.name === first.name) return { ...first };
       const team = s.teams.find((t) => t.id === c.name);
       return team ? teamCase(team) : gone(c);
     });
-    const added = s.teams.filter((t) => t.id !== NONE && !kept.some((c) => c.name === t.id)).map(teamCase);
+    const added = s.teams.filter((t) => t.id !== first.name && !kept.some((c) => c.name === t.id)).map(teamCase);
     const cases = [...kept, ...added];
-    const picked = picks[key];
-    const default_case = old ? old.default_case : picked !== null && ids.has(picked) && picked !== NONE ? picked : NONE;
+    const picked = key in picks ? picks[key as TeamOption] : null;
+    const default_case = old ? old.default_case : picked !== null && ids.has(picked) && picked !== first.name ? picked : first.name;
     const { cases: _cases, default_case: _default, ...placeholder } = PI.option[key];
     option[key] = { ...placeholder, default_case, cases };
   }
