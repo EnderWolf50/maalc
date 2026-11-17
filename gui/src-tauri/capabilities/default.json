@@ -21,6 +21,9 @@
     "allow-stop-run",
     "allow-attach-run",
     "allow-scan-devices",
-    "allow-hide-to-tray"
+    "allow-hide-to-tray",
+    "allow-take-scheduled",
+    "allow-log-schedule",
+    "allow-sync-schedules"
   ]
 }

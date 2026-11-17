@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-log-schedule"
+description = "Enables the log_schedule command without any pre-configured scope."
+commands.allow = ["log_schedule"]
+
+[[permission]]
+identifier = "deny-log-schedule"
+description = "Denies the log_schedule command without any pre-configured scope."
+commands.deny = ["log_schedule"]

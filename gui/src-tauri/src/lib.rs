@@ -1,5 +1,7 @@
 //! File access for the settings GUI (docs/spec/04-settings.md sections 1, 2 and 12), and the runner it starts (#815,
 //! src/runner.rs): its messages go to the page through a channel, and closing the window during a run hides it in the tray.
+//! The scheduled runs (#816): one window per maalc folder (src/instance.rs), the `--run <id>` of a start handed to the page,
+//! and the Task Scheduler's tasks brought in line with the settings' schedules (src/schedule.rs).
 //! Validation lives in the frontend; this side only reads and writes files under <root>.
 
 use runner::{Command, DeviceWant, Message, Run, TaskSpec};
@@ -14,7 +16,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
+mod instance;
 mod runner;
+mod schedule;
 
 /// <root> is the folder holding this executable (spec 04 section 1), so the user never picks it.
 /// Debug builds honour MAALC_ROOT, because `tauri dev` runs the exe from target/debug.
@@ -186,20 +190,72 @@ fn save_settings(text: String, expected: Option<String>) -> Result<(), String> {
     })
 }
 
-/// Append one JSON line to <root>/logs/runs.jsonl (the GUI only appends reset markers, spec 04 section 12).
-#[tauri::command]
-fn append_runs_log(line: String) -> Result<(), String> {
+/// Append one line to <root>/logs/<name>.
+fn append_log(name: &str, line: &str) -> Result<(), String> {
     if line.contains('\n') {
-        return Err("runs.jsonl lines must not contain a newline".into());
+        return Err(format!("{name} lines must not contain a newline"));
     }
     let dir = root()?.join("logs");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut f = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(dir.join("runs.jsonl"))
+        .open(dir.join(name))
         .map_err(|e| e.to_string())?;
     f.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Append one JSON line to <root>/logs/runs.jsonl (the GUI only appends reset markers, spec 04 section 12).
+#[tauri::command]
+fn append_runs_log(line: String) -> Result<(), String> {
+    append_log("runs.jsonl", &line)
+}
+
+/// Append one line to <root>/logs/schedule.log: what came of a scheduled run's start (#816), which a window the schedule
+/// opened and closed again leaves nowhere else.
+#[tauri::command]
+fn log_schedule(line: String) -> Result<(), String> {
+    append_log("schedule.log", &line)
+}
+
+/// A scheduled run the page has not taken yet: its schedule's id, and whether this window was opened for it (it closes when
+/// the run ends) or was open already.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+struct Scheduled {
+    id: String,
+    opened: bool,
+}
+
+/// The `--run <id>` of this window's own start, and of each second start since, in order; the page takes them once its
+/// settings are read (and on each `scheduled` event), so one that comes while the page loads waits for it.
+#[derive(Default)]
+struct Pending(Mutex<Vec<Scheduled>>);
+
+#[tauri::command]
+fn take_scheduled(pending: tauri::State<Pending>) -> Vec<Scheduled> {
+    std::mem::take(&mut *pending.0.lock().unwrap())
+}
+
+/// One sync with the Task Scheduler at a time: the one after the load and a save soon after must not cross.
+static SYNCING: Mutex<()> = Mutex::new(());
+
+/// Bring this folder's Task Scheduler tasks in line with `schedules`, the settings file's as the page last read or saved them
+/// (schedule::sync): each to start this maalc-gui.exe with `--run <id>` from <root>. A development build on MAALC_ROOT writes
+/// none: its task would start this exe without MAALC_ROOT, on the wrong folder.
+#[tauri::command]
+async fn sync_schedules(schedules: Vec<schedule::Schedule>) -> Result<schedule::Synced, String> {
+    if cfg!(debug_assertions) && std::env::var_os("MAALC_ROOT").is_some() {
+        return Err("a development build on MAALC_ROOT writes no scheduled task".into());
+    }
+    let root = schedule::real(&root()?);
+    let exe = schedule::real(&std::env::current_exe().map_err(|e| e.to_string())?);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _one = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
+        let tasks = schedule::TaskService::connect()?;
+        schedule::sync(&tasks, &schedules, &exe, &root, &|p| p.is_file())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// The log lines of a run the window keeps for a page that attaches later, as many as the page shows (Run.tsx LOG_LINES).
@@ -380,24 +436,43 @@ fn hide_to_tray(app: AppHandle, runs: tauri::State<Runs>, text: TrayText) -> Res
     Ok(true)
 }
 
-/// A second start of maalc-gui.exe: its arguments and working folder, which go to the open window as the `second-start`
-/// event (a scheduled run's `--run`, spec #811 「定時執行」, reads them).
-#[derive(Serialize, Clone)]
-struct SecondStart {
-    args: Vec<String>,
-    cwd: String,
+/// A second start of maalc-gui.exe in this folder (src/instance.rs): the window shows in front, and a scheduled run's
+/// `--run <id>` goes to the page, which runs it or says why not (spec #811 「定時執行」).
+fn second_start(app: &AppHandle, start: instance::SecondStart) {
+    show_window(app);
+    if let Some(id) = schedule::run_arg(&start.args) {
+        app.state::<Pending>().0.lock().unwrap().push(Scheduled { id, opened: false });
+        let _ = app.emit("scheduled", ());
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // One window per maalc folder: a start of a folder whose window is open hands it its arguments and ends here. The lock
+    // lives as long as this process.
+    let key = root().map(|r| schedule::folder_key(&schedule::real(&r))).unwrap_or_default();
+    let _lock = match instance::claim(&key) {
+        Ok(Some(lock)) => Some(lock),
+        Ok(None) => {
+            if let Err(e) = instance::forward(&key, &instance::SecondStart::this(), instance::FORWARD_WAIT) {
+                eprintln!("the window of this folder did not take this start: {e}");
+            }
+            return;
+        }
+        Err(e) => {
+            eprintln!("one window per folder: {e}");
+            None
+        }
+    };
+    let launch = schedule::run_arg(&instance::SecondStart::this().args).map(|id| Scheduled { id, opened: true });
     tauri::Builder::default()
-        // first, as the plugin asks: a second start ends at once, and the window that is open shows in front
-        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
-            show_window(app);
-            let _ = app.emit("second-start", SecondStart { args, cwd });
-        }))
         .manage(Runs::default())
-        .setup(|app| {
+        .manage(Pending(Mutex::new(launch.into_iter().collect())))
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            if let Err(e) = instance::serve(&key, move |start| second_start(&handle, start)) {
+                eprintln!("second starts: {e}");
+            }
             // The page loads the game's images from the data folder through the asset protocol, whose static scope
             // (tauri.conf.json) is empty: that folder alone is opened to it, found the way load_game_data finds it. Without
             // one, load_game_data fails and the window says why.
@@ -420,7 +495,10 @@ pub fn run() {
             stop_run,
             attach_run,
             scan_devices,
-            hide_to_tray
+            hide_to_tray,
+            take_scheduled,
+            log_schedule,
+            sync_schedules
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

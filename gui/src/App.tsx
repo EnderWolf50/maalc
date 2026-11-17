@@ -1,5 +1,7 @@
 // Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2); the run the window starts (#815),
-// which outlives a tab switch: Start saves first, and closing the window during a run hides it in the tray.
+// which outlives a tab switch: Start saves first, and closing the window during a run hides it in the tray. The scheduled runs
+// (#816): the load and each save bring the Task Scheduler's tasks in line with the schedules, and a scheduled start
+// (`maalc-gui.exe --run <id>`) runs the task list as Start does, closing the window it opened when the run ends.
 import { Fragment, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
 import { DeploymentTab } from "./Deployment";
@@ -11,6 +13,7 @@ import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./re
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, taskOfPath } from "./Run";
 import { IDLE, RunnerContext, isRunning, reduce, type Runner } from "./runner";
+import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
@@ -19,7 +22,7 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator"]],
+  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules"]],
   ["teams", "tab.teams", TeamsTab, ["teams", "team_queue"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -32,9 +35,8 @@ export const TABS = [
 type TabId = (typeof TABS)[number][0];
 
 /** The tabs in groups (what runs: the task list and its options; the team and its gift list; the plans; the overrides): the
- * tabs that start a group after the first. The Run tab edits the settings file's task options, task list and emulator
- * (version 23, #813, #814) and runs the tasks (#815), so the window opens on it; a save keeps the schedules, which no tab
- * edits yet (#811). */
+ * tabs that start a group after the first. The Run tab edits the settings file's task options, task list, emulator and
+ * schedules (version 23, #813, #814, #816) and runs the tasks (#815), so the window opens on it. */
 const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
@@ -117,8 +119,26 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   // the run: what the backend relays of it, folded into one view (runner.ts); a page loaded again during a run takes it up
   const [run, dispatch] = useReducer(reduce, IDLE);
   const [starting, setStarting] = useState(false); // Start's save and the runner's start are under way
+  const startingRef = useRef(false); // the same, at once: a scheduled start right after another reads it before a render
   const runRef = useRef(run);
   runRef.current = run;
+  // the scheduled runs (#816): the last sync with the Task Scheduler, the last scheduled start the window took, and the
+  // schedule whose start opened this window, which closes when its run ends
+  const [synced, setSynced] = useState<ScheduleView["synced"]>(null);
+  const [lastScheduled, setLastScheduled] = useState<ScheduleView["last"]>(null);
+  const closeAfter = useRef<string | null>(null);
+  /** Bring the Task Scheduler's tasks in line with `list`, the schedules of the file as read or saved. */
+  const writeTasks = (list: Settings["schedules"]) => {
+    api.syncSchedules(list).then((done) => setSynced({ done }), (e: unknown) => setSynced({ error: String(e) }));
+  };
+  /** What came of a scheduled start: a line in logs/schedule.log (done when the promise is) and the live log, and the
+   * schedules' section's last start. */
+  const noteScheduled = (id: string, outcome: Outcome) => {
+    const line = logLine(id, outcome), at = stamp();
+    dispatch({ type: "note", line });
+    setLastScheduled({ id, at, outcome });
+    return api.logSchedule(`${at} ${line}`).catch(() => {});
+  };
   useEffect(() => {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
     api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
@@ -176,6 +196,9 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
+        // the window's start checks the tasks (a moved folder's point at the old one); schedules the checks refuse wait for
+        // their fix and a save
+        if (!validate(data).some((p) => p.paths.some((m) => within(m, "schedules")))) writeTasks(data.schedules);
         // written back only when it passes the checks: a file they refuse waits for the user's fixes and a save
         if (old && !validate(data).length) {
           try {
@@ -266,6 +289,38 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   const held = typed && typed.field === document.activeElement ? typed : null;
   const shown = held ? problems.flatMap((p) => asBefore(p, held.at, held.before)) : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
+  // the schedules as the file holds them: an edit not saved yet is not in the Task Scheduler
+  const savedSchedules = useMemo(() => {
+    try { return JSON.stringify((JSON.parse(savedText) as Settings).schedules ?? []); } catch { return "[]"; }
+  }, [savedText]);
+
+  // A scheduled run's start (#816), taken in turn once the settings are read or failed to: its own start's `--run`, then each
+  // second start's. What runs it is set further down, once a render has the settings; until then (the load error screen) it
+  // is not run, and says so.
+  const scheduledRef = useRef<(r: api.Scheduled) => Promise<unknown>>(async () => {});
+  scheduledRef.current = ({ id }) => noteScheduled(id, { kind: "unread" });
+  const ready = s !== null || loadError !== "";
+  useEffect(() => {
+    if (!ready) return;
+    let queue: Promise<unknown> = Promise.resolve();
+    // taken before a StrictMode double start drops the first effect: the backend hands each start out once
+    const take = () => {
+      queue = queue.then(() => api.takeScheduled()).then(async (all) => { for (const r of all) await scheduledRef.current(r); }).catch(() => {});
+    };
+    take();
+    return api.onScheduled(take);
+  }, [ready]);
+  // the window a schedule opened closes when its run ends, unless it has edits that closing would drop
+  useEffect(() => {
+    const id = closeAfter.current;
+    if (run.phase !== "ended" || id === null) return;
+    closeAfter.current = null;
+    if (unsaved()) {
+      noteScheduled(id, { kind: "kept_open" });
+      return;
+    }
+    noteScheduled(id, { kind: "closed" }).finally(() => { api.closeWindow().catch(() => {}); });
+  }, [run.phase]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
 
@@ -335,6 +390,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         setSavedText(written);
         wroteBack();
         setStatus("saved");
+        writeTasks(current.schedules); // each save checks the tasks against the schedules it wrote
         return true;
       }
     } catch (e) {
@@ -346,20 +402,43 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   saveRef.current = asking ? () => {} : save; // while the close prompt asks, its buttons decide
 
   /** Start the ticked tasks: unsaved edits are saved first (each task reads the file at its start), then the runner starts on
-   * the file's task list and emulator. A save the checks refuse starts nothing, and says why as any save does. */
-  const startRun = async () => {
-    if (starting || isRunning(run)) return;
+   * the file's task list and emulator. A save the checks refuse starts nothing, and says why as any save does. Returns why
+   * nothing started, null when the run did. */
+  type NotStarted = Extract<Outcome, { kind: "refused" }>["why"];
+  const startRun = async (): Promise<NotStarted | null> => {
+    if (startingRef.current || isRunning(runRef.current)) return { error: "a run is under way" };
+    if (problems.length) return "problems";
+    startingRef.current = true;
     setStarting(true);
     try {
-      if (dirty && !(await save())) return;
+      if (dirty && !(await save())) return "save";
       const { s: now } = latest.current;
       const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
-      if (!entries.length) return;
-      dispatch({ type: "begin", entries });
-      await api.startRun(entries, now!.emulator, dispatch).catch((e: unknown) => dispatch({ type: "refused", error: String(e) }));
+      if (!entries.length) return "no_task";
+      const begin = { type: "begin", entries } as const;
+      runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
+      dispatch(begin);
+      return await api.startRun(entries, now!.emulator, dispatch).then(() => null, (e: unknown) => {
+        dispatch({ type: "refused", error: String(e) });
+        return { error: String(e) };
+      });
     } finally {
+      startingRef.current = false;
       setStarting(false);
     }
+  };
+  /** A scheduled run's start (#816, spec #811 「定時執行」): the task list runs as Start runs it, on the Run tab; skipped while a
+   * run is under way, not run when its schedule is not in the settings (a task left from an older file) or Start would not
+   * start. The window it opened closes when the run ends (the effect above); one that stays open says why. */
+  scheduledRef.current = async ({ id, opened }) => {
+    if (!latest.current.s?.schedules.some((x) => x.id === id)) return noteScheduled(id, { kind: "unknown" });
+    if (startingRef.current || isRunning(runRef.current)) return noteScheduled(id, { kind: "busy" });
+    setTab("run");
+    if (opened) closeAfter.current = id; // before the start: a run that ends at once still closes the window
+    const why = await startRun();
+    if (why === null) return noteScheduled(id, { kind: "started" });
+    if (closeAfter.current === id) closeAfter.current = null;
+    return noteScheduled(id, { kind: "refused", why });
   };
   const runner: Runner = {
     view: run,
@@ -477,7 +556,9 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
               ))}</ul>
             </div>
           )}
-          <RunnerContext.Provider value={runner}><Current /></RunnerContext.Provider>
+          <RunnerContext.Provider value={runner}>
+            <ScheduleContext.Provider value={{ synced, saved: savedSchedules, last: lastScheduled }}><Current /></ScheduleContext.Provider>
+          </RunnerContext.Provider>
         </div>
       </main>
       {leavePrompt}

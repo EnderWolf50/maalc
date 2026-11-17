@@ -20,7 +20,7 @@
 
 視窗用 `python/` 內附的 Python 跑執行器（`runner/`）與 bot，不需要另外安裝 Python。
 
-這一版起由設定視窗自己執行任務，zip 不再附 MXU，也不再支援 MFAAvalonia（[ADR 0015](docs/adr/0015-settings-window-runs-the-tasks.md)）。定時執行與自動更新由 #811 的其他票加入。v1.0.0 仍用 zip 附的 MXU 執行，說明見 v1.0.0 的 README。
+這一版起由設定視窗自己執行任務，zip 不再附 MXU，也不再支援 MFAAvalonia（[ADR 0015](docs/adr/0015-settings-window-runs-the-tasks.md)）。自動更新由 #811 的其他票加入。v1.0.0 仍用 zip 附的 MXU 執行，說明見 v1.0.0 的 README。
 
 從 v1.0.0 升級：把新 zip 解壓到新資料夾，再把舊資料夾的 `config/` 複製過去。設定視窗第一次打開時把設定檔升到版本 23，舊檔另存成 `config/settings.v22.json`。同時從 `config/mxu-maalc.json`（MXU 上次用的實例）讀回任務選項、任務清單的勾選與順序、模擬器位址；沒有 MXU 的檔就從 `config/settings.v20.json` 讀回任務選項，再沒有就用預設值。讀到什麼、哪些沒讀到要重填，在分頁上方列一次。MXU 的檔只讀不寫。webhook 在 MXU 裡加密存放，一定要重填。用 MFAAvalonia 的人要自己重設任務選項。
 
@@ -85,7 +85,7 @@
 
 ### 定時執行
 
-設定視窗建立的排程（星期、時間、是否叫醒電腦，設定檔的 `schedules`）寫進 Windows 工作排程器，時間到時打開視窗跑任務清單（#811）。
+在「執行」分頁的「定時執行」新增排程，選星期、時間與是否叫醒電腦（設定檔的 `schedules`），存檔就寫進 Windows 工作排程器。時間到時打開視窗跑勾選的任務，跑完自動關閉；視窗開著就在那個視窗跑，已經在跑就略過。電腦在那個時間沒開，登入後補跑一次；只在你登入 Windows 時執行。叫醒電腦還要 Windows 的電源選項允許喚醒計時器。每次的結果寫在 `logs\schedule.log`。搬動 maalc 資料夾後打開一次視窗，排程就改到新位置（[spec 04 第 14 節](docs/spec/04-settings.md#14-任務清單模擬器與排程tasksemulatorschedules)，#816）。
 
 ## 自行組裝
 
