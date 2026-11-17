@@ -12,7 +12,7 @@ The tools are in `tools/live/`, each with its options in `--help`. Reach for the
 | `queue.py` | the emulator and bench tickets, `wait --resource <bench|emulator> --name <ticket>` blocks until one ends and exits with its code (75: still running, run it again; give the ticket's `run` a `--log` so `wait` prints it), `pause` a hold, `detach`, `status`, `resume` |
 | `preflight.py` | `screen` names the emulator's screen before costly prep; `plan` checks a run in progress; `recording` notes a stretch with no new frames |
 | `backup.py hold` | backs up `install/` and verifies it after the run |
-| `bot.py` | `run` the bot headless into a stamped `run.log`, each task with the options a client sends (`--option NAME=VALUE`); `prep` a test install's settings file; `awake` keeps the screen on |
+| `bot.py` | `run` the bot headless through the install's runner (`runner/`, the one the settings window uses) into a stamped `run.log`, each task with the options a client sends (`--option NAME=VALUE`); `prep` a test install's settings file; `awake` keeps the screen on |
 | `device.py` | `shot`, `tap`, `key`, `start` or `restart` an app; `freeze` the bot on a log line to look or act, then resume |
 | `giveup.py` | `run` ends a Mirror Dungeon run early from a battle: Give Up, Forfeit, GiveUpRewards, never Claim; `look` names a capture's screen |
 | `evidence.py` | `events`, `steps`, `frames`, `clip`, `mask`; `map` and `packs`, the route and pack evidence of step 8 |
