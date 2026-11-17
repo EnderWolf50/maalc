@@ -46,8 +46,8 @@ ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
 
 class Out:
     """Where events go: the protocol (write takes one line) and, during a start, the run log, under one lock so both
-    keep one order. A write the reader no longer takes (it closed its end) stops the protocol; the run goes on and the
-    run log keeps every line."""
+    keep one order. Nothing follows the end event. A write the reader no longer takes (it closed its end) stops the
+    protocol; the run goes on and the run log keeps every line."""
 
     def __init__(self, write, clock=runlog.clock):
         self.write, self.clock, self.file, self.lock = write, clock, None, threading.Lock()
@@ -57,9 +57,18 @@ class Out:
         if self.before_end is not None:
             self.before_end()
 
+    def close_log(self) -> None:
+        """Close the run log; a line a reader thread logs after it goes to the protocol only."""
+        with self.lock:
+            f, self.file = self.file, None
+        if f is not None:
+            f.close()
+
     def send(self, name: str, /, **fields) -> None:
         with self.lock:
             self._send(protocol.event(name, **fields))
+            if name == "end":
+                self.write = None
 
     def log(self, source: str, text: str) -> None:
         with self.lock:
@@ -158,13 +167,14 @@ class Session:
     launch(manager, index) starts a MuMu instance (devices.launch); awake() keeps the machine on (keep_awake)."""
 
     def __init__(self, out: Out, framework, commands: Commands, *, sleep=time.sleep, monotonic=time.monotonic,
-                 agent_command=agent_command, launch=devices.launch, awake=keep_awake, wait=None):
+                 agent_command=agent_command, launch=devices.launch, awake=keep_awake):
         self.out, self.framework, self.commands = out, framework, commands
         self.sleep, self.now, self.agent_command, self.launch, self.awake = sleep, monotonic, agent_command, launch, awake
-        self.wait = wait or (lambda event, seconds: event.wait(seconds))  # a real-time wait for the bot's output
         self.tasker = self.client = self.agent = self.reader = None
-        self.stop_at = self.stopping = self.reposted = self.crash = self.halt = self.last_stop = None
-        self.timed_out = False
+        # stop_at: when the caller's stop came; stop_posted, reposted: the first post_stop (the caller's or the
+        # runner's own once the bot exited) and the last one
+        self.stop_at = self.stop_posted = self.reposted = self.crash = self.halt = self.last_stop = None
+        self.timed_out = self.halt_awaited = False
         self.halted = threading.Event()
         self.tail = deque(maxlen=TAIL)
         self.tasks, self.states = [], []
@@ -183,8 +193,8 @@ class Session:
                       **({"reason": reason} if reason is not None else {}))
 
     # scan
-    def scan(self, root: Path = ROOT) -> str:
-        found = devices.ordered(self.framework(root).devices())
+    def scan(self) -> str:
+        found = devices.ordered(self.framework(ROOT).devices())
         self.out.send("devices", devices=[devices.describe(d) for d in found])
         self.out.settle()
         self.out.send("end", result="succeeded")
@@ -211,16 +221,23 @@ class Session:
             self.say(f"end {result}")
             self.out.send("end", result=result)
         finally:
-            f, self.out.file = self.out.file, None
-            f.close()
+            self.out.close_log()
         return result
 
     def cancel_rest(self, result: str, reason: str | None) -> str:
         """Every task not yet ended is cancelled (with the reason, unless the caller stopped the run): the result."""
         for i, state in enumerate(self.states):
             if state in ("pending", "running"):
-                self.task(i, "cancelled", None if self.stop_at is not None else reason)
+                self.cancel(i, reason)
         return "stopped" if self.stop_at is not None else result
+
+    def cancel(self, i: int, reason: str | None) -> None:
+        self.task(i, "cancelled", None if self.stop_at is not None else reason)
+
+    def fail(self, kind: str, message: str, reason: str | None = None, **fields) -> str:
+        """The run fails before its first task: the error, then the tasks cancelled (reason, else the message)."""
+        self.error(kind, message, **fields)
+        return self.cancel_rest("failed", reason or message)
 
     def run(self, root: Path, want: dict) -> str:
         fw = self.framework(root)
@@ -231,8 +248,7 @@ class Session:
         ctl = fw.controller(device)
         ctl.post_connection().wait()
         if not ctl.connected:
-            self.error("connect_failed", f"could not connect to {device.address}")
-            return self.cancel_rest("failed", f"could not connect to {device.address}")
+            return self.fail("connect_failed", f"could not connect to {device.address}")
         self.out.send("connection", state="connected", address=device.address)
         self.say(f"connected {device.name} {device.address}")
         self.poll()
@@ -241,22 +257,19 @@ class Session:
         self.out.send("resource", state="loading")
         res = fw.resource()
         if not res.post_bundle(str(root / "resource" / "base")).wait().succeeded:
-            self.error("resource_failed", f"could not load {root / 'resource' / 'base'}")
-            return self.cancel_rest("failed", "the resource did not load")
+            return self.fail("resource_failed", f"could not load {root / 'resource' / 'base'}", "the resource did not load")
         self.out.send("resource", state="loaded")
         self.client = fw.agent_client()
         self.client.bind(res)
         self.start_agent(root, self.client.identifier)
         if not self.client.connect():
             code = self.agent.poll()
-            self.error("agent_failed", "the bot did not connect" + (f": it exited with code {code}" if code is not None else ""),
-                       **({"code": code} if code is not None else {}), tail=list(self.tail))
-            return self.cancel_rest("failed", "the bot did not start")
+            return self.fail("agent_failed", "the bot did not connect" + (f": it exited with code {code}" if code is not None else ""),
+                             "the bot did not start", **({"code": code} if code is not None else {}), tail=list(self.tail))
         t = fw.tasker()
         t.bind(res, ctl)
         if not t.inited:
-            self.error("internal", "the tasker did not initialise")
-            return self.cancel_rest("failed", "the tasker did not initialise")
+            return self.fail("internal", "the tasker did not initialise")
         self.say(f"start {','.join(task['entry'] for task in self.tasks)} pid {os.getpid()} agent {self.agent.pid} "
                  f"install {root}")
         self.tasker = t
@@ -362,17 +375,17 @@ class Session:
                 self.error("protocol", f"{c['cmd']}: a run is under way, only stop is taken")
 
     def post_stop(self) -> None:
-        self.stopping = self.stopping if self.stopping is not None else self.now()
+        self.stop_posted = self.stop_posted if self.stop_posted is not None else self.now()
         self.reposted = self.now()
         self.tasker.post_stop()
 
     def tick(self) -> None:
         """One look between two sleeps: the commands, a stop's re-posts and its limit, the bot still alive."""
         self.poll()
-        if self.stopping is not None and self.tasker.running:
+        if self.stop_posted is not None and self.tasker.running:
             if self.now() - self.reposted >= STOP_REPOST:
                 self.post_stop()
-            if not self.timed_out and self.now() - self.stopping >= STOP_LIMIT:
+            if not self.timed_out and self.now() - self.stop_posted >= STOP_LIMIT:
                 self.timed_out = True
                 self.error("stop_timeout", f"MaaFramework did not stop in {STOP_LIMIT:g} s: end the runner's process tree")
         if self.crash is None and self.agent.poll() is not None:
@@ -380,7 +393,7 @@ class Session:
             code = self.agent.returncode
             self.crash = f"the bot exited with code {code}"
             self.error("agent_exit", self.crash, code=code, tail=list(self.tail))
-            if self.stopping is None:
+            if self.stop_posted is None:
                 self.post_stop()
 
     def follow(self, jobs: list) -> None:
@@ -408,7 +421,7 @@ class Session:
         elif ran:
             self.task(i, "stopped" if self.stop_at is not None else "failed")
         else:
-            self.task(i, "cancelled", None if self.stop_at is not None else self.why_unrun())
+            self.cancel(i, None if self.stop_at is not None else self.why_unrun())
         self.say(f"{self.tasks[i]['entry']} status={self.states[i]} t={seconds:.0f}s")
         for n in (detail.nodes[-NODES:] if detail else []):
             self.say(f"node {n.name} {n.completed}")
@@ -418,6 +431,7 @@ class Session:
         reason, which it logged before the post_stop that the tasker's stop came from)."""
         if self.crash:
             return self.crash
-        if self.halt is None:
-            self.wait(self.halted, HALT_WAIT)
+        if self.halt is None and not self.halt_awaited:  # once: the next unrun task has the same answer
+            self.halt_awaited = True
+            self.halted.wait(HALT_WAIT)
         return self.halt or "MaaFramework stopped the task list"

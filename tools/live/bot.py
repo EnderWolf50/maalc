@@ -132,7 +132,7 @@ def stamped(cmd, log: Path, clock=clock, send: str | None = None, line=None) -> 
 
 
 def kill_tree(pid: int) -> None:
-    """End pid and every process under it."""
+    """End pid and every process under it (taskkill /T; the live tools run on Windows, elsewhere pid alone ends)."""
     if sys.platform == "win32":
         subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], capture_output=True)
     else:
@@ -183,6 +183,7 @@ def run(root: Path, tasks: list[str], port: int, options: list[str], log: Path) 
         f.writelines(f"{clock()} {line}\n" for line in said)
     if jobs is None:
         return 1
+    # v: runner/protocol.py VERSION (tests/test_live_bot.py ties the two)
     start = {"v": 1, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
              "tasks": [{"entry": entry, "override": override} for _, entry, override in jobs]}
     return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),

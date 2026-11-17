@@ -2,6 +2,7 @@
 is a release build (it has the bundled python/); release.yml runs this file right after the build."""
 
 import json
+import os
 import subprocess
 from collections import Counter
 from pathlib import Path
@@ -54,6 +55,21 @@ def test_bundled_python_runs_the_runner_and_it_answers_in_its_protocol():
     assert r.returncode == 2, r.stdout + r.stderr
     assert [e["event"] for e in events] == ["ready", "error", "end"] and events[1]["kind"] == "protocol"
     assert not (TREE / "logs").exists()
+
+
+def test_bundled_python_loads_maafw_through_the_runners_framework(tmp_path):
+    """The runner's Framework (runner/framework.py) on the bundled Python loads MaaFramework and MaaToolkit from
+    maafw/. Its root is tmp_path, which takes the toolkit's debug/ (the zipped tree gets none), with maafw/ named by
+    MAAFW_BINARY_PATH, which Framework keeps when its root has no maafw/ of its own."""
+    code = ("import runpy; from pathlib import Path; "
+            f"runpy.run_path({str(TREE / 'runner' / '__main__.py')!r}, run_name='loaded'); "
+            "from runner.framework import Framework; from maa.library import Library; "
+            f"Framework(Path({str(tmp_path)!r})); Library.framework(); print(Library.framework_libpath)")
+    env = {**os.environ, "MAAFW_BINARY_PATH": str(TREE / "maafw")}
+    r = subprocess.run([str(PYTHON), "-B", "-c", code], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    assert Path(r.stdout.strip().splitlines()[-1]).resolve() == (TREE / "maafw" / "MaaFramework.dll").resolve()
+    assert (tmp_path / "debug").is_dir()
 
 
 def test_resource_base_holds_the_package_and_its_manifest():

@@ -11,6 +11,7 @@ import pytest
 import client_override
 from client_options import TEAM_OPTIONS, override
 from live import bot
+from runner import protocol
 
 
 def test_run_stamps_every_line_of_the_child_and_its_exit(tmp_path):
@@ -255,8 +256,9 @@ def test_run_goes_through_the_installs_runner_with_each_tasks_override_and_logs_
     assert code == 0
     start = json.loads((root / "runner/start.json").read_text(encoding="utf-8"))
     hard = [{"MirrorEntry": {"attach": {"difficulty": "hard"}}}]
-    assert start == {"v": 1, "cmd": "start", "root": str(root.resolve()), "device": {"address": "127.0.0.1:16416"},
-                     "tasks": [{"entry": "MirrorEntry", "override": hard}] * 2}
+    assert start == {"v": protocol.VERSION, "cmd": "start", "root": str(root.resolve()),
+                     "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry", "override": hard}] * 2}
+    assert protocol.command(json.dumps(start))["tasks"] == start["tasks"]  # a start the runner takes as it is
     lines = log.read_text(encoding="utf-8").splitlines()
     assert [ln.split(" ", 1)[1] for ln in lines[:2]] == ["[run] Mirror options: Difficulty=hard"] * 2
     assert " [run] child pid " in lines[2]  # tools/live/preflight.py's BOT_START

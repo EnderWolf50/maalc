@@ -10,8 +10,8 @@
                   "tasks": [{"entry": "MirrorDungeon", "override": {}}]}
     },
     {
-      "line": "{\"v\": 1, \"cmd\": \"start\", \"root\": \"D:/maalc\", \"device\": {\"address\": \"127.0.0.1:16384\", \"mumu_index\": 0, \"mumu_manager\": \"C:/MuMu/nx_main/MuMuManager.exe\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\", \"override\": [{\"MirrorDungeon\": {\"attach\": {\"difficulty\": \"hard\"}}}]}, {\"entry\": \"ExpLuxcavation\", \"override\": {\"ExpLuxcavation\": {\"attach\": {\"team\": \"t3\"}}}}]}",
-      "command": {"cmd": "start", "root": "D:/maalc",
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"root\": \"C:/maalc\", \"device\": {\"address\": \"127.0.0.1:16384\", \"mumu_index\": 0, \"mumu_manager\": \"C:/MuMu/nx_main/MuMuManager.exe\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\", \"override\": [{\"MirrorDungeon\": {\"attach\": {\"difficulty\": \"hard\"}}}]}, {\"entry\": \"ExpLuxcavation\", \"override\": {\"ExpLuxcavation\": {\"attach\": {\"team\": \"t3\"}}}}]}",
+      "command": {"cmd": "start", "root": "C:/maalc",
                   "device": {"address": "127.0.0.1:16384", "mumu_index": 0, "mumu_manager": "C:/MuMu/nx_main/MuMuManager.exe"},
                   "tasks": [{"entry": "MirrorDungeon", "override": [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}]},
                             {"entry": "ExpLuxcavation", "override": {"ExpLuxcavation": {"attach": {"team": "t3"}}}}]}

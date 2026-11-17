@@ -306,6 +306,31 @@ def test_the_bots_own_stop_of_the_whole_list_cancels_the_rest_with_its_reason(tm
     assert not run.of("error") and world.stops == []  # the bot stopped it; the runner had nothing to stop
 
 
+def test_a_tasker_that_stops_with_no_reason_from_the_bot_waits_for_one_once(tmp_path):
+    # no account-level stop line comes: each unrun task says MaaFramework stopped the list, after one wait in all
+    world = World({"MirrorDungeon": (2, "halt"), "ExpLuxcavation": (2, "succeeded"), "ClaimMail": (2, "succeeded")})
+    run = Run(tmp_path, world)
+    began = time.monotonic()
+    assert run.start([*TWO, {"entry": "ClaimMail"}]) == "failed"
+    assert time.monotonic() - began < session.HALT_WAIT * 2
+    assert run.states()[-2:] == [(1, "cancelled", "MaaFramework stopped the task list"),
+                                 (2, "cancelled", "MaaFramework stopped the task list")]
+
+
+def test_nothing_follows_the_end_event_and_a_line_after_the_run_log_closed_goes_out_only(tmp_path):
+    # a reader thread (the console, a bot's last line) may log while the run log closes, or after the end
+    sent = []
+    out = Out(lambda text: sent.append(json.loads(text)), clock=lambda: "12:00:00.000")
+    out.file = open(tmp_path / "run.log", "w", encoding="utf-8")
+    out.log("agent", "[maalc] a")
+    out.close_log()
+    out.log("console", "b")
+    out.send("end", result="succeeded")
+    out.log("console", "c")
+    assert [e.get("line", e["event"]) for e in sent] == ["[maalc] a", "b", "end"]
+    assert (tmp_path / "run.log").read_text(encoding="utf-8") == "12:00:00.000 [maalc] a\n"
+
+
 def test_the_bot_exiting_mid_run_fails_the_run_with_its_code_and_last_lines(tmp_path):
     world = World({"MirrorDungeon": (1000, "succeeded"), "ExpLuxcavation": (2, "succeeded")})
     run = Run(tmp_path, world, "[maalc] task MirrorDungeon started", "Traceback (most recent call last):",
