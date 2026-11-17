@@ -400,7 +400,7 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 | 任務 | `id` | 字串 | `MirrorDungeon`、`AssembleModules`、`ClaimMail`、`ExpLuxcavation`、`ThreadLuxcavation`、`ClaimPassMissions`、`ChargeEnkephalin` 之一，也是它的入口節點（`interface.json` 的 `task`，`tests/test_interface.py` 檢查兩邊一致） | — |
 | 勾選 | `enabled` | 布林 | 開始時跑不跑這個任務 | 關 |
 
-- 新的設定檔與遷移（版本 22 的檔沒有 `tasks`）：照 README 的建議順序列 8 項，都不勾：`ChargeEnkephalin`、`AssembleModules`、`ExpLuxcavation`、`ThreadLuxcavation`、`AssembleModules`、`ClaimPassMissions`、`ClaimMail`、`MirrorDungeon`。狂氣換腦啡肽排第一：設了次數時，換到的腦啡肽由後面的換腦啡肽模組一起換成模組。這份清單是 schema 裡 `tasks` 的 `default`，Agent 與 GUI 都從那裡讀（`tests/test_settings.py` 核對它和 README 的建議順序一致）。
+- 新的設定檔與遷移（版本 22 的檔沒有 `tasks`）：照 README 的建議順序列 8 項，都不勾：`ChargeEnkephalin`、`AssembleModules`、`ExpLuxcavation`、`ThreadLuxcavation`、`AssembleModules`、`ClaimPassMissions`、`ClaimMail`、`MirrorDungeon`。狂氣換腦啡肽排第一：設了次數時，換到的腦啡肽由後面的換腦啡肽模組一起換成腦啡肽模組。這份清單是 schema 裡 `tasks` 的 `default`，Agent 與 GUI 都從那裡讀（`tests/test_settings.py` 核對它和 README 的建議順序一致）。
 - 列幾次、順序都不限，也可以少列（schema 不檢查）。GUI 讀檔時把少列的任務補在最後、不勾，每個一項，照新檔清單裡第一次出現的順序，讓「執行」分頁能勾選它；不勾的任務不會跑，所以補上不改變執行的內容（#814）。不認得的任務 id 是 schema 的錯。
 - 「執行」分頁：每一項一列，勾選框決定 `enabled`，拖曳或 ↑↓ 改順序；點一列在右邊顯示那個任務的選項，沒有選項的任務寫「這個任務沒有選項」，列了不只一次的任務另寫「列了 n 次，每一項各自勾選、排順序，都用這裡的選項」。同一個任務的各項，勾選框的名稱帶它是第幾項（螢幕閱讀器念「執行第 2 項「換腦啡肽模組」」）。點的那一項記在它是那個任務的第幾項，所以拖動後選取還在同一項上。清單下方的「＋ 再加一次「任務名稱」」在點的那一項後面多列一項同一個任務（不勾），並選取它；點的任務列了不只一次時，旁邊有「移除這一項」，拿掉點的那一項，選取移到那個任務剩下的第一項。任務的最後一項沒有「移除這一項」，所以每個任務都留在清單上。這兩個按鈕和清單一樣在執行中不能按。選項有問題的任務，它的每一列都標紅，點問題會切到那個任務的第一項、聚焦那個欄位。
 
