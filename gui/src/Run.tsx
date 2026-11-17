@@ -1,8 +1,7 @@
 // The Run tab (#814, #815, #816, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device
 // scan; the task list on the left (ticks, drag or ↑↓: the run order; a task listed again, or an extra entry removed, #811)
-// and the picked task's options on the right; the global
-// options in a frame of their own; the scheduled runs (Schedules.tsx); the runner's Start and Stop, each posted task's state
-// and the live log at the bottom. Each control
+// and the picked task's options on the right; the global options in a frame of their own; the scheduled runs
+// (Schedules.tsx); the runner's Start and Stop, each posted task's state and the live log at the bottom. Each control
 // writes the settings key the runner or the agent reads at a task's start, and shows that key beside its label: the agent's
 // stop lines name an option by it ("run/start_team: team 'x' was deleted ..."). A team pick lists the settings' teams as they
 // are now. During a run the settings it reads are locked (LockContext): a task still shows its options when clicked.
@@ -64,10 +63,12 @@ function Switch({ path, checked, note, onChange }: { path: string; checked: bool
   );
 }
 
-/** An entry's pick key: its task's id for the task's first entry, `<id>#<n>` for the one after n others (a task may be listed
- * more than once, #811), so the pick stays on its entry when the list is reordered; a pick by id alone is the first entry. */
-const entryKey = (tasks: { id: string }[], j: number) => {
-  const n = tasks.slice(0, j).filter((x) => x.id === tasks[j].id).length;
+/** How many entries of entry j's task come before it (a task may be listed more than once, #811). */
+const nthOf = (tasks: { id: string }[], j: number) => tasks.slice(0, j).filter((x) => x.id === tasks[j].id).length;
+/** An entry's pick key: its task's id for the task's first entry, `<id>#<n>` for the one after n others, so the pick stays on
+ * its entry when the list is reordered; a pick by id alone is the task's first entry. */
+export const entryKey = (tasks: { id: string }[], j: number) => {
+  const n = nthOf(tasks, j);
   return n ? `${tasks[j].id}#${n}` : tasks[j].id;
 };
 
@@ -75,8 +76,7 @@ export function RunTab() {
   const { s, update, t, bad } = useEditor();
   // each entry a row of its own: `nth` is its place among its task's entries (from 0), `of` how many the task has
   const rows = s.tasks.map((x, j) => ({
-    ...x, key: entryKey(s.tasks, j), nth: s.tasks.slice(0, j).filter((y) => y.id === x.id).length,
-    of: s.tasks.filter((y) => y.id === x.id).length,
+    ...x, key: entryKey(s.tasks, j), nth: nthOf(s.tasks, j), of: s.tasks.filter((y) => y.id === x.id).length,
   }));
   const [i, setSel] = usePick("tasks", rows.map((x) => ({ id: x.key })));
   const picked = rows[i];

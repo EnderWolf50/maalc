@@ -176,16 +176,20 @@ describe("from MXU's config file", () => {
     expect(report.missed).toEqual([{ kind: "task", name: "Gone" }]); // the two Assemble Modules have no options to differ
   });
 
-  test("a task's options come from its first ticked entry, else its first; copies whose options differ are named", () => {
+  test("a task's options come from its first ticked entry, else its first; copies that read as other values are named", () => {
     const text = mxu([
       { taskName: "ExpLuxcavation", enabled: false, optionValues: { ExpRetries: input({ retries: "4" }) } },
       { taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpRetries: input({ retries: "2" }) } },
       { taskName: "ThreadLuxcavation", enabled: false, optionValues: { ThreadRetries: input({ retries: "3" }) } },
       { taskName: "ThreadLuxcavation", enabled: false, optionValues: { ThreadRetries: input({ retries: "1" }) } },
-      // the same values (keys in another order) and an option maalc does not read: nothing to name
-      { taskName: "MirrorDungeon", enabled: true, optionValues: { MirrorDifficulty: select("hard"), MirrorRuns: input({ runs: "2" }) } },
+      // what maalc reads is the same, so nothing to name: the runs MXU still holds under its limit's No, a floor left at its
+      // default against one set to it, the keys in another order, an option maalc does not read
       { taskName: "MirrorDungeon", enabled: true, optionValues: {
-        MirrorRuns: { values: { runs: "2" }, type: "input" }, MirrorDifficulty: select("hard"), MirrorOld: select("x"),
+        MirrorDifficulty: select("hard"), MirrorRunsLimit: toggle(false), MirrorRuns: input({ runs: "2" }),
+      } },
+      { taskName: "MirrorDungeon", enabled: true, optionValues: {
+        MirrorRuns: { values: { runs: "5" }, type: "input" }, MirrorRunsLimit: toggle(false), MirrorDifficulty: select("hard"),
+        MirrorTargetFloor: select("5"), MirrorOld: select("x"),
       } },
     ]);
     const { data, report } = readBack(migrated(), 22, files(text));

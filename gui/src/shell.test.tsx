@@ -124,6 +124,18 @@ test("a problem in a task's option opens the Run tab with that task picked, its 
   expect(document.querySelector(".task-list li.selected")).toHaveClass("bad");
 });
 
+test("a problem in a task list entry picks that entry, the second of a task listed twice too (#811)", async () => {
+  const s = newSettings();
+  (s.tasks[4] as { enabled: unknown }).enabled = "yes"; // the second Assemble Modules, broken by hand
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App start="teams" />);
+  await user.click(within(await screen.findByRole("alert")).getByRole("button"));
+  const rows = [...document.querySelectorAll(".task-list li")];
+  expect(rows[4]).toHaveClass("selected");
+  expect(rows[1]).not.toHaveClass("selected");
+});
+
 describe("an older file (#782, #813)", () => {
   const write = (data: unknown) => (file.text = JSON.stringify(data, null, 2) + "\n");
 

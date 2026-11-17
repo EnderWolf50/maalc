@@ -301,7 +301,7 @@ const zh_tw = {
   "tasks.title": "任務清單",
   "tasks.note": "勾選的任務由上往下依序執行。拖曳或用 ↑↓ 調整順序。\n同一個任務可以再加一次，例如換腦啡肽模組排在副本前後各一次。每一項各自勾選，選項共用。\n點一個任務，右邊顯示它的選項。",
   "tasks.tick": "執行「{name}」",
-  "tasks.tick_nth": "執行第 {n} 個「{name}」",
+  "tasks.tick_nth": "執行第 {n} 項「{name}」",
   "tasks.again": "再加一次「{name}」",
   "tasks.remove": "移除這一項",
   "tasks.entries": "這個任務在清單裡列了 {n} 次：每一項各自勾選、排順序，都用這裡的選項。",
@@ -487,7 +487,7 @@ const zh_tw = {
   "rb.value": "{where}：舊值「{value}」對不到，照預設值。",
   "rb.team": "{where}：隊伍「{team}」已經刪掉，改成「{none}」。",
   "rb.task": "MXU 的任務「{name}」不是 maalc 的任務，略過。",
-  "rb.differ": "MXU 列了 {n} 次「{task}」，各項的選項不一樣：這些項目共用一份選項，用勾選的第一個的（都沒勾就用第一個）。",
+  "rb.differ": "MXU 列了 {n} 次「{task}」，各項的選項不一樣：這些項共用一份選項，用勾選的第一項的（都沒勾就用第一項的）。",
   "rb.dismiss": "知道了",
   "rb.on": "開", "rb.off": "關", "rb.set": "已設定", "rb.no_limit": "不限局數", "rb.sep": "、",
 };

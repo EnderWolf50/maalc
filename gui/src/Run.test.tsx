@@ -31,7 +31,7 @@ test("the global options the tab shows are the run keys every task reads in the 
 describe("the task list", () => {
   test("a new file lists the README's suggested order, Assemble Modules before and after the Luxcavations, none ticked (#811)", () => {
     renderEditor(<RunTab />, newSettings());
-    // README 建議順序: 換腦啡肽模組 → 經驗本 → 紐本 → 換腦啡肽模組 → 領通行證任務 → 領信 → 鏡牢; the Lunacy charge before the first assembly
+    // README 建議順序: 狂氣換腦啡肽 → 換腦啡肽模組 → 經驗本 → 紐本 → 換腦啡肽模組 → 領通行證任務 → 領信 → 鏡牢
     expect(rows().map((x) => x.textContent)).toEqual([
       "狂氣換腦啡肽", "換腦啡肽模組", "經驗本", "紐本", "換腦啡肽模組", "領通行證任務", "領信", "鏡牢",
     ].map((name) => expect.stringContaining(name)));

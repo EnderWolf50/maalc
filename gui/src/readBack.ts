@@ -122,11 +122,6 @@ function setAt(d: Settings, path: string, v: unknown) {
 }
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
 const shown = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v) ?? String(v));
-/** A value as text that does not depend on the order of an object's keys: two MXU entries' options compared. */
-const canonical = (v: unknown): string =>
-  Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
-    : isObject(v) ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
-      : JSON.stringify(v) ?? "undefined";
 
 /** What reads the values back into the settings: it sets a value, or notes one that did not come back. */
 class Reader {
@@ -275,14 +270,21 @@ export function readBack(data: Settings, version: number, files: ReadBackFiles):
       for (const id of new Set(entries.map((e) => e.id))) {
         const list = entries.filter((e) => e.id === id).map((e) => e.task);
         const specs = Object.entries(TASK_OPTIONS[id] ?? {});
-        const valuesOf = (t: MxuTask) => (isObject(t.optionValues) ? t.optionValues : {});
-        // the task's entries share its options: the first ticked one's count, and copies that had others are named
-        const read = (t: MxuTask) => canonical(specs.map(([name]) => valuesOf(t)[name]));
-        if (new Set(list.map(read)).size > 1) reader.missed.push({ kind: "differ", task: id, n: list.length });
-        const values = valuesOf(list.find(ticked) ?? list[0]);
-        // the runs' switch before the runs: its No wins over a count MXU still holds
-        const limitOff = isObject(values.MirrorRunsLimit) && values.MirrorRunsLimit.value === false;
-        for (const [name, s] of specs) if (name in values && !(limitOff && name === "MirrorRuns")) reader.mxu(s, values[name]);
+        const paths = [...new Set(specs.map(([, s]) => s.path))];
+        const readInto = (r: Reader, t: MxuTask) => {
+          const values = isObject(t.optionValues) ? t.optionValues : {};
+          // the runs' switch before the runs: its No wins over a count MXU still holds
+          const limitOff = isObject(values.MirrorRunsLimit) && values.MirrorRunsLimit.value === false;
+          for (const [name, s] of specs) if (name in values && !(limitOff && name === "MirrorRuns")) r.mxu(s, values[name]);
+        };
+        // the task's entries share its options: the first ticked one's count, and copies that read as other values are named
+        const readAs = (t: MxuTask) => {
+          const r = new Reader(structuredClone(out), reader.labels);
+          readInto(r, t);
+          return JSON.stringify(paths.map((path) => getAt(r.data, path)));
+        };
+        if (new Set(list.map(readAs)).size > 1) reader.missed.push({ kind: "differ", task: id, n: list.length });
+        readInto(reader, list.find(ticked) ?? list[0]);
       }
       for (const [name, s] of Object.entries(GLOBAL_OPTIONS)) if (name in globals) reader.mxu(s, globals[name]);
     }
