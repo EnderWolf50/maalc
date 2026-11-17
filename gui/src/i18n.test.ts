@@ -58,8 +58,9 @@ describe("the UI text keeps the STE rules a program can check", () => {
 });
 
 describe("English names a press of Start a session and keeps run for a Mirror Dungeon run (GLOSSARY 執行, 局)", () => {
-  // the texts whose "run" is a 局: the Mirror Dungeon task's options, the team queue, a team's fields
-  const ofMirrorRuns = /^(run|team|queue|weekly_bonus_amount|after_retries|skill|gl)\.|^resetConfirm$/;
+  // the texts whose "run" is a 局: the Mirror Dungeon task's options (run.*, but the global options under it), the team
+  // queue, a team's fields
+  const ofMirrorRuns = /^run\.(?!webhook_url|auto_|keep_dismissed_screens)|^(team|queue|weekly_bonus_amount|after_retries|skill|gl)\.|^resetConfirm$/;
   // a lower-case run: "the Run tab" names the tab, after the verb (GLOSSARY 執行)
   const runNoun = /\b([Aa]n?|[Tt]he|[Tt]his|[Ee]ach|[Pp]er|[Nn]ext) runs?\b|\bruns? (is|ends|failed)\b|\bScheduled runs\b|\brun order\b/;
 

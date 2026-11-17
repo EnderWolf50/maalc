@@ -236,8 +236,8 @@ impl Scheduled {
     /// The scheduled run a start's arguments bring (`--run <id>`), if any: `opened` for this window's own start; `root` the
     /// folder whose update state it reads now, as it comes.
     fn of(args: &[String], opened: bool, root: Option<&Path>) -> Option<Scheduled> {
-        let update_unfinished = root.is_some_and(update::left_unfinished);
-        schedule::run_arg(args).map(|id| Scheduled { id, opened, update_unfinished })
+        let update_unfinished = || root.is_some_and(update::left_unfinished); // read only for a start that brings --run
+        schedule::run_arg(args).map(|id| Scheduled { id, opened, update_unfinished: update_unfinished() })
     }
 }
 

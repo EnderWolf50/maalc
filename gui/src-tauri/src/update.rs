@@ -575,10 +575,11 @@ pub fn settle(root: &Path) -> Option<Outcome> {
     let outcome = read_journal(root);
     let old = old_dir(root);
     if outcome.as_ref().is_some_and(Outcome::keeps_old) {
-        if holds_files(&old) {
+        // an emptied old/ goes, never recursively: an apply under way may move its first entry in just now, and a
+        // remove_dir that finds it there fails and keeps both
+        if holds_files(&old) || (old.exists() && fs::remove_dir(&old).is_err()) {
             return outcome;
         }
-        let _ = remove_tree(&old);
     } else {
         let _ = remove_tree(&old);
     }

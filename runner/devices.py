@@ -62,7 +62,7 @@ def launch(manager: str, index: int, run=subprocess.run) -> tuple[int | None, st
     (None, why) when it could not run."""
     quiet = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     r, note = None, ""
-    for flags in dict.fromkeys((quiet | CREATE_BREAKAWAY_FROM_JOB, quiet)):  # one try when both are the same
+    for flags in (quiet | CREATE_BREAKAWAY_FROM_JOB, quiet):
         try:
             r = run(launch_command(manager, index), capture_output=True, timeout=LAUNCH_TIMEOUT,
                     stdin=subprocess.DEVNULL, creationflags=flags)
