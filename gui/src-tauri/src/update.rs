@@ -489,7 +489,7 @@ pub fn launch(root: &Path, staged: &Path, pid: u32) -> Result<(), String> {
 
 /// The apply-update mode: `maalc-gui.exe --apply-update <root> --wait <pid> --from <version>`, which `launch` starts from the
 /// unpacked new version. Some(exit code) when the arguments ask for it; None for any other start. lib.rs run calls it before
-/// Tauri and its single-instance plugin start, so this process never hands itself to the window that is still open.
+/// the one window per folder (instance.rs) and Tauri, so this process never hands itself to a window that is still open.
 pub fn apply_mode(args: &[String]) -> Option<i32> {
     let at = args.iter().position(|a| a == "--apply-update")?;
     let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();

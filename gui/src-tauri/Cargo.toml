@@ -17,8 +17,6 @@ tauri-build = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
-# a second start hands its arguments to the window that is open (#815)
-tauri-plugin-single-instance = "2"
 # The self-update (src/update.rs, #817): the release check and the download over Windows' own TLS and certificate store, the
 # zip's sha256 (the version tauri-codegen already locks), the release's version against this one, and the zip it unpacks.
 semver = "1"
@@ -26,9 +24,15 @@ sha2 = "0.10"
 ureq = { version = "3", default-features = false, features = ["native-tls-no-default"] }
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
-# The runner's process tree in a Job Object (src/runner.rs); the version Tauri's own dependencies already lock.
+# The runner's process tree in a Job Object (src/runner.rs), and one window per maalc folder: a named mutex and pipe
+# (src/instance.rs); the version Tauri's own dependencies already lock.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Pipes",
+  "Win32_System_Threading", "Win32_System_IO", "Win32_System_SystemInformation", "Win32_UI_WindowsAndMessaging",
+] }
+# The Task Scheduler's COM interface (src/schedule.rs, #816); the version Tauri's own dependencies already lock.
+windows = { version = "0.62", features = ["Win32_System_Com", "Win32_System_Ole", "Win32_System_TaskScheduler", "Win32_System_Variant"] }
 
 [profile.release]
 codegen-units = 1

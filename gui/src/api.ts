@@ -1,6 +1,7 @@
 // File access through the Rust side (src-tauri/src/lib.rs). In a plain browser (`pnpm dev`,
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
 import { Channel, convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Settings } from "./model";
 import type { Device, Message } from "./runner";
@@ -161,6 +162,31 @@ export const isMismatch = (e: unknown) => String(e).includes(MISMATCH);
 /** The error of what a run refuses, an apply too (lib.rs RUN_UNDER_WAY). */
 export const RUN_UNDER_WAY = "a run is under way";
 export const isRunUnderWay = (e: unknown) => String(e).includes(RUN_UNDER_WAY);
+/** A scheduled run's start the window was handed (`maalc-gui.exe --run <id>`, lib.rs take_scheduled): its schedule's id, and
+ * whether this window was opened for it (it closes when the run ends) or was open already. */
+export interface Scheduled { id: string; opened: boolean }
+
+/** The scheduled runs' starts the window got since the last call, in order: its own start's, then each second start's. */
+export const takeScheduled = (): Promise<Scheduled[]> => (tauri ? invoke("take_scheduled") : Promise.resolve([]));
+
+/** Call `more` each time a second start brings a scheduled run (takeScheduled has it). Returns the function that stops. */
+export function onScheduled(more: () => void): () => void {
+  if (!tauri) return () => {};
+  const listening = listen("scheduled", () => more());
+  return () => { listening.then((stop) => stop()); };
+}
+
+/** Append a line to logs/schedule.log (lib.rs log_schedule): what came of a scheduled run's start. */
+export const logSchedule = (line: string): Promise<void> => (tauri ? invoke("log_schedule", { line }) : Promise.resolve());
+
+/** What bringing the Task Scheduler in line with the schedules did (lib.rs sync_schedules, schedule.rs Synced): the task
+ * names written, kept and deleted, and what could not be done; `prefix` begins this folder's task names. */
+export interface Synced { prefix: string; written: string[]; kept: string[]; deleted: string[]; errors: string[] }
+
+/** Write this folder's Task Scheduler tasks as `schedules` say, the settings file's: one task each, those of deleted
+ * schedules deleted. Rejects with why when the Task Scheduler cannot be reached (and in a plain browser). */
+export const syncSchedules = (schedules: Settings["schedules"]): Promise<Synced> =>
+  tauri ? invoke("sync_schedules", { schedules }) : Promise.reject(new Error("only the app reaches the Task Scheduler"));
 
 /** Ask the window to close, as Alt+F4 does: the page's title bar ✕ (tauri.conf.json has no system bar). The request goes
  * to the onCloseRequested listener, which keeps the window open while it asks. */

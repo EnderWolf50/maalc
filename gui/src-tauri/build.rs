@@ -19,6 +19,9 @@ fn main() {
             "last_update",
             "download_update",
             "apply_update",
+            "take_scheduled",
+            "log_schedule",
+            "sync_schedules",
         ]),
     ))
     .unwrap();

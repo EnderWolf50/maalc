@@ -1,14 +1,16 @@
-// The Run tab (#814, #815, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device scan;
-// the task list on the left (ticks, drag or ↑↓: the run order) and the picked task's options on the right; the global options
-// in a frame of their own; the runner's Start and Stop, each posted task's state and the live log at the bottom. Each control
+// The Run tab (#814, #815, #816, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device
+// scan; the task list on the left (ticks, drag or ↑↓: the run order) and the picked task's options on the right; the global
+// options in a frame of their own; the scheduled runs (Schedules.tsx); the runner's Start and Stop, each posted task's state
+// and the live log at the bottom. Each control
 // writes the settings key the runner or the agent reads at a task's start, and shows that key beside its label: the agent's
 // stop lines name an option by it ("run/start_team: team 'x' was deleted ..."). A team pick lists the settings' teams as they
 // are now. During a run the settings it reads are locked (LockContext): a task still shows its options when clicked.
-import { memo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
 import { LOG_LINES, isRunning, useRunner, type Device, type LogLine, type RunView } from "./runner";
 import * as api from "./api";
+import { SchedulesSection } from "./Schedules";
 import { Choice, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
 
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
@@ -103,6 +105,8 @@ export function RunTab() {
       </div>
       <GlobalOptions />
       </LockContext.Provider>
+      {/* the run reads no schedule: they stay open to edits during a run (#816) */}
+      <SchedulesSection />
       <RunnerSection />
     </div>
   );
@@ -131,9 +135,16 @@ const LogRow = memo(function LogRow({ line }: { line: LogLine }) {
  * LOG_LINES lines, MaaFramework's own output hidden unless asked for), and how a run that went wrong ended. */
 function RunnerSection() {
   const { t } = useEditor();
-  const { view, start, stop, blocked } = useRunner();
+  const { view, start, stop, blocked, reveal, revealed } = useRunner();
   const running = isRunning(view);
   const [showConsole, setShowConsole] = useState(false);
+  // a scheduled run's window shows its log and Stop (spec #811 「定時執行」): they sit at the tab's bottom
+  const box = useRef<HTMLFieldSetElement>(null);
+  useEffect(() => {
+    if (!reveal) return;
+    box.current?.scrollIntoView?.({ block: "start" });
+    revealed?.();
+  }, [reveal]);
   const shown = showConsole ? view.log : view.log.filter((l) => l.source !== "console");
   // the log follows its newest line while the user has not scrolled up from the bottom
   const pane = useRef<HTMLOListElement>(null);
@@ -141,7 +152,7 @@ function RunnerSection() {
   useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole]);
   const crashed = view.exit && !view.exit.ended && !view.killed;
   return (
-    <fieldset className="runner">
+    <fieldset className="runner" ref={box}>
       <legend>{t("runner.title")}</legend>
       <div className="runner-bar">
         <button type="button" className="primary" disabled={running || blocked !== null} onClick={start}>{t("runner.start")}</button>

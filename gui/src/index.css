@@ -482,6 +482,22 @@ fieldset.queue { align-items: stretch; }
 .run-log time { flex: none; color: var(--muted); }
 .run-log .src-runner span { color: var(--accent-ink); } /* the runner's own [run] lines: the run's steps */
 .run-log .src-console span, .run-log .src-raw span { color: var(--muted); }
+.run-log .src-window span { color: var(--fg-2); font-style: italic; } /* the window's own lines: a scheduled run's start (#816) */
+/* the scheduled runs (#816): one row a schedule, its weekdays, time, wake switch and delete, its task's name under them */
+.run-page fieldset.schedules { align-items: stretch; }
+.schedule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.schedule-list > li {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 22px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 2px; corner-shape: bevel; background: var(--raise);
+}
+.schedule-list .days { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.schedule-list .days .label { font-size: 12.5px; font-weight: 600; color: var(--fg-2); margin-right: 2px; }
+.schedule-list .day { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.schedule-list .day:has(input:disabled) { cursor: default; }
+.schedule-list .toggle { max-width: 26em; }
+.schedule-list > li > button.danger { margin-left: auto; }
+.schedule-list .task-name { flex-basis: 100%; color: var(--muted); font: 400 11.5px/1.3 Consolas, monospace; }
+.sched-last { margin: 0; color: var(--fg-2); }
 .runner .crash { padding: 8px 12px; border: 1px solid var(--bad); border-radius: 2px; background: var(--bad-soft); }
 .runner .crash p { margin: 0 0 6px; color: var(--bad); font-weight: 600; }
 .runner .crash pre { margin: 0; max-height: 200px; overflow: auto; white-space: pre-wrap; font: 12.5px/1.45 Consolas, monospace; }
