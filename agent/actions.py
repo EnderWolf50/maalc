@@ -117,6 +117,9 @@ def until(context, done, timeout=2.0, least=0.0, every=0.2):
     """Screenshots every `every` s until done(image) holds: that image, or None after timeout s (#58).
 
     least: s to wait before the first look, where the game ignores taps during an animation.
+
+    A task that is stopping (the runner's stop, #812) ends the wait at once with None, as a timeout does: a stop waits
+    for the custom action under way to return.
     """
     time.sleep(least)
     end = time.monotonic() + timeout
@@ -124,7 +127,7 @@ def until(context, done, timeout=2.0, least=0.0, every=0.2):
         image = screen(context)
         if done(image):
             return image
-        if time.monotonic() >= end:
+        if time.monotonic() >= end or context.tasker.stopping:
             return None
         time.sleep(every)
 

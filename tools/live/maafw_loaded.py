@@ -3,7 +3,7 @@
     uv run --group probe python tools/live/maafw_loaded.py PID...
 
 Give the PID of what runs the tasks: the settings window (`maalc-gui.exe`, which starts the runner, ADR 0015), the
-runner, or `bot.py tasker`. For it and the processes under it, a line per loaded DLL whose name starts with
+runner (`bot.py run` starts one too). For it and the processes under it, a line per loaded DLL whose name starts with
 Maa: size and path. The agent, a child of the runner, shows MaaAgentServer.dll and no MaaFramework.dll: recognition
 runs in the runner. A MaaFramework.dll line ends with `MAAFW_FIX` when its bytes are the DLL tools/install.py pins
 (fetched once per run, about 1 MB), `wheel` when they are the installed maafw wheel's, `other` otherwise. The fork

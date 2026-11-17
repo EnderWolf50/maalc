@@ -12,15 +12,15 @@ The tools are in `tools/live/`, each with its options in `--help`. Reach for the
 | `queue.py` | the emulator and bench tickets, `wait --resource <bench|emulator> --name <ticket>` blocks until one ends and exits with its code (75: still running, run it again; give the ticket's `run` a `--log` so `wait` prints it), `pause` a hold, `detach`, `status`, `resume` |
 | `preflight.py` | `screen` names the emulator's screen before costly prep; `plan` checks a run in progress; `recording` notes a stretch with no new frames |
 | `backup.py hold` | backs up `install/` and verifies it after the run |
-| `bot.py` | `run` the bot headless into a stamped `run.log`; `prep` a test install's settings; `awake` keeps the screen on |
+| `bot.py` | `run` the bot headless through the install's runner (`runner/`, the one the settings window uses) into a stamped `run.log`, each task on the options of the install's settings file; `prep` a test install's settings file, the task options too (`--set run.runs=1`); `awake` keeps the screen on |
 | `device.py` | `shot`, `tap`, `key`, `start` or `restart` an app; `freeze` the bot on a log line to look or act, then resume |
 | `giveup.py` | `run` ends a Mirror Dungeon run early from a battle: Give Up, Forfeit, GiveUpRewards, never Claim; `look` names a capture's screen |
 | `evidence.py` | `events`, `steps`, `frames`, `clip`, `mask`; `map` and `packs`, the route and pack evidence of step 8 |
 | `maafw_events.py` | maafw.log touches as events.json |
-| `maafw_loaded.py` | given the PID of what runs the tasks (the settings window, its runner, `bot.py tasker`): the Maa DLLs it and its agent have loaded, and whether its MaaFramework.dll is the fixed one |
+| `maafw_loaded.py` | given the PID of what runs the tasks (the settings window, or the runner `bot.py run` starts): the Maa DLLs it and its agent have loaded, and whether its MaaFramework.dll is the fixed one |
 | `map_taps.py` | every touch on the Mirror Dungeon map (follow, a full read's take, `find_bus` and the other drags) as a CSV row: taken or ignored by `recovery.same_screen`, seconds since the map faded in, the log line it led to; a summary per kind and verdict |
 | `dialogs.py` | the game's confirm dialogs, to diff against the pipeline before an unattended run |
-| `memwatch.py` | the bot's (or the settings window's) process tree sampled until it ends: a CSV row per process (role tasker, runner, agent, window or other; working set, private) and the peak and last per role, the memory half of a performance fix's before/after |
+| `memwatch.py` | the bot's (or the settings window's) process tree sampled until it ends: a CSV row per process (role runner, agent, window or other; working set, private) and the peak and last per role, the memory half of a performance fix's before/after |
 
 Log statistics: `tools/wait_spans.py` (Now Loading and other waiting screens), `tools/maafw_timeline.py` (time per node), `tools/video_align.py` (a recording against the log, its drift and freezes). A one-off script none of these covers goes in `<local>/scratch/<task>/`; `docs/agents/live-tools-inventory.md` lists which old scripts the tools replaced.
 

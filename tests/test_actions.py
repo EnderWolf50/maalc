@@ -123,6 +123,24 @@ def test_until_gives_up_after_its_timeout(context, clock):
     assert 2 <= sum(clock) < 2.5
 
 
+def test_until_ends_at_once_when_the_task_is_stopping(context, clock):
+    # #812: a stop waits for the custom action under way to return; a wait in it gives up as soon as the task stops
+    screens(context, [0])
+    looks = iter([False, False, True])
+    type(context.tasker).stopping = property(lambda self: next(looks))
+    try:
+        assert actions.until(context, lambda im: False, timeout=10) is None
+    finally:
+        del type(context.tasker).stopping
+    assert context.tasker.controller.post_screencap.call_count == 3 and sum(clock) < 1
+
+
+def test_until_still_takes_the_screen_it_waits_for_while_the_task_is_stopping(context, clock):
+    screens(context, [9])
+    context.tasker.stopping = True
+    assert actions.until(context, lambda im: im[0, 0, 0] == 9, timeout=10)[0, 0, 0] == 9
+
+
 def test_until_waits_its_minimum_before_the_first_look(context, clock):
     screens(context, [9])
     actions.until(context, lambda im: True, timeout=2, least=0.6)

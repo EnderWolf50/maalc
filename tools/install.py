@@ -1,5 +1,6 @@
-"""Assemble a runnable <root> in install/: interface.json, resource/, agent/,
-maafw/ (the MaaFramework DLLs the bot and what runs its tasks load, taken from the installed maafw;
+"""Assemble a runnable <root> in install/: interface.json, resource/, agent/, runner/ (the runner that
+tools/live/bot.py run and the settings window start: `python runner/__main__.py`),
+maafw/ (the MaaFramework DLLs the runner and the agent load, taken from the installed maafw;
 on Windows MaaFramework.dll comes from MAAFW_FIX), and
 the settings GUI maalc-gui.exe when it has been built, which runs the tasks (ADR 0015).
 
@@ -132,11 +133,11 @@ def mirror(src: Path, dst: Path, caller_writes: str | None = None) -> None:
 
 
 def mirror_repo(repo: Path, root: Path, child_exec: str) -> None:
-    """Copy agent/ and what assets/ holds (interface.json, resource/, locales/) into root. A file the repo deleted
-    leaves those folders too; the rest of root (config/, state/, logs/, maafw/) is left alone. interface.json gets
-    child_exec in place of the bare python."""
+    """Copy agent/, runner/ (#812) and what assets/ holds (interface.json, resource/, locales/) into root. A file the
+    repo deleted leaves those folders too; the rest of root (config/, state/, logs/, maafw/) is left alone.
+    interface.json gets child_exec in place of the bare python."""
     root.mkdir(parents=True, exist_ok=True)
-    for src in (*(repo / "assets").iterdir(), repo / "agent"):
+    for src in (*(repo / "assets").iterdir(), repo / "agent", repo / "runner"):
         if src.is_dir():
             mirror(src, root / src.name)
         elif src.name == "interface.json":
