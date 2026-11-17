@@ -54,13 +54,12 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     (src / "config").mkdir(parents=True)
     (src / "state").mkdir()
     (src / "config/settings.json").write_text(json.dumps({"run": {"runs": 5, "difficulty": "hard"}}))
-    (src / "config/maa_option.json").write_text("{}")
     (src / "state/progress.json").write_text("{}")
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1", "--set", "run.difficulty=normal",
               "--set", "run.weekly_bonus_use=none"])
     s = json.loads((dst / "config/settings.json").read_text())
     assert s["run"] == {"runs": 1, "difficulty": "normal", "weekly_bonus_use": "none"}
-    assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
+    assert (dst / "state/progress.json").exists()
     assert json.loads((src / "config/settings.json").read_text())["run"]["runs"] == 5  # the source stays
 
 
@@ -83,8 +82,14 @@ def prep_source(tmp_path):
     (src / "config").mkdir(parents=True)
     teams = [{"id": "t1", "heal": "none"}, {"id": "t3", "heal": "none", "min_alive": 3}]
     (src / "config/settings.json").write_text(json.dumps({"teams": teams}))
-    (src / "config/maa_option.json").write_text("{}")
     return src
+
+
+def test_prep_copies_no_client_file(tmp_path):
+    # config/maa_option.json was MXU's (v1.0.0); the runner sets save_on_error itself, and tools/install.py writes none
+    src, dst = prep_source(tmp_path), tmp_path / "test"
+    bot.main(["prep", "--install", str(dst), "--source", str(src)])
+    assert sorted(p.name for p in (dst / "config").iterdir()) == ["settings.json"]
 
 
 def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
@@ -92,7 +97,7 @@ def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
     src, dst = prep_source(tmp_path), tmp_path / "test"
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive"])
     assert json.loads((dst / "config/settings.json").read_text())["teams"][1]["heal"] == "revive"
-    assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
+    assert not (dst / "state").exists()
 
 
 def test_prep_sets_a_list_item_by_its_id(tmp_path):
@@ -113,7 +118,8 @@ def test_prep_stops_on_a_key_it_cannot_set_before_the_install_is_touched(tmp_pat
 def test_awake_holds_the_display_for_the_minutes():
     calls = []
     bot.awake(2, set_state=calls.append, sleep=calls.append)
-    assert calls == [bot.ES_CONTINUOUS | bot.ES_SYSTEM_REQUIRED | bot.ES_DISPLAY_REQUIRED, 120, bot.ES_CONTINUOUS]
+    # SetThreadExecutionState: ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED, then ES_CONTINUOUS alone
+    assert calls == [0x80000003, 120, 0x80000000]
 
 
 REPO = Path(__file__).resolve().parent.parent
@@ -175,17 +181,15 @@ def fake_install(tmp_path, code=0):
 
 
 def test_run_goes_through_the_installs_runner_with_each_tasks_entry_and_logs_its_lines(tmp_path):
-    # #812: the runner posts each task with the override it is given, as it came; #813: the options are the
-    # settings file's, so bot.py gives none. run.log gets the runner's log lines at their own time, and nothing for
-    # its other events
+    # #813: the options are the settings file's, so a task is its entry alone. run.log gets the runner's log lines
+    # at their own time, and nothing for its other events
     root, log = fake_install(tmp_path), tmp_path / "run.log"
     code = bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror,Mirror", "--port", "16416"])
     assert code == 0
     start = json.loads((root / "runner/start.json").read_text(encoding="utf-8"))
     assert start == {"v": protocol.VERSION, "cmd": "start", "root": str(root.resolve()),
                      "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry"}] * 2}
-    # a start the runner takes, each task with no override
-    assert protocol.command(json.dumps(start))["tasks"] == [{"entry": "MirrorEntry", "override": {}}] * 2
+    assert protocol.command(json.dumps(start))["tasks"] == [{"entry": "MirrorEntry"}] * 2  # a start the runner takes
     lines = log.read_text(encoding="utf-8").splitlines()
     assert " [run] child pid " in lines[0]  # tools/live/preflight.py's BOT_START
     assert lines[1:3] == ["10:00:00.001 [maalc] 開始", "10:00:00.002 x: 960, y: 540, width: 1920, height: 1080"]
