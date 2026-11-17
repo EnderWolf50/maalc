@@ -451,6 +451,7 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 | `<root>/logs/runs.jsonl` | Agent；GUI 只附加重置標記 | 每局一行：起訖時間、隊伍 id 與當時的名稱、難度、有沒有用每週獎勵、通過幾層、結果（通關／停止／放棄）、L1/L2/L3 各觸發幾次 | 驗收與計算每層時間上限；不用於接續判斷 | #14、#19 |
 | `<root>/logs/evidence/<時間>/` | Agent | 停止時保存的證據 | 除錯與通知 | #14、#19 |
 | `<root>/cache/update/` | GUI | 程式自動更新（`gui/src-tauri/src/update.rs`）：`check.json` 是上次查 GitHub 最新正式版的時間與找到的版本，每天最多查一次，失敗也算；`v<版本>/` 是下載、比對 sha256 後解壓、等著套用的新版；`old/` 是套用時換下來的舊版，下次啟動時刪掉；`apply.json` 是套用的結果，下次啟動的視窗顯示一次。例外：套用中途被打斷（例如斷電）或失敗後沒能全部還原時，`old/` 是那些舊檔唯一的一份，所以 `old/` 與 `apply.json` 留著，直到使用者把檔案搬回、清掉 `old/`。在那之前視窗每次啟動都在分頁上方寫明舊檔在哪、為什麼不能套用，按「更新」被擋下並寫明原因，定時執行也略過（第 14 節） | 更新 | #811、#817 |
+| `<root>/logs/runner/run-<時間>.log` | 執行器 | 每次執行一個：執行器送出的每一行記錄（`[run]` 行、bot 的 `[maalc]` 行、MaaFramework 的原生輸出），格式是 `HH:MM:SS.fff <行>`，和 `tools/live/bot.py` 的 run.log 相同（`runner/runlog.py`）。保留最近 30 個 | 事後回報問題；視窗只留最近 2000 行 | #811、#812 |
 | `<root>/logs/schedule.log` | GUI | 每次定時執行的結果一行：本機時間與 `[schedule] <id>: …`（開始、略過、沒跑與原因、跑完關閉或留著） | 排程開了又關的視窗沒留下的紀錄 | #816 |
 
 - Agent 沒有狀態檔：下一局輪到誰在設定檔的隊伍佇列（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)），其他狀態每次都從畫面讀（[ADR 0003](../adr/0003-screen-is-truth-state-file-only-rotation-cursor.md)）。（#8、#501）
