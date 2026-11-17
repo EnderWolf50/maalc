@@ -2,14 +2,11 @@ import json
 import os
 import signal
 import sys
-import shutil
 import threading
 from pathlib import Path
 
 import pytest
 
-import client_override
-from client_options import TEAM_OPTIONS, override
 from live import bot
 from runner import protocol
 
@@ -56,68 +53,29 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
     src, dst = tmp_path / "main", tmp_path / "test"
     (src / "config").mkdir(parents=True)
     (src / "state").mkdir()
-    # the keys the agent still reads from the settings file: the teams and plans, not a task's options (#779-#781)
-    (src / "config/settings.json").write_text(json.dumps({"language": "zh_tw", "teams": [{"id": "t3", "heal": "none"}]}))
+    (src / "config/settings.json").write_text(json.dumps({"run": {"runs": 5, "difficulty": "hard"}}))
     (src / "config/maa_option.json").write_text("{}")
-    (src / "config/team_options.json").write_text('{"option": {}}')  # the settings GUI's (#780)
     (src / "state/progress.json").write_text("{}")
-    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "language=en_us", "--set", "teams.t3.heal=revive"])
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "run.runs=1", "--set", "run.difficulty=normal",
+              "--set", "run.weekly_bonus_use=none"])
     s = json.loads((dst / "config/settings.json").read_text())
-    assert s == {"language": "en_us", "teams": [{"id": "t3", "heal": "revive"}]}
+    assert s["run"] == {"runs": 1, "difficulty": "normal", "weekly_bonus_use": "none"}
     assert (dst / "config/maa_option.json").exists() and (dst / "state/progress.json").exists()
-    assert (dst / "config/team_options.json").read_text() == '{"option": {}}'  # bot.py run --option ExpTeam= picks from it
-    assert json.loads((src / "config/settings.json").read_text())["language"] == "zh_tw"  # the source stays
+    assert json.loads((src / "config/settings.json").read_text())["run"]["runs"] == 5  # the source stays
 
 
-@pytest.mark.parametrize("key, says", [
-    ("run.runs=1", "bot.py run --option MirrorRunsLimit=Yes --option MirrorRuns=1"),
-    ("run.runs=null", "bot.py run --option MirrorRunsLimit=No"),
-    ("run.difficulty=normal", "bot.py run --option MirrorDifficulty=normal"),
-    ("run.target_floor=10", "bot.py run --option MirrorTargetFloor=10"),
-    ("run.auto_download=false", "bot.py run --option AutoDownload=No"),
-    ("run.stop_when_weekly_bonus_out=true", "bot.py run --option MirrorStopWhenBonusOut=Yes"),
-    ("run.nope=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
-    # #781: a daily task's own, a nested count after the case that sends it
-    ("luxcavation.exp.mode=count", "bot.py run --option ExpMode=count"),
-    ("luxcavation.thread.count=5", "bot.py run --option ThreadMode=count --option ThreadCount=5"),
-    ("luxcavation.exp.retries=2", "bot.py run --option ExpRetries=2"),
-    ("luxcavation.thread.consecutive=false", "bot.py run --option ThreadConsecutive=No"),
-    ("charge_enkephalin.count=3", "bot.py run --option ChargeCount=3"),
-    # a key under a moved section that is not an option, and a whole section, or one that holds one: all stop
-    ("run.x.y=1", "the settings' run section is no longer read: set its options with bot.py run --option"),
-    ("charge_enkephalin.nope=1", "the settings' charge_enkephalin section is no longer read: set its options with bot.py run --option"),
-    ("luxcavation.exp.nope=1", "the settings' luxcavation.exp section is no longer read: set its options with bot.py run --option"),
-    ("run={}", "the agent reads run's keys from the client's options: set them with bot.py run --option"),
-    ("luxcavation.thread={}", "the agent reads luxcavation.thread's keys from the client's options: set them with bot.py "
-     "run --option"),
-    ("luxcavation={}", "the agent reads luxcavation.exp's keys from the client's options: set them with bot.py run --option"),
-    # #780: a Luxcavation task's team is its dropdown, a case per team id; null is 「未選擇」
-    ("luxcavation.exp.team=t3", "bot.py run --option ExpTeam=t3"),
-    ("luxcavation.thread.team=null", "bot.py run --option ThreadTeam=none"),
-    ("run.webhook_url=null", "bot.py run --option WebhookUrl=null"),  # none is a team's 「未選擇」 alone
+@pytest.mark.parametrize("key, value", [
+    # #813: the task options are the settings file's again, every section of them
+    ("run.runs", None), ("run.start_team", "t3"), ("run.auto_download", False), ("luxcavation.exp.team", "t3"),
+    ("luxcavation.thread.mode", "count"), ("charge_enkephalin.count", 3),
 ])
-def test_prep_stops_on_a_key_the_client_took_over_and_names_its_option(tmp_path, key, says):
-    # #779, #780, #781: the agent no longer reads these keys of the settings file; a value set there would not happen
+def test_prep_sets_the_task_options(tmp_path, key, value):
     src, dst = prep_source(tmp_path), tmp_path / "test"
-    with pytest.raises(SystemExit) as e:
-        bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive", "--set", key])
-    assert str(e.value) == f"prep: {key.split('=')[0]} is a task or global option of the client now: {says}"
-    assert not dst.exists()
-
-
-def test_every_key_prep_refuses_names_an_option_of_the_interface():
-    # the option names come from the agent's schema titles: each is an option assets/interface.json has. The keys are
-    # every one of the three sections settings version 21 dropped (#782), as a v0.1.0 file had them (settings_cases v20).
-    options = client_override.load_interface(REPO / "assets/interface.json")["option"]
-    v20 = json.loads((REPO / "tests/settings_cases.json").read_text(encoding="utf-8"))["v20"]
-    keys = [*(f"run.{k}" for k in v20["run"]),
-            *(f"luxcavation.{task}.{k}" for task in ("exp", "thread") for k in v20["luxcavation"][task]),
-            *(f"charge_enkephalin.{k}" for k in v20["charge_enkephalin"])]
-    assert len(keys) == 25
-    for key in keys:
-        where = bot.moved(key, "1")
-        named = [w.split("=")[0] for w in where.split("--option ")[1:]]
-        assert named and all(n in options for n in named), (key, where)
+    bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", f"{key}={json.dumps(value)}"])
+    node = json.loads((dst / "config/settings.json").read_text())
+    for part in key.split("."):
+        node = node[part]
+    assert node == value
 
 
 def prep_source(tmp_path):
@@ -130,13 +88,9 @@ def prep_source(tmp_path):
 
 
 def test_prep_goes_on_when_the_source_has_no_state(tmp_path):
-    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/.
-    # #780: nor a team options file, and one an earlier prep left goes: its teams may not be the source's
+    # #763: the bot's first start turns the old rotation cursor into the team queue's head (#501) and removes state/
     src, dst = prep_source(tmp_path), tmp_path / "test"
-    (dst / "config").mkdir(parents=True)
-    (dst / "config/team_options.json").write_text("{}")
     bot.main(["prep", "--install", str(dst), "--source", str(src), "--set", "teams.t3.heal=revive"])
-    assert not (dst / "config/team_options.json").exists()
     assert json.loads((dst / "config/settings.json").read_text())["teams"][1]["heal"] == "revive"
     assert (dst / "config/maa_option.json").exists() and not (dst / "state").exists()
 
@@ -167,63 +121,36 @@ REPO = Path(__file__).resolve().parent.parent
 INTERFACE = """{
     "interface_version": 2,
     // a whole-line comment, as assets/interface.json has
-    "task": [{"name": "Mirror", "entry": "MirrorEntry", "option": ["Difficulty"]}],
-    "option": {"Difficulty": {"cases": [
-        {"name": "auto", "pipeline_override": {"MirrorEntry": {"attach": {"difficulty": "auto"}}}},
-        {"name": "hard", "pipeline_override": {"MirrorEntry": {"attach": {"difficulty": "hard"}}}}]}}
+    "task": [{"name": "Mirror", "entry": "MirrorEntry"}]
 }"""
 
 
-def test_plan_posts_each_task_with_the_override_mxu_would_send_and_says_the_values(tmp_path):
+def test_plan_names_each_tasks_entry_node(tmp_path):
+    # #813: a task's options are the settings file's, so nothing else goes with the post
     (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
-    lines = []
-    jobs = bot.plan(tmp_path, ["Mirror", "Mirror"], ["Difficulty=hard"], lines.append)
-    assert jobs == [("Mirror", "MirrorEntry", [{"MirrorEntry": {"attach": {"difficulty": "hard"}}}])] * 2
-    assert lines == ["[run] Mirror options: Difficulty=hard"] * 2
+    assert bot.plan(tmp_path, ["Mirror", "Mirror"]) == [("Mirror", "MirrorEntry")] * 2
 
 
-def test_plan_posts_every_task_of_the_interface_with_the_global_options_and_its_own():
-    # #779: every task sends the four global options at their defaults, MirrorDungeon its own ten too. The repo's
-    # assets/ has no team options file (#780): a line says so, as MXU warns, and the team dropdowns have no case.
-    tasks = [t["name"] for t in client_override.load_interface(REPO / "assets/interface.json")["task"]]
-    lines = []
-    jobs = bot.plan(REPO / "assets", tasks, ["MirrorRuns=2"], lines.append)
-    assert tasks and jobs == [(name, name, override(name, "MirrorRuns=2", teams=None)) for name in tasks]
-    assert lines[0] == "[run] import config/team_options.json not read (FileNotFoundError): skipped"
-    assert all(line.startswith(f"[run] {name} options: WebhookUrl=(not set) (default), AutoAcceptTerms=Yes (default)")
-               for name, line in zip(tasks, lines[1:]))
-    assert "MirrorRunsLimit=Yes (default), MirrorRuns=2, " in lines[1 + tasks.index("MirrorDungeon")]
-    assert ", ExpTeam=(no case) (default), " in lines[1 + tasks.index("ExpLuxcavation")]
+def test_plan_takes_every_task_of_the_repos_interface():
+    tasks = json.loads((REPO / "agent/settings.schema.json").read_text(encoding="utf-8"))["$defs"]["task"]["enum"]
+    assert bot.plan(REPO / "assets", tasks) == [(name, name) for name in tasks]
 
 
-@pytest.mark.parametrize("task, option, key", [("ExpLuxcavation", "ExpTeam", "team"),
-                                               ("MirrorDungeon", "MirrorStartTeam", "start_team")])
-def test_run_option_picks_a_team_of_the_team_options_file_the_install_has(tmp_path, task, option, key):
-    # #780, #805: --option <option>=<team id> sends the case of that team, which writes its id into the entry's attach
-    shutil.copy(REPO / "assets/interface.json", tmp_path / "interface.json")
-    (tmp_path / "config").mkdir()
-    shutil.copy(TEAM_OPTIONS, tmp_path / "config/team_options.json")
-    lines = []
-    ((_, entry, array),) = bot.plan(tmp_path, [task], [f"{option}=b"], lines.append)
-    assert entry == task and {task: {"attach": {key: "b"}}} in array
-    assert f", {option}=b" in lines[0]
-    with pytest.raises(SystemExit, match=f"{option} has no case t9"):
-        bot.plan(tmp_path, [task], [f"{option}=t9"], lines.append)
-
-
-@pytest.mark.parametrize("tasks, option, says", [
-    ("Mirror", "Nope=1", "--option Nope=1: interface.json has no option Nope"),
-    ("Mirror", "Difficulty=extreme", "--option Difficulty=extreme: Difficulty has no case extreme (cases: auto, hard)"),
-    ("Mirror,Nope", "Difficulty=hard", "interface.json has no task Nope (tasks: Mirror)"),
-])
-def test_run_stops_before_posting_any_task_on_an_option_case_or_task_the_interface_lacks(tmp_path, tasks, option, says):
+def test_run_stops_before_posting_any_task_on_a_task_the_interface_lacks(tmp_path):
     (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
     log = tmp_path / "run.log"
-    code = bot.main(["run", "--install", str(tmp_path), "--log", str(log), "--task", tasks, "--option", option])
+    code = bot.main(["run", "--install", str(tmp_path), "--log", str(log), "--task", "Mirror,Nope"])
     lines = log.read_text(encoding="utf-8").splitlines()
     assert code != 0
-    assert any(line.endswith(f"[run] {says}: stopped before posting any task") for line in lines), lines
-    assert not any("[run] start" in line or " options: " in line for line in lines)  # no device, no task, no values
+    says = "[run] interface.json has no task Nope (tasks: Mirror): stopped before posting any task"
+    assert any(line.endswith(says) for line in lines), lines
+    assert not any("[run] start" in line for line in lines)  # no device, no task
+
+
+def test_run_takes_no_option(tmp_path):
+    # #813: the options are prep's, in the settings file
+    with pytest.raises(SystemExit):
+        bot.main(["run", "--install", str(tmp_path), "--log", str(tmp_path / "run.log"), "--option", "MirrorRuns=2"])
 
 
 FAKE_RUNNER = """
@@ -247,23 +174,22 @@ def fake_install(tmp_path, code=0):
     return tmp_path
 
 
-def test_run_goes_through_the_installs_runner_with_each_tasks_override_and_logs_its_lines(tmp_path):
-    # #812: the runner posts each task with the override bot.py built from --option (#778), as it came; run.log gets
-    # the runner's log lines at their own time, and nothing for its other events
+def test_run_goes_through_the_installs_runner_with_each_tasks_entry_and_logs_its_lines(tmp_path):
+    # #812: the runner posts each task with the override it is given, as it came; #813: the options are the
+    # settings file's, so bot.py gives none. run.log gets the runner's log lines at their own time, and nothing for
+    # its other events
     root, log = fake_install(tmp_path), tmp_path / "run.log"
-    code = bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror,Mirror", "--port", "16416",
-                     "--option", "Difficulty=hard"])
+    code = bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror,Mirror", "--port", "16416"])
     assert code == 0
     start = json.loads((root / "runner/start.json").read_text(encoding="utf-8"))
-    hard = [{"MirrorEntry": {"attach": {"difficulty": "hard"}}}]
     assert start == {"v": protocol.VERSION, "cmd": "start", "root": str(root.resolve()),
-                     "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry", "override": hard}] * 2}
-    assert protocol.command(json.dumps(start))["tasks"] == start["tasks"]  # a start the runner takes as it is
+                     "device": {"address": "127.0.0.1:16416"}, "tasks": [{"entry": "MirrorEntry"}] * 2}
+    # a start the runner takes, each task with no override
+    assert protocol.command(json.dumps(start))["tasks"] == [{"entry": "MirrorEntry", "override": {}}] * 2
     lines = log.read_text(encoding="utf-8").splitlines()
-    assert [ln.split(" ", 1)[1] for ln in lines[:2]] == ["[run] Mirror options: Difficulty=hard"] * 2
-    assert " [run] child pid " in lines[2]  # tools/live/preflight.py's BOT_START
-    assert lines[3:5] == ["10:00:00.001 [maalc] 開始", "10:00:00.002 x: 960, y: 540, width: 1920, height: 1080"]
-    assert lines[5].endswith(" [run] exit 0") and len(lines) == 6
+    assert " [run] child pid " in lines[0]  # tools/live/preflight.py's BOT_START
+    assert lines[1:3] == ["10:00:00.001 [maalc] 開始", "10:00:00.002 x: 960, y: 540, width: 1920, height: 1080"]
+    assert lines[3].endswith(" [run] exit 0") and len(lines) == 4
 
 
 @pytest.mark.parametrize("code", [1, 2])

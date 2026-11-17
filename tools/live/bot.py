@@ -1,7 +1,6 @@
 """Run maalc headless from an install, and the chores around a live run.
 
     uv run python tools/live/bot.py run --install DIR --log run.log [--task MirrorDungeon[,ExpLuxcavation...]] [--port 16384]
-        [--option NAME=VALUE ...]
     uv run python tools/live/bot.py prep --install DIR [--source INSTALL] [--set KEY=VALUE ...]
     uv run python tools/live/bot.py awake [--minutes 240]
 
@@ -11,24 +10,19 @@ at `--port`. It writes every log line the runner sends to `--log` at the line's 
 the runner's `[run]` lines, the bot's `[maalc]` lines and the controller's touch lines that `tools/live/evidence.py`
 reads; the runner keeps the same lines in DIR/logs/runner/. `--task A,B` posts several tasks up front, as a client
 queues its task list, and runs them in turn (#364). It exits 0 when every task succeeded. Start it detached
-(`tools/live/queue.py detach`), as the maalc-live-test skill says. Each task goes with the override MXU would send
-(#778, `tools/client_override.py`), which the runner passes on as it is: DIR's interface.json and its imports, every
-option at its default but those `--option NAME=VALUE` sets (a select's case, a switch's Yes or No, an input's text),
-the same values for every task of the list. A line per task says the values it used, `(default)` after one no
-`--option` set. An option, case or task interface.json lacks stops it, exit 1, before the runner starts. A runner that
-reports it cannot stop MaaFramework (after the bot exited mid-run) has its process tree ended.
+(`tools/live/queue.py detach`), as the maalc-live-test skill says. Each task reads its options from DIR's
+`config/settings.json` at its start (#813): `prep --set` sets them; the runner gets each task with no override. A task
+DIR's interface.json lacks stops it, exit 1, before the runner starts. A runner that reports it cannot stop
+MaaFramework (after the bot exited mid-run) has its process tree ended.
 
-**prep** copies `config/settings.json`, `config/maa_option.json` and, when the source has them, the team options file
-`config/team_options.json` the settings GUI writes (#780: `run --option ExpTeam=<team id>` picks from its cases, and
-so does `--option MirrorStartTeam=<team id>`, #805; one the source lacks goes from DIR too) and `state/` from
-`--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor into the team queue's head and removes the state files with `state/`
-(#501). Then it sets each dotted KEY to VALUE (JSON, else a string): `--set language=en_us`; a list's item goes by its
-id, `--set teams.t3.heal=revive`. A key it cannot set stops it before DIR is touched, and so does a key the client's
-options took over: `run.*`, the Mirror Dungeon task's options and the global ones (#779), and a daily task's own,
-`luxcavation.<task>.*` (#781; its team, #780) and `charge_enkephalin.*` (#781), a whole section too
-(`--set luxcavation={...}`). They are set with `run --option`, which the line names (`--set run.runs=1`:
-`--option MirrorRunsLimit=Yes --option MirrorRuns=1`; `--set luxcavation.exp.team=t3`: `--option ExpTeam=t3`). DIR
-comes from `tools/install.py` (a worktree's install/) or a copy of one under `.local/scratch/<task>/`.
+**prep** copies `config/settings.json`, `config/maa_option.json` and, when the source still has one, `state/`
+from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
+into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to VALUE
+(JSON, else a string):
+`--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`, `--set run.start_team=t3`,
+`--set luxcavation.exp.team=t3`; a list's item goes by its id, `--set teams.t3.heal=revive`. A key it cannot set stops
+it before DIR is touched. DIR comes from `tools/install.py` (a worktree's install/) or a copy of one under
+`.local/scratch/<task>/`.
 
 **awake** keeps the display and the machine on for that many minutes: a recording needs the screen awake
 (screen-record). Windows only.
@@ -50,7 +44,6 @@ TOOLS = Path(__file__).resolve().parents[1]
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-import client_override  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
 
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
@@ -167,11 +160,11 @@ class RunnerEvents:
         return None
 
 
-def run(root: Path, tasks: list[str], port: int, options: list[str], log: Path) -> int:
+def run(root: Path, tasks: list[str], port: int, log: Path) -> int:
     """The tasks through root's runner, its log lines in log; the runner's exit code (0: every task succeeded)."""
     said = []
     try:
-        jobs = plan(root, tasks, options, said.append)
+        jobs = plan(root, tasks)
     except SystemExit as e:
         said.append(str(e))
         jobs = None
@@ -185,65 +178,26 @@ def run(root: Path, tasks: list[str], port: int, options: list[str], log: Path) 
         return 1
     # v: runner/protocol.py VERSION (tests/test_live_bot.py ties the two)
     start = {"v": 1, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
-             "tasks": [{"entry": entry, "override": override} for _, entry, override in jobs]}
+             "tasks": [{"entry": entry} for _, entry in jobs]}
     return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),
                    line=RunnerEvents())
 
 
-def plan(root: Path, tasks: list[str], options: list[str], say=print) -> list[tuple[str, str, list]]:
-    """(task, entry, override) of each task, as MXU would post it from root's interface.json and its imports with the
-    --option NAME=VALUE pairs (tools/client_override.py), and a line of the option values each task uses. An option,
-    case or task the interface lacks stops it before any task is posted."""
-    interface = client_override.load_interface(root / "interface.json", warn=lambda line: say(f"[run] {line}"))
-    try:
-        values = client_override.parse_options(interface, options)
-        jobs = [(name, *client_override.build(interface, name, values)) for name in tasks]
-    except ValueError as e:
-        raise SystemExit(f"[run] {e}: stopped before posting any task")
-    for name, _, _, used in jobs:
-        say(f"[run] {name} options: {', '.join(used) or 'none'}")
-    return [(name, entry, override) for name, entry, override, _ in jobs]
-
-
-AGENT_OPTIONS = TOOLS.parent / "agent" / "task_options.schema.json"
-INTERFACE = TOOLS.parent / "assets" / "interface.json"
-# The settings sections whose keys the client's options took over, and the nodes whose attach the agent reads them from
-# now (agent/task_options.schema.json): run (#779), a daily task's own (#781), a Luxcavation task's team too (#780).
-MOVED_NODES = {"run": ("MirrorDungeon", "GlobalOptions"), "luxcavation.exp": ("ExpLuxcavation",),
-               "luxcavation.thread": ("ThreadLuxcavation",), "charge_enkephalin": ("ChargeEnkephalin",)}
-
-
-def moved(key: str, value: str) -> str | None:
-    """Where settings key went (#779, #780, #781): the --option pairs of bot.py run that set it now, for a key the
-    client's options took over; None for a key the agent still reads from the settings file. A whole moved section, one
-    that holds one (luxcavation), and a key under a moved section that is no option get a line too. An input nested
-    under a case comes after the case that sends it (luxcavation.exp.count=2: ExpMode=count, then ExpCount=2); a
-    switch's true or false is its Yes or No, a team's null its 「未選擇」, none."""
-    for section, nodes in MOVED_NODES.items():
-        if key == section or section.startswith(key + "."):
-            return f"the agent reads {section}'s keys from the client's options: set them with bot.py run --option"
-        if not key.startswith(section + "."):
-            continue
-        name = key.removeprefix(section + ".")
-        schema = json.loads(AGENT_OPTIONS.read_text(encoding="utf-8"))["$defs"]
-        option = next((schema[n]["properties"][name]["title"] for n in nodes if name in schema[n]["properties"]), None)
-        if option is None:
-            return f"the settings' {section} section is no longer read: set its options with bot.py run --option"
-        if key == "run.runs" and value == "null":  # no run cap
-            return "bot.py run --option MirrorRunsLimit=No"
-        case = {"true": "Yes", "false": "No", **({"null": "none"} if name == "team" else {})}.get(value, value)
-        pairs = [*client_override.shown_by(client_override.load_interface(INTERFACE), option), (option, case)]
-        return "bot.py run " + " ".join(f"--option {o}={c}" for o, c in pairs)
-    return None
+def plan(root: Path, tasks: list[str]) -> list[tuple[str, str]]:
+    """(task, entry) of each task: its entry node from root's interface.json (whole-line // comments dropped); it goes
+    with no override, as its options are the settings file's (#813). A task the interface lacks stops it before any task
+    is posted."""
+    lines = (root / "interface.json").read_text(encoding="utf-8").splitlines()
+    entries = {t["name"]: t["entry"] for t in json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))["task"]}
+    for name in tasks:
+        if name not in entries:
+            raise SystemExit(f"[run] interface.json has no task {name} (tasks: {', '.join(entries)}): stopped before posting any task")
+    return [(name, entries[name]) for name in tasks]
 
 
 def prep(install: Path, source: Path, sets: list[str]) -> dict:
     """Copy source's config (and state/) into install, with each KEY=VALUE of sets set; SystemExit before install is
-    touched on a key it cannot set, or one that is a client's option now (moved)."""
-    for item in sets:
-        key, _, value = item.partition("=")
-        if where := moved(key, value):
-            raise SystemExit(f"prep: {key} is a task or global option of the client now: {where}")
+    touched on a key it cannot set."""
     settings = json.loads((source / "config/settings.json").read_text(encoding="utf-8"))
     for item in sets:
         key, value = item.split("=", 1)
@@ -264,11 +218,6 @@ def prep(install: Path, source: Path, sets: list[str]) -> dict:
             node[last] = value
     (install / "config").mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / "config/maa_option.json", install / "config/maa_option.json")
-    team_options = install / "config/team_options.json"  # the GUI's, which interface.json imports (#780)
-    if (source / "config/team_options.json").is_file():
-        shutil.copy2(source / "config/team_options.json", team_options)
-    else:
-        team_options.unlink(missing_ok=True)  # an earlier prep's would offer teams the source's settings may lack
     if (source / "state").is_dir():
         shutil.copytree(source / "state", install / "state", dirs_exist_ok=True)
     (install / "config/settings.json").write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -294,8 +243,6 @@ def main(argv=None) -> int:
     p.add_argument("--install", type=Path, required=True)
     p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
     p.add_argument("--port", type=int, default=16384)
-    p.add_argument("--option", action="append", default=[], metavar="NAME=VALUE",
-                   help="a task or global option of interface.json, as the client sets it; repeatable")
     p.add_argument("--log", type=Path, required=True)
     p = sub.add_parser("prep")
     p.add_argument("--install", type=Path, required=True)
@@ -305,7 +252,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.command == "run":
-        return run(a.install.resolve(), a.task.split(","), a.port, a.option, a.log)
+        return run(a.install.resolve(), a.task.split(","), a.port, a.log)
     if a.command == "prep":
         prep(a.install, a.source or main_checkout() / "install", a.set)
         print(f"prep: {a.install / 'config/settings.json'} written, {len(a.set)} key(s) set", flush=True)

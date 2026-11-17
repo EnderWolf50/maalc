@@ -7,10 +7,10 @@
 - 鏡牢的流程必須寫在 Pipeline。每種畫面的辨識必須各自寫在自己的 Pipeline 節點；不用單一 custom recognition 對全螢幕做分類。（#8）
 - 需要判斷的選擇必須寫成 Agent 的 custom action 或 custom recognition，包括地圖節點、飾品、主題包、商店、星光、獎勵卡、事件選項、Boss 後的選擇、戰前的出戰順序。（#8、#9、#11、#17）
 - 不採用把整局寫在程式碼迴圈裡的做法（MaaLimbus、AALC）。理由見 [ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)。（#8）
-- 隊伍、方案、飾品清單與覆寫表由設定 GUI 寫進 `<root>/config/settings.json`（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；每個任務怎麼跑的單一的值是 PI 的任務選項與全域選項，client 隨任務送給 Agent（[ADR 0013](../adr/0013-run-and-daily-options-in-pi-task-options.md)）。Agent 在任務開始時讀取並檢查兩者。格式見 [04-settings.md](04-settings.md)。（#6、#19，2026-10-14 定案；#776）
+- 隊伍、方案、飾品清單、覆寫表與每個任務怎麼跑的單一的值（任務選項與全域選項），由設定 GUI 寫進 `<root>/config/settings.json`（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)、[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）。Agent 在任務開始時讀取並檢查。格式見 [04-settings.md](04-settings.md)。v1.0.0 的任務選項在 client，隨任務送給 Agent（ADR 0013）。（#6、#19，2026-10-14 定案；#813）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
-- Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；MXU 與 `tools/live/bot.py`（設 `MAAFW_BINARY_PATH`）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
-- Agent 的 `main.py` 在 `<root>/maafw/` 存在時，把沒設過的 `MAAFW_BINARY_PATH` 設成它，所以 Agent 也從 `maafw/` 載入。Agent 程序只載入 `MaaAgentServer.dll` 和它要的 `MaaUtils.dll`、`opencv_world4_maa.dll`、`DirectML.dll`，不載入 `MaaFramework.dll`：辨識在 client 的程序裡跑。發佈 zip 的內嵌 Python 因此不帶 wheel 的 `maa/bin/`，MaaFramework 的二進位只有 `maafw/` 一份。MFAAvalonia 只從它自己的 `runtimes/win-x64/native/` 載入 MaaFramework，不讀 `maafw/`；換成 fork 的做法見 README。（#497）
+- Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；執行任務的程式（設定視窗的執行器、`tools/live/bot.py`，設 `MAAFW_BINARY_PATH`；v1.0.0 的 MXU）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
+- Agent 的 `main.py` 在 `<root>/maafw/` 存在時，把沒設過的 `MAAFW_BINARY_PATH` 設成它，所以 Agent 也從 `maafw/` 載入。Agent 程序只載入 `MaaAgentServer.dll` 和它要的 `MaaUtils.dll`、`opencv_world4_maa.dll`、`DirectML.dll`，不載入 `MaaFramework.dll`：辨識在執行任務的程序（執行器、`bot.py tasker`；v1.0.0 是 client）裡跑。發佈 zip 的內嵌 Python 因此不帶 wheel 的 `maa/bin/`，MaaFramework 的二進位只有 `maafw/` 一份。v1.0.0 的 MFAAvalonia 只從它自己的 `runtimes/win-x64/native/` 載入 MaaFramework，不讀 `maafw/`；下一版不再支援 MFAAvalonia（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）。（#497）
 
 | 層 | 負責 | 不負責 |
 |---|---|---|
@@ -75,13 +75,13 @@
 - `ClaimPassMissions`（`pass_missions.json`）：主畫面的 Limbus Pass 橫幅（OCR 標題 `SEASON`）→ `Pass Missions` 分頁（模板，亮著時分數 0.92，門檻 0.97）→ Daily 分頁逐列點可領的列（`PassClaimable`，`agent/pass_missions.py`：金幣亮、沒有 CLEAR 章、進度條滿）→ Weekly 分頁同樣 → Seasonal 分頁（(270,540)，#362 D9）：先領看得到的五列，再往上滑一次（`PassSeasonalSwipe`：遊戲座標 520,560 → 520,200、600 ms，`max_hit` 1），一次就到底、各列比頂端低 10 px（`PassClaimable` 的參數 `dy` 10），領剩下的 → `PassFinish`（動作 `PassFinish`：回主畫面、`done`，理由寫這次點了幾列：`pass missions: 4 row(s) claimed`，一列都沒點是 `pass missions: nothing to claim`，live-1 F6）。Daily、Weekly 各 5 列、不能捲動，Seasonal 10 列（實機 2026-10-27，verified）。每個分頁的點擊有上限（`max_hit` 8），點滿就換下一個分頁，不算失敗。只滑一次：實機連續快速小幅滑動時遊戲曾出現「沒有回應」（不特別處理）。沒有可領的就直接成功結束。可領的列（實機 2026-10-27，`tests/screens/PassMissionsDailyClaimable.png`）：整列橘框、右上紅色 !、進度條滿（1/1、2/2、10/10），四列都讀對（live-1 F7）。
 - 沒有鏡牢的卡住恢復階梯：日常頁只有返回鍵（L1）和重啟遊戲（L3）；L3 之後的接手還沒做（待實機看過再定）。
 
-### 帳號層級的停止與 client 的任務佇列
+### 帳號層級的停止與任務清單
 
-帳號層級的停止（[spec 06](06-recovery.md) 停止程序第 5 步）呼叫 `post_stop`。MaaFramework 5.14.3 的 `Tasker::post_stop`（`source/MaaFramework/Tasker/Tasker.cpp:161-183`）清掉 tasker 裡還沒跑的任務（`task_runner_->clear()`），再停下正在跑的那個。所以它能不能結束整串清單，要看 client 是一次把整串送進 tasker，還是一次送一個（依原始碼，沒有實機驗證）：
+帳號層級的停止（[spec 06](06-recovery.md) 停止程序第 5 步）呼叫 `post_stop`。MaaFramework 5.14.3 的 `Tasker::post_stop`（`source/MaaFramework/Tasker/Tasker.cpp:161-183`）清掉 tasker 裡還沒跑的任務（`task_runner_->clear()`），再停下正在跑的那個。所以它能不能結束整串清單，要看執行任務的程式是一次把整串送進 tasker，還是一次送一個。v1.0.0 的兩個 client 不同（依原始碼，沒有實機驗證）；下一版的執行器照任務清單的順序送出勾選的任務（#811）：
 
 - MXU（`5e923e8`）：一次送整串。`start_tasks_impl`（`src-tauri/src/commands/maa_agent.rs:554`）在 `maa_agent.rs:776-784` 的迴圈裡對每個勾選的任務呼叫 `tasker.post_task`，全部進了 tasker 才開始跑。`post_stop` 清掉的就是清單剩下的任務，整串結束。
 - MFAAvalonia（`098fe84`）：一次送一個。`ExecuteTasks`（`MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs:3704-3728`）從自己的 `TaskQueue` 取一個任務，`TryRunTasksAsync`（`MaaProcessor.cs:4424-4431`）`AppendTask` 後等它結束才取下一個。`post_stop` 只結束目前這個任務（狀態不是 Succeeded，`MFAAvalonia/Helper/ValueType/MFATask.cs:92-113` 記為失敗）；「任務失敗後是否繼續」開著（預設，`MaaProcessor.cs:4469`）時清單照樣跑下一個，後面每個任務各自撞上同一個畫面、各自走停止程序。關掉這個選項時，第一個失敗就結束整串。
-- 所以 agent 也記住「這次啟動遇過帳號層級的停止」（`STUCK["halted"]`，停止的理由；像遊戲重啟次數一樣只在記憶體、不隨 `TaskStart` 清掉）：之後每個任務的入口（`TaskStart` 與它的子類別 `LuxStart`、`ChargeStart`）一看到就以失敗結束，不點任何東西、不存證據、不寫 `runs.jsonl`、不送 webhook，只 log 一行 `skip: account-level stop earlier this launch`。兩個 client 都適用，不靠 `post_stop`。（#362 D8）
+- 所以 agent 也記住「這次啟動遇過帳號層級的停止」（`STUCK["halted"]`，停止的理由；像遊戲重啟次數一樣只在記憶體、不隨 `TaskStart` 清掉）：之後每個任務的入口（`TaskStart` 與它的子類別 `LuxStart`、`ChargeStart`）一看到就以失敗結束，不點任何東西、不存證據、不寫 `runs.jsonl`、不送 webhook，只 log 一行 `skip: account-level stop earlier this launch`。不論怎麼送都適用，不靠 `post_stop`。（#362 D8）
 - 帳號層級的停止：`GoHome` 遇到戰鬥（`HomeInBattle`，live-4 J2）、維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新（每次啟動重啟 2 次之後又出現，#362 D1）、`auto_accept_terms` 關閉時遇到使用者協議（#362 D2，維持原樣）。
 
 ### 日常任務的骨架
@@ -96,17 +96,17 @@
 
 - 從主畫面點 Drive（`NavMainTabs`）→ Luxcavation（`NavLuxcavation`）→ EXP 分頁（停在 Thread 分頁時點 EXP，`LuxExpTab`）→ EXP 分頁預設畫面最右邊的 Enter（`LuxExpEnter`，動作 `LuxEnter`）。上鎖的卡顯示 KEEP OUT、沒有 Enter，所以最右邊的 Enter 就是最難的開放關卡。不按 Skip Battle；Consecutive Battle 見下一條。（#366）
 - **每場花費**：3 個腦啡肽模組（`luxcavation.EXP_COST`；實機 2026-10-26 第 4–9 關都是 3），紐本每場 2 個（`luxcavation.THREAD_COST`，見下方紐本）。
-- **連戰**（任務選項 `ExpConsecutive`，預設開，#375、#781）：卡片上方一條 `Consecutive Battle ×N ▲`，點它展開一列 `1« − N + »10`，範圍 1–10。框長在卡片上，卡片的位置會變（EXP 分頁最右邊已開放的關是中間那張卡時），所以標題、數字、列與按鍵的座標依實際按的 Enter 平移（基準 `ENTER_AT`，`lux_actions.consecutive_box`），不寫死座標（`tests/screens/LuxConsecExp*.png`）。開時 `LuxEnter` 在按 Enter 之前把 N 設成 `luxcavation.batch(這次要打的場數, 已贏, 開)` = min(10, 剩下的場數)，一場打完，一場 ×N 算 N 場（獎勵與腦啡肽模組消耗都是 ×N，一張結算頁）；剩下的場數超過 10 就先 ×10，打完再開下一場打剩下的。遊戲離開 Luxcavation 或結算後會把 N 歸零成 ×1，所以每次進場都要設，不信畫面上的預設。設法（`lux_actions.set_consecutive`）：OCR 讀標題的 N（`consecutive_now`：先讀 ×N 旁的窄 roi，再讀整個標題），不等於目標就點標題展開、照 `luxcavation.presses` 按最少的鍵（1«、−、+、»10）、再點標題收合，再讀一次必須等於目標；讀不到或調不到就停止程序（帶證據），不照錯的次數開戰。關：不碰這個框，一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431，[spec 03 第 15 節](03-decisions.md)）。戰敗：不算次數，重打時重設同樣的 N。
+- **連戰**（任務選項 `luxcavation.exp.consecutive`，預設開，#375、#813）：卡片上方一條 `Consecutive Battle ×N ▲`，點它展開一列 `1« − N + »10`，範圍 1–10。框長在卡片上，卡片的位置會變（EXP 分頁最右邊已開放的關是中間那張卡時），所以標題、數字、列與按鍵的座標依實際按的 Enter 平移（基準 `ENTER_AT`，`lux_actions.consecutive_box`），不寫死座標（`tests/screens/LuxConsecExp*.png`）。開時 `LuxEnter` 在按 Enter 之前把 N 設成 `luxcavation.batch(這次要打的場數, 已贏, 開)` = min(10, 剩下的場數)，一場打完，一場 ×N 算 N 場（獎勵與腦啡肽模組消耗都是 ×N，一張結算頁）；剩下的場數超過 10 就先 ×10，打完再開下一場打剩下的。遊戲離開 Luxcavation 或結算後會把 N 歸零成 ×1，所以每次進場都要設，不信畫面上的預設。設法（`lux_actions.set_consecutive`）：OCR 讀標題的 N（`consecutive_now`：先讀 ×N 旁的窄 roi，再讀整個標題），不等於目標就點標題展開、照 `luxcavation.presses` 按最少的鍵（1«、−、+、»10）、再點標題收合，再讀一次必須等於目標；讀不到或調不到就停止程序（帶證據），不照錯的次數開戰。關：不碰這個框，一場一場打。剩下的場數是這個模式算出的場數還差的（#429、#431，[spec 03 第 15 節](03-decisions.md)）。戰敗：不算次數，重打時重設同樣的 N。
 - 分頁亮起看橘色邊框（ColorMatch）：亮和不亮的分頁對模板的分數差不多（0.93），分不開。
-- 隊伍是任務選項 `ExpTeam` 選的 maalc 隊伍（隊伍 id 寫進入口節點 `attach` 的 `team`，[04 第 12 節](04-settings.md#12-日常的任務選項與-luxcavation-的隊伍)，#780），戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，做法同鏡牢；回合數則每場戰鬥重新算，自 2026-10-27 起，鏡牢是整局只用一次，見 [spec 03 第 8 節](03-decisions.md#8-戰鬥)開局連續防禦）。實機 2026-10-27：經驗本第 9 關照 `guard_turns` 5 防禦了 5 回合（verified）。異想體戰（紐本的 Faelantern 等）是 focused encounter：左齒輪是空心圓環，技能要拖到敵方的技能格上，連線拉不起來，所以照 #127 按勝率、防禦回合留著（`tests/test_battle.py` 用 `LuxBattleTurn.png`、`LuxBattleTurnFocused.png` 驗證這個判斷）。（live-1 F5）
+- 隊伍是任務選項 `luxcavation.exp.team` 選的 maalc 隊伍（[04 第 12 節](04-settings.md#12-日常的任務選項luxcavationcharge_enkephalin)，#813），戰鬥用它的 `guard_turns`（全員防禦 N 回合後按勝率，做法同鏡牢；回合數則每場戰鬥重新算，自 2026-10-27 起，鏡牢是整局只用一次，見 [spec 03 第 8 節](03-decisions.md#8-戰鬥)開局連續防禦）。實機 2026-10-27：經驗本第 9 關照 `guard_turns` 5 防禦了 5 回合（verified）。異想體戰（紐本的 Faelantern 等）是 focused encounter：左齒輪是空心圓環，技能要拖到敵方的技能格上，連線拉不起來，所以照 #127 按勝率、防禦回合留著（`tests/test_battle.py` 用 `LuxBattleTurn.png`、`LuxBattleTurnFocused.png` 驗證這個判斷）。（live-1 F5）
 - 按 Enter 直接進選隊頁（`LuxTeamSelect`）：和鏡牢的選隊頁（`TeamSelect`）同一頁，左側 `TEAMS` 清單、位置和點法都一樣（`pick_team_slot`，鏡牢的 `SelectTeam` 也用它：標題已是 `TEAMS #N` 就不動，否則點畫面上的 `TEAMS #N` 列，不在畫面上才從目前位置捲過去，點了之後讀標題確認；見 [03](03-decisions.md) 選隊），只有右下角的按鈕不同：鏡牢是 `Confirm`，這裡是 `To Battle!`（1145,588）；連戰 ×2 以上時標籤是 `Chain` 加 `To Battle!`，位置相同、`LuxTeamSelect` 照認（`tests/screens/LuxTeamSelectChain.png`，實機 2026-10-28）。`LuxSelectTeam`：選 `RUN["team"]`（經驗本是任務選項 `ExpTeam` 選的隊伍）的遊戲內隊伍欄位（`game_team`，每場一次），再按 To Battle! 直到這頁消失。節點與動作由 Luxcavation 的各個 hub（經驗本、紐本）共用：hub 列出 `[JumpBack]LuxTeamSelect`，入口的 `LuxStart` 設 `RUN["team"]`，Enter 的動作在進關時清掉 `RUN["team_picked"]`。（#366）
-- 每日模式（任務選項 `ExpMode` 是 `daily`，#781）開頭先走通行證頁讀 Daily 分頁的 `Clear EXP Luxcavation` 那一列（`ExpPassHome` → `ExpPassHub` → `ExpPassRead`，#429）；自訂次數模式不走通行證頁（`ExpCountMode`，自訂辨識 `LuxCountMode`，#431）。再回主畫面讀腦啡肽模組數，算出這次要打幾場（每日模式：今天還沒打的；自訂次數：`count`），不夠就跳過（`ExpHome` 節點，動作 `LuxHome`，`lux_actions.plan`，[spec 03 第 15 節](03-decisions.md)）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`LuxExpEnter` 節點，動作 `LuxEnter`，[spec 03 第 15 節](03-decisions.md)）。
+- 每日模式（任務選項 `luxcavation.exp.mode` 是 `daily`，#431）開頭先走通行證頁讀 Daily 分頁的 `Clear EXP Luxcavation` 那一列（`ExpPassHome` → `ExpPassHub` → `ExpPassRead`，#429）；自訂次數模式不走通行證頁（`ExpCountMode`，自訂辨識 `LuxCountMode`，#431）。再回主畫面讀腦啡肽模組數，算出這次要打幾場（每日模式：今天還沒打的；自訂次數：`count`），不夠就跳過（`ExpHome` 節點，動作 `LuxHome`，`lux_actions.plan`，[spec 03 第 15 節](03-decisions.md)）；按 Enter 之後回到 EXP 分頁，依這場的勝敗計次、再打或結束（`LuxExpEnter` 節點，動作 `LuxEnter`，[spec 03 第 15 節](03-decisions.md)）。
 - To Battle! 之後直接 Now Loading 進戰鬥，沒有等級警告、沒有開戰確認（實機 2026-10-27）。戰鬥畫面（`BattleHUD`、`Victory`）沿用鏡牢的節點；戰鬥中的劇情事件也沿用鏡牢的 `Event`（`ExpText` 的 entries，處理完回 hub、戰鬥照打）：SKIP → 右側只有事件卡、SKIP 變灰時點事件卡（`card_alone`，(940,195)；不點不會前進）→ 選角色（`pick_checker`：預測最高的，Very High > High > … ，Unselectable 不選；不花資源）→ Commence → SKIP → SKIP 灰時點畫面推進文字 → Continue 回戰鬥。實機 2026-10-28 紐本 Glut 第 2 波（`tests/screens/LuxEvent*.png`，live-4 J1）；推進文字實機是點對話框，bot 點左上角落（鏡牢的做法），在紐本上 unverified。經驗本會不會遇到 unverified。暫停選單只有 Settings／Resume／Give Up，Resume 比鏡牢低一格（`LuxBattleMenu`，`tests/screens/LuxBattleMenu.png`）；Give Up 沒有確認框，按了就是戰敗。
 - 戰後：戰場上的 VICTORY／DEFEAT → Now Loading → **結算頁**（`LuxResult`，`tests/screens/LuxResultVictory.png`、`LuxResultThread.png`、`LuxResultDefeat.png`）：左邊 Most Valued Employee，右上黃字 `Victory` 或紅字 `Defeat`（`LuxWon`、`LuxLost`），中間 `Clear Rewards`、`Module Cost`，右下 `Confirm`（1125,570）。動作 `LuxResult` 讀 Victory／Defeat 當這場的勝敗（只記進了關的那一場一次），按 Confirm 直到這頁消失；之後落在 EXP 分頁（紐本是 Thread 分頁，不是 Level Select），下一個 Enter 的 `battle_over` 依勝敗計次、重打或結束。按返回鍵離開結算頁也落在同一頁。（live-1 F2）
 
 ### 紐本（`ThreadLuxcavation`）
 
-照經驗本的做法：`ThreadLuxcavation`（`LuxStart`，`custom_action_param` 是 `"thread"`，讀 `ThreadLuxcavation` 的任務選項，隊伍是 `ThreadTeam`）→ `ThreadHome`（`LuxHome`）→ `ThreadHub`。兩個任務共用同一組動作：`LuxStart`（參數 `"exp"`／`"thread"` 決定任務名稱和每場的腦啡肽模組消耗）、`LuxHome`、`LuxEnter`（EXP 的 Enter、Thread 卡片的 Enter、Level Select 的 Enter；卡片的 Enter 開的是 Level Select 不是戰鬥，參數 `{"opens_battle": false}`），計次、腦啡肽模組檢查與勝敗判斷都在 `battle_over`；OCR 畫面共用 `ExpText`。（#368）
+照經驗本的做法：`ThreadLuxcavation`（`LuxStart`，`custom_action_param` 是 `"thread"`，讀任務選項 `luxcavation.thread`，隊伍是它的 `team`）→ `ThreadHome`（`LuxHome`）→ `ThreadHub`。兩個任務共用同一組動作：`LuxStart`（參數 `"exp"`／`"thread"` 決定任務名稱和每場的腦啡肽模組消耗）、`LuxHome`、`LuxEnter`（EXP 的 Enter、Thread 卡片的 Enter、Level Select 的 Enter；卡片的 Enter 開的是 Level Select 不是戰鬥，參數 `{"opens_battle": false}`），計次、腦啡肽模組檢查與勝敗判斷都在 `battle_over`；OCR 畫面共用 `ExpText`。（#368）
 
 - 從主畫面點 Drive → Luxcavation（`NavLuxcavation`）→ Thread 分頁（停在 EXP 分頁時點 Thread，`LuxThreadTab`：Luxcavation 面板加上 EXP 分頁亮著）→ 今天唯一開放的異想體卡的 Enter（`LuxThreadEnter`，動作 `LuxEnter`）→ Level Select（`LuxThreadLevel`，動作 `LuxEnter`）→ 最下面那一列的 Enter。
 - 開放的卡才有亮的 Enter 按鈕（對模板 1.0，其他天才開的卡最多 0.6）。清單從今天的卡開始排，所以進頁就看得到；但清單記得上次捲到哪裡，捲走後看不到亮的 Enter，這時往右滑（`LuxThreadSwipe`，`max_hit` 4）把左邊的卡帶進來。滑的方向沒實機驗證（unverified）。
@@ -114,7 +114,7 @@
 - Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個腦啡肽模組（`luxcavation.THREAD_COST`），所以腦啡肽模組檢查是 2 × 這次要打的場數。`LuxThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣腦啡肽模組、不開戰。不按 Skip Battle。連戰（任務選項 `ThreadConsecutive`，預設開）設在外層開放卡片的框（座標依實際 Enter 平移，`ENTER_AT`，`LuxThreadEnter` 在按卡片的 Enter 之前設），Level Select 頂端的框位置固定，數字從外層帶入，`LuxThreadLevel` 在按 Enter 前再讀一次確認（不符就用同一套方法改；在 Level Select 改不會存回外層）。做法、拆 10 加剩下的，同經驗本。（#375）
 - Level Select 之後接選隊頁：和經驗本同一個節點，`ThreadHub` 與 `ExpHub` 都列 `[JumpBack]LuxTeamSelect`。（#366、#368）
 - 打完一場經結算頁（`LuxResult`）回到 Thread 分頁就算一場（實機 2026-10-27：Confirm 後落在 Thread 分頁，不是 Level Select）：`battle_over` 依勝敗計次、再打或回主畫面結束；停在 Level Select 也照算。
-- 隊伍是任務選項 `ThreadTeam` 選的隊伍（#780）。
+- 隊伍是任務選項 `luxcavation.thread.team` 選的隊伍（#813）。
 
 ### 換腦啡肽模組（`AssembleModules`，#370）
 
@@ -126,7 +126,7 @@
 
 ### 狂氣換腦啡肽（`ChargeEnkephalin`，#373）
 
-- 入口 `ChargeEnkephalin`（`ChargeStart`：`TaskStart` 加讀任務選項 `ChargeCount`，#781）。`count` 是 0（預設）就 `done()`，`TaskDone` 接著結束，沒有 GoHome、沒有任何點擊。**這是「每個日常任務頭尾都走 `GoHome`」的唯一例外**：0 次的任務什麼都不做，也就不必從主畫面開始；它不動畫面，所以下一個任務仍然從上一個任務留下的主畫面開始。否則 `ChargeHome`（`GoHomeRun`）→ `ChargeHub`，形狀同 `AssembleHub`：認得視窗（`ChargePanel`，視窗認法同 `AssemblePanel`：`EnkephalinWindow`）、全域彈窗（`HomeText`）、主畫面（`ChargeMain`，只在這裡 `done()`）。60 秒都不認得就走停止程序。
+- 入口 `ChargeEnkephalin`（`ChargeStart`：`TaskStart` 加讀任務選項 `charge_enkephalin.count`，#813）。`count` 是 0（預設）就 `done()`，`TaskDone` 接著結束，沒有 GoHome、沒有任何點擊。**這是「每個日常任務頭尾都走 `GoHome`」的唯一例外**：0 次的任務什麼都不做，也就不必從主畫面開始；它不動畫面，所以下一個任務仍然從上一個任務留下的主畫面開始。否則 `ChargeHome`（`GoHomeRun`）→ `ChargeHub`，形狀同 `AssembleHub`：認得視窗（`ChargePanel`，視窗認法同 `AssemblePanel`：`EnkephalinWindow`）、全域彈窗（`HomeText`）、主畫面（`ChargeMain`，只在這裡 `done()`）。60 秒都不認得就走停止程序。
 - `ChargeMain` 點腦啡肽條開視窗；`ChargePanel` 先點 Use Lunacy 分頁（720p (639,226)，實機量的；視窗重開一律在 Modules，#362 D7）、讀提示、價格與 Daily Count（`ChargePrompt`、`ChargePrice`、`ChargeCount`），交給 `lunacy.check`（[spec 03 第 16 節](03-decisions.md)）：CHARGE 才點 Confirm，DONE 與 STOP 點 Cancel。`count` 是當天的目標 Daily Count（#429）：已到就不換；第一次開就讀不到也不換、成功結束。只點頁籤、Confirm、Cancel。
 - 開視窗次數有上限（價格表長度加一），避免價格一直讀對卻沒換成的迴圈。
 - 畫面見 spec 03 第 16 節（Use Lunacy 頁有截圖，2026-10-27；Confirm 之後的畫面沒有）。
@@ -150,9 +150,9 @@
 - 用途和這一局難度不符的隊伍跳過，留在原位；沒有任何可用的隊伍就以成功結束任務（#364）。（#9）
 - 接續暫停中的局時，選隊之後沒有畫面顯示隊伍，Agent 從佇列推回這局的隊伍；推不回就不移動佇列（[03-decisions.md](03-decisions.md) 第 1 節，#436）。（#8、#19）
 - 「限制局數」只算這個任務開始後完成的局數，不存檔；清單裡第二個鏡牢任務從 0 局算起（#364）。「每週獎勵用完就停」的剩餘次數從畫面讀。（#8）
-- 難度、每週獎勵用法這類策略是鏡牢的任務選項（[04](04-settings.md) 第 5 節），Agent 不另外存檔。（#8、#19、#776）
+- 難度、每週獎勵用法這類策略是鏡牢的任務選項，在設定檔的 `run`（[04](04-settings.md) 第 5 節），Agent 不另外存檔。（#8、#19、#813）
 - 刷新次數這類以層為單位的計數記在 Agent 記憶體，不存檔。（#10）
-- Agent 寫的檔案都在 `<root>` 底下，避開 MXU 與 MFAAvalonia 的設定檔（`mxu-*.json`、`instances/`）：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中的隊伍佇列 `team_queue`（GUI 還沒寫回的版本 20、21 檔改 `teams` 的順序，[04](04-settings.md) 第 2 節），先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
+- Agent 寫的檔案都在 `<root>` 底下：`logs/` 是 Agent 自己的子目錄；`config/settings.json` 是 GUI 的檔案，Agent 只改其中的隊伍佇列 `team_queue`（GUI 還沒寫回的版本 20、21 檔改 `teams` 的順序，[04](04-settings.md) 第 2 節），先寫暫存檔，確認檔案仍是剛才讀到的內容才改名（[ADR 0011](../adr/0011-team-list-order-is-the-queue.md)、[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）。根目錄用 Agent 腳本自身的位置定位，不依賴工作目錄。舊版的 `<root>/state/` 在遷移後刪除（[04](04-settings.md) 第 9 節）。（#6、#501）
 
 ## 執行記錄 runs.jsonl
 

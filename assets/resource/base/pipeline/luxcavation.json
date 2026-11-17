@@ -1,5 +1,5 @@
 {
-    // EXP Luxcavation (#366): LuxStart picks the team (the task option ExpTeam, #780), then the daily task entry of spec 01. In daily
+    // EXP Luxcavation (#366): LuxStart picks the team (luxcavation.exp.team), then the daily task entry of spec 01. In daily
     // mode first the pass page (#429): ExpPassHome (GoHome), then ExpPassHub to the Pass Missions' Daily tab, whose Clear
     // EXP Luxcavation row says whether a battle was won today (ExpPassRead). Count mode reads nothing about today
     // (ExpCountMode, #431). Then ExpHome (LuxHome: GoHome, the Modules and the battles this run fights), and ExpHub,
@@ -320,7 +320,7 @@
         "pre_delay": 500,
         "post_delay": 0
     },
-    // Thread Luxcavation (#368): LuxStart picks the team (the task option ThreadTeam, #780), then the same entry as EXP (ThreadHome,
+    // Thread Luxcavation (#368): LuxStart picks the team (luxcavation.thread.team), then the same entry as EXP (ThreadHome,
     // LuxHome) and ThreadHub, which plays the hardest level of today's one open card of the Thread tab, over
     // and over until this run's battles are won (count mode: count; daily mode: the Daily Bonuses left, #431). Its screens: the Thread tab's open card (Enter), its Level Select (the bottom row's
     // Enter), then the pages EXP's Enter leads to as well (ExpHub's list: the team page, the battle, the results page).

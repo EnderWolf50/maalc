@@ -140,7 +140,7 @@
 | 觸控方式 | `MuMuPlayerExtras`，約 51 ms |
 
 - `Toolkit.find_adb_devices()` 會自動找到 MuMu，回傳 `EmulatorExtras` 截圖方式與 MuMu 的路徑和實例 index。（#7）
-- 輸入方式的 `Default` 不含 `EmulatorExtras`，但 PI V2 的 ADB 控制器沒有輸入方式欄位，client（MXU 這類 PI 介面）會沿用 Toolkit 找到的裝置 `input_methods`（`assets/interface.json`）。不強制 `EmulatorExtras`，能連上、能點擊即可。（#7、#22）
+- 輸入方式的 `Default` 不含 `EmulatorExtras`，但 PI V2 的 ADB 控制器沒有輸入方式欄位；執行器與 `tools/live/bot.py`（v1.0.0 的 MXU 也一樣）沿用 Toolkit 找到的裝置 `input_methods`。不強制 `EmulatorExtras`，能連上、能點擊即可。（#7、#22）
 - 使用者必須在遊戲設定裡關掉戰鬥中的旁白等待。（#16）
 - 使用者必須把遊戲設定的 Change UI Design 維持 Default；Dark 未驗證。（#48）
 - 建議把遊戲設定的 Normal FPS 與 Combat FPS 設為 60：30 FPS 時每次等待會慢約 0.045 秒。（#191）

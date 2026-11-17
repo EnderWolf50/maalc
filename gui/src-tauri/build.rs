@@ -7,8 +7,6 @@ fn main() {
             "load_settings",
             "load_game_data",
             "save_settings",
-            "load_team_options",
-            "save_team_options",
             "save_old_settings",
             "append_runs_log",
         ]),

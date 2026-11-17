@@ -24,12 +24,6 @@ fn settings_path() -> Result<PathBuf, String> {
     Ok(root()?.join("config").join("settings.json"))
 }
 
-/// The team options file (#780): assets/interface.json imports it from here (gui/src/teamOptions.test.ts checks the two
-/// agree), and config/ is what tools/install.py and both clients' updates leave alone.
-fn team_options_path() -> Result<PathBuf, String> {
-    Ok(root()?.join("config").join("team_options.json"))
-}
-
 /// A settings file of an older version beside the settings file, as it read (#782): config/settings.v<version>.json.
 fn old_settings_path(version: u32) -> Result<PathBuf, String> {
     Ok(root()?.join("config").join(old_settings_name(version)))
@@ -77,18 +71,6 @@ fn root_dir() -> Result<String, String> {
 #[tauri::command]
 fn load_settings() -> Result<Option<String>, String> {
     read_if_there(&settings_path()?).map_err(|e| e.to_string())
-}
-
-/// The team options file text, or None when it does not exist yet.
-#[tauri::command]
-fn load_team_options() -> Result<Option<String>, String> {
-    read_if_there(&team_options_path()?).map_err(|e| e.to_string())
-}
-
-/// Write the team options file as save_settings writes its file: a temp file, then a rename. The GUI is its one writer.
-#[tauri::command]
-fn save_team_options(text: String) -> Result<(), String> {
-    replace(&team_options_path()?, &text, || Ok(()))
 }
 
 /// Keep a settings file of an older version as it was, before the GUI writes its migration back (api.ts saveOldSettings):
@@ -211,8 +193,6 @@ pub fn run() {
             load_settings,
             load_game_data,
             save_settings,
-            load_team_options,
-            save_team_options,
             save_old_settings,
             append_runs_log
         ])

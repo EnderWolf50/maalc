@@ -1,10 +1,11 @@
-"""Which MaaFramework DLLs a client has loaded, and whether its MaaFramework.dll is the fixed one (#497).
+"""Which MaaFramework DLLs what runs the tasks has loaded, and whether its MaaFramework.dll is the fixed one (#497).
 
-    uv run --group probe python tools/live/maafw_loaded.py CLIENT_PID...
+    uv run --group probe python tools/live/maafw_loaded.py PID...
 
-Give the PID of MXU or MFAAvalonia. For it and the processes under it, a line per loaded DLL whose name starts with
-Maa: size and path. The agent, a child of the client, shows MaaAgentServer.dll and no MaaFramework.dll: recognition
-runs in the client. A MaaFramework.dll line ends with `MAAFW_FIX` when its bytes are the DLL tools/install.py pins
+Give the PID of what runs the tasks: the settings window (`maalc-gui.exe`, which starts the runner, ADR 0015), the
+runner (`bot.py run` starts one too). For it and the processes under it, a line per loaded DLL whose name starts with
+Maa: size and path. The agent, a child of the runner, shows MaaAgentServer.dll and no MaaFramework.dll: recognition
+runs in the runner. A MaaFramework.dll line ends with `MAAFW_FIX` when its bytes are the DLL tools/install.py pins
 (fetched once per run, about 1 MB), `wheel` when they are the installed maafw wheel's, `other` otherwise. The fork
 and the wheel both report MaaVersion() v5.14.3, so only the bytes tell them apart.
 

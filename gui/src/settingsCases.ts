@@ -20,11 +20,13 @@ export function applyEdits(data: unknown, edits: Edit[]) {
   return out;
 }
 
-/** The valid file at an older version, without the team_queue version 22 added (#803), these edits made to it; version 20's
- * with the three sections version 21 dropped (#782). */
-function beforeQueue(version: 20 | 21, edits: Edit[]) {
-  const { team_queue: _, ...old } = cases.valid;
+/** The valid file at an older version, these edits made to it (tests/test_settings.py older): without the sections version
+ * 23 added (#813), without the team_queue version 22 added below it (#803), and version 20's with the three sections it
+ * had. */
+export function olderFile(version: 20 | 21 | 22, edits: Edit[] = []) {
+  const old = Object.fromEntries(Object.entries(cases.valid).filter(([k]) =>
+    !cases.added_v23.includes(k) && (version >= 22 || k !== "team_queue")));
   return applyEdits({ ...old, version, ...(version === 20 ? cases.v20 : {}) }, edits);
 }
-export const v20File = (edits: Edit[] = []) => beforeQueue(20, edits);
-export const v21File = (edits: Edit[] = []) => beforeQueue(21, edits);
+export const v20File = (edits: Edit[] = []) => olderFile(20, edits);
+export const v21File = (edits: Edit[] = []) => olderFile(21, edits);

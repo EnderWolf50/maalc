@@ -2,6 +2,8 @@
 status: accepted（補充 ADR 0006）
 ---
 
+> [ADR 0015](0015-settings-window-runs-the-tasks.md)：A2 到了，設定視窗負責執行，但不必常駐（定時執行由 Windows 工作排程器打開視窗），所以照下文的條件維持 Tauri。（#813，2026-11-17）
+
 # 設定 GUI 維持 Tauri；A2 要常駐時優先改用 GPUI
 
 設定 GUI（[ADR 0006](0006-settings-gui-writes-one-settings-file.md)）用 Tauri 2 + React，執行時會帶出 WebView2。擔心的是它跟模擬器搶記憶體，以及安裝包大小。2026-10-23 在 Windows 11 實測，量法都一樣：啟動後等 8 秒，合計整個程序樹的 PrivateMemorySize64，GPU 記憶體取 `\GPU Process Memory(pid_*)\Dedicated Usage`。

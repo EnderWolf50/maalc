@@ -1,4 +1,4 @@
-"""The task chain (#364, ADR 0010): a task with nothing left to do ends a success, so the client's list goes on.
+"""The task chain (#364, ADR 0010): a task with nothing left to do ends a success, so the task list goes on.
 
 MaaFramework 5.14.3 ends a task a success when it reaches a node with an empty next off any [JumpBack] (a stack
 with nothing to go back to). maa-tools test runs recognitions only, with no task status, so this runs the real
@@ -21,11 +21,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 from agent_patch import patch_all
-from client_options import override, send
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "agent"))  # run as a script: as pytest's pythonpath has it
 UPDATE_GIFT = 9990001  # a gift the fake maalc-resource adds to data/gift_search.json
+# A post with an override of the entry node, as a runner may send a task's own (#812): MaaFramework builds that node on the
+# bundle loaded at the post.
+ENTRY_OVERRIDE = {"MirrorDungeon": {"attach": {"posted": True}}}
 
 if __name__ != "__main__":  # pytest; the script (child) imports actions itself, under a stand-in AgentServer
     import build_resource_package as brp
@@ -123,17 +125,17 @@ def child(work=None):
         for n in (1, 2):
             if n == 2:  # the next publish, between two tasks of the same agent
                 shutil.copyfile(work / "next.json", work / "remote" / "main" / "manifest.json")
-            # as a client posts it (#779): its options override the entry node, which MaaFramework builds on the old bundle
-            detail = tasker.post_task("MirrorDungeon", override("MirrorDungeon")).wait().get()
+            # an override of the entry node, which MaaFramework builds on the old bundle
+            detail = tasker.post_task("MirrorDungeon", ENTRY_OVERRIDE).wait().get()
             out["succeeded"] = detail.status.succeeded
             out["nodes"].append([node.name for node in detail.nodes])
         print(json.dumps(out))
         return
     actions.TASK["done"] = "left by the last task"
-    detail = tasker.post_task("MirrorDungeon", override("MirrorDungeon")).wait().get()  # what a client posts (#779)
+    detail = tasker.post_task("MirrorDungeon").wait().get()
     out.update(succeeded=detail.status.succeeded, nodes=[n.name for n in detail.nodes], first_starts=out["starts"])
     actions.STUCK["halted"] = "maintenance"  # D8: an account-level stop earlier this launch
-    detail = tasker.post_task("MirrorDungeon", override("MirrorDungeon")).wait().get()
+    detail = tasker.post_task("MirrorDungeon").wait().get()
     out["after_halt"] = {"succeeded": detail.status.succeeded, "nodes": [n.name for n in detail.nodes]}
     print(json.dumps(out))
 
@@ -225,36 +227,41 @@ def test_an_interrupted_run_does_not_reach_another_task(context, monkeypatch):
     assert interrupted_run(context, lambda: None) == {}
 
 
-# The options entry_page's MirrorDungeon starts on before its own: no run limit, stop when the retries run out, a webhook.
-ENTRY_OPTIONS = ("MirrorRunsLimit=No", "MirrorAfterRetries=stop", "WebhookUrl=http://hook.invalid/")
+# The run options entry_page's MirrorDungeon starts on before its own: no run limit, stop when the retries run out, a webhook.
+ENTRY_RUN = {"runs": None, "after_retries": "stop", "webhook_url": "http://hook.invalid/"}
 
 
-def entry_page(context, *options, teams=lambda teams: None, settings=lambda data: None):
-    """settings.json under the agent's ROOT (settings_cases' valid file, its teams edited, then the whole file),
-    MirrorDungeon started on it with ENTRY_OPTIONS and options (NAME=VALUE) as a client sends them; the entry page reads no
-    weekly bonus; GoHome ends on the main window."""
+def entry_settings(teams=lambda teams: None, settings=lambda data: None, **run):
+    """settings.json under the agent's ROOT: settings_cases' valid file, its run ENTRY_RUN and these keys, its teams
+    edited, then the whole file."""
     data = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["valid"]
+    data["run"].update(ENTRY_RUN, **run)
     teams(data["teams"])
     settings(data)
-    (actions.ROOT / "config").mkdir()
+    (actions.ROOT / "config").mkdir(exist_ok=True)
     (actions.ROOT / "config" / "settings.json").write_text(json.dumps(data), encoding="utf-8")
-    send(context, "MirrorDungeon", *ENTRY_OPTIONS, *options)
+
+
+def entry_page(context, teams=lambda teams: None, settings=lambda data: None, **run):
+    """MirrorDungeon started on entry_settings (these run keys, then the teams and the file edited); the entry page
+    reads no weekly bonus; GoHome ends on the main window."""
+    entry_settings(teams, settings, **run)
     assert actions.TaskStart().run(context, SimpleNamespace(node_name="MirrorDungeon"))
     actions.RUN.clear()
     actions.TASK["modules"] = 20  # what OpenDrive read on this trip (#369)
     context.tasker.get_node_detail.return_value = SimpleNamespace(name="HomeReached")
 
 
-@pytest.mark.parametrize("options, teams, done", [
-    (("MirrorRunsLimit=Yes", "MirrorRuns=1"), lambda teams: None, "1 of 1 runs done"),
-    (("MirrorStopWhenBonusOut=Yes",), lambda teams: None, "weekly bonuses used up"),
-    ((), lambda teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
-    ((), lambda teams: [t.update(enabled=False) for t in teams], "no enabled team"),  # review S3: no team at all
+@pytest.mark.parametrize("run, teams, done", [
+    ({"runs": 1}, lambda teams: None, "1 of 1 runs done"),
+    ({"stop_when_weekly_bonus_out": True}, lambda teams: None, "weekly bonuses used up"),
+    ({}, lambda teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
+    ({}, lambda teams: [t.update(enabled=False) for t in teams], "no enabled team"),  # review S3: no team at all
 ])
-def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, options, teams, done):
+def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, run, teams, done):
     # #364: the run count reached, the weekly bonuses out, no team for the difficulty: the task is done, not failed, so
-    # the client's list goes on. No stop procedure: no runs.jsonl line, no webhook, no evidence; Enter is not pressed.
-    entry_page(context, *options, teams=teams)
+    # the task list goes on. No stop procedure: no runs.jsonl line, no webhook, no evidence; Enter is not pressed.
+    entry_page(context, teams=teams, **run)
     actions.TASK.update(runs=1, done=None)
     urlopen = MagicMock()
     monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
@@ -331,7 +338,7 @@ def test_an_update_that_keeps_coming_back_ends_the_whole_task_list(context, monk
 
 
 def test_every_task_after_an_account_level_stop_fails_at_its_entry_without_a_tap_or_a_webhook(context, monkeypatch):
-    # D8 (#362): MFAAvalonia hands the tasker one task at a time, so post_stop does not reach the next: the agent
+    # D8 (#362): a client that hands the tasker one task at a time is not reached by post_stop at the next: the agent
     # remembers the stop for this launch, and each later entry fails before anything (no evidence, no webhook).
     urlopen = MagicMock()
     monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
@@ -490,8 +497,8 @@ def test_a_bundle_that_does_not_load_puts_the_old_files_back_and_the_task_runs_o
 def test_the_pipeline_a_task_found_is_the_pipeline_it_runs(tmp_path):
     # #772: TaskStart swaps image/ and pipeline/ and reloads the bundle, so the node the fake remote's pipeline added is
     # reached by the very task that found it; the custom actions and recognitions registered before the reload still answer.
-    # The probe follows the entry node, which the client's options override (#779): TaskStart takes it from the new bundle
-    # again, with the options the client sent, which the task then reads.
+    # The probe follows the entry node, which the post overrides (ENTRY_OVERRIDE): TaskStart takes it from the new bundle
+    # again.
     base, _ = update_scene(tmp_path)
     run = subprocess.run([sys.executable, __file__, "update", str(tmp_path)], capture_output=True, text=True, timeout=300, cwd=ROOT)
     assert run.returncode == 0, run.stderr[-2000:]

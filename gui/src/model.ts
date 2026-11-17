@@ -308,19 +308,49 @@ export interface Settings {
   team_queue: string[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
+  /** The Mirror Dungeon task's options and the four every task reads (#813); no editor shows them yet, a save keeps them. */
+  run: RunOptions;
+  luxcavation: { exp: LuxOptions; thread: LuxOptions };
+  charge_enkephalin: { count: number };
+  /** The task list the runner posts (#811): the order is the run order, a task ticked off is skipped. */
+  tasks: { id: string; enabled: boolean }[];
+  emulator: { address: string | null; mumu_index: number | null; mumu_manager: string | null };
+  schedules: { id: string; days: string[]; time: string; wake: boolean }[];
 }
+export interface RunOptions {
+  difficulty: string; target_floor: number; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
+  stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number; after_retries: string;
+  webhook_url: string; theme_pack_refresh: string; auto_accept_terms: boolean; auto_download: boolean;
+  keep_dismissed_screens: boolean; start_team: string | null;
+}
+export interface LuxOptions { mode: string; count: number; team: string | null; retries: number; consecutive: boolean }
 
 const defaultsOf = (props: Record<string, object>) =>
   Object.fromEntries(Object.entries(props).map(([k, v]) => [k, structuredClone((v as { default?: unknown }).default)]));
 
 export const newId = () => crypto.randomUUID();
 
-/** A new settings file: empty lists (spec 04 section 4). How each task runs is the client's task options (#782). */
+/** The sections version 23 added (#813) as a new file has them, from the schema's defaults (agent/settings.py defaults):
+ * run, luxcavation (Thread's count 3, the day's bonuses), charge_enkephalin, emulator; tasks every task in the schema's
+ * order, none ticked; schedules none. */
+export function newSections(): Pick<Settings, "run" | "luxcavation" | "charge_enkephalin" | "tasks" | "emulator" | "schedules"> {
+  const lux = () => defaultsOf(schema.$defs.luxcavation.properties) as unknown as LuxOptions;
+  return {
+    run: defaultsOf(P.run.properties) as unknown as RunOptions,
+    luxcavation: { exp: lux(), thread: { ...lux(), count: 3 } },
+    charge_enkephalin: defaultsOf(P.charge_enkephalin.properties) as { count: number },
+    tasks: schema.$defs.task.enum.map((id: string) => ({ id, enabled: false })),
+    emulator: defaultsOf(P.emulator.properties) as Settings["emulator"],
+    schedules: [],
+  };
+}
+
+/** A new settings file: empty lists (spec 04 section 4), the task options at their defaults, no task ticked. */
 export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw",
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], gift_lists: [], teams: [], team_queue: [],
-    event_overrides: [], trial_risk_overrides: [],
+    event_overrides: [], trial_risk_overrides: [], ...newSections(),
   };
 }
 
@@ -347,15 +377,34 @@ export function freeName(base: string, taken: string[]) {
 
 /** v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653). */
 export const OLDEST_VERSION = 20;
-/** Version 21's (#782): the sections whose 25 values the client's task and global options hold since #779, #780 and #781
- * (agent/settings.py MOVED). */
-export const MOVED = ["run", "luxcavation", "charge_enkephalin"];
 /** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file, one for each n from OLDEST_VERSION up; keep in step with
- * agent/settings.py. */
+ * agent/settings.py. 20 -> 21 changes nothing now: version 21 dropped run, luxcavation and charge_enkephalin while the
+ * client held their values (#782), and 22 -> 23 brings them back, so a version 20 file keeps its own (#813). */
 export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
-  20: (d) => Object.fromEntries(Object.entries(d).filter(([k]) => !MOVED.includes(k))),
+  20: (d) => ({ ...d }),
   21: (d) => ({ ...d, team_queue: queueInListOrder(d.teams) }),
+  22: (d) => sectionsBack(d),
 };
+
+const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
+
+/** have with every key of fallback it lacks, an object inside an object filled the same way; anything else is have's own,
+ * so the schema check names what a hand edit broke (agent/settings.py _with_missing). */
+function withMissing(fallback: unknown, have: unknown): unknown {
+  if (!isObject(fallback) || !isObject(have)) return have;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fallback)) out[k] = k in have ? withMissing(v, have[k]) : v;
+  for (const [k, v] of Object.entries(have)) if (!(k in fallback)) out[k] = v;
+  return out;
+}
+
+/** 22 -> 23 (#813): each section newSections has that the file lacks comes in at its defaults, and each key a section
+ * lacks (agent/settings.py _sections_back). A version 20 file still has its own run, luxcavation and charge_enkephalin. */
+function sectionsBack(d: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...d };
+  for (const [k, v] of Object.entries(newSections())) out[k] = k in d ? withMissing(v, d[k]) : v;
+  return out;
+}
 
 /** 21 -> 22 (#803): team_queue, the order of teams so far (agent/settings.py _queue_in_list_order). A teams list broken by
  * hand gives what ids it has: the schema check names what is wrong. */
