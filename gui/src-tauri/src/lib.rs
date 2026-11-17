@@ -1,12 +1,20 @@
-//! File access for the settings GUI (docs/spec/04-settings.md sections 1, 2 and 12).
+//! File access for the settings GUI (docs/spec/04-settings.md sections 1, 2 and 12), and the runner it starts (#815,
+//! src/runner.rs): its messages go to the page through a channel, and closing the window during a run hides it in the tray.
 //! Validation lives in the frontend; this side only reads and writes files under <root>.
 
-use serde::Serialize;
-use std::collections::BTreeMap;
+use runner::{Command, DeviceWant, Message, Run, TaskSpec};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
-use tauri::Manager;
+use std::sync::{Arc, Mutex};
+use tauri::ipc::Channel;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager};
+
+mod runner;
 
 /// <root> is the folder holding this executable (spec 04 section 1), so the user never picks it.
 /// Debug builds honour MAALC_ROOT, because `tauri dev` runs the exe from target/debug.
@@ -194,9 +202,201 @@ fn append_runs_log(line: String) -> Result<(), String> {
     f.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())
 }
 
+/// The log lines of a run the window keeps for a page that attaches later, as many as the page shows (Run.tsx LOG_LINES).
+const LOG_KEEP: usize = 2000;
+
+/// A message that is a line of the run's log.
+fn is_log(m: &Message) -> bool {
+    matches!(m, Message::Event(runner::Event::Log { .. }) | Message::Invalid { .. } | Message::Output { .. })
+}
+
+/// What a run sent, for a page that attaches after it started (a reload): every message in order, of the log lines the last
+/// LOG_KEEP.
+#[derive(Default)]
+struct History {
+    messages: VecDeque<Message>,
+    logs: usize,
+}
+
+impl History {
+    fn push(&mut self, m: Message) {
+        if is_log(&m) {
+            self.logs += 1;
+            if self.logs > LOG_KEEP {
+                if let Some(i) = self.messages.iter().position(is_log) {
+                    self.messages.remove(i);
+                    self.logs -= 1;
+                }
+            }
+        }
+        self.messages.push_back(m);
+    }
+}
+
+/// Where a run's messages go: the page's channel while it has one, and the history.
+#[derive(Default)]
+struct Relay {
+    channel: Option<Channel<Message>>,
+    history: History,
+}
+
+impl Relay {
+    fn push(&mut self, m: Message) {
+        if let Some(c) = &self.channel {
+            if c.send(m.clone()).is_err() {
+                self.channel = None; // the page went (a reload): it attaches again
+            }
+        }
+        self.history.push(m);
+    }
+
+    /// Send the page what came so far, then each message as it comes.
+    fn attach(&mut self, channel: Channel<Message>) {
+        if self.history.messages.iter().all(|m| channel.send(m.clone()).is_ok()) {
+            self.channel = Some(channel);
+        }
+    }
+}
+
+/// The last run the window started (one at a time) and where its messages go.
+struct Active {
+    run: Arc<Run>,
+    relay: Arc<Mutex<Relay>>,
+}
+
+impl Active {
+    fn under_way(&self) -> bool {
+        !self.run.done()
+    }
+}
+
+#[derive(Default)]
+struct Runs(Mutex<Option<Active>>);
+
+impl Runs {
+    fn running(&self) -> Option<Arc<Run>> {
+        self.0.lock().unwrap().as_ref().filter(|a| a.under_way()).map(|a| a.run.clone())
+    }
+}
+
+/// Start the runner on `tasks` (their entry nodes, in run order) and `device`; its messages go to `on_message`. Each task reads
+/// its options from config/settings.json at its start (#813), so the page saves first. Refused while a run is under way.
+#[tauri::command]
+fn start_run(runs: tauri::State<Runs>, tasks: Vec<String>, device: DeviceWant, on_message: Channel<Message>) -> Result<(), String> {
+    let mut slot = runs.0.lock().unwrap();
+    if slot.as_ref().is_some_and(Active::under_way) {
+        return Err("a run is under way".into());
+    }
+    let root = root()?;
+    let spawn = runner::runner_spawn(&root)?;
+    let tasks = tasks.into_iter().map(TaskSpec::new).collect();
+    let start = Command::Start { root: Some(root.display().to_string()), device, tasks };
+    let relay = Arc::new(Mutex::new(Relay { channel: Some(on_message), history: History::default() }));
+    let to = relay.clone();
+    let run = Run::spawn(&spawn, &start, runner::STOP_WAIT, Box::new(move |m| to.lock().unwrap().push(m)))?;
+    *slot = Some(Active { run, relay });
+    Ok(())
+}
+
+/// Ask the run to stop; false when none is under way.
+#[tauri::command]
+fn stop_run(runs: tauri::State<Runs>) -> bool {
+    runs.running().is_some_and(|run| run.stop())
+}
+
+/// The page (after a reload) takes the last run's messages so far and the ones to come; true while that run is under way.
+#[tauri::command]
+fn attach_run(runs: tauri::State<Runs>, on_message: Channel<Message>) -> bool {
+    let slot = runs.0.lock().unwrap();
+    let Some(active) = slot.as_ref() else { return false };
+    active.relay.lock().unwrap().attach(on_message);
+    active.under_way()
+}
+
+/// The devices a scan finds, MuMu first (runner/devices.py), each with its MuMu instance.
+#[tauri::command]
+async fn scan_devices() -> Result<Vec<runner::Device>, String> {
+    let spawn = runner::runner_spawn(&root()?)?;
+    tauri::async_runtime::spawn_blocking(move || runner::scan(&spawn, runner::SCAN_WAIT)).await.map_err(|e| e.to_string())?
+}
+
+/// The tray icon's texts, in the page's language.
+#[derive(Deserialize)]
+struct TrayText {
+    tip: String,
+    show: String,
+    stop: String,
+}
+
+const TRAY: &str = "main";
+
+/// The window shows again, in front, and the tray icon goes.
+fn show_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+    let _ = app.remove_tray_by_id(TRAY);
+}
+
+/// During a run the window hides in the tray instead of closing, the run going on (#815): its icon brings the window back (a
+/// click, or its first item) or stops the run. True when it hid; false when no run is under way, and the window closes as
+/// before.
+#[tauri::command]
+fn hide_to_tray(app: AppHandle, runs: tauri::State<Runs>, text: TrayText) -> Result<bool, String> {
+    if runs.running().is_none() {
+        return Ok(false);
+    }
+    if app.tray_by_id(TRAY).is_none() {
+        let show = MenuItem::with_id(&app, "show", &text.show, true, None::<&str>).map_err(|e| e.to_string())?;
+        let stop = MenuItem::with_id(&app, "stop", &text.stop, true, None::<&str>).map_err(|e| e.to_string())?;
+        let menu = Menu::with_items(&app, &[&show, &stop]).map_err(|e| e.to_string())?;
+        let icon = app.default_window_icon().cloned().ok_or("the app has no icon")?;
+        TrayIconBuilder::with_id(TRAY)
+            .icon(icon)
+            .tooltip(&text.tip)
+            .menu(&menu)
+            .show_menu_on_left_click(false)
+            .on_menu_event(|app, e| match e.id().as_ref() {
+                "show" => show_window(app),
+                "stop" => {
+                    if let Some(run) = app.state::<Runs>().running() {
+                        run.stop();
+                    }
+                }
+                _ => {}
+            })
+            .on_tray_icon_event(|tray, e| {
+                if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+                    show_window(tray.app_handle());
+                }
+            })
+            .build(&app)
+            .map_err(|e| e.to_string())?;
+    }
+    let window = app.get_webview_window("main").ok_or("no main window")?;
+    window.hide().map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// A second start of maalc-gui.exe: its arguments and working folder, which go to the open window as the `second-start`
+/// event (a scheduled run's `--run`, spec #811 「定時執行」, reads them).
+#[derive(Serialize, Clone)]
+struct SecondStart {
+    args: Vec<String>,
+    cwd: String,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // first, as the plugin asks: a second start ends at once, and the window that is open shows in front
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            show_window(app);
+            let _ = app.emit("second-start", SecondStart { args, cwd });
+        }))
+        .manage(Runs::default())
         .setup(|app| {
             // The page loads the game's images from the data folder through the asset protocol, whose static scope
             // (tauri.conf.json) is empty: that folder alone is opened to it, found the way load_game_data finds it. Without
@@ -215,7 +415,12 @@ pub fn run() {
             save_settings,
             save_old_settings,
             load_read_back,
-            append_runs_log
+            append_runs_log,
+            start_run,
+            stop_run,
+            attach_run,
+            scan_devices,
+            hide_to_tray
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -268,6 +473,25 @@ mod tests {
         for bad in ["settings.json", "settings.v22.json", "../mxu-maalc.json", "config/mxu-maalc.json", ""] {
             assert!(read_back_path(root, bad).is_err(), "{bad}");
         }
+    }
+
+    fn log(i: usize) -> Message {
+        Message::Output { line: format!("line {i}") }
+    }
+
+    #[test]
+    fn the_history_keeps_every_event_and_the_last_log_lines() {
+        let mut h = History::default();
+        h.push(Message::Stopping);
+        for i in 0..LOG_KEEP + 5 {
+            h.push(log(i));
+        }
+        h.push(Message::Exit { code: Some(0), ended: true, tail: vec![] });
+        assert_eq!(h.messages.len(), LOG_KEEP + 2);
+        assert_eq!(h.messages[0], Message::Stopping);
+        assert_eq!(h.messages[1], log(5));
+        assert_eq!(h.messages[LOG_KEEP], log(LOG_KEEP + 4));
+        assert!(matches!(h.messages.back(), Some(Message::Exit { .. })));
     }
 
     #[test]

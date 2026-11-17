@@ -237,7 +237,7 @@ describe("in the editor", () => {
   // The drag the real window takes only in the foreground (docs/agents/gui-driving.md): the HTML5 events the list handles.
   test("dragging a team onto another in the list moves it there in the list; the saved queue stays", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
     const rows = () => sideList().getAllByRole("listitem");
     dragOnto(rows()[2], rows()[0]);
@@ -255,7 +255,7 @@ describe("in the editor", () => {
 
     test("a drag and an ↑ in it save the queue in their order, and the team list as it was", async () => {
       const user = userEvent.setup();
-      render(<App />);
+      render(<App start="teams" />);
       await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
       dragOnto(rows()[2], rows()[0]);
       expect(inBlock()).toEqual(["Tc", "Ta", "Tb"]);
@@ -272,7 +272,7 @@ describe("in the editor", () => {
       ["the Agent moves a claimed team to the end", (s: Settings) => claimed(s, "a"), ["Tb", "Tc", "Ta"]],
       ["a task's start team is put first (#802)", (s: Settings) => ({ ...s, team_queue: ["c", "a", "b"] }), ["Tc", "Ta", "Tb"]],
     ])("shows the order the file has once the editor reads it again: %s", async (_, write, expected) => {
-      render(<App />);
+      render(<App start="teams" />);
       await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
       file.text = text(write(JSON.parse(file.text!)));
       act(() => { window.dispatchEvent(new Event("focus")); });
@@ -282,7 +282,7 @@ describe("in the editor", () => {
 
     test("an unsaved move in it and the Agent's claim are both shown", async () => {
       const user = userEvent.setup();
-      render(<App />);
+      render(<App start="teams" />);
       await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
       await user.click(within(rows()[2]).getByRole("button", { name: zh.up })); // a, c, b
       agentClaims("a");
@@ -293,7 +293,7 @@ describe("in the editor", () => {
     test("an id of the queue that names no team is its own row, marked, and the problem's click focuses it", async () => {
       file.text = text({ ...queue("a", "b", "c"), team_queue: ["a", "b", "c", "x"] });
       const user = userEvent.setup();
-      render(<App />);
+      render(<App start="teams" />);
       const extra = fill(zh["problem.queueExtra"], { name: "x" });
       await user.click(await within(await screen.findByRole("alert")).findByRole("button", { name: extra }));
       expect(rows()[3].querySelector(".item")).toHaveTextContent(/^4\. \? x$/);
@@ -304,7 +304,7 @@ describe("in the editor", () => {
 
   test("the queue the Agent wrote is taken when the window comes back to the front; the list keeps its order", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
     agentClaims("a");
     act(() => { window.dispatchEvent(new Event("focus")); });
@@ -317,7 +317,7 @@ describe("in the editor", () => {
   });
 
   test("the team being edited stays in the editor when the Agent moves it", async () => {
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     agentClaims("a");
     act(() => { window.dispatchEvent(new Event("focus")); });
@@ -327,7 +327,7 @@ describe("in the editor", () => {
 
   test("a save keeps the queue the Agent wrote under the unsaved edit", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     await user.type(nameBox(), "!");
     agentClaims("a"); // between two polls: the save itself finds it
@@ -339,7 +339,7 @@ describe("in the editor", () => {
 
   test("an unsaved drag of the list and the Agent's move of the queue are both in the save", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
     await user.click(within(sideList().getAllByRole("listitem")[2]).getByRole("button", { name: zh.up }));
     agentClaims("a");
@@ -351,7 +351,7 @@ describe("in the editor", () => {
 
   test("a poll and a save that read the Agent's write together save the Agent's queue", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     await user.type(nameBox(), "!");
     agentClaims("a");
@@ -365,7 +365,7 @@ describe("in the editor", () => {
 
   test("a save the Agent's write overtakes reads the file again and keeps that queue too", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     await user.type(nameBox(), "!");
     file.beforeSave = () => agentClaims("a"); // after the save read the file, before it writes
@@ -378,7 +378,7 @@ describe("in the editor", () => {
 
   test("a file deleted while the editor is open is written again by a save", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     file.text = null;
     act(() => { window.dispatchEvent(new Event("focus")); });
@@ -398,7 +398,7 @@ describe("in the editor", () => {
       window.dispatchEvent(new Event("focus"));
     };
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     act(() => { window.dispatchEvent(new Event("focus")); });
     await waitFor(() => expect(shown()).toEqual(["Tb", "Tc", "Ta"]));
@@ -411,7 +411,7 @@ describe("in the editor", () => {
   test("a file put there while the editor had none is read", async () => {
     const put = file.text;
     file.text = null;
-    render(<App />);
+    render(<App start="teams" />);
     expect(await screen.findByText(zh.noTeams)).toBeInTheDocument();
     file.text = put;
     act(() => { window.dispatchEvent(new Event("focus")); });
@@ -421,7 +421,7 @@ describe("in the editor", () => {
   test("New file writes over a file that does not parse", async () => {
     file.text = "{";
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(await screen.findByRole("button", { name: zh.newFile }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
@@ -429,7 +429,7 @@ describe("in the editor", () => {
 
   test("a save then a switch of language shows no stale saved note", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
@@ -439,7 +439,7 @@ describe("in the editor", () => {
 
   test("a file left half edited by hand is not saved over", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await waitFor(() => expect(nameBox()).toHaveValue("Ta"));
     file.text = "{";
     await user.type(nameBox(), "!");

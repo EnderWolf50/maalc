@@ -1,7 +1,9 @@
 // File access through the Rust side (src-tauri/src/lib.rs). In a plain browser (`pnpm dev`,
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
-import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Settings } from "./model";
+import type { Device, Message } from "./runner";
 
 const tauri = isTauri();
 
@@ -87,11 +89,43 @@ export const loadReadBack = (name: string): Promise<string | null> =>
 /** Ask `keepOpen` each time the user closes the window (its ✕, Alt+F4): true keeps it open. Returns the function that stops
  * asking. With a listener, Tauri leaves the closing to the page, which destroys the window (needs core:window:allow-destroy,
  * capabilities/default.json). A plain browser has no window to keep. */
-export function onCloseRequested(keepOpen: () => boolean): () => void {
+export function onCloseRequested(keepOpen: () => boolean | Promise<boolean>): () => void {
   if (!tauri) return () => {};
-  const listening = getCurrentWindow().onCloseRequested((e) => { if (keepOpen()) e.preventDefault(); });
+  const listening = getCurrentWindow().onCloseRequested(async (e) => { if (await keepOpen()) e.preventDefault(); });
   return () => { listening.then((stop) => stop()); };
 }
+
+const channel = (onMessage: (m: Message) => void) => {
+  const c = new Channel<Message>();
+  c.onmessage = onMessage;
+  return c;
+};
+
+/** Start the runner on `entries` (the ticked tasks' entry nodes, in run order) and `device` (lib.rs start_run): each message
+ * of the run goes to `onMessage`, the exit last. Each task reads its options from the settings file at its start, so the
+ * page saves first. Refused while a run is under way, and in a plain browser, which has no runner. */
+export function startRun(entries: string[], device: Settings["emulator"], onMessage: (m: Message) => void): Promise<void> {
+  if (!tauri) return Promise.reject(new Error("the runner runs only in the app"));
+  return invoke("start_run", { tasks: entries, device, onMessage: channel(onMessage) });
+}
+
+/** Ask the run to stop: the runner stops MaaFramework, and the window ends its tree when it cannot (lib.rs stop_run). False
+ * when no run is under way. */
+export const stopRun = (): Promise<boolean> => (tauri ? invoke("stop_run") : Promise.resolve(false));
+
+/** The last run's messages so far and the ones to come, for a page loaded again during a run (lib.rs attach_run): true while
+ * that run is under way. */
+export const attachRun = (onMessage: (m: Message) => void): Promise<boolean> =>
+  tauri ? invoke("attach_run", { onMessage: channel(onMessage) }) : Promise.resolve(false);
+
+/** The emulators a scan finds, MuMu first (lib.rs scan_devices). */
+export const scanDevices = (): Promise<Device[]> =>
+  tauri ? invoke("scan_devices") : Promise.reject(new Error("the device scan runs only in the app"));
+
+/** During a run, hide the window in the tray, its icon's tooltip and items in the page's language (lib.rs hide_to_tray): true
+ * when it hid, false when no run is under way. */
+export const hideToTray = (text: { tip: string; show: string; stop: string }): Promise<boolean> =>
+  tauri ? invoke("hide_to_tray", { text }) : Promise.resolve(false);
 
 /** Ask the window to close, as Alt+F4 does: the page's title bar ✕ (tauri.conf.json has no system bar). The request goes
  * to the onCloseRequested listener, which keeps the window open while it asks. */

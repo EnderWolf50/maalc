@@ -1,12 +1,15 @@
-// The Run tab (#814, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top; the task list on the
-// left (ticks, drag or ↑↓: the run order) and the picked task's options on the right; the global options in a frame of their
-// own; the place the runner's Start, Stop and live log take (the next ticket of #811). Each control writes the settings key
-// the runner or the agent reads at a task's start, and shows that key beside its label: the agent's stop lines name an
-// option by it ("run/start_team: team 'x' was deleted ..."). A team pick lists the settings' teams as they are now.
-import type { ReactNode } from "react";
+// The Run tab (#814, #815, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device scan;
+// the task list on the left (ticks, drag or ↑↓: the run order) and the picked task's options on the right; the global options
+// in a frame of their own; the runner's Start and Stop, each posted task's state and the live log at the bottom. Each control
+// writes the settings key the runner or the agent reads at a task's start, and shows that key beside its label: the agent's
+// stop lines name an option by it ("run/start_team: team 'x' was deleted ..."). A team pick lists the settings' teams as they
+// are now. During a run the settings it reads are locked (LockContext): a task still shows its options when clicked.
+import { memo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
-import { Field, Input, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
+import { LOG_LINES, isRunning, useRunner, type Device, type LogLine, type RunView } from "./runner";
+import * as api from "./api";
+import { Choice, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks } from "./ui";
 
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
 const runEnum = (k: string) => RUN[k].enum!.map(String);
@@ -65,8 +68,11 @@ export function RunTab() {
   const seen = new Map<string, number>();
   const rows = s.tasks.map((x) => { const repeat = seen.get(x.id) ?? 0; seen.set(x.id, repeat + 1); return { ...x, repeat }; });
   const picked = s.tasks[i];
+  const locked = isRunning(useRunner().view);
   return (
     <div className="run-page">
+      <LockContext.Provider value={locked}>
+      {locked && <p className="notice" role="status">{t("runner.locked")}</p>}
       <EmulatorFields />
       <div className="split">
         <aside className="task-list" data-path="tasks">
@@ -78,8 +84,11 @@ export function RunTab() {
             onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
             render={(x, j) => (
               <span className="task-row">
-                <Input type="checkbox" checked={x.enabled} aria-label={fill(t("tasks.tick"), { name: taskName(t, x.id) })}
-                  onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
+                {/* the tick's own hit area, larger than the bare box; a click there ticks and leaves the picked task as it is */}
+                <label className="tick" onClick={(e) => e.stopPropagation()}>
+                  <Input type="checkbox" checked={x.enabled} aria-label={fill(t("tasks.tick"), { name: taskName(t, x.id) })}
+                    onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
+                </label>
                 <span className={x.enabled ? "" : "muted"}>{taskName(t, x.id)}</span>
               </span>
             )} />
@@ -93,11 +102,91 @@ export function RunTab() {
         </section>
       </div>
       <GlobalOptions />
-      {/* the runner's Start, Stop, task states and live log (#811's next ticket) */}
-      <section className="runner-slot" aria-label={t("runner.slot")}>
-        <p className="muted">{t("runner.slot")}</p>
-      </section>
+      </LockContext.Provider>
+      <RunnerSection />
     </div>
+  );
+}
+
+/** What the status line says of the run: the phase, then where it got to (the connection, the resource) or how it ended. */
+function statusOf(t: (k: Key) => string, v: RunView) {
+  if (v.phase === "idle") return t("runner.status_idle");
+  // ended before its end event: the window ended its tree after a stop, or it crashed and the run failed (spec #811)
+  if (v.phase === "ended") return t(v.exit && !v.exit.ended ? (v.killed ? "runner.result.stopped" : "runner.result.crashed")
+    : `runner.result.${v.result ?? "failed"}`);
+  const parts = [
+    v.phase === "stopping" && t("runner.stopping"),
+    v.link ? fill(t(`runner.link.${v.link.state}`), { address: v.link.address }) : t("runner.status_starting"),
+    v.resource && t(`runner.resource.${v.resource}`),
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
+/** One line of the live log: its time, where it came from (a class, so the bot's own lines read apart) and its text. */
+const LogRow = memo(function LogRow({ line }: { line: LogLine }) {
+  return <li className={`src-${line.source}`}><time>{line.t}</time><span>{line.line}</span></li>;
+});
+
+/** The runner (#815): Start (it saves first) and Stop, what the run is doing, each posted task's state, the live log (the last
+ * LOG_LINES lines, MaaFramework's own output hidden unless asked for), and how a run that went wrong ended. */
+function RunnerSection() {
+  const { t } = useEditor();
+  const { view, start, stop, blocked } = useRunner();
+  const running = isRunning(view);
+  const [showConsole, setShowConsole] = useState(false);
+  const shown = showConsole ? view.log : view.log.filter((l) => l.source !== "console");
+  // the log follows its newest line while the user has not scrolled up from the bottom
+  const pane = useRef<HTMLOListElement>(null);
+  const follow = useRef(true);
+  useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole]);
+  const crashed = view.exit && !view.exit.ended && !view.killed;
+  return (
+    <fieldset className="runner">
+      <legend>{t("runner.title")}</legend>
+      <div className="runner-bar">
+        <button type="button" className="primary" disabled={running || blocked !== null} onClick={start}>{t("runner.start")}</button>
+        <button type="button" disabled={view.phase !== "running"} onClick={stop}>
+          {view.phase === "stopping" ? t("runner.stopping") : t("runner.stop")}
+        </button>
+        <span className="runner-status" role="status" data-phase={view.phase}>{statusOf(t, view)}</span>
+      </div>
+      {blocked && !running ? <p className="caution">{t(`runner.blocked_${blocked}`)}</p> : <p className="muted">{t("runner.start_note")}</p>}
+      {view.refused && <p className="caution" role="alert">{fill(t("runner.refused"), { error: view.refused })}</p>}
+      {view.killed && <p className="caution" role="alert">{fill(t("runner.killed"), { reason: view.killed })}</p>}
+      {crashed && (
+        <div className="crash" role="alert">
+          <p>{fill(t("runner.crash"), { code: view.exit!.code ?? "—" })}</p>
+          <pre>{view.exit!.tail.join("\n")}</pre>
+        </div>
+      )}
+      <div className="runner-body">
+        <div className="run-tasks">
+          <h3>{t("runner.tasks")}</h3>
+          {view.tasks.length ? (
+            <ol aria-label={t("runner.tasks")}>
+              {view.tasks.map((x, j) => (
+                <li key={j} data-state={x.state}>
+                  <span>{taskName(t, x.entry)}</span>
+                  <span className="state">{t(`runner.state.${x.state}`)}</span>
+                  {x.reason && <small>{x.reason}</small>}
+                </li>
+              ))}
+            </ol>
+          ) : <p className="muted">{t("runner.tasks_none")}</p>}
+        </div>
+        <div className="run-log-pane">
+          <h3>{t("runner.log")}</h3>
+          <p className="muted">{fill(t("runner.log_note"), { n: LOG_LINES })}</p>
+          <label className="check">
+            <input type="checkbox" checked={showConsole} onChange={(e) => setShowConsole(e.target.checked)} />{t("runner.console")}
+          </label>
+          <ol className="run-log" ref={pane} aria-label={t("runner.log")} tabIndex={0}
+            onScroll={(e) => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+            {shown.map((l) => <LogRow key={l.n} line={l} />)}
+          </ol>
+        </div>
+      </div>
+    </fieldset>
   );
 }
 
@@ -253,23 +342,62 @@ function GlobalOptions() {
   );
 }
 
-/** The emulator the runner connects to (spec 04 section 14): its adb address and its MuMu instance; an empty field is none
- * (null). The device scan and its pick list come with the runner's start (#811's next ticket). */
+/** The last device scan: none yet, under way, the devices it found, or why it found none. */
+type Scan = { state: "none" } | { state: "scanning" } | { state: "found"; devices: Device[] } | { state: "failed"; error: string };
+
+/** A device of a scan as its pick list names it: a MuMu one by its instance. */
+const deviceName = (t: (k: Key) => string, d: Device) =>
+  d.mumu ? fill(t("emu.device_mumu"), { index: d.mumu.index, address: d.address }) : fill(t("emu.device"), { name: d.name, address: d.address });
+
+/** The emulator the runner connects to (spec 04 section 14): its adb address, its MuMu instance and MuMuManager.exe; an empty
+ * field is none (null). The scan lists the emulators that run, MuMu first; a pick fills in all three, saved with the rest. */
 function EmulatorFields() {
   const { s, update, t } = useEditor();
   const set = (patch: Partial<Settings["emulator"]>) => update((d) => { Object.assign(d.emulator, patch); });
-  const label = (k: "address" | "mumu_index") => <span className="keyed">{t(`emu.${k}`)}<code className="key" aria-hidden>emulator/{k}</code></span>;
+  const label = (k: "address" | "mumu_index" | "mumu_manager") =>
+    <span className="keyed">{t(`emu.${k}`)}<code className="key" aria-hidden>emulator/{k}</code></span>;
+  const text = (v: string) => (v.trim() === "" ? null : v);
+  const running = isRunning(useRunner().view);
+  // the last scan: its devices, or why it found none; null before the first
+  const [scan, setScan] = useState<Scan>({ state: "none" });
+  const find = () => {
+    setScan({ state: "scanning" });
+    api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
+  };
+  const found = scan.state === "found" ? scan.devices : null;
+  const at = found ? found.findIndex((d) => d.address === s.emulator.address) : -1;
+  const pick = (d: Device) => set({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
+      <div className="row scan">
+        <button type="button" disabled={scan.state === "scanning" || running} onClick={find}>
+          {scan.state === "scanning" ? t("emu.scanning") : t("emu.scan")}
+        </button>
+        {found && found.length > 0 && (
+          <label className="field">
+            <span>{t("emu.found")}</span>
+            <Choice value={at >= 0 ? String(at) : ""} onChange={(e) => { if (e.target.value !== "") pick(found[Number(e.target.value)]); }}>
+              {at < 0 && <option value="">{t("emu.pick")}</option>}
+              {found.map((d, j) => <option key={j} value={j}>{deviceName(t, d)}</option>)}
+            </Choice>
+            <small>{t("emu.found_note")}</small>
+          </label>
+        )}
+        {found && found.length === 0 && <p className="muted">{t("emu.none_found")}</p>}
+        {scan.state === "failed" && <p className="caution">{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
+      </div>
       <div className="row">
         <Field label={label("address")} path="emulator/address">
-          <Input type="text" value={s.emulator.address ?? ""} spellCheck={false}
-            onChange={(e) => set({ address: e.target.value.trim() === "" ? null : e.target.value })} />
+          <Input type="text" value={s.emulator.address ?? ""} spellCheck={false} onChange={(e) => set({ address: text(e.target.value) })} />
         </Field>
         <Field label={label("mumu_index")} path="emulator/mumu_index">
           <Input type="number" min={0} step={1} value={s.emulator.mumu_index ?? ""}
             onChange={(e) => set({ mumu_index: e.target.value === "" ? null : Math.max(0, Math.trunc(Number(e.target.value))) })} />
+        </Field>
+        <Field label={label("mumu_manager")} path="emulator/mumu_manager">
+          <Input type="text" className="wide" value={s.emulator.mumu_manager ?? ""} spellCheck={false}
+            onChange={(e) => set({ mumu_manager: text(e.target.value) })} />
         </Field>
       </div>
       <p className="muted">{withBreaks(t("emu.note"))}</p>

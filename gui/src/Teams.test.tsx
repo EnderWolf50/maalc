@@ -145,7 +145,7 @@ describe("in the whole editor", () => {
   test("the button opens the gift list tab with that list chosen", async () => {
     file.text = JSON.stringify(settings("other"));
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(await screen.findByRole("button", { name: zh["team.edit_list"] }));
     expect(screen.getByRole("tab", { name: zh["tab.gifts"] })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("other");
@@ -155,7 +155,7 @@ describe("in the whole editor", () => {
   test("a team on the default list opens the read-only default", async () => {
     file.text = JSON.stringify(settings("default"));
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(await screen.findByRole("button", { name: zh["team.edit_list"] }));
     await waitFor(() => expect(screen.getByRole("combobox", { name: zh["gl.list"] })).toHaveValue("default"));
     expect(screen.getByText(zh["gl.readonly"])).toBeInTheDocument();
@@ -164,7 +164,7 @@ describe("in the whole editor", () => {
   test("the chosen list stays when the user goes to another tab and comes back", async () => {
     file.text = JSON.stringify(settings("other"));
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(await screen.findByRole("button", { name: zh["team.edit_list"] }));
     await user.click(screen.getByRole("tab", { name: zh["tab.events"] }));
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));

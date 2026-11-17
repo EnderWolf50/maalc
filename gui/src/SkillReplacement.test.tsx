@@ -290,7 +290,7 @@ describe("in the whole editor", () => {
 
   test("the list, the targets and s1_s3_first are saved", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(await screen.findByText(zh["skill.title"], { exact: false, selector: "summary" }));
     await user.selectOptions(screen.getByRole("combobox", { name: zh["skill.add"] }), "Ryōshū");
     await user.click(step("Ryōshū", "S2", "inc"));
@@ -304,7 +304,7 @@ describe("in the whole editor", () => {
   test("a file holding an unreachable target blocks the save and names the sinner; removing it saves", async () => {
     file.text = JSON.stringify(settings([entry("Yi Sang", 4, 1, 1)]));
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(await screen.findByText(zh["skill.title"], { exact: false, selector: "summary" }));
     await user.click(screen.getByRole("button", { name: zh.save }));
     expect(file.saved).toEqual([]);

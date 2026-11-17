@@ -16,6 +16,11 @@
     "allow-save-settings",
     "allow-save-old-settings",
     "allow-load-read-back",
-    "allow-append-runs-log"
+    "allow-append-runs-log",
+    "allow-start-run",
+    "allow-stop-run",
+    "allow-attach-run",
+    "allow-scan-devices",
+    "allow-hide-to-tray"
   ]
 }

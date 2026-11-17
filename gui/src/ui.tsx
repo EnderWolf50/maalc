@@ -201,9 +201,14 @@ export function Mark({ as: Tag = "div", path, className, marked = true, children
   );
 }
 
-/** A plain <input> or <select> that takes the mark of its field; Select, Num and Decimal are built on them. */
-export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} />;
-export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} />;
+/** True: the controls inside (Input, Choice and what is built on them, a ReorderList) are disabled. The Run tab's settings
+ * during a run, which reads them (#815). */
+export const LockContext = createContext(false);
+
+/** A plain <input> or <select> that takes the mark of its field, and the lock around it; Select, Num and Decimal are built on
+ * them. */
+export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
+export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
 
 export function Field({ label, path, note, children }: { label: ReactNode; path?: string; note?: string; children: ReactNode }) {
   return (
@@ -272,9 +277,10 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
 }) {
   const { t } = useEditor();
+  const locked = useContext(LockContext); // the rows still select: the Run tab shows a task's options during a run
   const [dragging, setDragging] = useState<number | null>(null);
   const move = (from: number, to: number) => {
-    if (to < 0 || to >= items.length || from === to) return;
+    if (locked || to < 0 || to >= items.length || from === to) return;
     const next = [...items];
     next.splice(to, 0, ...next.splice(from, 1));
     onChange(next);
@@ -283,7 +289,7 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
   return (
     <ol className="reorder" title={t("dragHint")}>
       {items.map((item, i) => (
-        <li key={keyOf(item)} draggable
+        <li key={keyOf(item)} draggable={!locked}
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
           // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
           tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
@@ -297,9 +303,9 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
           {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
           {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
           <span className="item">{render(item, i)}</span>
-          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
+          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={locked || i === 0}
             onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>
-          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
+          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={locked || i === items.length - 1}
             onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}>↓</button>
         </li>
       ))}

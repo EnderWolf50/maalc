@@ -1,5 +1,6 @@
-// Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+// Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2); the run the window starts (#815),
+// which outlives a tab switch: Start saves first, and closing the window during a run hides it in the tray.
+import { Fragment, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
 import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
@@ -9,6 +10,7 @@ import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, taskOfPath } from "./Run";
+import { IDLE, RunnerContext, isRunning, reduce, type Runner } from "./runner";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
@@ -31,7 +33,8 @@ type TabId = (typeof TABS)[number][0];
 
 /** The tabs in groups (what runs: the task list and its options; the team and its gift list; the plans; the overrides): the
  * tabs that start a group after the first. The Run tab edits the settings file's task options, task list and emulator
- * (version 23, #813, #814); a save keeps the schedules, which no tab edits yet (#811). */
+ * (version 23, #813, #814) and runs the tasks (#815), so the window opens on it; a save keeps the schedules, which no tab
+ * edits yet (#811). */
 const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
@@ -66,12 +69,13 @@ function asBefore(p: Problem, at: string, before: Problem[]): Problem[] {
 const TYPED = new Set(["text", "search", "url", "number"]);
 const typesText = (el: EventTarget) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && TYPED.has(el.type));
 
-export default function App() {
+/** `start`: the tab the window opens on, the Run tab unless a caller (a test of another tab) names one. */
+export default function App({ start = "run" }: { start?: TabId } = {}) {
   const [s, setS] = useState<Settings | null>(null);
   const [savedText, setSavedText] = useState("");
   const [loadError, setLoadError] = useState("");
   const [root, setRoot] = useState("");
-  const [tab, setTab] = useState<TabId>("teams");
+  const [tab, setTab] = useState<TabId>(start);
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
@@ -110,6 +114,16 @@ export default function App() {
   };
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
+  // the run: what the backend relays of it, folded into one view (runner.ts); a page loaded again during a run takes it up
+  const [run, dispatch] = useReducer(reduce, IDLE);
+  const [starting, setStarting] = useState(false); // Start's save and the runner's start are under way
+  const runRef = useRef(run);
+  runRef.current = run;
+  useEffect(() => {
+    let live = true; // the development build starts an effect twice: the first channel's messages are dropped
+    api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
   const sync = async () => {
@@ -201,11 +215,22 @@ export default function App() {
     focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
     setAsking((was) => (kind === "close" ? kind : was || kind)); // a close outranks a reload; a reload keeps the prompt that shows
   };
-  useEffect(() => api.onCloseRequested(() => {
-    const keep = unsaved();
-    if (keep) ask("close");
-    return keep;
-  }), []);
+  // During a run the window hides in the tray instead, the run going on, unsaved edits and all (#815); a run that ended
+  // meanwhile (the backend says it hid nothing) closes as below. A hide that fails keeps the window open and says why:
+  // closing it would end the run with the app.
+  useEffect(() => {
+    const askIfUnsaved = () => {
+      const keep = unsaved();
+      if (keep) ask("close");
+      return keep;
+    };
+    return api.onCloseRequested(() => {
+      if (!isRunning(runRef.current)) return askIfUnsaved();
+      const { t } = translate(latest.current.s?.language ?? "zh_tw");
+      return api.hideToTray({ tip: t("tray.tip"), show: t("tray.show"), stop: t("tray.stop") })
+        .then((hid) => hid || askIfUnsaved(), (e: unknown) => { setStatus(String(e)); return true; });
+    });
+  }, []);
   // F5 and Ctrl+R would reload the page and drop the edits (WebView2 keeps the browser's keys on). With unsaved changes the
   // prompt asks first; with none the key is left alone and the browser reloads (#702).
   useEffect(() => {
@@ -320,6 +345,29 @@ export default function App() {
   };
   saveRef.current = asking ? () => {} : save; // while the close prompt asks, its buttons decide
 
+  /** Start the ticked tasks: unsaved edits are saved first (each task reads the file at its start), then the runner starts on
+   * the file's task list and emulator. A save the checks refuse starts nothing, and says why as any save does. */
+  const startRun = async () => {
+    if (starting || isRunning(run)) return;
+    setStarting(true);
+    try {
+      if (dirty && !(await save())) return;
+      const { s: now } = latest.current;
+      const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
+      if (!entries.length) return;
+      dispatch({ type: "begin", entries });
+      await api.startRun(entries, now!.emulator, dispatch).catch((e: unknown) => dispatch({ type: "refused", error: String(e) }));
+    } finally {
+      setStarting(false);
+    }
+  };
+  const runner: Runner = {
+    view: run,
+    start: () => { startRun(); },
+    stop: () => { api.stopRun().catch(() => {}); },
+    blocked: starting ? "saving" : problems.length ? "problems" : s.tasks.some((x) => x.enabled) ? null : "no_task",
+  };
+
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
   const close = () => api.closeWindow().catch((e) => setStatus(String(e)));
   /** What the prompt's Save and Discard end with: the window closes or the page loads again. */
@@ -366,7 +414,8 @@ export default function App() {
   ].filter(Boolean).join(" · ");
   const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
   const canRevert = dirty && savedText !== ""; // a file to go back to: a new one has none
-  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty;
+  // not during a run: Undo would bring back edits to the settings the run reads, which a save would then write (#815)
+  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty && !isRunning(run);
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: ReactKeyboardEvent) => {
     const next = nextTab(TABS.map((x) => x[0]), tab, e.key);
@@ -428,7 +477,7 @@ export default function App() {
               ))}</ul>
             </div>
           )}
-          <Current />
+          <RunnerContext.Provider value={runner}><Current /></RunnerContext.Provider>
         </div>
       </main>
       {leavePrompt}
