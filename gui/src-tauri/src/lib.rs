@@ -472,23 +472,28 @@ pub fn run() {
     // lives as long as this process. With no folder to key it by (no path of this exe), every start opens a window.
     let this = instance::SecondStart::of_this_process();
     let key = root().ok().map(|r| schedule::folder_key(&schedule::real_path(&r)));
-    let _lock = match key.as_deref().map(instance::claim) {
-        Some(Ok(None)) => {
-            let key = key.as_deref().unwrap_or_default();
-            if let Err(e) = instance::forward(key, &this, instance::FORWARD_WAIT) {
-                // the window that is open never got it: a scheduled run says so where the user looks for it
-                if let Some(s) = Scheduled::of(&this.args, false) {
-                    let _ = append_log("schedule.log", &format!("{} [schedule] {}: not run: the open window did not take it: {e}", stamp(), s.id));
-                }
-            }
-            return;
-        }
-        Some(Ok(lock)) => lock,
-        Some(Err(e)) => {
-            eprintln!("one window per folder: {e}");
-            None
-        }
+    let _lock = match key.as_deref() {
         None => None,
+        Some(k) => match instance::claim(k) {
+            Ok(Some(lock)) => Some(lock),
+            Ok(None) => {
+                if let Err(e) = instance::forward(k, &this, instance::FORWARD_WAIT) {
+                    // the window that is open never got it: a scheduled run says so where the user looks for it
+                    match Scheduled::of(&this.args, false) {
+                        Some(s) => {
+                            let line = format!("{} [schedule] {}: not run: the open window did not take it: {e}", stamp(), s.id);
+                            let _ = append_log("schedule.log", &line);
+                        }
+                        None => eprintln!("the window of this folder did not take this start: {e}"),
+                    }
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("one window per folder: {e}");
+                None
+            }
+        },
     };
     let launch = Scheduled::of(&this.args, true);
     tauri::Builder::default()

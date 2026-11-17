@@ -277,9 +277,9 @@ fn other_install(name: &str, prefix: &str) -> bool {
 
 /// Bring the tasks of the folder `root` in line with its settings' `schedules`, each to start `exe`: a task that is missing or
 /// does something else is written again, a task of this folder whose schedule is gone is deleted. A task of another maalc
-/// folder whose program `exists` says is gone (that folder moved or was deleted; `program_there`) is deleted too; one whose program is there
-/// is another install's, and stays. A schedule that cannot be a task (a hand-edited id, time or days) is left out with why,
-/// and a task of its id stays as it was.
+/// folder whose program `exists` says is gone (that folder moved or was deleted; `program_there`) is deleted too; one whose
+/// program is there is another install's, and stays. A schedule that cannot be a task (a hand-edited id, time or days) is
+/// left out with why, and a task of its id stays as it was.
 pub fn sync(tasks: &dyn Scheduler, schedules: &[Schedule], exe: &Path, root: &Path, exists: &dyn Fn(&Path) -> bool) -> Result<Synced, String> {
     let prefix = task_prefix(root);
     let names = tasks.names()?;
