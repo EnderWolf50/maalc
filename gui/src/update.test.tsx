@@ -95,9 +95,9 @@ describe("the update", () => {
     progress({ step: "download", received: 1000, total: 1000 });
     expect(bar).toHaveTextContent(fill(zh["update.downloading"], { pct: 100 }));
     progress({ step: "verify" });
-    expect(screen.getByText(zh["update.verify"])).toHaveRole("status");
+    expect(screen.getByText(zh["update.verify"]).closest("[role=status]")).toHaveClass("update");
     progress({ step: "extract" });
-    expect(screen.getByText(zh["update.extract"])).toHaveRole("status");
+    expect(screen.getByText(zh["update.extract"]).closest("[role=status]")).toHaveClass("update");
     expect(back.applies).toBe(0);
     await finish();
     expect(back.applies).toBe(1);

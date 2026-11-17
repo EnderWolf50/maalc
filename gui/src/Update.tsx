@@ -23,8 +23,16 @@ export type UpdateStep =
 /** The newer release, this build's version, and where its update is. */
 export interface Update { current: string; release: Release; at: UpdateStep }
 
+/** The notice's words beside its mark, an arrow into a tray. In a header too narrow for its parts (the `label` step of
+ * WindowControls.tsx FIT_STEPS) the mark shows alone and the words leave the eye only: they stay the notice's name. */
+const said = (text: string) => (<>
+  <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M5 .5v6M2.5 4 5 6.5 7.5 4M.5 9.5h9" /></svg>
+  <span className="words">{text}</span>
+</>);
+
 /** The header's notice: a button while there is something to click (update, apply, try again), the step's name while it runs.
- * During a run the apply waits: its button says so and stays off until the run ends. */
+ * During a run the apply waits: its button says so and stays off until the run ends. Each one's tooltip says more, or its
+ * words when they do not show. */
 export function UpdateChip({ update, running, onUpdate, onApply }: {
   update: Update; running: boolean; onUpdate: () => void; onApply: () => void;
 }) {
@@ -33,29 +41,30 @@ export function UpdateChip({ update, running, onUpdate, onApply }: {
   const v = { version, current };
   switch (at.step) {
     case "available":
-      return <button type="button" className="update" title={fill(t("update.title"), v)} onClick={onUpdate}>{fill(t("update.available"), v)}</button>;
+      return <button type="button" className="update" title={fill(t("update.title"), v)} onClick={onUpdate}>{said(fill(t("update.available"), v))}</button>;
     case "download": {
       const pct = at.total > 0 ? Math.min(100, Math.floor((at.received / at.total) * 100)) : null;
+      const text = pct === null ? fill(t("update.downloading_mb"), { mb: Math.floor(at.received / 2 ** 20) }) : fill(t("update.downloading"), { pct });
       return (
         <span className="update busy" role="progressbar" aria-label={fill(t("update.label"), v)} aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={pct ?? undefined} style={{ "--done": `${pct ?? 0}%` } as CSSProperties}>
-          {pct === null ? fill(t("update.downloading_mb"), { mb: Math.floor(at.received / 2 ** 20) }) : fill(t("update.downloading"), { pct })}
+          aria-valuenow={pct ?? undefined} title={text} style={{ "--done": `${pct ?? 0}%` } as CSSProperties}>
+          {said(text)}
         </span>
       );
     }
     case "verify":
     case "extract":
     case "applying":
-      return <span className="update busy" role="status">{t(`update.${at.step}`)}</span>;
+      return <span className="update busy" role="status" title={t(`update.${at.step}`)}>{said(t(`update.${at.step}`))}</span>;
     case "ready":
       return (
         <button type="button" className="update" disabled={running} onClick={onApply}
           title={fill(t(running ? "update.after_run_title" : "update.apply_title"), v)}>
-          {fill(t(running ? "update.after_run" : "update.apply"), v)}
+          {said(fill(t(running ? "update.after_run" : "update.apply"), v))}
         </button>
       );
     case "failed":
-      return <button type="button" className="update bad" title={fill(t("update.retry_title"), v)} onClick={onUpdate}>{t("update.retry")}</button>;
+      return <button type="button" className="update bad" title={fill(t("update.retry_title"), v)} onClick={onUpdate}>{said(t("update.retry"))}</button>;
   }
 }
 
