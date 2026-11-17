@@ -2,8 +2,8 @@
 
 Commands (one runner process takes one start or one scan, then ends):
 - scan: report the devices MaaFramework finds (`devices`), MuMu first, then `end`.
-- start: run `tasks` in turn, each {entry, override}: the task's entry node and a pipeline override that goes to
-  MaaFramework as it is. `root` is the install (default: the folder that holds runner/). `device` picks the emulator:
+- start: run `tasks` in turn, each {entry}: the task's entry node, which reads its options from the settings file at
+  its start (#813). `root` is the install (default: the folder that holds runner/). `device` picks the emulator:
   `address` (default: the first device the scan finds), and `mumu_index` with `mumu_manager` to start a MuMu that is
   not running.
 - stop: during a start, stop MaaFramework; the running task ends `stopped`, the ones after it `cancelled`.
@@ -21,6 +21,7 @@ VERSION = 1
 SOURCES = ("runner", "agent", "console")
 STATES = ("pending", "running", "succeeded", "failed", "stopped", "cancelled")
 CONNECTION = ("launching", "waiting", "connecting", "connected")
+RESOURCE = ("loading", "loaded")
 RESULTS = ("succeeded", "failed", "stopped")
 ERRORS = ("protocol", "device_missing", "launch_failed", "device_timeout", "connect_failed", "resource_failed",
           "agent_failed", "agent_exit", "stop_timeout", "internal")
@@ -67,7 +68,7 @@ EVENTS = {
     "log": ({"t": _str, "source": _one_of(*SOURCES), "line": _str}, {}),
     "devices": ({"devices": _list(DEVICE)}, {}),
     "connection": ({"state": _one_of(*CONNECTION), "address": _str}, {}),
-    "resource": ({"state": _one_of("loading", "loaded")}, {}),
+    "resource": ({"state": _one_of(*RESOURCE)}, {}),
     "task": ({"index": _int, "entry": _str, "state": _one_of(*STATES)}, {"reason": _nullable(_str)}),
     "error": ({"kind": _one_of(*ERRORS), "message": _str}, {"code": _int, "tail": _list(_str)}),
     "end": ({"result": _one_of(*RESULTS)}, {}),
@@ -101,13 +102,10 @@ def _fields(where: str, given: dict, allowed) -> None:
 def _task(i: int, t) -> dict:
     if not isinstance(t, dict):
         raise ProtocolError(f"start: tasks[{i}] must be an object")
-    _fields(f"start: tasks[{i}]", t, ("entry", "override"))
+    _fields(f"start: tasks[{i}]", t, ("entry",))
     if not isinstance(t.get("entry"), str) or not t["entry"]:
         raise ProtocolError(f"start: tasks[{i}].entry must name the task's entry node")
-    override = t.get("override", {})
-    if not isinstance(override, (dict, list)):
-        raise ProtocolError(f"start: tasks[{i}].override must be a pipeline override (an object, or a list of them)")
-    return {"entry": t["entry"], "override": override}
+    return {"entry": t["entry"]}
 
 
 def _device(d) -> dict:

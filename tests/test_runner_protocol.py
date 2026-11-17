@@ -35,10 +35,22 @@ def test_an_event_is_well_formed_as_its_case_says(case):
             protocol.check_event(case["event"])
 
 
-def test_every_event_kind_and_task_state_has_a_valid_case():
+def test_every_event_kind_and_every_value_it_can_take_has_a_valid_case():
+    # the window's backend refuses a line it cannot read: a value no case holds could differ between the two unseen
     valid = [c["event"] for c in CASES["events"] if c["valid"]]
     assert {e["event"] for e in valid} == set(protocol.EVENTS)
-    assert {"pending", "cancelled"} <= {e["state"] for e in valid if e["event"] == "task"}
+    values = lambda kind, field: {e[field] for e in valid if e["event"] == kind}  # noqa: E731
+    assert values("log", "source") == set(protocol.SOURCES)
+    assert values("connection", "state") == set(protocol.CONNECTION)
+    assert values("resource", "state") == set(protocol.RESOURCE)
+    assert values("task", "state") == set(protocol.STATES)
+    assert values("error", "kind") == set(protocol.ERRORS)
+    assert values("end", "result") == set(protocol.RESULTS)
+
+
+def test_a_task_of_a_start_is_its_entry_alone():
+    # the options are the settings file's (#813): the runner takes no override for MaaFramework
+    assert protocol.command('{"v": 1, "cmd": "start", "tasks": [{"entry": "ClaimMail"}]}')["tasks"] == [{"entry": "ClaimMail"}]
 
 
 def test_an_event_line_is_one_line_of_json_with_the_version():

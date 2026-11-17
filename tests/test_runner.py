@@ -32,8 +32,8 @@ OTHER = device("emulator-5554", None, "emulator-5554", adb="C:/adb/adb.exe")
 
 
 class Job:
-    def __init__(self, entry, override):
-        self.entry, self.override, self.state, self.left = entry, override, "pending", 0
+    def __init__(self, entry):
+        self.entry, self.state, self.left = entry, "pending", 0
 
     def get(self):
         s = self.state
@@ -140,9 +140,9 @@ class World:
             def bind(self, res, ctl):
                 pass
 
-            def post_task(self, entry, override):
-                job = Job(entry, override)
-                world.posted.append((entry, override))
+            def post_task(self, entry):  # no pipeline override: each task reads the settings file (#813)
+                job = Job(entry)
+                world.posted.append(entry)
                 world.queue.append(job)
                 return job
 
@@ -210,8 +210,7 @@ class Run:
         return [e["line"] for e in self.of("log") if source in (None, e["source"])]
 
 
-TWO = [{"entry": "MirrorDungeon", "override": [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}]},
-       {"entry": "ExpLuxcavation"}]
+TWO = [{"entry": "MirrorDungeon"}, {"entry": "ExpLuxcavation"}]
 
 
 def test_a_start_connects_loads_starts_the_bot_and_reports_each_task_in_turn(tmp_path):
@@ -225,8 +224,7 @@ def test_a_start_connects_loads_starts_the_bot_and_reports_each_task_in_turn(tmp
                      "awake off", "end"]
     assert [e["state"] for e in run.of("connection")] == ["connecting", "connected"]
     assert run.of("end") == [{"v": 1, "event": "end", "result": "succeeded"}]
-    # each task goes with its own override, as it came: the runner passes it through
-    assert world.posted == [("MirrorDungeon", [{"MirrorDungeon": {"attach": {"difficulty": "hard"}}}]), ("ExpLuxcavation", {})]
+    assert world.posted == ["MirrorDungeon", "ExpLuxcavation"]  # the whole list up front, in its order
     assert world.roots == [run.root] and world.bundles == [str(run.root / "resource" / "base")]
     assert world.controllers == ["127.0.0.1:16384"] and world.disconnected
     assert "[maalc] task MirrorDungeon started" in run.lines("agent")  # the bot's line as it printed it
@@ -423,6 +421,28 @@ def test_launch_runs_mumumanager_and_returns_its_code_and_output():
         raise FileNotFoundError(2, "not found")
     code, said = devices.launch("C:/nope/MuMuManager.exe", 0, run=missing)
     assert code is None and said.startswith("FileNotFoundError")
+
+
+def test_launch_starts_mumumanager_out_of_the_windows_job_so_the_emulator_outlives_the_run():
+    # the window ends its job's processes at each run's end (runner.rs Job): MuMu, and what MuMuManager starts for it,
+    # must not be among them. A job that allows no breakaway refuses the flag, and the launch then runs inside it.
+    flags = []
+
+    def run(cmd, creationflags=0, **kw):
+        flags.append(creationflags)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    assert devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 0, run=run) == (0, "")
+    assert len(flags) == 1 and flags[0] & devices.CREATE_BREAKAWAY_FROM_JOB
+
+    flags.clear()
+
+    def refused(cmd, creationflags=0, **kw):
+        flags.append(creationflags)
+        if creationflags & devices.CREATE_BREAKAWAY_FROM_JOB:
+            raise PermissionError(13, "Access is denied")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+    assert devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 0, run=refused) == (0, "")
+    assert [bool(f & devices.CREATE_BREAKAWAY_FROM_JOB) for f in flags] == [True, False]
 
 
 def test_keep_awake_holds_the_machine_and_the_display_and_lets_go_after():
