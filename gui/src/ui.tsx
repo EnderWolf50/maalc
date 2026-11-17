@@ -180,11 +180,16 @@ export function nextTab<T>(tabs: readonly T[], at: T, key: string): T | undefine
 /** The problem ids of the field around a control ("" for none), for its aria attributes (useMark). */
 const MarkContext = createContext("");
 
+/** The ids of more text the controls inside take as their description, after their problems' (useMark): the settings key a
+ * field of the Run tab shows (Run.tsx DescribedByKey). */
+export const DescribeContext = createContext("");
+
 /** A control's aria attributes: in a field marked red, invalid and described by the problems' text, which a screen reader
- * reads with it (#695). */
+ * reads with it (#695); described too by what DescribeContext names. */
 export function useMark() {
   const ids = useContext(MarkContext);
-  return ids ? { "aria-invalid": true, "aria-describedby": ids } as const : {};
+  const described = [ids, useContext(DescribeContext)].filter(Boolean).join(" ");
+  return { ...(ids ? { "aria-invalid": true } as const : {}), ...(described ? { "aria-describedby": described } : {}) };
 }
 
 /** The frame of a field, red when a check fails at `path` or under it, with the data-path a problem's jump finds (focusPath).

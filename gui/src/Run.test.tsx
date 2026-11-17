@@ -6,7 +6,8 @@ import taskOptionsPy from "../../agent/task_options.py?raw";
 import { TABS } from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
-import { dragOnto, expectLines, queuedTeams, renderEditor } from "./testing";
+import css from "./index.css?raw";
+import { cssRules, cssValueOf, dragOnto, expectLines, queuedTeams, renderEditor } from "./testing";
 import { GLOBAL_KEYS } from "./Run";
 import { useEditor } from "./ui";
 
@@ -291,21 +292,94 @@ describe("the global options and the emulator", () => {
     expect(r.settings().emulator).toEqual({ address: null, mumu_index: null, mumu_manager: null });
   });
 
-  test("each field shows its settings key beside its label, as the agent's stop lines name it; a screen reader reads the label", async () => {
-    const r = renderEditor(<RunTab />, newSettings());
-    await show(r, "鏡牢");
-    for (const key of ["run/start_team", "run/difficulty", "run/runs", "run/webhook_url", "emulator/address"]) expect(screen.getByText(key)).toBeVisible();
-    expect(screen.getByRole("checkbox", { name: zh["run.auto_download"] })).toBeInTheDocument();
-    await show(r, "經驗本");
-    for (const key of ["luxcavation/exp/team", "luxcavation/exp/consecutive"]) expect(screen.getByText(key)).toBeVisible();
-    // a switch's label and its key are one item of its flex row: apart, the label wrapped a word to a line in the window
-    const label = screen.getByRole("checkbox", { name: zh["lux.consecutive"] }).closest("label")!;
-    expect([...label.children].map((x) => x.tagName)).toEqual(["INPUT", "SPAN"]);
-    expect(label.querySelector(":scope > span")).toHaveTextContent(`${zh["lux.consecutive"]}luxcavation/exp/consecutive`);
-  });
-
   test("the tab's long notes show one topic to a line", async () => {
     await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
     for (const key of ["tasks.note", "run.start_team_note", "emu.note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);
+  });
+});
+
+describe("each field's settings key, as the agent's stop lines name it", () => {
+  /** The settings key `path` the tab shows after its field's label. */
+  const keyOf = (path: string) => screen.getByText(path, { selector: "code" });
+  /** Whether the stylesheet shows that key, with the pointer over an element, the keyboard focus on one, or neither. */
+  const shown = (path: string, at?: Element | { focus: Element }) => cssValueOf(css, keyOf(path), "visibility", at) !== "hidden";
+  // a field of each kind: a task option's choice, the run limit (a switch with its number), a task's switch, a global option's
+  // text and switch, the emulator's fields
+  const MIRROR = ["run/difficulty", "run/start_team", "run/runs", "run/stop_when_weekly_bonus_out"];
+  const EVERY_TASK = ["run/webhook_url", "run/auto_download", "emulator/address", "emulator/mumu_index", "emulator/mumu_manager"];
+
+  test("stays in the page after its label, shown only while the pointer is over that field, its label included", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await show(r, "鏡牢");
+    for (const path of [...MIRROR, ...EVERY_TASK]) {
+      expect(keyOf(path).closest(".keyed")).toHaveTextContent(path);
+      expect(shown(path)).toBe(false);
+    }
+    // over a label, and over a field's control: that field's key shows, no other
+    const label = keyOf("run/start_team").closest(".keyed")!;
+    expect(shown("run/start_team", label)).toBe(true);
+    expect(shown("run/difficulty", label)).toBe(false);
+    const runs = screen.getByRole("checkbox", { name: zh["run.runs"] });
+    expect(shown("run/runs", runs)).toBe(true);
+    expect(shown("run/runs", within(runs.closest(".toggle") as HTMLElement).getByRole("spinbutton"))).toBe(true);
+    expect(shown("run/start_team", runs)).toBe(false);
+    for (const path of EVERY_TASK) expect(shown(path, keyOf(path).closest(".keyed")!)).toBe(true);
+    expect(shown("emulator/address", keyOf("emulator/mumu_index"))).toBe(false);
+    await show(r, "經驗本");
+    const consecutive = screen.getByRole("checkbox", { name: zh["lux.consecutive"] });
+    expect(shown("luxcavation/exp/consecutive")).toBe(false);
+    expect(shown("luxcavation/exp/consecutive", consecutive)).toBe(true);
+    // a switch's label and its key are one item of its flex row: apart, the label wrapped a word to a line in the window
+    const box = consecutive.closest("label")!;
+    expect([...box.children].map((x) => x.tagName)).toEqual(["INPUT", "SPAN"]);
+    expect(box.querySelector(":scope > span")).toHaveTextContent(`${zh["lux.consecutive"]}luxcavation/exp/consecutive`);
+  });
+
+  // which focus draws a ring (:focus-visible) is the browser's call: one the keyboard moved, and a text box's either way, not a
+  // click on a switch or a choice; the real window's check showed it
+  test("shows while the keyboard focus is in its field, on its control or its number", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await show(r, "鏡牢");
+    const difficulty = screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) });
+    expect(shown("run/difficulty", { focus: difficulty })).toBe(true);
+    expect(shown("run/target_floor", { focus: difficulty })).toBe(false);
+    const runs = screen.getByRole("checkbox", { name: zh["run.runs"] });
+    expect(shown("run/runs", { focus: runs })).toBe(true);
+    expect(shown("run/runs", { focus: within(runs.closest(".toggle") as HTMLElement).getByRole("spinbutton") })).toBe(true);
+    const download = screen.getByRole("checkbox", { name: zh["run.auto_download"] });
+    expect(shown("run/auto_download", { focus: download })).toBe(true);
+    expect(shown("run/auto_accept_terms", { focus: download })).toBe(false);
+    expect(shown("emulator/address", { focus: screen.getByRole("textbox", { name: zh["emu.address"] }) })).toBe(true);
+  });
+
+  test("shown, it moves nothing: hidden, it keeps its room, and showing it changes its visibility alone", () => {
+    renderEditor(<RunTab />, newSettings());
+    expect(cssValueOf(css, keyOf("emulator/address"), "display")).not.toBe("none");
+    const showing = cssRules(css).filter((r) => r.selector.includes("code.key") && /:hover|:focus/.test(r.selector));
+    expect(showing).not.toHaveLength(0);
+    for (const rule of showing) expect(rule.body.split(";").map((x) => x.split(":")[0].trim()).filter(Boolean)).toEqual(["visibility"]);
+  });
+
+  test("a screen reader reads the label as the field's name and its key as the field's description", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await show(r, "鏡牢");
+    const fields = [
+      [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "run/difficulty"],
+      [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.start_team"]}`) }), "run/start_team"],
+      [screen.getByRole("checkbox", { name: zh["run.runs"] }), "run/runs"],
+      [screen.getByRole("checkbox", { name: zh["run.stop_when_weekly_bonus_out"] }), "run/stop_when_weekly_bonus_out"],
+      [screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) }), "run/webhook_url"],
+      [screen.getByRole("checkbox", { name: zh["run.auto_download"] }), "run/auto_download"],
+      [screen.getByRole("textbox", { name: zh["emu.address"] }), "emulator/address"],
+      [screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), "emulator/mumu_index"],
+      [screen.getByRole("textbox", { name: zh["emu.mumu_manager"] }), "emulator/mumu_manager"],
+    ] as const;
+    for (const [control, path] of fields) {
+      expect(control).not.toHaveAccessibleName(new RegExp(path));
+      expect(control).toHaveAccessibleDescription(path);
+    }
+    await show(r, "經驗本");
+    expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) })).toHaveAccessibleDescription("luxcavation/exp/team");
+    expect(screen.getByRole("checkbox", { name: zh["lux.consecutive"] })).toHaveAccessibleDescription("luxcavation/exp/consecutive");
   });
 });
