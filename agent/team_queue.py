@@ -79,7 +79,7 @@ def requeue(root, team_id):
 
 
 def to_head(root, team_id):
-    """MirrorDungeon's start team (the client's MirrorStartTeam, #805, ADR 0014): once the task's first new run, which
+    """MirrorDungeon's start team (run.start_team, #805, ADR 0014): once the task's first new run, which
     picked its team with team_id at the head (headed), opens, move team team_id to the head of the queue, written as a
     claim's move to the end is. Moving it to the head is moving each team before it to the end, in turn, so the settings
     GUI merges it as it merges claims (movedToEnd).
