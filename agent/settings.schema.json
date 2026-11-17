@@ -361,7 +361,17 @@
     },
     "tasks": {
       "type": "array",
-      "description": "the task list the runner posts (#811): the order is the run order, a task ticked off is skipped; each task once (agent/settings.py cross_check)",
+      "description": "the task list the runner posts (#811): the order is the run order, an entry ticked off is skipped; a task may be listed more than once, each entry with its own tick, all of them reading that task's options; default: a new file's list, the README's suggested order (AssembleModules before and after the Luxcavations), ChargeEnkephalin before the first AssembleModules, none ticked",
+      "default": [
+        { "id": "ChargeEnkephalin", "enabled": false },
+        { "id": "AssembleModules", "enabled": false },
+        { "id": "ExpLuxcavation", "enabled": false },
+        { "id": "ThreadLuxcavation", "enabled": false },
+        { "id": "AssembleModules", "enabled": false },
+        { "id": "ClaimPassMissions", "enabled": false },
+        { "id": "ClaimMail", "enabled": false },
+        { "id": "MirrorDungeon", "enabled": false }
+      ],
       "items": {
         "type": "object",
         "additionalProperties": false,

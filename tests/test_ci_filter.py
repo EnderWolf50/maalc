@@ -51,9 +51,9 @@ def test_a_pattern_with_picomatch_syntax_this_does_not_read_is_refused():
 
 
 def test_a_file_a_test_opens_outside_the_read_filter_is_named():
-    assert cf.unlisted(["gui/src/i18n.ts", "agent/main.py", "tests/shard_seconds.json"]) == []
-    assert cf.unlisted(["docs/spec/04-settings.md", "gui/src/i18n.ts", "README.md", "LICENSE"]) == [
-        "LICENSE", "README.md", "docs/spec/04-settings.md"]
+    assert cf.unlisted(["gui/src/i18n.ts", "README.md", "agent/main.py", "tests/shard_seconds.json"]) == []
+    assert cf.unlisted(["docs/spec/04-settings.md", "gui/src/i18n.ts", "CODING_STANDARDS.md", "LICENSE"]) == [
+        "CODING_STANDARDS.md", "LICENSE", "docs/spec/04-settings.md"]
 
 
 def test_record_notes_the_files_of_the_repository_the_way_the_opener_wrote_them(tmp_path, monkeypatch):

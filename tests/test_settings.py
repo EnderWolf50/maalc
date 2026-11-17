@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -241,6 +242,18 @@ def test_a_current_file_says_nothing(tmp_path):
 def test_the_sections_version_23_added_are_the_schemas_defaults_as_the_shared_valid_file_has_them():
     # the agent's migration fills them from the schema, the GUI's from its own new file (validate.test.ts): both give valid
     assert settings.defaults() == ADDED
+
+
+def test_a_new_files_task_list_is_the_readmes_suggested_order_every_task_listed_none_ticked():
+    # #811: the order runs AssembleModules before and after the Luxcavations; README's 日常任務 table names each task's id
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    ids = dict(re.findall(r"^\| (\S+?)（`(\w+)`）", readme, re.M))
+    order = readme.split("### 建議順序", 1)[1].strip().splitlines()[0].split(" → ")
+    tasks = settings.defaults()["tasks"]
+    assert [t["id"] for t in tasks] == [ids[name] for name in order]
+    assert [t["id"] for t in tasks].count("AssembleModules") == 2
+    assert {t["id"] for t in tasks} == set(settings.SCHEMA["$defs"]["task"]["enum"])
+    assert not any(t["enabled"] for t in tasks)
 
 
 def test_every_version_from_the_oldest_has_its_migration():

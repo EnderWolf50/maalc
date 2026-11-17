@@ -11,7 +11,7 @@ import { newSettings, parseSettings, rebase, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
-import { RunTab, taskOfPath } from "./Run";
+import { RunTab, entryKey, taskOfPath } from "./Run";
 import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
 import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
@@ -530,6 +530,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     const at = Number(index);
     const task = taskOfPath(path); // a task option shows with its task picked
     if (section === "gift_lists" && s.gift_lists[at]) setGiftList(s.gift_lists[at].id);
+    else if (section === "tasks" && s.tasks[at]) ctx.pick("tasks", entryKey(s.tasks, at)); // that entry, not its task's first
     else if (isPickList(section) && s[section][at]) ctx.pick(section, s[section][at].id);
     else if (task) ctx.pick("tasks", task);
     setTab(tabOf(path)![0]);

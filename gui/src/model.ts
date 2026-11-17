@@ -312,7 +312,8 @@ export interface Settings {
   run: RunOptions;
   luxcavation: { exp: LuxOptions; thread: LuxOptions };
   charge_enkephalin: { count: number };
-  /** The task list the runner posts (#811): the order is the run order, a task ticked off is skipped. */
+  /** The task list the runner posts (#811): the order is the run order, an entry ticked off is skipped. A task may be listed
+   * more than once, each entry with its own tick, all of them reading that task's options. */
   tasks: { id: string; enabled: boolean }[];
   emulator: { address: string | null; mumu_index: number | null; mumu_manager: string | null };
   schedules: { id: string; days: string[]; time: string; wake: boolean }[];
@@ -331,15 +332,15 @@ const defaultsOf = (props: Record<string, object>) =>
 export const newId = () => crypto.randomUUID();
 
 /** The sections version 23 added (#813) as a new file has them, from the schema's defaults (agent/settings.py defaults):
- * run, luxcavation (Thread's count 3, the day's bonuses), charge_enkephalin, emulator; tasks every task in the schema's
- * order, none ticked; schedules none. */
+ * run, luxcavation (Thread's count 3, the day's bonuses), charge_enkephalin, emulator; tasks the README's suggested order,
+ * AssembleModules twice, none ticked (#811); schedules none. */
 export function newSections(): Pick<Settings, "run" | "luxcavation" | "charge_enkephalin" | "tasks" | "emulator" | "schedules"> {
   const lux = () => defaultsOf(schema.$defs.luxcavation.properties) as unknown as LuxOptions;
   return {
     run: defaultsOf(P.run.properties) as unknown as RunOptions,
     luxcavation: { exp: lux(), thread: { ...lux(), count: 3 } },
     charge_enkephalin: defaultsOf(P.charge_enkephalin.properties) as { count: number },
-    tasks: schema.$defs.task.enum.map((id: string) => ({ id, enabled: false })),
+    tasks: structuredClone(P.tasks.default) as Settings["tasks"],
     emulator: defaultsOf(P.emulator.properties) as Settings["emulator"],
     schedules: [],
   };
@@ -413,13 +414,17 @@ function queueInListOrder(teams: unknown): unknown[] {
   return teams.filter((t) => t !== null && typeof t === "object" && !Array.isArray(t) && "id" in t).map((t) => t.id);
 }
 
-/** The task list with each task it leaves out last, unticked, in the schema's order, so the Run tab can tick it (#814): the
+/** Each task id once, in the order a new file lists them (a task listed twice at its first entry's place): the order a
+ * task a list leaves out is put back in (withEveryTask, the read-back). */
+export const TASK_ORDER: string[] = [...new Set((P.tasks.default as { id: string }[]).map((x) => x.id))];
+
+/** The task list with each task it leaves out last, unticked, once each in TASK_ORDER, so the Run tab can tick it (#814): the
  * schema lets a hand edit leave one out, and a task not ticked does not run, so nothing changes what runs. A list broken by
  * hand stays as it is, for the schema check to name; so does an entry it does not know. */
 function withEveryTask(tasks: unknown): unknown {
   if (!Array.isArray(tasks)) return tasks;
   const listed = new Set(tasks.map((x) => (isObject(x) ? x.id : undefined)));
-  return [...tasks, ...(schema.$defs.task.enum as string[]).filter((id) => !listed.has(id)).map((id) => ({ id, enabled: false }))];
+  return [...tasks, ...TASK_ORDER.filter((id) => !listed.has(id)).map((id) => ({ id, enabled: false }))];
 }
 
 /** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
