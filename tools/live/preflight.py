@@ -6,9 +6,9 @@
 
 **screen** screenshots the emulator and names the screen with the pipeline's own nodes (the install's resource/base):
 `ok` the main screen (exit 0); `accept` an update, download or User Agreement dialog, which the user allowed the bot
-to accept on 2026-10-21 (exit 0, the line says which; the bot's nodes do it when the global options
-`AutoDownload` / `AutoAcceptTerms` are on, #779); `stop` a resumable Mirror Dungeon run, an outdated client or any
-other screen (exit 1 with the reason). Run it before any pytest or install rebuild: a game update found after 21 minutes of prep cost a run.
+to accept on 2026-10-21 (exit 0, the line says which; the bot's nodes do it when `run.auto_download` /
+`run.auto_accept_terms` are on); `stop` a resumable Mirror Dungeon run, an outdated client or any other screen (exit 1
+with the reason). Run it before any pytest or install rebuild: a game update found after 21 minutes of prep cost a run.
 
 **recording** says whether the recording in progress in `--out` (the `.mkv` its live `rec_<profile>.state.json` names)
 grew over `--seconds`. A file that did not grow, or that ffmpeg has not written yet because no frame came, is a `note:`

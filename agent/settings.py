@@ -17,8 +17,6 @@ SCHEMA = json.loads((Path(__file__).parent / "settings.schema.json").read_text(e
 CURRENT_VERSION = SCHEMA["properties"]["version"]["const"]
 # v0.1.0's, the first release: the versions before it were the developers' own files, and their migrations went (#653)
 OLDEST_VERSION = 20
-# Version 21's: the sections whose 25 values the client's task and global options hold since #779, #780 and #781 (#782).
-MOVED = ("run", "luxcavation", "charge_enkephalin")
 
 
 def _queue_in_list_order(data):
@@ -29,15 +27,52 @@ def _queue_in_list_order(data):
     return {**data, "team_queue": ids}
 
 
+def defaults():
+    """The sections version 23 added (#813) as a new file has them, from the schema's defaults: run, luxcavation (Thread's
+    count 3, the day's bonuses), charge_enkephalin, emulator; tasks every task in the schema's order, none ticked;
+    schedules none."""
+    props, lux = SCHEMA["properties"], SCHEMA["$defs"]["luxcavation"]["properties"]
+
+    def of(properties):
+        return {k: p["default"] for k, p in properties.items()}
+
+    return {
+        "run": of(props["run"]["properties"]),
+        "luxcavation": {"exp": of(lux), "thread": {**of(lux), "count": 3}},
+        "charge_enkephalin": of(props["charge_enkephalin"]["properties"]),
+        "tasks": [{"id": t, "enabled": False} for t in SCHEMA["$defs"]["task"]["enum"]],
+        "emulator": of(props["emulator"]["properties"]),
+        "schedules": [],
+    }
+
+
+def _fill(default, have):
+    """have with every key of default it lacks, a dict inside a dict filled the same way; anything else is have's own,
+    so the schema check names what a hand edit broke."""
+    if not (isinstance(default, dict) and isinstance(have, dict)):
+        return have
+    return {**{k: _fill(v, have[k]) if k in have else v for k, v in default.items()},
+            **{k: v for k, v in have.items() if k not in default}}
+
+
+def _sections_back(data):
+    """22 -> 23 (#813): the options are the settings file's again (the runner reads no client). Each section of defaults()
+    the file lacks comes in at its defaults, and each key a section lacks; a version-20 file still has its own run,
+    luxcavation and charge_enkephalin (20 -> 21 kept them), which only get start_team and keep_dismissed_screens when
+    they lack them."""
+    return {**data, **{k: _fill(v, data[k]) if k in data else v for k, v in defaults().items()}}
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
-# gui/src/model.ts.
-MIGRATIONS = {20: lambda data: {k: v for k, v in data.items() if k not in MOVED}, 21: _queue_in_list_order}
-# NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is still at version n, until the GUI writes it
-# back: what its migration took away and where it went.
+# gui/src/model.ts. 20 -> 21 is the identity now: version 21 dropped run, luxcavation and charge_enkephalin while the
+# client held their values (#782), and 22 -> 23 brings them back, so a version-20 file keeps its own (#813).
+MIGRATIONS = {20: dict, 21: _queue_in_list_order, 22: _sections_back}
+# NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is at version n or older, until the GUI writes
+# it back: what its migration changed about what the task reads.
 NOTES = {
-    20: "settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's task "
-        f"and global options now (#782); open the settings GUI once: it writes the file as version {CURRENT_VERSION} and "
-        "lists the values to set in the client",
+    22: f"settings older than version {CURRENT_VERSION}: the task options are read from its run, luxcavation and "
+        "charge_enkephalin again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; "
+        f"open the settings GUI once: it writes the file as version {CURRENT_VERSION}",
 }
 
 
@@ -221,8 +256,9 @@ def migrate(data, notes=None):
 
 
 def cross_check(data):
-    """The checks spec 04 section 2 says the schema cannot express, but the two that cross a task's options with the
-    teams (the target floor's, a Luxcavation task's team): the task's start checks those (task_options, #777)."""
+    """The checks spec 04 section 2 says the schema cannot express, but the ones that cross a task's options with the
+    teams (the target floor's, the start team, a Luxcavation task's team): the task's start checks those (task_options,
+    #777), so a team deleted or disabled stops only the task that names it."""
     errors = []
 
     def dupes(path, values, what):
@@ -279,4 +315,6 @@ def cross_check(data):
 
     dupes("event_overrides", [o["question"] for o in data["event_overrides"]], "question")
     dupes("trial_risk_overrides", [o["trial"] for o in data["trial_risk_overrides"]], "trial")
+    dupes("tasks", [t["id"] for t in data["tasks"]], "id")
+    dupes("schedules", [s["id"] for s in data["schedules"]], "id")
     return errors

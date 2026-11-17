@@ -207,22 +207,18 @@ CHARGE_TRIES = 3  # reads of the prompt and price, and Cancels over a decided ta
 
 @AgentServer.custom_action("ChargeStart")
 class ChargeStart(TaskStart):
-    """ChargeEnkephalin's entry: TaskStart, then its option count, the client's ChargeCount (#781), the day's target
-    Daily Count (#429). 0, the default, ends the task at once, a success, before GoHome or any tap: the window is never
-    opened, so the Use Lunacy tab is never touched. It reads nothing from the settings file, so one that does not load
-    leaves it to go on, as a task with no options there does."""
+    """ChargeEnkephalin's entry: TaskStart, then its option count, charge_enkephalin.count (#777, #813), the day's
+    target Daily Count (#429). 0, the default, ends the task at once, a success, before GoHome or any tap: the window is
+    never opened, so the Use Lunacy tab is never touched. Settings that do not load: the stop procedure, before any tap,
+    since the count is theirs."""
 
     def unread(self, context, error):
-        log(f"settings not read, ChargeEnkephalin needs none of them: {error}")
-        return self.charge()
+        return stop(context, str(error))
 
     def begin(self, context: Context, argv: CustomAction.RunArg, settings) -> bool:
-        return self.charge()
-
-    def charge(self):
         count = TASK["options"]["count"]
         TASK["charge"] = {"count": count, "reads": 0, "opened": 0, "charged": 0}
-        return done("ChargeCount is 0: Lunacy left alone") if count == 0 else True
+        return done("charge_enkephalin.count is 0: Lunacy left alone") if count == 0 else True
 
 
 @AgentServer.custom_action("ChargeMain")

@@ -212,7 +212,8 @@ describe("deleting a team", () => {
 });
 
 test("the team page says what a target past floor 5 asks of a team, which the Mirror Dungeon task's start checks (#779)", () => {
-  // the target floor is a client option now: the GUI no longer refuses a save over it, so the rule shows beside usage
+  // the target floor is the Mirror Dungeon task's option, which its start checks: a save is not refused over it, so the
+  // rule shows beside usage
   renderEditor(<TeamsTab />, settings());
   expect(screen.getByText(zh["team.target_floor_note"])).toBeVisible();
   expect(zh["team.min_alive_note"]).toContain("鏡牢任務選項");

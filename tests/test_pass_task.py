@@ -4,7 +4,7 @@ game: a screenshot per screen, and the taps and the back key that move between t
 
 import json
 
-from daily_child import bind, game_class, inside, interface as interface_json, load, posted, result, run_child, screen
+from daily_child import bind, game_class, inside, interface as interface_json, load, result, run_child, screen
 
 BANNER = (940, 190, 270, 90)  # the Limbus Pass banner on the main window
 MISSIONS_TAB = (305, 38, 140, 38)
@@ -86,7 +86,7 @@ def child():
     out = {"error": None}
     for scenario, claimable in {"nothing": None, "claim": "daily", "seasonal": "seasonal", "daily5": "daily5", "seasonal10": "seasonal10"}.items():
         game.set(claimable)
-        out[scenario] = {**result(tasker.post_task("ClaimPassMissions", posted("ClaimPassMissions")).wait().get(), game, actions), "swipes": game.swipes}
+        out[scenario] = {**result(tasker.post_task("ClaimPassMissions").wait().get(), game, actions), "swipes": game.swipes}
     print(json.dumps(out))
 
 

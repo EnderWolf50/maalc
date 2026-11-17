@@ -23,18 +23,23 @@ def test_each_maafw_binary_ships_once():
 
 
 def test_the_release_ships_no_config_folder():
-    """MXU's full update moves away every top-level item the zip has (update.rs): a config/ in the zip would take the
-    user's settings and team options file (#780) with it."""
+    """An update replaces the top-level items the zip has (v1.0.0's MXU every one, update.rs): a config/ in the zip
+    would take the user's settings with it."""
     assert not (TREE / "config").exists()
 
 
+def test_the_release_ships_no_mxu():
+    """The settings window runs the tasks (ADR 0015): no MXU and no licence of it in the zip, as NOTICE.md lists none."""
+    assert not [p.name for p in TREE.iterdir() if "mxu" in p.name.lower()]
+
+
 def test_maafw_holds_the_fixed_framework_dll():
-    """MXU loads MaaFramework from <root>/maafw/."""
+    """The agent loads MaaFramework from <root>/maafw/ (agent/main.py)."""
     assert (TREE / "maafw" / "MaaFramework.dll").read_bytes() == fixed_framework_dll()
 
 
 def test_bundled_python_loads_the_agent_server_from_maafw():
-    """The agent the clients start (child_exec ./python/python.exe, agent/main.py) takes its DLLs from maafw/.
+    """The agent as interface.json starts it (child_exec ./python/python.exe, agent/main.py) takes its DLLs from maafw/.
     -B: release.yml zips this tree next, so the check writes no __pycache__ into it."""
     code = "import main; from maa.library import Library; Library.agent_server(); print(Library.agent_server_libpath)"
     r = subprocess.run([str(PYTHON), "-B", "-c", code], cwd=TREE, capture_output=True, text=True, timeout=120)

@@ -10,7 +10,6 @@ from recovery import (AWAY_AFTER, AWAY_POLL, GAME, L2_SCREENS, TRANSIT, WAIT_STI
                       floor_limit, focused_package, over_time, read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
 from agent_patch import patch_all
-from client_options import send_defaults
 
 
 def screen(level):
@@ -540,7 +539,6 @@ def hub(monkeypatch, tmp_path):
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.tasker.get_node_detail.return_value.name = "HomeReached"  # go_home() reads GoHome's last node (#514)
-    send_defaults(ctx)  # a task's start reads the options a client sends with it (#779)
     actions.RUN.clear()
     actions.STUCK["flag"] = None
     actions.STUCK["watch"].reset()

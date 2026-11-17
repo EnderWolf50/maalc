@@ -84,6 +84,7 @@ jobs:
         with:
           filters: |
             read:
+              - 'NOTICE.md'
               - 'docs/agents/subagent-preamble.md'
               - 'docs/agents/triage-labels.md'
               - 'docs/agents/watchdog-prompt.md'

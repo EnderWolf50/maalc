@@ -2,19 +2,19 @@
 import { describe, expect, test } from "vitest";
 import themePacksYaml from "../../assets/resource/base/data/theme_packs.yaml?raw";
 import {
-  MIGRATIONS, OLDEST_VERSION, SKILL_SWAPS, VERSION, cleanGiftList, newSettings, newTeam, parseSettings, parseThemePacks, schema,
-  skillPlan, type GiftList, type Settings,
+  MIGRATIONS, OLDEST_VERSION, SKILL_SWAPS, VERSION, cleanGiftList, newSections, newSettings, newTeam, parseSettings,
+  parseThemePacks, schema, skillPlan, type GiftList, type Settings,
 } from "./model";
 import { GIFT_BY_ID } from "./giftCatalog";
 import { TEXT } from "./i18n";
-import { applyEdits, cases, v20File, v21File, type Edit } from "./settingsCases";
+import { applyEdits, cases, olderFile, v21File, type Edit } from "./settingsCases";
 import { pyRepr, sayProblem, validate } from "./validate";
 
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
 
-  // Not task_start's: the agent checks those at a task's start (tests/test_task_options.py), on the target floor and the
-  // team the client sends, which the GUI does not see (#779, #780).
+  // Not task_start's: the agent checks those at a task's start (tests/test_task_options.py), so a team deleted or disabled
+  // stops only the task that names it (#813).
   for (const c of cases.cases as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
     test(c.name, () => {
       const problems = validate(applyEdits(cases.valid, c.edits));
@@ -45,6 +45,9 @@ function everyProblem(): Settings {
   s.gift_lists = [{ ...s.gift_lists[0], want: [9780], keep: [9780] }];
   s.event_overrides = [{ question: "Q", option: "a" }, { question: "Q", option: "b" }];
   s.trial_risk_overrides = [{ trial: "Growth I", risk: 1 }, { trial: "Growth I", risk: 2 }];
+  s.tasks = [{ id: "ClaimMail", enabled: true }, { id: "ClaimMail", enabled: false }];
+  const schedule = { id: "s1", days: ["mon"], time: "05:10", wake: true };
+  s.schedules = [schedule, { ...schedule, time: "21:00" }];
   return s;
 }
 
@@ -106,30 +109,44 @@ test("parseSettings refuses a newer version", () => {
   expect(() => parseSettings(JSON.stringify({ version: VERSION + 1 }))).toThrow("newer");
 });
 
-describe("tests/settings_cases.json migrate_v20: a version 20 file reads as the valid file, its moved sections gone (#782)", () => {
-  const valid = parseSettings(JSON.stringify(cases.valid)).data; // its gift list cleaned, as any file's on load
-  for (const c of cases.migrate_v20 as { name: string; edits: Edit[] }[]) {
+type MigrateCase = { name: string; edits: Edit[]; gives?: Edit[]; schema?: string[] };
+describe.each([20, 22] as const)("tests/settings_cases.json migrate_v%i: the sections version 23 added come back (#813)", (version) => {
+  for (const c of cases[`migrate_v${version}`] as MigrateCase[]) {
     test(c.name, () => {
-      const old = v20File(c.edits);
+      const old = olderFile(version, c.edits);
       const { data, old: read } = parseSettings(JSON.stringify(old));
-      expect([data, read]).toEqual([valid, { version: 20, data: old }]);
+      expect(read).toEqual({ version, data: old });
+      if (c.schema) {
+        // a value broken by hand stays, for the check to name it
+        expect(new Set(validate(data).map((p) => p.text.split(": ")[0]))).toEqual(new Set(c.schema));
+        return;
+      }
+      expect(data).toEqual(parseSettings(JSON.stringify(applyEdits(cases.valid, c.gives!))).data); // gift lists cleaned too
       expect(validate(data)).toEqual([]);
     });
   }
-
-  test("a version 22 file needs no migration and has no old file", () => {
-    expect(parseSettings(JSON.stringify(cases.valid)).old).toBeNull();
-  });
 });
 
-describe("tests/settings_cases.json migrate_v21: a version 21 file reads as version 22, the queue in the order of teams (#803)", () => {
+test("a version 23 file needs no migration and has no old file", () => {
+  expect(parseSettings(JSON.stringify(cases.valid)).old).toBeNull();
+});
+
+test("the sections version 23 added are what a new file has, as the shared valid file has them", () => {
+  // the agent's migration fills them from the schema (tests/test_settings.py), the GUI's from newSections: both give valid
+  const added = Object.fromEntries(cases.added_v23.map((k) => [k, (cases.valid as Record<string, unknown>)[k]]));
+  expect(newSections()).toEqual(added);
+  expect(Object.fromEntries(cases.added_v23.map((k) => [k, (newSettings() as unknown as Record<string, unknown>)[k]]))).toEqual(added);
+});
+
+describe("tests/settings_cases.json migrate_v21: a version 21 file reads with the queue in the order of teams (#803), on to version 23", () => {
+  const added = Object.fromEntries(cases.added_v23.map((k) => [k, (cases.valid as Record<string, unknown>)[k]]));
   for (const c of cases.migrate_v21 as { name: string; edits: Edit[]; team_queue: string[] }[]) {
     test(c.name, () => {
       const old = v21File(c.edits);
       const { data, old: read } = parseSettings(JSON.stringify(old));
       const { gift_lists: _, ...rest } = data;
       const { gift_lists: __, ...was } = old;
-      expect([rest, read]).toEqual([{ ...was, version: 22, team_queue: c.team_queue }, { version: 21, data: old }]);
+      expect([rest, read]).toEqual([{ ...was, version: 23, team_queue: c.team_queue, ...added }, { version: 21, data: old }]);
     });
   }
 });

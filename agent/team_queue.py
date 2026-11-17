@@ -97,11 +97,11 @@ def to_head(root, team_id):
     try:
         moved = _reorder(root, head)
     except UNUSABLE as e:
-        return f"team queue not written ({e!r}): start team {team_id!r} (MirrorStartTeam) keeps its place"
+        return f"team queue not written ({e!r}): start team {team_id!r} (run.start_team) keeps its place"
     if found is None:
-        return f"team queue: start team {team_id!r} (MirrorStartTeam) is no longer listed, the queue stays"
+        return f"team queue: start team {team_id!r} (run.start_team) is no longer listed, the queue stays"
     name = found.get("name", team_id)
-    return f"team queue: start team {name!r} (MirrorStartTeam) {'to the head' if moved else 'is already at the head'}"
+    return f"team queue: start team {name!r} (run.start_team) {'to the head' if moved else 'is already at the head'}"
 
 
 def migrate_cursor(root, address):

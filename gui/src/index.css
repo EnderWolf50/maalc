@@ -268,16 +268,6 @@ main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-widt
 .problems li button:hover { color: var(--bad); }
 .problems li button:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 
-/* A version 20 file's values to set again in the client (#782): above the tab's content, as the problems, until dismissed. */
-.moved {
-  margin: 0 0 16px; padding: 10px 16px 12px; background: var(--accent-soft); border: 1px solid var(--accent-line);
-  border-radius: 10px 0 10px 0; corner-shape: bevel;
-}
-.moved h3 { margin: 0 0 6px; font-size: 14px; color: var(--accent-ink); }
-.moved p { margin: 0 0 6px; font-size: 13px; color: var(--fg-2); }
-.moved ul { margin: 0 0 10px; padding-left: 22px; font-size: 13px; color: var(--fg); }
-.moved li + li { margin-top: 2px; }
-
 /* The close prompt (WindowControls.tsx LeavePrompt), over the dimmed editor. */
 .ask-back { position: fixed; inset: 0; z-index: 90; background: #0006; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .ask {

@@ -1,18 +1,16 @@
 """Assemble a runnable <root> in install/: interface.json, resource/, agent/,
-maafw/ (the MaaFramework DLLs MXU and the agent load, taken from the installed maafw;
+maafw/ (the MaaFramework DLLs the bot and what runs its tasks load, taken from the installed maafw;
 on Windows MaaFramework.dll comes from MAAFW_FIX), and
-the settings GUI maalc-gui.exe when it has been built.
+the settings GUI maalc-gui.exe when it has been built, which runs the tasks (ADR 0015).
 
-Drop MXU or MFAAvalonia into install/ and start it. child_exec is pinned to the
-Python running this script (run it with `uv run`), because MXU on Windows
-resolves a bare `python` to the Microsoft Store alias. Run tools/fetch_ocr.py first.
+interface.json's child_exec, which a tool that starts the agent from it reads (MaaDebugger), is pinned to the
+Python running this script (run it with `uv run`), because Windows resolves a bare `python` to the Microsoft Store
+alias. Run tools/fetch_ocr.py first.
 
 `--release` (Windows x64 only, used by .github/workflows/release.yml) makes
 install/ self-contained instead: python.org's embeddable Python in python/ with
 the locked runtime deps but without the maafw wheel's DLLs (agent/main.py points
-it at maafw/), child_exec `./python/python.exe` (MXU joins a relative
-child_exec onto the interface.json folder), and MXU's mxu.exe and LICENSE,
-shipped unmodified from its release (MXU is AGPL-3.0, see NOTICE.md).
+it at maafw/), and child_exec `./python/python.exe`, relative to the interface.json folder.
 """
 
 import argparse
@@ -45,8 +43,6 @@ PYTHON = ("https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.
 MAAFW_FIX_VERSION = "5.14.3"
 MAAFW_FIX = ("https://github.com/EnderWolf50/MaaFramework/releases/download/v5.14.3-maalc.4/MaaFramework-v5.14.3-maalc.4-win-x64.zip",
              "5f606362da84fbaf94ef1753bf04cafc023bccb53da0efd6faf2fdb43c25da81")
-MXU = ("https://github.com/MistEO/MXU/releases/download/v2.7.1/MXU-win-x86_64-v2.7.1.zip",
-       "825a62af7a344a7a47adca09d1414128e6f53a222a11cdf456f08d2e83d31724")
 # GitHub's release downloads answered 504, some after about 2 minutes, five times on 2026-11-08 (#571).
 DOWNLOAD_TIMEOUT = 60
 DOWNLOAD_WAITS = (10, 20, 40)
@@ -87,19 +83,19 @@ def fixed_framework_dll() -> bytes:
 
 @contextmanager
 def exit_if_held(path: Path):
-    """A file another process holds cannot be written or deleted: MXU and the bot load maafw/'s DLLs, the settings
-    window runs maalc-gui.exe. Stop with one line that names it, not a traceback (#757). Windows says so as
+    """A file another process holds cannot be written or deleted: the bot and what runs its tasks load maafw/'s DLLs,
+    the settings window runs maalc-gui.exe. Stop with one line that names it, not a traceback (#757). Windows says so as
     WinError 32 (shutil.copy2, unlink) or as errno 13 (open, unlink of a loaded DLL): PermissionError both."""
     try:
         yield
     except PermissionError as error:
-        sys.exit(f"cannot change {path} ({error.strerror}): MXU, the settings window or the bot may hold it;"
+        sys.exit(f"cannot change {path} ({error.strerror}): the settings window or the bot may hold it;"
                  " close it and run install.py again")
 
 
 def copy_file(src: Path, dst: Path) -> None:
     """copy2, unless dst holds src's bytes already (size, then bytes: copy2 keeps the source's mtime). A rebuild
-    that changes none of the DLLs MXU or the bot holds then goes through (#757)."""
+    that changes none of the DLLs a running bot holds then goes through (#757)."""
     with exit_if_held(dst):
         if not (dst.is_file() and filecmp.cmp(src, dst, shallow=False)):
             shutil.copy2(src, dst)
@@ -163,7 +159,7 @@ def mirror_maafw(wheel_bin: Path, root: Path, fixed_dll: bytes | None) -> None:
     if fixed_dll is None:
         mirror(wheel_bin, maafw)
         return
-    # The wheel's MaaFramework.dll is not copied in first: the fixed one MXU holds would have to change twice.
+    # The wheel's MaaFramework.dll is not copied in first: the fixed one a running bot holds would have to change twice.
     mirror(wheel_bin, maafw, caller_writes="MaaFramework.dll")
     write_file(maafw / "MaaFramework.dll", fixed_dll)
 
@@ -186,12 +182,6 @@ def bundle_python() -> None:
     wheel_dlls = site_packages / "maa" / "bin"
     if wheel_dlls.exists():  # a rerun finds maafw installed already, its bin/ gone
         shutil.rmtree(wheel_dlls)
-
-
-def bundle_mxu() -> None:
-    with fetch_zip(*MXU) as mxu:
-        (install / "mxu.exe").write_bytes(mxu.read("mxu.exe"))
-        (install / "LICENSE-MXU").write_bytes(mxu.read("LICENSE"))
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -221,5 +211,4 @@ if __name__ == "__main__":
         copy_file(gui, install / gui.name)
     if release:
         bundle_python()
-        bundle_mxu()
     print(f"Installed to {install}")

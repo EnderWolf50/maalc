@@ -1,5 +1,6 @@
-"""The version MXU shows is the `version` of assets/interface.json. Every manifest that names a version names that one,
-and release.yml names the zip and the draft release after a tag that must be it too (TAG, set by release.yml only)."""
+"""maalc's version is the `version` of assets/interface.json. Every manifest that names a version names that one (the
+settings window's, whose self-update compares it, spec #811), and release.yml names the zip and the draft release after a
+tag that must be it too (TAG, set by release.yml only)."""
 
 import json
 import os
@@ -14,7 +15,7 @@ def repo_text(path):
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_every_manifest_names_the_version_mxu_shows():
+def test_every_manifest_names_the_version_of_interface_json():
     shown = interface()["version"].removeprefix("v")
     versions = {
         "pyproject.toml": tomllib.loads(repo_text("pyproject.toml"))["project"]["version"],
@@ -26,5 +27,5 @@ def test_every_manifest_names_the_version_mxu_shows():
 
 
 @pytest.mark.skipif(not os.environ.get("TAG"), reason="release.yml sets TAG to the tag it releases")
-def test_the_release_tag_is_the_version_mxu_shows():
+def test_the_release_tag_is_the_version_of_interface_json():
     assert interface()["version"] == os.environ["TAG"]

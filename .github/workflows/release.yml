@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Check every manifest and the tag name the version MXU shows
+      - name: Check every manifest and the tag name the version of interface.json
         run: uv run --frozen pytest tests/test_version.py
       - uses: pnpm/action-setup@v4
         with:

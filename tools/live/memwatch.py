@@ -3,11 +3,12 @@ before/after (CODING_STANDARDS.md "Fixes"). Windows only: private bytes are Wind
 
     uv run --group probe python tools/live/memwatch.py --pid ROOT --csv mem.csv [--every 5]
 
-ROOT is the bot's pid (the one `queue.py detach` prints for `bot.py run`) or a client's (MXU, MFAAvalonia). Each
-sample lists the tree again, so the tasker and the agent, which start after the root, are counted. The CSV has one
-row per process per sample: time, pid, role, name, working set and private bytes in MB. The role comes from the
-command line: `tasker` (`bot.py tasker`, where MaaFramework recognises), `agent` (`agent/main.py`), `client` (MXU,
-MFAAvalonia), `other`. A venv's python.exe is a launcher that starts the real interpreter under it with the same
+ROOT is the bot's pid (the one `queue.py detach` prints for `bot.py run`) or the settings window's (`maalc-gui.exe`,
+which runs the tasks, ADR 0015). Each sample lists the tree again, so the tasker and the agent, which start after the
+root, are counted. The CSV has one row per process per sample: time, pid, role, name, working set and private bytes in
+MB. The role comes from the command line: `tasker` (`bot.py tasker`, where MaaFramework recognises), `runner` (the
+runner the window starts, a `runner.py` or `-m ...runner`, where MaaFramework recognises then), `agent`
+(`agent/main.py`), `window` (`maalc-gui.exe` and its WebView2 processes), `other`. A venv's python.exe is a launcher that starts the real interpreter under it with the same
 command line, so a role counts both; the launcher is about 12 MB of working set and 3 MB private. When the root ends
 it prints the peak and the last sample of the whole tree and of each role.
 """
@@ -35,8 +36,11 @@ def role(name: str, cmdline: list[str]) -> str:
         return "agent"
     if any(a.endswith("bot.py") for a in args) and "tasker" in args:
         return "tasker"
-    if name.lower().startswith(("mxu", "mfaavalonia")):
-        return "client"
+    module = args[args.index("-m") + 1] if "-m" in args[:-1] else ""
+    if any(a.endswith("runner.py") for a in args) or module.split(".")[-1] == "runner":
+        return "runner"
+    if name.lower() in ("maalc-gui.exe", "msedgewebview2.exe"):
+        return "window"
     return "other"
 
 

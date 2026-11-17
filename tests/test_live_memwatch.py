@@ -38,8 +38,12 @@ def test_a_child_started_after_the_root_is_counted_under_its_role_until_the_root
     ("python.exe", ["python", "-u", "install\\agent\\main.py", "MaaAgent_1"], "agent"),
     ("python.exe", ["python", "-u", "tools/live/bot.py", "tasker", "--install", "install"], "tasker"),
     ("python.exe", ["python", "-u", "tools/live/bot.py", "run", "--install", "install"], "other"),
-    ("mxu.exe", ["mxu.exe"], "client"),
-    ("MFAAvalonia.exe", ["MFAAvalonia.exe"], "client"),
+    # the settings window runs the tasks (ADR 0015): the window itself, its WebView2, the runner it starts
+    ("maalc-gui.exe", ["maalc-gui.exe"], "window"),
+    ("msedgewebview2.exe", ["msedgewebview2.exe", "--embedded-browser-webview=1"], "window"),
+    ("python.exe", ["python\\python.exe", "-u", "agent\\runner.py"], "runner"),
+    ("python.exe", ["python", "-u", "-m", "maalc.runner"], "runner"),
+    ("python.exe", ["python", "-m"], "other"),
     ("uv.exe", ["uv", "run", "python", "tools/live/bot.py", "run"], "other"),
     ("python.exe", [], "other"),
 ])
