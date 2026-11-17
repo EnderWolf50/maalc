@@ -373,10 +373,12 @@ def test_the_files_come_over_https_too(base, remote, network):
     publish(remote, NEW, "2026.11.16")
     run(base)
     assert local_files(base)["data/a.json"] == NEW["data/a.json"]
-    # the timeout is a deadline minus the clock: what is left of the 60 s, less a tick of the clock (15.6 ms on Windows);
-    # the subtraction may land a hair above 60 in floating point (60.00000000000006 on CI, #825)
+    # the timeout is a deadline minus the clock: what is left of the budget, less a tick of the clock (15.6 ms on
+    # Windows). Rounding the deadline (clock + budget) can leave it up to half a float step above the budget:
+    # 60.00000000000006 on CI (#825), still under 1e-6 with the clock below 2**33 s.
     timeouts = dict(network.seen)
-    assert network.seen[0][0] == "main/manifest.json" and 59 < timeouts["2026.11.16/data/a.json"] <= 60 + 1e-9
+    budget = ru.DOWNLOAD_SECONDS
+    assert network.seen[0][0] == "main/manifest.json" and budget - 1 < timeouts["2026.11.16/data/a.json"] <= budget + 1e-6
 
 
 # A stall waits until the test ends, so only its cases cut the budgets to 0.3 s and wait for them to run out; the other
