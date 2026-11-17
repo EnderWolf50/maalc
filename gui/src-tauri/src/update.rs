@@ -12,7 +12,7 @@
 //!   went, which the next window shows (`settle`); that window deletes old/. The exception: an apply cut short, or one that
 //!   failed and could not put everything back, leaves in old/ the only copy of what it replaced, so old/ stays until the
 //!   user empties it. Until then each start shows why, no apply runs (`holds_files`) and a scheduled start is skipped
-//!   (App.tsx, api.ts keepsOld).
+//!   (`left_unfinished`, read when it comes).
 //!
 //! The game data's resource package keeps its own hot update (ADR 0012), at a task's start: an update never runs beside one.
 
@@ -568,16 +568,17 @@ fn wait_for_exit(_pid: u32, _limit: Duration) -> bool {
 
 /// At the window's start: how the last apply went, for the page to show, and the cleanup that allows. An apply that went
 /// through, or failed and put everything back, is shown once: old/ and the journal go. One that was cut short or did not put
-/// everything back keeps both, since old/ holds the only copy of what did not go back, and is shown at each start until the
-/// user empties old/. An old/ with no journal is a leftover, and goes.
+/// everything back keeps both while old/ holds files, the only copy of what did not go back, and is shown at each start
+/// until the user empties old/ (an emptied old/ goes then too). An old/ with no journal is a leftover, and goes.
 pub fn settle(root: &Path) -> Option<Outcome> {
     let journal = journal_path(root);
     let outcome = read_journal(root);
     let old = old_dir(root);
     if outcome.as_ref().is_some_and(Outcome::keeps_old) {
-        if old.exists() {
+        if holds_files(&old) {
             return outcome;
         }
+        let _ = remove_tree(&old);
     } else {
         let _ = remove_tree(&old);
     }
@@ -588,6 +589,14 @@ pub fn settle(root: &Path) -> Option<Outcome> {
 /// cache/update/apply.json as the last apply-update mode wrote it; None when there is none, or it cannot be read.
 fn read_journal(root: &Path) -> Option<Outcome> {
     fs::read_to_string(journal_path(root)).ok().and_then(|text| serde_json::from_str(&text).ok())
+}
+
+/// Whether an apply left the folder half replaced, as it is now: one under way or cut short, or one that failed and could
+/// not put everything back, while old/ holds what it moved aside (what `settle` keeps for the user). A scheduled start is
+/// skipped then (lib.rs Scheduled): its runner would run on half the new version. An apply under way that has not moved
+/// its first entry yet (a few ms) leaves old/ empty, and is not seen.
+pub fn left_unfinished(root: &Path) -> bool {
+    read_journal(root).is_some_and(|o| o.keeps_old()) && holds_files(&old_dir(root))
 }
 
 /// Delete what an update left in cache/update/ that no update needs any more: the unpacked versions up to this one, and the
@@ -1064,9 +1073,9 @@ mod tests {
         assert_eq!(settle(&root), Some(cut.clone()));
         assert_eq!(settle(&root), Some(cut), "at each start");
         assert!(old_dir(&root).join("python/python.exe").is_file());
-        fs::remove_dir_all(old_dir(&root)).unwrap(); // the user put the files back
+        fs::remove_dir_all(old_dir(&root).join("python")).unwrap(); // the user put the files back, old/ itself left
         assert_eq!(settle(&root), None);
-        assert!(!journal_path(&root).exists());
+        assert!(!journal_path(&root).exists() && !old_dir(&root).exists());
         // an old/ with no journal is a leftover
         put(&old_dir(&root), &[("x", "y")]);
         assert_eq!(settle(&root), None);
@@ -1089,6 +1098,23 @@ mod tests {
         ]);
         assert!(clean(&root));
         assert_eq!(tree(&update_dir(&root)).keys().cloned().collect::<Vec<_>>(), ["check.json".to_string(), format!("v{ahead}/maalc-gui.exe")]);
+    }
+
+    #[test]
+    fn the_folder_is_left_half_replaced_while_old_holds_what_an_unfinished_apply_moved() {
+        let root = scratch("unfinished");
+        let outcome = |state, restored| Outcome { state, from: "1.0.0".into(), to: "1.1.0".into(), error: None, restored };
+        assert!(!left_unfinished(&root), "no update");
+        put(&old_dir(&root), &[("python/python.exe", "moved aside")]);
+        for (o, left) in [(outcome(State::Applying, false), true), (outcome(State::Failed, false), true),
+                          (outcome(State::Failed, true), false), (outcome(State::Done, true), false)] {
+            write_json(&journal_path(&root), &o).unwrap();
+            assert_eq!(left_unfinished(&root), left, "{o:?}");
+        }
+        // read as it is now, not as the window's start found it: once old/ is emptied, it is not
+        write_json(&journal_path(&root), &outcome(State::Applying, false)).unwrap();
+        fs::remove_dir_all(old_dir(&root).join("python")).unwrap();
+        assert!(!left_unfinished(&root));
     }
 
     #[test]

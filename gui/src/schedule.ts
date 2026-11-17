@@ -21,11 +21,11 @@ export function newSchedule(list: Schedule[]): Schedule {
   return { id: `s${n}`, days: [...DAYS], time: NEW_TIME, wake: true };
 }
 
-/** What came of a scheduled run's start: it started; skipped, a run under way, or an update being applied or cut short
- * (cache/update/apply.json says `applying`, #817: the folder may hold half the new version); not run, its schedule is not in
- * the settings, the settings did not load, or the start was refused (why: a runner.blocked_* reason, the save, the backend's
- * error); the run it started ended, and the window it opened stayed open over unsaved changes or after the runner crashed
- * (exit code `code`), or closes. */
+/** What came of a scheduled run's start: it started; skipped, a run under way, or an update that left the folder half
+ * replaced (under way, cut short, or failed with not all of it back: update.rs left_unfinished, #817); not run, its
+ * schedule is not in the settings, the settings did not load, or the start was refused (why: a runner.blocked_* reason, the
+ * save, the backend's error); the run it started ended, and the window it opened stayed open over unsaved changes or after
+ * the runner crashed (exit code `code`), or closes. */
 export type Outcome =
   | { kind: "started" } | { kind: "busy" } | { kind: "updating" } | { kind: "unknown" } | { kind: "unread" }
   | { kind: "refused"; why: "problems" | "no_task" | "save" | { error: string } }
@@ -39,8 +39,8 @@ export function logLine(id: string, o: Outcome): string {
     : "";
   const said = {
     started: "started the task list", busy: "skipped: a run is under way",
-    updating: "skipped: an update is being applied or did not finish", unknown: `not run: the settings have no schedule ${id}`,
-    unread: "not run: the settings did not load", refused: `not run: ${why}`,
+    updating: "skipped: an update is under way or left the folder half replaced",
+    unknown: `not run: the settings have no schedule ${id}`, unread: "not run: the settings did not load", refused: `not run: ${why}`,
     kept_open: "the run ended; the window stays open: it has unsaved changes",
     crashed: `the runner ended unexpectedly (exit code ${o.kind === "crashed" ? o.code ?? "none" : ""}); the window stays open`,
     closed: "the run ended; the window closes",

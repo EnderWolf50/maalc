@@ -134,10 +134,6 @@ export interface Release { version: string; zip: string; size: number; sha256: s
 export type UpdateProgress = { step: "download"; received: number; total: number } | { step: "verify" } | { step: "extract" };
 /** How the last apply went (update.rs Outcome): `applying` is one cut short; `restored`, for `failed`: all of it went back. */
 export interface UpdateOutcome { state: "applying" | "done" | "failed"; from: string; to: string; error: string | null; restored: boolean }
-/** Whether the last apply left cache/update/old/ holding the only copy of what it replaced (update.rs Outcome::keeps_old):
- * cut short, or failed with not all of it back. Until the user empties old/, the folder may hold half the new version: no
- * update applies, and a scheduled start is skipped. */
-export const keepsOld = (o: UpdateOutcome | null) => !!o && (o.state === "applying" || (o.state === "failed" && !o.restored));
 
 /** This build's version and the newer release GitHub has, asked at most once a day (lib.rs check_update); none when the check
  * fails. A plain browser has no update. */
@@ -166,9 +162,10 @@ export const isMismatch = (e: unknown) => String(e).includes(MISMATCH);
 /** The error of what a run refuses, an apply too (lib.rs RUN_UNDER_WAY). */
 export const RUN_UNDER_WAY = "a run is under way";
 export const isRunUnderWay = (e: unknown) => String(e).includes(RUN_UNDER_WAY);
-/** A scheduled run's start the window was handed (`maalc-gui.exe --run <id>`, lib.rs take_scheduled): its schedule's id, and
- * whether this window was opened for it (it closes when the run ends) or was open already. */
-export interface Scheduled { id: string; opened: boolean }
+/** A scheduled run's start the window was handed (`maalc-gui.exe --run <id>`, lib.rs take_scheduled): its schedule's id;
+ * whether this window was opened for it (it closes when the run ends) or was open already; and whether an update's apply had
+ * left the folder half replaced when it came (update.rs left_unfinished), which skips it. */
+export interface Scheduled { id: string; opened: boolean; update_unfinished: boolean }
 
 /** The scheduled runs' starts the window got since the last call, in order: its own start's, then each second start's. */
 export const takeScheduled = (): Promise<Scheduled[]> => (tauri ? invoke("take_scheduled") : Promise.resolve([]));
