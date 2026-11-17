@@ -14,6 +14,8 @@ from pathlib import Path
 
 from settings import settings_path, write_settings
 
+# The settings GUI marks the next run with its own copy (gui/src/model.ts nextRunPlaces): tests/settings_cases.json
+# next_run holds both to the same picks.
 USAGE_FITS = {"any": {"hard", "normal"}, "hard_only": {"hard"}, "normal_only": {"normal"}}
 UNUSABLE = (OSError, ValueError, LookupError, TypeError)  # a settings file missing, broken or of the wrong shape
 QUEUE_VERSION = 22  # the first settings version with team_queue (#803): before it, the queue is the order of teams
@@ -77,9 +79,10 @@ def requeue(root, team_id):
 
 
 def to_head(root, team_id):
-    """MirrorDungeon's start team (the client's MirrorStartTeam, #805, ADR 0014): before the task's first new run picks
-    its team, move team team_id to the head of the queue, written as a claim's move to the end is. Moving it to the head
-    is moving each team before it to the end, in turn, so the settings GUI merges it as it merges claims (movedToEnd).
+    """MirrorDungeon's start team (the client's MirrorStartTeam, #805, ADR 0014): once the task's first new run, which
+    picked its team with team_id at the head (headed), opens, move team team_id to the head of the queue, written as a
+    claim's move to the end is. Moving it to the head is moving each team before it to the end, in turn, so the settings
+    GUI merges it as it merges claims (movedToEnd).
 
     Returns a line for the log.
     """

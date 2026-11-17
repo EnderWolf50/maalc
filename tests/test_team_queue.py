@@ -10,6 +10,7 @@ import settings
 import test_actions
 from team_queue import migrate_cursor, pick_team, requeue, resumed_team
 from test_resumed_run import claim
+from test_settings import CASES, apply_edits
 from test_task_chain import entry_page
 from agent_patch import patch_all
 
@@ -47,6 +48,14 @@ def test_a_run_plays_the_first_enabled_team_of_the_queue_that_fits_its_difficult
 def test_no_team_fits():
     assert pick_team(settings_of([t("b", "hard_only"), t("x", enabled=False)], "xb"), "normal") is None
     assert pick_team(settings_of([], ""), "hard") is None
+
+
+@pytest.mark.parametrize("case", CASES["next_run"], ids=lambda c: c["name"])
+def test_the_next_run_of_each_difficulty_is_the_one_the_settings_gui_marks(case):
+    # tests/settings_cases.json next_run: the GUI's team queue block marks the same teams (#804, gui/src/teamQueue.test.tsx)
+    settings = apply_edits(CASES["valid"], case["edits"])
+    picked = [pick_team(settings, d) for d in ("hard", "normal")]
+    assert [team and team["id"] for team in picked] == [case["hard"], case["normal"]]
 
 
 @pytest.mark.parametrize("difficulty, expected", [

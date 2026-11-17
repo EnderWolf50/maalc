@@ -420,7 +420,8 @@ export function rebase(base: Settings, draft: Settings, disk: Settings): Setting
   return { ...draft, team_queue: [...queue.filter((id) => !moved.includes(id)), ...moved.filter((id) => queue.includes(id))] };
 }
 
-/** The difficulties a team's usage lets it play (agent/team_queue.py USAGE_FITS). */
+/** The difficulties a team's usage lets it play (agent/team_queue.py USAGE_FITS; tests/settings_cases.json next_run holds
+ * both to the same picks). */
 const USAGE_FITS: Record<string, string[]> = { any: ["hard", "normal"], hard_only: ["hard"], normal_only: ["normal"] };
 
 /** Where in team_queue the team of the next hard and the next normal run is: the first enabled team whose usage fits that

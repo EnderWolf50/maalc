@@ -5,10 +5,12 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import enUs from "../../assets/locales/en_us.json";
+import zhTw from "../../assets/locales/zh_tw.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
-import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
-import { cases } from "./settingsCases";
+import { addTeam, movedToEnd, newSettings, newTeam, nextRunPlaces, rebase, type Settings } from "./model";
+import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
 import { cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
@@ -192,6 +194,25 @@ describe("the team queue block above the list and the editor (#804)", () => {
     edits.forEach((e, j) => Object.assign(inQueue[j], e));
     renderEditor(<TeamsTab />, s);
     expect(marks()).toEqual(expected);
+  });
+
+  // tests/settings_cases.json next_run: the agent's pick_team gives the same teams (tests/test_team_queue.py).
+  test.each(cases.next_run as { name: string; edits: FileEdit[]; hard: string | null; normal: string | null }[])(
+    "the next run is the team the agent picks: $name", ({ edits, hard, normal }) => {
+      const s = applyEdits(cases.valid, edits) as unknown as Settings;
+      const places = nextRunPlaces(s);
+      expect([s.team_queue[places.hard] ?? null, s.team_queue[places.normal] ?? null]).toEqual([hard, normal]);
+    });
+
+  // The note names the client's option by the label the client shows (assets/locales, interface.json's MirrorStartTeam),
+  // in the language's quotes, and the task it is under.
+  test.each([
+    ["zh_tw", zhTw, "「", "」"],
+    ["en_us", enUs, "\"", "\""],
+  ] as const)("its note in %s names the start team option as the client labels it", (lang, client, open, close) => {
+    const note = TEXT[lang]["queue.note"];
+    expect(note).toContain(`${open}${client.MirrorStartTeam}${close}`);
+    expect(note).toContain(client.MirrorDungeon);
   });
 
   test("its ↑↓ move a team in the queue, not in the list", async () => {
