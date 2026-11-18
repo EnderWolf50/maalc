@@ -423,13 +423,14 @@ function EmulatorFields() {
     api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
   };
   const found = scan.state === "found" ? scan.devices : null;
-  // the list starts on the device the three fields already name in full, a pick of which would change nothing, and else on
-  // "pick one" (#833): one that started on the device at the address alone (MXU's read-back keeps no instance or MuMuManager)
-  // took no pick of it, as a select fires no change for the option it shows
-  const em = s.emulator;
+  // The list shows a device only when the fields already hold all that a pick of it writes, and "pick one" otherwise. A select
+  // fires no change for the option it shows, so a list that showed the device at the address alone (after MXU's read-back,
+  // which keeps no instance or MuMuManager) could not fill the other two (#833).
+  const current = s.emulator;
   const at = found ? found.findIndex((d) => {
-    const p = pickOf(d);
-    return em.address !== null && sameAddress(d.address, em.address) && p.mumu_index === em.mumu_index && p.mumu_manager === em.mumu_manager;
+    const writes = pickOf(d);
+    return current.address !== null && sameAddress(d.address, current.address)
+      && writes.mumu_index === current.mumu_index && writes.mumu_manager === current.mumu_manager;
   }) : -1;
   const pick = (d: Device) => set(pickOf(d));
   return (

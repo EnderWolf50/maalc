@@ -12,7 +12,6 @@ reason it logged comes with it), after the bot exited, or when the run failed be
 """
 from __future__ import annotations
 
-import itertools
 import os
 import queue
 import subprocess
@@ -31,7 +30,9 @@ ROOT = Path(__file__).resolve().parent.parent  # the install: runner/ sits besid
 TICK = 0.5  # s between two looks at the running task and the commands
 STOP_REPOST = 1.0  # s between two post_stop while the tasker still runs (MaaFramework takes one at a time)
 STOP_LIMIT = 60.0  # s a stop may take before the runner reports it cannot stop; the caller then ends its tree
-LAUNCH_LIMIT = 120.0  # s a started MuMu has to come up and connect: listed in the scan, adb says `device`, connected
+# s a started MuMu has to come up and connect: listed in the scan, adb says `device`, connected. A device up at the limit
+# still gets its settle and one connect
+LAUNCH_LIMIT = 120.0
 SCAN_EVERY = 1.0  # s between two looks (the scan and adb, or a connect) while it boots
 # s after adb says `device` before the runner connects: MaaFramework's connect keeps the fastest screencap method that
 # works at that moment (source/MaaAdbControlUnit/Manager/ScreencapAgent.cpp init), for the whole run
@@ -169,8 +170,8 @@ def agent_command(root: Path, identifier: str) -> list[str]:
 
 class Session:
     """framework(root) gives MaaFramework (runner/framework.py, or a test's fake); sleep and monotonic its clock;
-    launch(manager, index) starts a MuMu instance (devices.launch); adb_state(device) says what adb says of it
-    (devices.adb_state); awake() keeps the machine on (keep_awake)."""
+    launch(manager, index) starts a MuMu instance (devices.launch); adb_state(device, timeout) says what adb says of
+    it (devices.adb_state); awake() keeps the machine on (keep_awake)."""
 
     def __init__(self, out: Out, framework, commands: Commands, *, sleep=time.sleep, monotonic=time.monotonic,
                  agent_command=agent_command, launch=devices.launch, awake=keep_awake, adb_state=devices.adb_state):
@@ -314,48 +315,50 @@ class Session:
         self.say(f"MuMuManager exit {code}" + (f": {said[:300]}" if said else ""))
         self.out.send("connection", state="waiting", address=address)
         start = self.now()
-        end, adb = start + LAUNCH_LIMIT, None  # adb: what adb last said of the address
+        end, adb_said = start + LAUNCH_LIMIT, None
         while self.now() < end:
-            self.poll()
-            if self.stop_at is not None:
+            if not self.waited(SCAN_EVERY):
                 return None, None
-            self.sleep(SCAN_EVERY)
             if (d := devices.find(fw.devices(), address)) is None:
                 continue
             # the scan lists MuMu seconds before its adb answers, and MaaFramework's connect needs `device` (#831)
-            if (state := self.adb_state(d)) != "device":
-                if state != adb:
+            if (state := self.adb_state(d, end - self.now())) != "device":
+                if state != adb_said:
                     self.say(f"{address} after {self.now() - start:.0f} s: adb says {state}")
-                adb = state
+                adb_said = state
                 continue
             self.say(f"{address} is up after {self.now() - start:.0f} s: adb says device; connecting in {SETTLE:g} s")
-            settle = self.now() + SETTLE
-            while self.now() < settle:
-                self.poll()
-                if self.stop_at is not None:
-                    return None, None
-                self.sleep(min(TICK, settle - self.now()))
-            return d, end
+            return (d, end) if self.waited(SETTLE) else (None, None)
         self.error("device_timeout", f"MuMu instance {want['mumu_index']} did not come up at {address} in {LAUNCH_LIMIT:g} s"
-                   + (f": adb says {adb}" if adb else ""))
+                   + (f": adb says {adb_said}" if adb_said else ""))
         return None, None
 
     def connect(self, fw, device, until):
         """A controller connected to device, or None (the caller may have stopped meanwhile). A MuMu the runner started
         gets another try each second until `until`; a device that was running gets one."""
-        for tries in itertools.count(1):
+        def attempt():
             ctl = fw.controller(device)
             ctl.post_connection().wait()
-            if ctl.connected:
+            return ctl if ctl.connected else None
+        ctl = attempt()
+        if ctl is not None or until is None or self.now() >= until:
+            return ctl
+        self.say(f"could not connect to {device.address} yet: trying each second for {until - self.now():.0f} s")
+        while self.now() < until and self.waited(SCAN_EVERY):
+            if (ctl := attempt()) is not None:
                 return ctl
-            if until is None or self.now() >= until:
-                return None
-            if tries == 1:
-                self.say(f"could not connect to {device.address} yet: trying each second for {until - self.now():.0f} s")
+        return None
+
+    def waited(self, seconds: float) -> bool:
+        """seconds on the clock, the commands taken each TICK; False as soon as the caller stopped."""
+        end = self.now() + seconds
+        while True:
             self.poll()
             if self.stop_at is not None:
-                return None
-            self.sleep(SCAN_EVERY)
+                return False
+            if self.now() >= end:
+                return True
+            self.sleep(min(TICK, end - self.now()))
 
     # the bot
     def start_agent(self, root: Path, identifier: str) -> None:
@@ -452,7 +455,8 @@ class Session:
 
     def finish(self, i: int, detail, seconds: float) -> None:
         """A task that ran ends as MaaFramework says, or stopped when the caller's stop came first: MaaFramework says
-        succeeded of a task whose agent action returns normally after post_stop (#832)."""
+        succeeded of a task whose agent action returns normally after post_stop (#832). The runner decides it, not the
+        actions: a stop is no failure of theirs, and their waits end on it as on a timeout (agent/actions.py until)."""
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
         if self.stop_at is None and status and status.succeeded:

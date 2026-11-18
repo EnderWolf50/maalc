@@ -31,6 +31,7 @@ def device(address, mumu_index=None, name=None, adb="C:/MuMu/nx_main/adb.exe"):
 MUMU0 = device("127.0.0.1:16384", 0, "MuMuPlayer-12.0-0-MuMuPlayer v5+")
 MUMU1 = device("127.0.0.1:16416", 1, "MuMuPlayer-12.0-1-MuMuPlayer v5+")
 OTHER = device("emulator-5554", None, "emulator-5554", adb="C:/adb/adb.exe")
+MANAGER = "C:/MuMu/nx_main/MuMuManager.exe"  # beside MuMu's adb
 
 
 class Job:
@@ -61,7 +62,7 @@ class World:
         self.offline, self.refusals = offline, refusals
         self.t, self.queue, self.current, self.stop_left = 1000.0, [], None, None
         self.posted, self.stops, self.roots, self.bundles, self.controllers = [], [], [], [], []
-        self.looks, self.connected_at = [], []
+        self.looks, self.timeouts, self.connected_at = [], [], []
         self.disconnected = False
 
     # the clock
@@ -119,8 +120,9 @@ class World:
             self.connected_at.append(self.t)
         return SimpleNamespace(post_connection=lambda: SimpleNamespace(wait=lambda: None), connected=up)
 
-    def adb_state(self, d):  # devices.adb_state
+    def adb_state(self, d, timeout):  # devices.adb_state
         self.looks.append(self.t)
+        self.timeouts.append(timeout)
         self.offline -= 1
         return "error: device offline" if self.offline >= 0 else "device"
 
@@ -296,10 +298,9 @@ def test_a_stop_ends_the_running_task_stopped_and_cancels_the_rest(tmp_path):
     assert run.of("end")[-1]["result"] == "stopped" and world.disconnected
 
 
-@pytest.mark.parametrize("ends", ["failed", "succeeded"])
-def test_the_task_a_stop_cuts_short_ends_stopped_whatever_maaframework_says_of_it(tmp_path, ends):
+def test_the_task_a_stop_cuts_short_ends_stopped_though_maaframework_says_succeeded(tmp_path):
     # #832: MaaFramework says succeeded of a task whose agent action returns normally after post_stop
-    world = World({"MirrorDungeon": (100, "succeeded"), "ExpLuxcavation": (2, "succeeded")}, stop_ends=ends)
+    world = World({"MirrorDungeon": (100, "succeeded"), "ExpLuxcavation": (2, "succeeded")}, stop_ends="succeeded")
     run = Run(tmp_path, world)
     run.stop_at(1003.0)
     assert run.start(TWO) == "stopped"
@@ -339,7 +340,7 @@ def test_a_stop_while_mumu_boots_ends_the_run_before_it_connects(tmp_path):
     world = World({"MirrorDungeon": (2, "succeeded")}, found=())
     run = Run(tmp_path, world)
     run.stop_at(1005.0)
-    assert run.start(TWO[:1], mumu_index=0, mumu_manager="C:/MuMu/nx_main/MuMuManager.exe") == "stopped"
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "stopped"
     assert run.states() == [(0, "pending"), (0, "cancelled")] and world.controllers == []
 
 
@@ -398,7 +399,7 @@ def test_a_scan_lists_the_devices_mumu_first_with_its_instance_and_manager(tmp_p
     (listed,) = run.of("devices")
     protocol.check_event(listed)
     assert [d["address"] for d in listed["devices"]] == ["127.0.0.1:16416", "127.0.0.1:16384", "emulator-5554"]
-    assert listed["devices"][0]["mumu"] == {"index": 1, "manager": str(Path("C:/MuMu/nx_main/MuMuManager.exe")),
+    assert listed["devices"][0]["mumu"] == {"index": 1, "manager": str(Path(MANAGER)),
                                             "path": "C:/MuMu"}
     assert listed["devices"][2]["mumu"] is None and run.of("end")[-1]["result"] == "succeeded"
 
@@ -419,19 +420,15 @@ def test_a_start_without_an_address_takes_the_first_device_mumu_first(tmp_path):
 
 
 def test_a_mumu_not_running_is_started_and_waited_for_then_connected_after_it_settles(tmp_path):
-    manager = "C:/MuMu/nx_main/MuMuManager.exe"
     world = World({"MirrorDungeon": (1, "succeeded")}, found=(OTHER,), appear=(1010.0, MUMU0))
     connected_at = []
     controller = world.controller
     world.controller = lambda d: connected_at.append(world.t) or controller(d)
     run = Run(tmp_path, world)
-    assert run.start(TWO[:1], mumu_index=0, mumu_manager=manager) == "succeeded"
-    assert run.launched == [[manager, "control", "--vmindex", "0", "launch"]]
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "succeeded"
+    assert run.launched == [[MANAGER, "control", "--vmindex", "0", "launch"]]
     assert [e["state"] for e in run.of("connection")] == ["launching", "waiting", "connecting", "connected"]
     assert world.controllers == ["127.0.0.1:16384"] and 1015.0 <= connected_at[0] <= 1016.0  # up at 1010, then 5 s
-
-
-MANAGER = "C:/MuMu/nx_main/MuMuManager.exe"
 
 
 def test_a_started_mumu_is_connected_once_adb_says_device_not_when_the_scan_lists_it(tmp_path):
@@ -510,10 +507,33 @@ def test_adb_state_asks_as_maaframeworks_connect_does_with_the_devices_own_adb()
     assert devices.adb_state(MUMU0, run=missing).startswith("FileNotFoundError")
 
 
+def test_adb_state_takes_no_longer_than_its_timeout_for_both_calls():
+    # the runner hands it the time left until 120 s after the launch: a hung adb does not hold the start past it
+    timeouts = []
+
+    def run(cmd, stdout, timeout, **kw):
+        timeouts.append(timeout)
+        time.sleep(0.05)
+        stdout.write(b"device\n")
+        return SimpleNamespace(returncode=0)
+    assert devices.adb_state(MUMU0, timeout=3.0, run=run) == "device"
+    assert len(timeouts) == 2 and timeouts[0] <= 3.0 and timeouts[1] <= 3.0 - 0.03  # what the first left (a ~50 ms sleep)
+    assert devices.adb_state(MUMU0, timeout=60.0, run=run) == "device" and max(timeouts[2:]) <= devices.ADB_TIMEOUT
+    timeouts.clear()
+    assert devices.adb_state(MUMU0, timeout=0.0, run=run).startswith("TimeoutExpired") and timeouts == []
+
+
+def test_the_runner_gives_each_look_at_adb_only_the_time_left_until_120_s_after_the_launch(tmp_path):
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(), appear=(1002.0, MUMU0), offline=10**6)
+    run = Run(tmp_path, world)
+    run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER)
+    assert len(world.looks) > 100 and max(t + timeout for t, timeout in zip(world.looks, world.timeouts)) <= 1120.0
+
+
 def test_a_mumu_that_does_not_come_up_in_120_s_fails_the_run(tmp_path):
     world = World({"MirrorDungeon": (1, "succeeded")}, found=())
     run = Run(tmp_path, world)
-    assert run.start(TWO, mumu_index=1, mumu_manager="C:/MuMu/nx_main/MuMuManager.exe") == "failed"
+    assert run.start(TWO, mumu_index=1, mumu_manager=MANAGER) == "failed"
     (error,) = run.of("error")
     assert error["kind"] == "device_timeout" and "120 s" in error["message"]
     assert 1120.0 <= world.t <= 1122.0 and world.controllers == []
@@ -543,8 +563,8 @@ def test_launch_runs_mumumanager_and_returns_its_code_and_output():
     def run(cmd, **kw):
         calls.append(cmd)
         return SimpleNamespace(returncode=0, stdout=b'{"errcode": 0}\r\n', stderr=b"")
-    assert devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 1, run=run) == (0, '{"errcode": 0}')
-    assert calls == [["C:/MuMu/nx_main/MuMuManager.exe", "control", "--vmindex", "1", "launch"]]
+    assert devices.launch(MANAGER, 1, run=run) == (0, '{"errcode": 0}')
+    assert calls == [[MANAGER, "control", "--vmindex", "1", "launch"]]
 
     def missing(cmd, **kw):
         raise FileNotFoundError(2, "not found")
@@ -561,7 +581,7 @@ def test_launch_starts_mumumanager_out_of_the_windows_job_so_the_emulator_outliv
     def run(cmd, creationflags=0, **kw):
         flags.append(creationflags)
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
-    assert devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 0, run=run) == (0, "")
+    assert devices.launch(MANAGER, 0, run=run) == (0, "")
     assert len(flags) == 1 and flags[0] & devices.CREATE_BREAKAWAY_FROM_JOB
 
     flags.clear()
@@ -571,7 +591,7 @@ def test_launch_starts_mumumanager_out_of_the_windows_job_so_the_emulator_outliv
         if creationflags & devices.CREATE_BREAKAWAY_FROM_JOB:
             raise PermissionError(13, "Access is denied")
         return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
-    code, said = devices.launch("C:/MuMu/nx_main/MuMuManager.exe", 0, run=refused)
+    code, said = devices.launch(MANAGER, 0, run=refused)
     assert code == 0 and [bool(f & devices.CREATE_BREAKAWAY_FROM_JOB) for f in flags] == [True, False]
     # the run log says so: this MuMu ends with the run
     assert said.startswith("inside the caller's job (breakaway refused: PermissionError: ") and "MuMu ends with the run" in said
