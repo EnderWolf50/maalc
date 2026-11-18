@@ -10,7 +10,7 @@
 - 隊伍、方案、飾品清單、覆寫表與每個任務怎麼跑的單一的值（任務選項與全域選項），由設定 GUI 寫進 `<root>/config/settings.json`（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)、[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）。Agent 在任務開始時讀取並檢查。格式見 [04-settings.md](04-settings.md)。v1.0.0 的任務選項在 client，隨任務送給 Agent（ADR 0013）。（#6、#19，2026-10-14 定案；#813）
 - 遊戲資料（主題包清單與預設主題包方案、事件覆寫表、尋路權重、Cost 對照表與商店數字、試煉表）放在 `resource/base/data/` 的 YAML 資料檔，由 Agent 讀取（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)）。格式見 [05-game-data.md](05-game-data.md)。（#11、#12、#17、#19）
 - Windows 上，`tools/install.py` 組出的 `install/maafw/` 用 `maafw` wheel 的檔案，只把 `MaaFramework.dll` 換成 fork（EnderWolf50/MaaFramework）的修改版；執行任務的程式（設定視窗的執行器、`tools/live/bot.py`，設 `MAAFW_BINARY_PATH`；v1.0.0 的 MXU）載入這份，其他直接 `import maa` 的程式（測試、離線工具）載入的仍是 wheel 原版。fork 是 wheel 那一版加上兩個修正：批次 OCR 裡被 roi 切掉一半以上高度的字框，改由那個 roi 自己跑一次 det+rec，不再切成細條重讀（上游 MaaXYZ/MaaFramework#1568，修正 PR 為 MaaXYZ/MaaFramework#1573）；每個任務只保留最後 200 個節點的詳情（上游 MaaXYZ/MaaFramework#1578）。`MAAFW_FIX` 釘下載網址與 SHA-256，`MAAFW_FIX_VERSION` 是它對應的 wheel 版本，wheel 版本不符時安裝中止；對應原始碼見 [NOTICE.md](../../NOTICE.md)。等 maafw 正式版同時包含這兩個修正，就拿掉 fork、改回 wheel 的 DLL。（#157、#176）
-- Agent 的 `main.py` 在 `<root>/maafw/` 存在時，把沒設過的 `MAAFW_BINARY_PATH` 設成它，所以 Agent 也從 `maafw/` 載入。Agent 程序只載入 `MaaAgentServer.dll` 和它要的 `MaaUtils.dll`、`opencv_world4_maa.dll`、`DirectML.dll`，不載入 `MaaFramework.dll`：辨識在執行任務的程序（執行器、`bot.py tasker`；v1.0.0 是 client）裡跑。發佈 zip 的內嵌 Python 因此不帶 wheel 的 `maa/bin/`，MaaFramework 的二進位只有 `maafw/` 一份。v1.0.0 的 MFAAvalonia 只從它自己的 `runtimes/win-x64/native/` 載入 MaaFramework，不讀 `maafw/`；下一版不再支援 MFAAvalonia（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）。（#497）
+- Agent 的 `main.py` 在 `<root>/maafw/` 存在時，把沒設過的 `MAAFW_BINARY_PATH` 設成它，所以 Agent 也從 `maafw/` 載入。Agent 程序只載入 `MaaAgentServer.dll` 和它要的 `MaaUtils.dll`、`opencv_world4_maa.dll`、`DirectML.dll`，不載入 `MaaFramework.dll`：辨識在執行任務的程序（執行器、`bot.py tasker`；v1.0.0 是 client）裡跑。發佈 zip 的內嵌 Python 因此不帶 wheel 的 `maa/bin/`，MaaFramework 的二進位只有 `maafw/` 一份。v1.0.0 的 MFAAvalonia 只從它自己的 `runtimes/win-x64/native/` 載入 MaaFramework，不讀 `maafw/`；v1.1.0 起不再支援 MFAAvalonia（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）。（#497）
 
 | 層 | 負責 | 不負責 |
 |---|---|---|
@@ -77,7 +77,7 @@
 
 ### 帳號層級的停止與任務清單
 
-帳號層級的停止（[spec 06](06-recovery.md) 停止程序第 5 步）呼叫 `post_stop`。MaaFramework 5.14.3 的 `Tasker::post_stop`（`source/MaaFramework/Tasker/Tasker.cpp:161-183`）清掉 tasker 裡還沒跑的任務（`task_runner_->clear()`），再停下正在跑的那個。所以它能不能結束整串清單，要看執行任務的程式是一次把整串送進 tasker，還是一次送一個。v1.0.0 的兩個 client 不同（依原始碼，沒有實機驗證）；下一版的執行器照任務清單的順序送出勾選的任務（#811）：
+帳號層級的停止（[spec 06](06-recovery.md) 停止程序第 5 步）呼叫 `post_stop`。MaaFramework 5.14.3 的 `Tasker::post_stop`（`source/MaaFramework/Tasker/Tasker.cpp:161-183`）清掉 tasker 裡還沒跑的任務（`task_runner_->clear()`），再停下正在跑的那個。所以它能不能結束整串清單，要看執行任務的程式是一次把整串送進 tasker，還是一次送一個。v1.0.0 的兩個 client 不同（依原始碼，沒有實機驗證）；v1.1.0 的執行器照任務清單的順序送出勾選的任務（#811）：
 
 - MXU（`5e923e8`）：一次送整串。`start_tasks_impl`（`src-tauri/src/commands/maa_agent.rs:554`）在 `maa_agent.rs:776-784` 的迴圈裡對每個勾選的任務呼叫 `tasker.post_task`，全部進了 tasker 才開始跑。`post_stop` 清掉的就是清單剩下的任務，整串結束。
 - MFAAvalonia（`098fe84`）：一次送一個。`ExecuteTasks`（`MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs:3704-3728`）從自己的 `TaskQueue` 取一個任務，`TryRunTasksAsync`（`MaaProcessor.cs:4424-4431`）`AppendTask` 後等它結束才取下一個。`post_stop` 只結束目前這個任務（狀態不是 Succeeded，`MFAAvalonia/Helper/ValueType/MFATask.cs:92-113` 記為失敗）；「任務失敗後是否繼續」開著（預設，`MaaProcessor.cs:4469`）時清單照樣跑下一個，後面每個任務各自撞上同一個畫面、各自走停止程序。關掉這個選項時，第一個失敗就結束整串。
