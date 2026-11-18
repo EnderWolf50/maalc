@@ -26,7 +26,7 @@
 | 中途接續 | 從任何畫面啟動都能接手，以畫面為準 | #8 |
 | 卡住處理 | 偵測卡住，分三級恢復，必要時重啟遊戲；停止時保存證據並發 webhook | #14 |
 | 日常任務 | 每個日常一個任務，順序、勾選、排程在設定檔的任務清單與排程，次數、隊伍、重打與連戰是設定檔的任務選項（[ADR 0010](../adr/0010-one-pi-task-per-daily.md)、[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）：經驗本、紐本（一律打最難的關；每日模式打今天還沒打的，自訂次數模式打設定的場數；腦啡肽模組不夠就跳過）、換腦啡肽模組、通行證任務領取、信箱 Claim All、狂氣換腦啡肽（預設 0 次）。鏡牢開局前也檢查腦啡肽模組 | #362 |
-| 設定 GUI | 自製設定 GUI（`gui/`）編輯具名方案、隊伍、事件覆寫與試煉分數覆寫；介面提供繁中與英文，預設繁中。v1.0.0 的任務選項與執行在 MXU／MFAAvalonia（ADR 0013）；下一版（v2）改由設定視窗執行：任務清單、任務選項、模擬器、開始與停止、即時記錄、定時執行與自動更新都在視窗裡（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811） | #1、#18、#19、#811 |
+| 設定 GUI | 自製設定 GUI（`gui/`）編輯具名方案、隊伍、事件覆寫與試煉分數覆寫；介面提供繁中與英文，預設繁中。v1.0.0 的任務選項與執行在 MXU／MFAAvalonia（ADR 0013）；v1.1.0 改由設定視窗執行：任務清單、任務選項、模擬器、開始與停止、即時記錄、定時執行與自動更新都在視窗裡（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811） | #1、#18、#19、#811 |
 
 驗收標準是無人看管、連續 10 局困難鏡牢、0 次停止；累計 30 局標記為穩定。詳見 [07-assets-and-testing.md](07-assets-and-testing.md)。（#14）
 
@@ -36,8 +36,8 @@
 
 以下功能不在 `maalc` 的規劃內：（#1）
 
-- Refraction Railway、免費抽卡（Extraction）、自動換腦啡肽模組的常駐工具。v1.0.0 的排程與結束後動作由 MXU／MFAAvalonia 提供；下一版的定時執行由設定視窗寫進 Windows 工作排程器（#811）。（#362）
-- 安裝程式。發佈只用 GitHub Actions 產出一個 zip：bot、resource、內嵌 Python、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）；v1.0.0 的 zip 另附 MXU，下一版不附，改由設定視窗執行並自動更新（#811、#813）。（#1、#4、#19，2026-10-14 定案；內嵌 Python 見 #33）
+- Refraction Railway、免費抽卡（Extraction）、自動換腦啡肽模組的常駐工具。v1.0.0 的排程與結束後動作由 MXU／MFAAvalonia 提供；v1.1.0 的定時執行由設定視窗寫進 Windows 工作排程器（#811）。（#362）
+- 安裝程式。發佈只用 GitHub Actions 產出一個 zip：bot、resource、內嵌 Python、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）；v1.0.0 的 zip 另附 MXU，v1.1.0 不附，改由設定視窗執行並自動更新（#811、#813）。（#1、#4、#19，2026-10-14 定案；內嵌 Python 見 #33）
 - Windows 原生客戶端（Win32 控制器）。
 - 中文或其他語言的遊戲畫面辨識。
 - 戰鬥防禦選項、技能配置與配卡決策。
@@ -60,7 +60,7 @@
 | 依星期換隊伍 | 每個日常用一支固定隊伍 | #362 |
 | 選關功能 | 一律打最難的關 | #362 |
 | 通行證等級獎勵 | 只領每日、每週、季度（Seasonal）任務獎勵 | #362 |
-| GUI 裡的任務清單（A2） | v1.0.0 的任務清單由 client 管；下一版做（#811） | #362、#811 |
+| GUI 裡的任務清單（A2） | v1.0.0 的任務清單由 client 管；v1.1.0 做（#811） | #362、#811 |
 
 ## 目標環境
 
@@ -85,8 +85,8 @@
 | 架構 | 流程寫在 Pipeline 的 `MirrorHub`，決策寫在 Python Agent（[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)） | #8 |
 | Agent | Python。執行器（`runner/`）用它自己的 Python 啟動 `agent/main.py`（`runner/session.py` 的 `agent_command`）；`interface.json` 的 `agent.child_exec`／`child_args` 留給開發工具（MaaDebugger）啟動它 | #1、#4、#812 |
 | 專案骨架 | 以 MaaPracticeBoilerplate（MIT）為起點，手動搬入所需檔案，保留其版權聲明 | #4 |
-| 執行介面 | 下一版由設定視窗的執行器跑任務（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811）。ProjectInterface V2（`interface.json`）只留控制器、資源、各任務的入口與 Agent 的啟動設定，給開發工具（MaaDebugger、`maa-tools check`）用。v1.0.0 由 MXU 或 MFAAvalonia 執行，任務選項在 `interface.json`（ADR 0013） | #1、#6、#19、#813 |
-| 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。v1.0.0 只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；下一版也負責執行（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811） | #19、#811 |
+| 執行介面 | v1.1.0 由設定視窗的執行器跑任務（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811）。ProjectInterface V2（`interface.json`）只留控制器、資源、各任務的入口與 Agent 的啟動設定，給開發工具（MaaDebugger、`maa-tools check`）用。v1.0.0 由 MXU 或 MFAAvalonia 執行，任務選項在 `interface.json`（ADR 0013） | #1、#6、#19、#813 |
+| 設定 GUI | Tauri 2 + React/TypeScript，放在 `gui/`，是 v1 新增的交付物。v1.0.0 只編輯設定，不執行 bot（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)）；v1.1.0 也負責執行（[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)，#811） | #19、#811 |
 | 設定 | 隊伍、方案、飾品清單、覆寫表、每個任務的任務選項、任務清單、模擬器與排程放在 `<root>/config/settings.json`，由設定 GUI 寫入、Agent 讀取，格式由 `settings.schema.json` 描述（[ADR 0006](../adr/0006-settings-gui-writes-one-settings-file.md)、[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）；遊戲資料放資料檔（[ADR 0005](../adr/0005-game-data-files-separate-from-user-settings.md)） | #9、#11、#19、#813 |
 | 辨識 | 文字與數字用 OCR（`ppocr_v6/small`），圖示與按鈕用自製模板；地圖節點先找 Bus 再比對相鄰格位，不用整張地圖的偵測模型 | #3、#13 |
 | 授權 | 程式碼 PolyForm Noncommercial 1.0.0（非商用，[ADR 0008](../adr/0008-noncommercial-license-and-llc-names.md)）；LLC 衍生的資料檔 CC BY-NC-SA 4.0。AGPL 專案（AALC、MaaLimbus、Lix）可以讀、不能抄，程式碼、圖片和模型都不複製；不用 Ultralytics 訓練模型（[ADR 0001](../adr/0001-mit-and-no-agpl-derived-assets.md)） | #1、#3 |

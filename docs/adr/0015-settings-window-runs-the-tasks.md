@@ -11,7 +11,7 @@ status: accepted（取代 ADR 0013；修訂 ADR 0006、ADR 0010、ADR 0014；依
 - 兩個 client 各有怪癖：MFAAvalonia 遇到 `setting` 區塊就跑不了任務（#799），用索引存選項；MXU 讀選項分大小寫。maalc 為此寫了特殊寫法、隊伍選項檔，還要產生簡體中文語系。
 - bot 想讓使用者看到的東西（下一局輪到誰、這次跑了幾局）都要繞回設定視窗看。
 
-使用者 2026-11-17 決定拋棄 MXU 和 MFAAvalonia，把執行任務整合到設定視窗：v1.0.0 照 MXU 版發布，下一版（v2）完全不用 MXU 和 MFAAvalonia。
+使用者 2026-11-17 決定拋棄 MXU 和 MFAAvalonia，把執行任務整合到設定視窗：v1.0.0 照 MXU 版發布，v1.1.0 完全不用 MXU 和 MFAAvalonia。
 
 ## 決定
 
