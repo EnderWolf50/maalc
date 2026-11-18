@@ -204,6 +204,7 @@ def cmd_shrink(a: argparse.Namespace) -> None:
 # ---- prune ----
 
 TRACKING = "tracking"  # an open issue with the `tracking` label: it stays open for good
+TRACKING_DAYS = 14
 
 
 def gh_states() -> dict[int, str]:
@@ -213,22 +214,47 @@ def gh_states() -> dict[int, str]:
         r = subprocess.run(["gh", kind, "list", "--state", "all", "--limit", "1000", "--json", "number,state,labels"],
                            capture_output=True, text=True, encoding="utf-8", check=True)
         for item in json.loads(r.stdout):
-            state = item["state"].lower()
-            if state == "open" and any(lb["name"] == TRACKING for lb in item["labels"]):
-                state = TRACKING
-            states[item["number"]] = state
+            states[item["number"]] = item_state(kind, item)
     return states
+
+
+def item_state(kind: str, item: dict) -> str:
+    state = item["state"].lower()
+    if kind == "issue" and state == "open" and any(lb["name"] == TRACKING for lb in item["labels"]):
+        return TRACKING
+    return state
 
 
 def mentions(name: str, line: str) -> bool:
     return re.search(rf"(?<![\w.-]){re.escape(name)}(?![\w.-])", line) is not None
 
 
-def issue_refs(name: str, index_lines: list[str]) -> list[int]:
-    """Issue/PR numbers of the INDEX.md rows that name the folder."""
-    nums = {int(n) for line in index_lines if line.startswith("|") and mentions(name, line)
+def names_recording(rel: str, line: str) -> bool:
+    """Whether a row names `recordings/<rel>`: by that path, or by the bare file name with no other folder before it."""
+    bare = rf"(?<![\w./-]){re.escape(Path(rel).name)}(?![\w.-])"
+    return mentions(f"recordings/{rel}", line) or re.search(bare, line) is not None
+
+
+def real_files(root: Path):
+    """Files under `root`, without following a link (a junction or symlink) to a folder or file."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        here = Path(dirpath)
+        dirnames[:] = sorted(d for d in dirnames if not is_link(here / d))
+        for name in sorted(filenames):
+            f = here / name
+            if not f.is_symlink() and f.is_file():
+                yield f
+
+
+def issue_refs(name: str, index_lines: list[str], names: Callable[[str, str], bool] = mentions) -> list[int]:
+    """Issue/PR numbers of the INDEX.md rows that name the folder (or, with `names_recording`, the file)."""
+    nums = {int(n) for line in index_lines if line.startswith("|") and names(name, line)
             for n in re.findall(r"#(\d+)", line)}
     return sorted(nums)
+
+
+def ref_states(nums: list[int], states: dict[int, str]) -> dict[int, str]:
+    return {n: states.get(n, "unknown") for n in nums}
 
 
 CLOSED_STATES = {"closed", "merged"}
@@ -247,7 +273,7 @@ class Folder:
     size: int
     refs: dict[int, str]  # issue/PR number -> state; `unknown` when gh did not return it
 
-    def blocker(self, days: float, tracking_days: float = 14) -> str | None:
+    def blocker(self, days: float, tracking_days: float) -> str | None:
         """Why the folder stays, or None when prune may delete it."""
         if self.name == "recordings":
             return "recordings"
@@ -260,28 +286,37 @@ class Folder:
 
 @dataclass
 class Recording:
+    """A file under `recordings/` that no folder links any more (counting the folders this run deletes)."""
     path: Path
+    rel: str  # path inside `recordings/`, `/`-separated
     age_days: float
     size: int
-    refs: dict[int, str]
+    refs: dict[int, str]  # from the INDEX.md rows that name the file itself
+
+    def blocker(self, days: float, tracking_days: float) -> str | None:
+        """Why the recording stays, or None when prune may delete it; a recording with no row of its own goes."""
+        if self.age_days <= days:
+            return "recent"
+        return ", ".join(holders(self.refs, self.age_days, tracking_days)) or None
+
+
+def inode(st: os.stat_result) -> tuple[int, int]:
+    return st.st_dev, st.st_ino
 
 
 def orphan_recordings(archive: Path, lines: list[str], states: dict[int, str],
                       leaving: Iterable[str] = ()) -> list[Recording]:
     """Files under `recordings/` with no other hard link once the `leaving` folders are gone."""
-    going: Counter[tuple[int, int]] = Counter()
-    for name in leaving:
-        for f in (archive / name).rglob("*"):
-            if f.is_file():
-                st = f.stat()
-                going[(st.st_dev, st.st_ino)] += 1
+    going = Counter(inode(f.stat()) for name in leaving for f in real_files(archive / name))
+    rec_dir = archive / "recordings"
     now = time.time()
     found = []
-    for f in sorted((archive / "recordings").rglob("*")):
+    for f in real_files(rec_dir):
         st = f.stat()
-        if f.is_file() and st.st_nlink - going[(st.st_dev, st.st_ino)] == 1:
-            refs = {n: states.get(n, "unknown") for n in issue_refs(f.name, lines)}
-            found.append(Recording(f, (now - st.st_mtime) / 86400, st.st_size, refs))
+        if st.st_nlink - going[inode(st)] == 1:
+            rel = f.relative_to(rec_dir).as_posix()
+            refs = ref_states(issue_refs(rel, lines, names_recording), states)
+            found.append(Recording(f, rel, (now - st.st_mtime) / 86400, st.st_size, refs))
     return found
 
 
@@ -296,7 +331,7 @@ def archive_folders(archive: Path, states: dict[int, str], lines: list[str]) -> 
     for d in sorted(p for p in archive.iterdir() if p.is_dir() and not is_link(p)):
         files = [f for f in d.rglob("*") if f.is_file()]
         newest = max((f.stat().st_mtime for f in files), default=d.stat().st_mtime)
-        refs = {n: states.get(n, "unknown") for n in issue_refs(d.name, lines)}
+        refs = ref_states(issue_refs(d.name, lines), states)
         folders.append(Folder(d.name, (now - newest) / 86400, sum(f.stat().st_size for f in files), refs))
     return sorted(folders, key=lambda f: -f.size)
 
@@ -313,7 +348,7 @@ def report(verdict: str, size: int, age_days: float, name: str, refs: dict[int, 
     print(f"{verdict:6}  {size / 1e9:6.2f} GB  {age_days:6.1f} d  {name}  [{tags}]" + (f"  ({why})" if why else ""))
 
 
-def prune(archive: Path, days: float = 7, tracking_days: float = 14, apply: bool = False,
+def prune(archive: Path, days: float = 7, tracking_days: float = TRACKING_DAYS, apply: bool = False,
           states: Callable[[], dict[int, str]] = gh_states) -> list[Folder]:
     """Delete old folders and old orphan recordings that no open issue holds; returns the folders deleted
     (on a dry run, the ones that would be)."""
@@ -325,37 +360,42 @@ def prune(archive: Path, days: float = 7, tracking_days: float = 14, apply: bool
         report("kept" if why else "delete", f.size, f.age_days, f.name, f.refs, why)
     doomed = [f for f in folders if f.blocker(days, tracking_days) is None]
     print(f"{len(doomed)} folders, {sum(f.size for f in doomed) / 1e9:.1f} GB (hard links counted per path)")
-    # A recording keeps the rule of the folder it came from: once that folder is gone, an old copy
-    # goes too, unless an INDEX row naming the file itself holds it.
-    recs = [r for r in orphan_recordings(archive, lines, known, [f.name for f in doomed])
-            if r.age_days > days and not holders(r.refs, r.age_days, tracking_days)]
-    for r in recs:
-        report("delete", r.size, r.age_days, r.path.relative_to(archive).as_posix(), r.refs, None)
+    orphans = orphan_recordings(archive, lines, known, [f.name for f in doomed])
+    for r in orphans:
+        why = r.blocker(days, tracking_days)
+        report("kept" if why else "delete", r.size, r.age_days, f"recordings/{r.rel}", r.refs, why)
+    recs = [r for r in orphans if r.blocker(days, tracking_days) is None]
     print(f"{len(recs)} recordings with no other link, {sum(r.size for r in recs) / 1e9:.1f} GB")
     if not (apply and (doomed or recs)):
         return doomed
-    deleted = []
+    gone_folders = []
     for f in doomed:
         try:
             shutil.rmtree(archive / f.name)
-            deleted.append(f.name)
+            gone_folders.append(f.name)
         except OSError as e:
             print(f"   could not delete {f.name}: {e}")
-    gone = [f.name for f in doomed if f.name in deleted]
+    gone_recs = []
     for r in recs:
+        if r.path.stat().st_nlink != 1:  # its folder could not be deleted, so it is not the last copy
+            print(f"   kept recordings/{r.rel}: still linked")
+            continue
         try:
             r.path.unlink()
-            deleted.append(r.path.name)
+            gone_recs.append(r.rel)
         except OSError as e:
-            print(f"   could not delete {r.path}: {e}")
+            print(f"   could not delete recordings/{r.rel}: {e}")
     index = archive / "INDEX.md"
-    if index.exists() and deleted:
+    if index.exists() and (gone_folders or gone_recs):
         tag = date.today().isoformat()
-        lines = [mark_deleted(ln, hit, tag) if ln.startswith("|") and (hit := [n for n in deleted if mentions(n, ln)])
-                 else ln for ln in index.read_text(encoding="utf-8").splitlines()]
-        index.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"deleted {len(gone)} folders, {len(deleted) - len(gone)} recordings")
-    return [f for f in doomed if f.name in gone]
+        marked = []
+        for ln in index.read_text(encoding="utf-8").splitlines():
+            hit = ([n for n in gone_folders if mentions(n, ln)]
+                   + [rel for rel in gone_recs if names_recording(rel, ln)]) if ln.startswith("|") else []
+            marked.append(mark_deleted(ln, hit, tag) if hit else ln)
+        index.write_text("\n".join(marked) + "\n", encoding="utf-8")
+    print(f"deleted {len(gone_folders)} folders, {len(gone_recs)} recordings")
+    return [f for f in doomed if f.name in gone_folders]
 
 
 def cmd_prune(a: argparse.Namespace) -> None:
@@ -388,7 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("prune", help="delete old archive folders and orphan recordings with no open issue or PR")
     p.add_argument("archive", type=Path)
     p.add_argument("--days", type=float, default=7)
-    p.add_argument("--tracking-days", type=float, default=14,
+    p.add_argument("--tracking-days", type=float, default=TRACKING_DAYS,
                    help="age past which a `tracking` issue no longer holds evidence")
     p.add_argument("--apply", action="store_true")
     p.set_defaults(fn=cmd_prune)
