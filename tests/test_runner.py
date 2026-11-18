@@ -48,13 +48,18 @@ class World:
     """A fake MaaFramework on a fake clock; a sleep of the runner is a tick. The tasker runs the posted tasks in turn,
     each for its plan's ticks, and ends it succeeded, failed, or halt: the bot's account-level stop, which fails it and
     stops the tasker with the rest unrun, once halt_when() holds (the bot's lines are in). post_stop clears the queue at
-    once and ends the running task failed stop_ticks ticks later (None: never, until free()). at: {time: call}."""
+    once and ends the running task failed stop_ticks ticks later (None: never, until free()). at: {time: call}.
+    adb says `offline` to the first `offline` looks at a device's state, and a connect fails while it does, as
+    MaaFramework's does (its get-state); the first `refusals` connects fail besides."""
 
-    def __init__(self, plan, *, found=(MUMU0,), appear=None, stop_ticks=1, at=None, connects=True, halt_when=None):
+    def __init__(self, plan, *, found=(MUMU0,), appear=None, stop_ticks=1, at=None, connects=True, halt_when=None,
+                 offline=0, refusals=0):
         self.plan, self.found, self.appear, self.stop_ticks = plan, list(found), appear, stop_ticks
         self.at, self.connects, self.halt_when = dict(at or {}), connects, halt_when or (lambda: True)
+        self.offline, self.refusals = offline, refusals
         self.t, self.queue, self.current, self.stop_left = 1000.0, [], None, None
         self.posted, self.stops, self.roots, self.bundles, self.controllers = [], [], [], [], []
+        self.looks, self.connected_at = [], []
         self.disconnected = False
 
     # the clock
@@ -107,7 +112,15 @@ class World:
 
     def controller(self, d):
         self.controllers.append(d.address)
-        return SimpleNamespace(post_connection=lambda: SimpleNamespace(wait=lambda: None), connected=self.connects)
+        up = self.connects and self.offline <= 0 and len(self.controllers) > self.refusals
+        if up:
+            self.connected_at.append(self.t)
+        return SimpleNamespace(post_connection=lambda: SimpleNamespace(wait=lambda: None), connected=up)
+
+    def adb_state(self, d):  # devices.adb_state
+        self.looks.append(self.t)
+        self.offline -= 1
+        return "error: device offline" if self.offline >= 0 else "device"
 
     def resource(self):
         def post_bundle(path):
@@ -188,7 +201,8 @@ class Run:
             return launch(manager, index) if launch else (0, "")
 
         self.session = Session(self.out, world, self.commands, sleep=world.sleep, monotonic=world.monotonic,
-                               agent_command=bot(world.bye, *bot_lines, code=code), launch=launch_mumu, awake=awake)
+                               agent_command=bot(world.bye, *bot_lines, code=code), launch=launch_mumu, awake=awake,
+                               adb_state=world.adb_state)
 
     def start(self, tasks, **device):
         line = {"v": 1, "cmd": "start", "root": str(self.root), "tasks": tasks,
@@ -392,6 +406,85 @@ def test_a_mumu_not_running_is_started_and_waited_for_then_connected_after_it_se
     assert run.launched == [[manager, "control", "--vmindex", "0", "launch"]]
     assert [e["state"] for e in run.of("connection")] == ["launching", "waiting", "connecting", "connected"]
     assert world.controllers == ["127.0.0.1:16384"] and 1015.0 <= connected_at[0] <= 1016.0  # up at 1010, then 5 s
+
+
+MANAGER = "C:/MuMu/nx_main/MuMuManager.exe"
+
+
+def test_a_started_mumu_is_connected_once_adb_says_device_not_when_the_scan_lists_it(tmp_path):
+    # #831: MuMuManager lists the instance 2 s into its boot, while its adb says `device offline` for 12 s more
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(), appear=(1002.0, MUMU0), offline=12)
+    run = Run(tmp_path, world)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "succeeded"
+    assert world.looks[0] == 1002.0 and len(world.looks) == 13  # each second from when the scan lists it
+    assert world.controllers == ["127.0.0.1:16384"] and world.connected_at == [1019.0]  # device at 1014, then 5 s
+    runner = run.lines("runner")
+    assert "[run] 127.0.0.1:16384 after 2 s: adb says error: device offline" in runner
+    assert "[run] 127.0.0.1:16384 is up after 14 s: adb says device; connecting in 5 s" in runner
+
+
+def test_a_started_mumu_whose_adb_stays_offline_fails_the_run_after_120_s_with_what_adb_said(tmp_path):
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(), appear=(1002.0, MUMU0), offline=10**6)
+    run = Run(tmp_path, world)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "failed"
+    (error,) = run.of("error")
+    assert error["kind"] == "device_timeout" and error["message"] == (
+        "MuMu instance 0 did not come up at 127.0.0.1:16384 in 120 s: adb says error: device offline")
+    assert 1120.0 <= world.t <= 1122.0 and world.controllers == []
+    assert run.lines("runner").count("[run] 127.0.0.1:16384 after 2 s: adb says error: device offline") == 1  # once
+
+
+def test_a_started_mumu_that_refuses_the_first_connects_is_connected_on_a_try_a_second_later(tmp_path):
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(), appear=(1002.0, MUMU0), refusals=2)
+    run = Run(tmp_path, world)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "succeeded"
+    assert world.controllers == ["127.0.0.1:16384"] * 3 and world.connected_at == [1009.0]  # 1007, 1008, 1009
+    assert not run.of("error")
+
+
+def test_a_connect_that_never_takes_is_tried_until_120_s_after_the_launch_and_once_on_a_running_device(tmp_path):
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(), appear=(1002.0, MUMU0), connects=False)
+    run = Run(tmp_path / "a", world)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "failed"
+    assert [e["kind"] for e in run.of("error")] == ["connect_failed"]
+    assert 1120.0 <= world.t <= 1122.0 and 100 <= len(world.controllers) <= 115  # each second from 1007
+
+    world = World({"MirrorDungeon": (1, "succeeded")}, connects=False)  # MuMu was running: no wait, one try
+    run = Run(tmp_path / "b", world)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "failed"
+    assert [e["kind"] for e in run.of("error")] == ["connect_failed"]
+    assert world.controllers == ["127.0.0.1:16384"] and world.looks == [] and world.t == 1000.0
+
+
+def test_a_stop_while_the_runner_tries_to_connect_a_started_mumu_ends_the_run_stopped(tmp_path):
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(), appear=(1002.0, MUMU0), connects=False)
+    run = Run(tmp_path, world)
+    run.stop_at(1010.0)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "stopped"
+    assert run.states() == [(0, "pending"), (0, "cancelled")] and not run.of("error")
+    assert world.t <= 1012.0
+
+
+def test_adb_state_asks_as_maaframeworks_connect_does_with_the_devices_own_adb():
+    calls = []
+
+    def answer(said, code=0):
+        def run(cmd, stdout, **kw):
+            calls.append(cmd)
+            stdout.write(said if cmd[-1] == "get-state" else b"already connected to 127.0.0.1:16384\r\n")
+            return SimpleNamespace(returncode=code if cmd[-1] == "get-state" else 0)
+        return run
+    adb = str(MUMU0.adb_path)
+    assert devices.adb_state(MUMU0, run=answer(b"device\r\n")) == "device"
+    assert calls == [[adb, "connect", "127.0.0.1:16384"], [adb, "-s", "127.0.0.1:16384", "get-state"]]
+    assert devices.adb_state(MUMU0, run=answer(b"error: device offline\r\n", 1)) == "error: device offline"
+    calls.clear()
+    assert devices.adb_state(OTHER, run=answer(b"device\n")) == "device"
+    assert calls == [[str(OTHER.adb_path), "-s", "emulator-5554", "get-state"]]  # a local serial needs no connect
+
+    def missing(cmd, **kw):
+        raise FileNotFoundError(2, "not found")
+    assert devices.adb_state(MUMU0, run=missing).startswith("FileNotFoundError")
 
 
 def test_a_mumu_that_does_not_come_up_in_120_s_fails_the_run(tmp_path):
