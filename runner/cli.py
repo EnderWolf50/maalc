@@ -82,7 +82,7 @@ class Console:
 
 
 def main(framework=None) -> int:
-    commands = take_stdin()
+    command_fd = take_stdin()
     proto, console = take_stdout()
 
     def write(text: str) -> None:
@@ -94,7 +94,7 @@ def main(framework=None) -> int:
     if framework is None:
         from runner.framework import Framework as framework
     try:
-        return serve(out, read_lines(commands), framework)
+        return serve(out, read_lines(command_fd), framework)
     finally:
         sys.stdout.flush()
         sys.stderr.flush()

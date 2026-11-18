@@ -135,12 +135,10 @@ def read_lines(fd: int):
         yield bytes(rest).decode("utf-8", "replace").rstrip()
 
 
-def pump(fd: int, each, stop=None) -> None:
-    """Hand each line read from fd to each (read_lines), until its end (or stop is set)."""
+def pump(fd: int, each) -> None:
+    """Hand each line read from fd to each (read_lines), until its end."""
     for text in read_lines(fd):
         each(text)
-        if stop is not None and stop.is_set():
-            return
 
 
 @contextmanager

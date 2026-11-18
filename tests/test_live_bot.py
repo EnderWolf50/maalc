@@ -213,8 +213,8 @@ def test_run_stops_before_any_child_when_the_install_has_no_runner(tmp_path):
 
 
 def test_run_reaches_the_real_runners_device_check_while_it_keeps_the_runners_stdin_open(tmp_path):
-    # #829: stamped keeps the runner's stdin open until it exits (a stop may follow), and the runner's real `import maa`
-    # waited on that pipe until a line came. No device listens on port 1, so the start ends at the device check
+    # #829: stamped keeps the runner's stdin open until it exits (a stop may follow), and the real runner's `import maa`
+    # waited for a line on it (runner/cli.py take_stdin). No device listens on port 1: the start ends at the device check
     (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
     shutil.copytree(REPO / "runner", tmp_path / "runner", ignore=shutil.ignore_patterns("__pycache__"))
     log, result = tmp_path / "run.log", {}

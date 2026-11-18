@@ -529,47 +529,45 @@ def test_a_runner_whose_first_line_breaks_the_protocol_ends_with_code_2(line, sa
     assert events[-1] == {"v": 1, "event": "end", "result": "failed"}
 
 
-def test_a_runner_ends_with_its_code_while_its_stdin_stays_open():
-    # the caller keeps stdin open until the runner exits (#829): the reader still blocked on it at the exit is no
-    # buffered file (sys.stdin's ended the process with an access violation, 0xC0000005)
-    p = subprocess.Popen([sys.executable, "-c", SCRIPT.format(repo=str(REPO))], stdin=subprocess.PIPE,
-                         stdout=subprocess.DEVNULL)
+@contextmanager
+def scan_with_stdin_open(cmd, **popen):
+    """cmd started on a scan, its stdin held open as the window and tools/live/bot.py hold it (#829) until the block
+    ends; still running then, it is killed (a runner stuck before MaaFramework loaded has started no process)."""
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, **popen)
     try:
         p.stdin.write(b'{"v": 1, "cmd": "scan"}\n')
         p.stdin.flush()
-        assert p.wait(60) == 0
+        yield p
     finally:
         if p.poll() is None:
             p.kill()
         p.stdin.close()
+        p.wait(10)
+
+
+def test_a_runner_ends_with_its_code_while_its_stdin_stays_open():
+    # the reader still blocked on stdin at the exit is no buffered file: sys.stdin's ended the process with an access
+    # violation (0xC0000005) instead of its code
+    with scan_with_stdin_open([sys.executable, "-c", SCRIPT.format(repo=str(REPO))], stdout=subprocess.DEVNULL) as p:
+        assert p.wait(60) == 0
 
 
 def test_the_real_runner_loads_maaframework_and_ends_a_scan_while_its_stdin_stays_open(tmp_path):
-    # #829: the window and tools/live/bot.py keep the runner's stdin open for a stop. The real `import maa` loads numpy's
-    # OpenBLAS, whose libgfortran looks at fd 0 as it loads, and on Windows that waited for the read pending on stdin's
-    # pipe until the next line came. The runner sits in tmp_path as an install lays it out, so its debug/ lands there
+    # the real `import maa` waited for the next command while the reader held stdin's pipe (cli.take_stdin). The runner
+    # sits in tmp_path as an install lays it out, so its debug/ lands there
     shutil.copytree(REPO / "runner", tmp_path / "runner", ignore=shutil.ignore_patterns("__pycache__"))
-    p = subprocess.Popen([sys.executable, str(tmp_path / "runner" / "__main__.py")], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE)
     events, ended = [], threading.Event()
+    with scan_with_stdin_open([sys.executable, str(tmp_path / "runner" / "__main__.py")], stdout=subprocess.PIPE) as p:
 
-    def read():
-        for line in p.stdout:
-            events.append(json.loads(line))
-            if events[-1]["event"] == "end":
-                ended.set()
+        def read():
+            for line in p.stdout:
+                events.append(json.loads(line))
+                if events[-1]["event"] == "end":
+                    ended.set()
 
-    threading.Thread(target=read, daemon=True).start()
-    try:
-        p.stdin.write(b'{"v": 1, "cmd": "scan"}\n')
-        p.stdin.flush()
+        threading.Thread(target=read, daemon=True).start()
         assert ended.wait(60), f"no end event in 60 s with stdin open: {[e['event'] for e in events]}"
-        assert p.wait(10) == 0  # stdin still open: the reader blocked on it does not keep the runner from ending
-    finally:
-        if p.poll() is None:
-            p.kill()  # a runner stuck in the import has started no process of its own
-        p.stdin.close()
-        p.wait(10)
+        assert p.wait(10) == 0
     for e in events:
         protocol.check_event(e)
     assert [e["event"] for e in events if e["event"] != "log"] == ["ready", "devices", "end"]
