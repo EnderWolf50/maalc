@@ -125,18 +125,20 @@ def split_lines(chunk: bytes, rest: bytearray) -> list[str]:
     return [part.decode("utf-8", "replace").rstrip() for raw in lines for part in raw.rstrip(b"\r").split(b"\r")]
 
 
-def pump(fd: int, each, stop=None) -> None:
-    """Hand each line read from fd to each, until its end (or stop is set). os.read, not a file object: the reader may
-    still be blocked in it when the process exits, and a buffered file's lock held by a daemon thread is fatal at
-    interpreter shutdown."""
+def read_lines(fd: int):
+    """Each line read from fd, until its end. os.read, not a file object: the reader may still be blocked in it when
+    the process exits, and a buffered file's lock held by a daemon thread is fatal at interpreter shutdown."""
     rest = bytearray()
     while chunk := os.read(fd, 65536):
-        for text in split_lines(chunk, rest):
-            each(text)
-        if stop is not None and stop.is_set():
-            return
+        yield from split_lines(chunk, rest)
     if rest:
-        each(bytes(rest).decode("utf-8", "replace").rstrip())
+        yield bytes(rest).decode("utf-8", "replace").rstrip()
+
+
+def pump(fd: int, each) -> None:
+    """Hand each line read from fd to each (read_lines), until its end."""
+    for text in read_lines(fd):
+        each(text)
 
 
 @contextmanager

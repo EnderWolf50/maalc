@@ -4,13 +4,12 @@ Exit code 0 when the command succeeded, 1 when it did not, 2 when the first comm
 """
 from __future__ import annotations
 
-import io
 import os
 import sys
 import threading
 
 from runner import protocol
-from runner.session import Commands, Out, Session, pump
+from runner.session import Commands, Out, Session, pump, read_lines
 
 
 def serve(out: Out, lines, framework, **session) -> int:
@@ -28,6 +27,19 @@ def serve(out: Out, lines, framework, **session) -> int:
     s = Session(out, framework, commands, **session)
     result = s.scan() if first["cmd"] == "scan" else s.start(first)
     return 0 if result == "succeeded" else 1
+
+
+def take_stdin() -> int:
+    """The fd the protocol's commands come on: stdin's pipe moved off fd 0, which then reads NUL (and so does the
+    process's standard input handle). On Windows the C runtime's fstat and lseek of a pipe's fd wait for a read pending
+    on it: behind the runtime's lock on the fd and, were it read with a plain ReadFile, behind the kernel's on a
+    synchronous pipe. numpy's OpenBLAS, which `import maa` loads, carries libgfortran, which looks at fd 0 as it loads,
+    so the import waited for the next command (#829). The new fd is not inheritable (os.dup)."""
+    fd = os.dup(0)
+    nul = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(nul, 0)
+    os.close(nul)
+    return fd
 
 
 def take_stdout():
@@ -70,6 +82,7 @@ class Console:
 
 
 def main(framework=None) -> int:
+    command_fd = take_stdin()
     proto, console = take_stdout()
 
     def write(text: str) -> None:
@@ -80,9 +93,8 @@ def main(framework=None) -> int:
     out.before_end = Console(console, out).settle
     if framework is None:
         from runner.framework import Framework as framework
-    stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
     try:
-        return serve(out, stdin, framework)
+        return serve(out, read_lines(command_fd), framework)
     finally:
         sys.stdout.flush()
         sys.stderr.flush()

@@ -3,8 +3,10 @@ that prints what a test needs and ends when the runner disconnects from it."""
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -525,3 +527,48 @@ def test_a_runner_whose_first_line_breaks_the_protocol_ends_with_code_2(line, sa
     (error,) = [e for e in events if e["event"] == "error"]
     assert error["kind"] == "protocol" and says in error["message"]
     assert events[-1] == {"v": 1, "event": "end", "result": "failed"}
+
+
+@contextmanager
+def scan_with_stdin_open(cmd, **popen):
+    """cmd started on a scan, its stdin held open as the window and tools/live/bot.py hold it (#829) until the block
+    ends; still running then, it is killed (a runner stuck before MaaFramework loaded has started no process)."""
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, **popen)
+    try:
+        p.stdin.write(b'{"v": 1, "cmd": "scan"}\n')
+        p.stdin.flush()
+        yield p
+    finally:
+        if p.poll() is None:
+            p.kill()
+        p.stdin.close()
+        p.wait(10)
+
+
+def test_a_runner_ends_with_its_code_while_its_stdin_stays_open():
+    # the reader still blocked on stdin at the exit is no buffered file: sys.stdin's ended the process with an access
+    # violation (0xC0000005) instead of its code
+    with scan_with_stdin_open([sys.executable, "-c", SCRIPT.format(repo=str(REPO))], stdout=subprocess.DEVNULL) as p:
+        assert p.wait(60) == 0
+
+
+def test_the_real_runner_loads_maaframework_and_ends_a_scan_while_its_stdin_stays_open(tmp_path):
+    # the real `import maa` waited for the next command while the reader held stdin's pipe (cli.take_stdin). The runner
+    # sits in tmp_path as an install lays it out, so its debug/ lands there
+    shutil.copytree(REPO / "runner", tmp_path / "runner", ignore=shutil.ignore_patterns("__pycache__"))
+    events, ended = [], threading.Event()
+    with scan_with_stdin_open([sys.executable, str(tmp_path / "runner" / "__main__.py")], stdout=subprocess.PIPE) as p:
+
+        def read():
+            for line in p.stdout:
+                events.append(json.loads(line))
+                if events[-1]["event"] == "end":
+                    ended.set()
+
+        threading.Thread(target=read, daemon=True).start()
+        assert ended.wait(60), f"no end event in 60 s with stdin open: {[e['event'] for e in events]}"
+        assert p.wait(10) == 0
+    for e in events:
+        protocol.check_event(e)
+    assert [e["event"] for e in events if e["event"] != "log"] == ["ready", "devices", "end"]
+    assert events[-1]["result"] == "succeeded"
