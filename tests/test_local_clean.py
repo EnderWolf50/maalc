@@ -2,6 +2,7 @@ import os
 import time
 from pathlib import Path
 
+import dir_link
 import local_clean as lc
 
 
@@ -92,6 +93,123 @@ def test_prune_apply_deletes_only_old_folders_whose_rows_are_all_closed(tmp_path
     assert done.endswith("|") and done.count("|") == 6
     for name in ("`old-open/`", "`new-done/`", "`recordings/old-done.mp4`", "`old-unknown/`"):
         assert "已刪除" not in rows[name]
+
+
+def test_prune_lets_an_old_folder_go_when_only_a_tracking_issue_holds_it(tmp_path):
+    archive = tmp_path / "archive"
+    write(archive / "old-tracked" / "f.bin", b"1" * 100, age_days=30)
+    write(archive / "mid-tracked" / "f.bin", b"2" * 100, age_days=10)
+    write(archive / "old-tracked-open" / "f.bin", b"3" * 100, age_days=30)
+    (archive / "INDEX.md").write_text(
+        "| 日期 | 主題 | issue | 位置 | 內容 |\n|---|---|---|---|---|\n"
+        "| 2026-10-01 | a | #1 #4 | `old-tracked/` | x |\n"
+        "| 2026-10-02 | b | #4 | `mid-tracked/` | x |\n"
+        "| 2026-10-03 | c | #3 #4 | `old-tracked-open/` | x |\n", encoding="utf-8")
+    states = {1: "closed", 3: "open", 4: "tracking"}
+    doomed = lc.prune(archive, days=7, tracking_days=14, apply=True, states=lambda: states)
+    assert [f.name for f in doomed] == ["old-tracked"]
+    assert not (archive / "old-tracked").exists()
+    assert (archive / "mid-tracked").is_dir() and (archive / "old-tracked-open").is_dir()
+
+
+def test_prune_deletes_old_recordings_no_folder_links_any_more(tmp_path):
+    archive = tmp_path / "archive"
+    rec = archive / "recordings"
+    kept_folder = write(archive / "live" / "run.mp4", b"1" * 100, age_days=30)
+    rec.mkdir(parents=True)
+    os.link(kept_folder, rec / "linked.mp4")
+    orphan = write(rec / "orphan.mp4", b"2" * 100, age_days=30)
+    fresh = write(rec / "fresh.mp4", b"3" * 100, age_days=1)
+    held = write(rec / "held.mp4", b"4" * 100, age_days=30)
+    nested = write(rec / "sub" / "orphan2.mp4", b"5" * 100, age_days=30)
+    (archive / "INDEX.md").write_text(
+        "| 日期 | 主題 | issue | 位置 | 內容 |\n|---|---|---|---|---|\n"
+        "| 2026-10-01 | a | #3 | `live/`、`recordings/linked.mp4` | x |\n"
+        "| 2026-10-02 | b | #3 | `recordings/held.mp4` | x |\n"
+        "| 2026-10-03 | c | #1 | `recordings/orphan.mp4` | x |\n", encoding="utf-8")
+    states = {1: "closed", 3: "open"}
+
+    lc.prune(archive, days=7, states=lambda: states)
+    assert orphan.exists() and nested.exists()  # dry run
+
+    lc.prune(archive, days=7, apply=True, states=lambda: states)
+    assert not orphan.exists() and not nested.exists()
+    assert (rec / "linked.mp4").exists() and fresh.exists() and held.exists()
+    assert (archive / "live").is_dir()
+    index = (archive / "INDEX.md").read_text(encoding="utf-8")
+    assert "已刪除 orphan.mp4" in index and "已刪除 held.mp4" not in index
+
+
+def test_prune_counts_a_recording_whose_only_other_link_is_in_a_doomed_folder(tmp_path):
+    archive = tmp_path / "archive"
+    src = write(archive / "old-done" / "run.mp4", b"1" * 100, age_days=30)
+    (archive / "recordings").mkdir()
+    os.link(src, archive / "recordings" / "old-done-run.mp4")
+    (archive / "INDEX.md").write_text(
+        "| 日期 | 主題 | issue | 位置 | 內容 |\n|---|---|---|---|---|\n"
+        "| 2026-10-01 | a | #1 | `old-done/` | x |\n", encoding="utf-8")
+    lc.prune(archive, days=7, apply=True, states=lambda: {1: "closed"})
+    assert not (archive / "old-done").exists()
+    assert not (archive / "recordings" / "old-done-run.mp4").exists()
+
+
+def test_item_state_marks_only_an_open_tracking_issue():
+    tracked = {"state": "OPEN", "labels": [{"name": "tracking"}]}
+    assert lc.item_state("issue", tracked) == "tracking"
+    assert lc.item_state("pr", tracked) == "open"
+    assert lc.item_state("issue", {"state": "CLOSED", "labels": [{"name": "tracking"}]}) == "closed"
+    assert lc.item_state("issue", {"state": "OPEN", "labels": [{"name": "bug"}]}) == "open"
+
+
+def test_prune_cli_takes_tracking_days():
+    a = lc.build_parser().parse_args(["prune", "x", "--tracking-days", "30"])
+    assert a.tracking_days == 30
+    assert lc.build_parser().parse_args(["prune", "x"]).tracking_days == lc.TRACKING_DAYS
+
+
+def rec_archive(tmp_path, rows: str):
+    archive = tmp_path / "archive"
+    (archive / "recordings").mkdir(parents=True)
+    (archive / "INDEX.md").write_text(
+        "| 日期 | 主題 | issue | 位置 | 內容 |\n|---|---|---|---|---|\n" + rows, encoding="utf-8")
+    return archive
+
+
+def test_a_tracking_issue_holds_an_orphan_recording_only_until_tracking_days(tmp_path):
+    archive = rec_archive(tmp_path, "| 2026-10-01 | a | #4 | `recordings/young.mp4`、`recordings/old.mp4` | x |\n")
+    young = write(archive / "recordings" / "young.mp4", b"1", age_days=10)
+    old = write(archive / "recordings" / "old.mp4", b"2", age_days=30)
+    lc.prune(archive, days=7, tracking_days=14, apply=True, states=lambda: {4: "tracking"})
+    assert young.exists() and not old.exists()
+
+
+def test_a_row_naming_the_same_file_name_in_another_folder_neither_holds_nor_gets_marked(tmp_path):
+    archive = rec_archive(tmp_path, "| 2026-10-01 | a | #3 | `fresh/run.mp4` | x |\n")
+    write(archive / "fresh" / "run.mp4", b"other", age_days=1)
+    orphan = write(archive / "recordings" / "run.mp4", b"1", age_days=30)
+    lc.prune(archive, days=7, apply=True, states=lambda: {3: "open"})
+    assert not orphan.exists()
+    assert "已刪除" not in (archive / "INDEX.md").read_text(encoding="utf-8")
+
+
+def test_prune_does_not_follow_a_folder_link_inside_recordings(tmp_path):
+    archive = rec_archive(tmp_path, "| 2026-10-01 | a | #3 | `held/` | x |\n")
+    held = write(archive / "held" / "x.bin", b"1", age_days=30)
+    dir_link.link(archive / "recordings" / "j", archive / "held")
+    lc.prune(archive, days=7, apply=True, states=lambda: {3: "open"})
+    assert held.exists()
+
+
+def test_prune_keeps_a_recording_whose_folder_could_not_be_deleted(tmp_path, monkeypatch):
+    archive = rec_archive(tmp_path, "| 2026-10-01 | a | #1 | `old-done/` | x |\n")
+    src = write(archive / "old-done" / "run.mp4", b"1", age_days=30)
+    os.link(src, archive / "recordings" / "run.mp4")
+
+    def refuse(path, *a, **k):
+        raise OSError("in use")
+    monkeypatch.setattr(lc.shutil, "rmtree", refuse)
+    lc.prune(archive, days=7, apply=True, states=lambda: {1: "closed"})
+    assert src.exists() and (archive / "recordings" / "run.mp4").exists()
 
 
 def test_shrink_filter_needs_taller_than_720p_and_over_2_mbps():
