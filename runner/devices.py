@@ -1,12 +1,15 @@
-"""The emulators MaaFramework's toolkit finds, and starting a MuMu instance that is not running.
+"""The emulators MaaFramework's toolkit finds, what adb says of one, and starting a MuMu instance that is not running.
 
 MaaToolkit finds only emulators that run, a MuMu one through MuMuManager.exe in its adb folder, and puts the instance
 in the device's config as {"extras": {"mumu": {"enable": true, "path": <MuMu folder>, "index": <n>}}}
-(MaaFramework v5.14.3, source/MaaToolkit/AdbDevice/AdbDeviceWin32Finder.cpp `find_mumu_devices`).
+(MaaFramework v5.14.3, source/MaaToolkit/AdbDevice/AdbDeviceWin32Finder.cpp `find_mumu_devices`). It lists a MuMu
+instance by what MuMuManager says, seconds before the instance's adb answers (#831).
 """
 from __future__ import annotations
 
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 LOOPBACK = ("127.0.0.1", "localhost")
@@ -42,6 +45,35 @@ def same_address(a: str, b: str) -> bool:
 def find(devices, address: str):
     """The first device at address, or None."""
     return next((d for d in devices if same_address(d.address, address)), None)
+
+
+ADB_TIMEOUT = 10  # s adb_state may take at most
+
+
+def adb_state(device, timeout: float = ADB_TIMEOUT, run=subprocess.run) -> str:
+    """What adb says of device: "device" once MaaFramework's connect can take it, else its answer ("error: device
+    offline" while a MuMu instance boots). It asks as that connect does, with the device's own adb: `adb connect` for a
+    network address, then `adb -s <address> get-state` (MaaFramework v5.14.3,
+    source/MaaAdbControlUnit/General/Connection.cpp), both in timeout s (ADB_TIMEOUT at most). The answer goes to a
+    file, not a pipe: an adb server the call starts outlives it, and run() would read a pipe that server holds until
+    the server ends."""
+    adb, address = str(device.adb_path), device.address
+    asks = ([[adb, "connect", address]] if ":" in address else []) + [[adb, "-s", address, "get-state"]]
+    end = time.monotonic() + min(timeout, ADB_TIMEOUT)
+    with tempfile.TemporaryFile() as answer:
+        try:
+            for cmd in asks:
+                if (left := end - time.monotonic()) <= 0:
+                    raise subprocess.TimeoutExpired(cmd, min(timeout, ADB_TIMEOUT))
+                answer.seek(0)
+                answer.truncate()
+                r = run(cmd, stdin=subprocess.DEVNULL, stdout=answer, stderr=subprocess.STDOUT, timeout=left,
+                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except (OSError, subprocess.SubprocessError) as e:
+            return f"{type(e).__name__}: {e}"
+        answer.seek(0)
+        text = " ".join(answer.read().decode("utf-8", "replace").split())
+    return "device" if r.returncode == 0 and text == "device" else text or f"exit code {r.returncode}"
 
 
 LAUNCH_TIMEOUT = 60  # s MuMuManager may take to answer the launch; the instance boots after it returns
