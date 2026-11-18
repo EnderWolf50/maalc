@@ -193,7 +193,7 @@ _Avoid_: 任務參數
 _Avoid_: 共用選項
 
 **隊伍選項檔**：
-v1.0.0 的設定視窗寫在 config 資料夾、`interface.json` 引入的檔案（`config/team_options.json`），讓 MXU／MFAAvalonia 的經驗本與紐本任務選項用下拉選單選隊伍，鏡牢任務選起頭隊伍。v1.1.0 起隊伍直接存在設定檔的任務選項裡，沒有程式再寫這個檔（ADR 0015）。
+v1.0.0 的設定視窗寫在 config 資料夾、`interface.json` 引入的檔案（`config/team_options.json`），讓 MXU／MFAAvalonia 的經驗本與紐本任務選項用下拉選單選隊伍，鏡牢任務選起頭隊伍。v2.0.0 起隊伍直接存在設定檔的任務選項裡，沒有程式再寫這個檔（ADR 0015）。
 _Avoid_: 隊伍清單檔
 
 **任務清單**：
