@@ -6,9 +6,9 @@ stop's post_stop then leaves the rest unrun, #364), and follows each task by its
 has stopped (G1: wait() and status go through a runner id a clear_cache drops). It returns once the tasker has
 stopped, so the bot is not closed under a task still running.
 
-A task ends succeeded or failed as MaaFramework says; stopped when the caller's stop came while it ran; cancelled when
-it never ran: after a stop, after the bot stopped the whole list (the reason it logged comes with it), after the bot
-exited, or when the run failed before its first task.
+A task ends succeeded or failed as MaaFramework says; stopped when the caller's stop came while it ran, whatever
+MaaFramework says of it (#832); cancelled when it never ran: after a stop, after the bot stopped the whole list (the
+reason it logged comes with it), after the bot exited, or when the run failed before its first task.
 """
 from __future__ import annotations
 
@@ -432,16 +432,18 @@ class Session:
                 self.post_stop()
 
     def follow(self, jobs: list) -> None:
+        """Each task to its end. A task's state is read before the commands are taken, so a task found ended has
+        ended before the runner took a stop: finish() then holds a stop against the task it follows only."""
         for i, job in enumerate(jobs):
             t0 = self.now()
             while True:
-                self.tick()
                 detail = job.get()
                 status = detail and detail.status
                 if (status and status.done) or not self.tasker.running:
                     break
                 if status and status.running and self.states[i] == "pending":
                     self.task(i, "running")
+                self.tick()
                 self.sleep(TICK)
             self.finish(i, job.get(), self.now() - t0)
         while self.tasker.running:
@@ -449,9 +451,11 @@ class Session:
             self.sleep(TICK)
 
     def finish(self, i: int, detail, seconds: float) -> None:
+        """A task that ran ends as MaaFramework says, or stopped when the caller's stop came first: MaaFramework says
+        succeeded of a task whose agent action returns normally after post_stop (#832)."""
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
-        if status and status.succeeded:
+        if self.stop_at is None and status and status.succeeded:
             self.task(i, "succeeded")
         elif ran:
             self.task(i, "stopped" if self.stop_at is not None else "failed")

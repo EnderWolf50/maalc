@@ -48,13 +48,15 @@ class World:
     """A fake MaaFramework on a fake clock; a sleep of the runner is a tick. The tasker runs the posted tasks in turn,
     each for its plan's ticks, and ends it succeeded, failed, or halt: the bot's account-level stop, which fails it and
     stops the tasker with the rest unrun, once halt_when() holds (the bot's lines are in). post_stop clears the queue at
-    once and ends the running task failed stop_ticks ticks later (None: never, until free()). at: {time: call}.
+    once and ends the running task stop_ends (failed, or succeeded as MaaFramework says when the agent's action returns
+    normally after post_stop, #832) stop_ticks ticks later (None: never, until free()). at: {time: call}.
     adb says `offline` to the first `offline` looks at a device's state, and a connect fails while it does, as
     MaaFramework's does (its get-state); the first `refusals` connects fail besides."""
 
     def __init__(self, plan, *, found=(MUMU0,), appear=None, stop_ticks=1, at=None, connects=True, halt_when=None,
-                 offline=0, refusals=0):
+                 offline=0, refusals=0, stop_ends="failed"):
         self.plan, self.found, self.appear, self.stop_ticks = plan, list(found), appear, stop_ticks
+        self.stop_ends = stop_ends
         self.at, self.connects, self.halt_when = dict(at or {}), connects, halt_when or (lambda: True)
         self.offline, self.refusals = offline, refusals
         self.t, self.queue, self.current, self.stop_left = 1000.0, [], None, None
@@ -97,9 +99,9 @@ class World:
                 self.queue.clear()
 
     def free(self):
-        """The stop takes: the running task ends failed."""
+        """The stop takes: the running task ends as stop_ends."""
         if self.current is not None:
-            self.current.state, self.current = "failed", None
+            self.current.state, self.current = self.stop_ends, None
         self.stop_left = None
 
     # MaaFramework
@@ -292,6 +294,27 @@ def test_a_stop_ends_the_running_task_stopped_and_cancels_the_rest(tmp_path):
     assert len(world.stops) == 1 and not run.of("error")
     assert "[run] stop requested" in run.lines("runner")
     assert run.of("end")[-1]["result"] == "stopped" and world.disconnected
+
+
+@pytest.mark.parametrize("ends", ["failed", "succeeded"])
+def test_the_task_a_stop_cuts_short_ends_stopped_whatever_maaframework_says_of_it(tmp_path, ends):
+    # #832: MaaFramework says succeeded of a task whose agent action returns normally after post_stop
+    world = World({"MirrorDungeon": (100, "succeeded"), "ExpLuxcavation": (2, "succeeded")}, stop_ends=ends)
+    run = Run(tmp_path, world)
+    run.stop_at(1003.0)
+    assert run.start(TWO) == "stopped"
+    assert run.states() == [(0, "pending"), (1, "pending"), (0, "running"), (0, "stopped"), (1, "cancelled")]
+    assert "[run] MirrorDungeon status=stopped t=" in " ".join(run.lines("runner"))
+
+
+def test_a_task_that_ends_before_the_runner_takes_the_stop_stays_succeeded(tmp_path):
+    # MirrorDungeon ends in the half second the stop is on its way: no post_stop reached it, so it did its work
+    world = World({"MirrorDungeon": (2, "succeeded"), "ExpLuxcavation": (100, "succeeded")}, stop_ends="succeeded")
+    run = Run(tmp_path, world)
+    run.stop_at(1001.5)  # the tick MirrorDungeon ends in (it starts at 1000.5 and runs 2 ticks)
+    assert run.start(TWO) == "stopped"
+    assert run.states() == [(0, "pending"), (1, "pending"), (0, "running"), (0, "succeeded"), (1, "cancelled")]
+    assert len(world.stops) == 1
 
 
 def test_a_stop_that_does_not_take_is_posted_again_each_second_and_reported_after_60_s(tmp_path):
