@@ -11,7 +11,7 @@ status: accepted（取代 ADR 0013；修訂 ADR 0006、ADR 0010、ADR 0014；依
 - 兩個 client 各有怪癖：MFAAvalonia 遇到 `setting` 區塊就跑不了任務（#799），用索引存選項；MXU 讀選項分大小寫。maalc 為此寫了特殊寫法、隊伍選項檔，還要產生簡體中文語系。
 - bot 想讓使用者看到的東西（下一局輪到誰、這次跑了幾局）都要繞回設定視窗看。
 
-使用者 2026-11-17 決定拋棄 MXU 和 MFAAvalonia，把執行任務整合到設定視窗：v1.0.0 照 MXU 版發布，下一版（2026-11-18 定為 v1.1.0）完全不用 MXU 和 MFAAvalonia。
+使用者 2026-11-17 決定拋棄 MXU 和 MFAAvalonia，把執行任務整合到設定視窗：v1.0.0 照 MXU 版發布，下一版（2026-11-18 定為 v2.0.0）完全不用 MXU 和 MFAAvalonia。
 
 ## 決定
 
@@ -46,5 +46,5 @@ status: accepted（取代 ADR 0013；修訂 ADR 0006、ADR 0010、ADR 0014；依
 - 設定檔版本 23。Agent 在記憶體裡遷移，只能用預設值補上新段落；設定視窗遷移後寫回，舊檔另存成 `config/settings.v<版本>.json`。版本 20 的檔原本就有這三段，遷移時保留它的值。從 MXU 的設定檔讀回使用者設過的選項，是「執行」分頁那張票的事（#811）。
 - 模板版本從 2 升到 3（`agent/resource_package.py` 的 `TEMPLATE`）：pipeline 拿掉 `GlobalOptions` 節點，Agent 不再讀節點的 `attach`。版本 2 的 Agent 拿到新 pipeline 會少了它要讀的節點，所以兩邊各自只套用自己的模板版本（ADR 0012）。
 - 實機工具：`bot.py prep --set` 又能設 `run.*`、`luxcavation.<任務>.*` 與 `charge_enkephalin.*`；`bot.py run` 不再收 `--option`。原本經由 client 覆寫送選項的任務測試，改成在設定檔放值。
-- 從 v1.0.0 升級的使用者要手動下載 v1.1.0：MXU 不會替 maalc 檢查更新。MXU 加密存放 webhook，所以 webhook 要重填；MFAAvalonia 的設定不讀回（規格 #811 範圍外）。
+- 從 v1.0.0 升級的使用者要手動下載 v2.0.0：MXU 不會替 maalc 檢查更新。MXU 加密存放 webhook，所以 webhook 要重填；MFAAvalonia 的設定不讀回（規格 #811 範圍外）。
 - 「執行」分頁、執行器、排程與自動更新由 #811 的其他票實作；這張 ADR 生效時，設定檔已經有它們要用的段落，存檔會保留，但還沒有編輯畫面。
