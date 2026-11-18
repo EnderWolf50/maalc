@@ -21,7 +21,7 @@ def check(price, used, charged, count, expected):
     """What to do with the Use Lunacy tab as read: (verdict, why).
 
     price: the tab's price; used: its Daily Count, the day's charges so far (n of "n/10"). charged: this run's Confirms;
-    count: the day's target Daily Count (the ChargeCount option, 0-10, #429, #781), so the charges made earlier today, by
+    count: the day's target Daily Count (charge_enkephalin.count, 0-10, #429), so the charges made earlier today, by
     hand too, count toward it. expected: the Daily Count after this run's last Confirm, None before the first. A Daily
     Count at the target (10/10 is the most a target can be) is DONE, whatever the price shows. Short of it, the price
     must be the table's at the Daily Count, and each Confirm must move the count up by one: anything else is a STOP, the

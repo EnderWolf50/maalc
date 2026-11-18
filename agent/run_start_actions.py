@@ -58,7 +58,7 @@ class PlanRun(CustomAction):
     the task a success at the main window (GoHome, then done; live-2 G4); bad settings fail it (returning False), and
     so do settings that forfeit run after run (the stop procedure, settlement.forfeits_stop).
 
-    The task's start team (the client's MirrorStartTeam, kept by TaskStart, #805) is at the head of the queue the
+    The task's start team (run.start_team, kept by TaskStart, #805) is at the head of the queue the
     task's first new run picks from (team_queue.headed), and is written there once that run opens (team_queue.to_head):
     a task that ends here with nothing left to do, or backs out to read the Modules, leaves the file alone. A start
     team whose usage does not fit the run is passed over as the queue passes over any team, and the log says so.
@@ -114,7 +114,7 @@ class PlanRun(CustomAction):
             first = next((t for t in settings["teams"] if t["id"] == start), None)  # None: deleted since the start
             if first and team["id"] != start:
                 why = first["usage"] if first["enabled"] else "disabled"
-                log(f"start team {first['name']!r} (MirrorStartTeam) is {why}: a {difficulty} run passes over it, and "
+                log(f"start team {first['name']!r} (run.start_team) is {why}: a {difficulty} run passes over it, and "
                     "it keeps its place in the team queue")
         # planned: the run's team is known (picked here, or after a restart the queue's, current_run), so the claim may
         # move it to the end of the queue and runs.jsonl names it.

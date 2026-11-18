@@ -36,11 +36,10 @@ LUX = {"exp": ("EXP Luxcavation", luxcavation.EXP_COST), "thread": ("Thread Luxc
 
 @AgentServer.custom_action("LuxStart")
 class LuxStart(TaskStart):
-    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, its options the
-    client sent (#781: mode, count in count mode alone, retries, consecutive; #780: team) beside the global ones, then
-    that team of the settings file, whose guard turns the battle plays (spec 03 section 8), its mode (#431), count and
-    retries (#367). No team picked, a team the settings GUI deleted, or settings that do not load: the stop procedure,
-    before any tap."""
+    """A Luxcavation task's entry (#366, #368), its param the settings key ("exp", "thread"): TaskStart, its options
+    luxcavation.<key> (#777, #813: mode, count, team, retries, consecutive) beside the global ones, then that team,
+    whose guard turns the battle plays (spec 03 section 8), its mode (#431), count and retries (#367). No team picked, a
+    team the settings GUI deleted, or settings that do not load: the stop procedure, before any tap."""
 
     def unread(self, context, error):
         return stop(context, str(error))
@@ -49,7 +48,7 @@ class LuxStart(TaskStart):
         key = json.loads(argv.custom_action_param)
         name, cost = LUX[key]
         opts = TASK["options"]
-        if errors := task_options.team_errors(argv.node_name, opts.get("team"), settings["teams"]):
+        if errors := task_options.team_errors(argv.node_name, opts["team"], settings["teams"]):
             return stop(context, str(task_options.OptionsError(errors)))
         team = next(t for t in settings["teams"] if t["id"] == opts["team"])
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.

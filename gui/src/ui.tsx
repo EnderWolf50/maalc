@@ -24,10 +24,11 @@ export interface Ctx {
   picked: Picked;
   pick: (list: keyof Picked, id: string | undefined) => void;
 }
-/** The lists whose tab shows one item at a time. */
-export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans"] as const;
-export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams">;
-/** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id. */
+/** The lists whose tab shows one item at a time: the Run tab shows the picked task's options (#814). */
+export const PICK_LISTS = ["teams", "deployment_order_plans", "starlight_plans", "theme_pack_plans", "tasks"] as const;
+export type PlanKey = Exclude<(typeof PICK_LISTS)[number], "teams" | "tasks">;
+/** By id, so the pick stays on its item when the list is reordered; a tab's lead (the theme packs' default plan) by its own id;
+ * a task list entry by its task's id and its place among that task's entries (Run.tsx entryKey). */
 export type Picked = Partial<Record<(typeof PICK_LISTS)[number], string>>;
 export const isPickList = (section: string): section is keyof Picked => PICK_LISTS.some((x) => x === section);
 export const EditorContext = createContext<Ctx>(null!);
@@ -179,11 +180,16 @@ export function nextTab<T>(tabs: readonly T[], at: T, key: string): T | undefine
 /** The problem ids of the field around a control ("" for none), for its aria attributes (useMark). */
 const MarkContext = createContext("");
 
+/** The ids of more text the controls inside take as their description, after their problems' (useMark): the settings key a
+ * field of the Run tab shows (Run.tsx DescribedByKey). */
+export const DescribeContext = createContext("");
+
 /** A control's aria attributes: in a field marked red, invalid and described by the problems' text, which a screen reader
- * reads with it (#695). */
+ * reads with it (#695); described too by what DescribeContext names. */
 export function useMark() {
   const ids = useContext(MarkContext);
-  return ids ? { "aria-invalid": true, "aria-describedby": ids } as const : {};
+  const described = [ids, useContext(DescribeContext)].filter(Boolean).join(" ");
+  return { ...(ids ? { "aria-invalid": true } as const : {}), ...(described ? { "aria-describedby": described } : {}) };
 }
 
 /** The frame of a field, red when a check fails at `path` or under it, with the data-path a problem's jump finds (focusPath).
@@ -201,11 +207,16 @@ export function Mark({ as: Tag = "div", path, className, marked = true, children
   );
 }
 
-/** A plain <input> or <select> that takes the mark of its field; Select, Num and Decimal are built on them. */
-export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} />;
-export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} />;
+/** True: the controls inside (Input, Choice and what is built on them, a ReorderList) are disabled. The Run tab's settings
+ * during a run, which reads them (#815). */
+export const LockContext = createContext(false);
 
-export function Field({ label, path, note, children }: { label: string; path?: string; note?: string; children: ReactNode }) {
+/** A plain <input> or <select> that takes the mark of its field, and the lock around it; Select, Num and Decimal are built on
+ * them. */
+export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
+export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
+
+export function Field({ label, path, note, children }: { label: ReactNode; path?: string; note?: string; children: ReactNode }) {
   return (
     <Mark as="label" className="field" path={path}>
       <span>{label}</span>
@@ -250,7 +261,7 @@ export function Decimal({ value, min, onChange }: { value: number; min: number; 
 
 /** A switch with its number (#137): off is null and greys the number out; switched on, it starts at `on`. */
 export function ToggleNum({ label, path, value, on, min, max, note, onChange }: {
-  label: string; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
+  label: ReactNode; path: string; value: number | null; on: number; min: number; max?: number; note?: string;
   onChange: (v: number | null) => void;
 }) {
   return (
@@ -272,9 +283,10 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
 }) {
   const { t } = useEditor();
+  const locked = useContext(LockContext); // the rows still select: the Run tab shows a task's options during a run
   const [dragging, setDragging] = useState<number | null>(null);
   const move = (from: number, to: number) => {
-    if (to < 0 || to >= items.length || from === to) return;
+    if (locked || to < 0 || to >= items.length || from === to) return;
     const next = [...items];
     next.splice(to, 0, ...next.splice(from, 1));
     onChange(next);
@@ -283,7 +295,7 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
   return (
     <ol className="reorder" title={t("dragHint")}>
       {items.map((item, i) => (
-        <li key={keyOf(item)} draggable
+        <li key={keyOf(item)} draggable={!locked}
           className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
           // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
           tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
@@ -297,9 +309,9 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
           {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
           {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
           <span className="item">{render(item, i)}</span>
-          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={i === 0}
+          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={locked || i === 0}
             onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>
-          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={i === items.length - 1}
+          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={locked || i === items.length - 1}
             onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}>↓</button>
         </li>
       ))}

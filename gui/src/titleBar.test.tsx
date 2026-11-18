@@ -41,7 +41,7 @@ beforeEach(() => {
 const button = (name: string) => screen.getByRole("button", { name });
 const shown = async () => {
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await screen.findByRole("textbox", { name: zh.name });
   return user;
 };
@@ -148,7 +148,7 @@ describe("a title bar with less room than its parts ask for (#746)", () => {
   const edited = async (width: number) => {
     room = width;
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.type(await screen.findByRole("textbox", { name: en.name }), "!");
     return user;
   };
@@ -231,7 +231,7 @@ describe("a settings file that does not read", () => {
 
   test("keeps the title bar: it drags the window, and its buttons and a Close beside New file close it", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     expect(await screen.findByText(zh.loadError)).toBeInTheDocument();
     expect(document.querySelector("header")).toHaveAttribute("data-tauri-drag-region", "deep");
     expect(button(zh["win.minimize"])).toBeInTheDocument();
@@ -246,7 +246,7 @@ test("while the settings still load, a window button that fails shows its reason
   const spy = vi.spyOn(api, "minimizeWindow").mockRejectedValue("no permission");
   try {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.click(button(zh["win.minimize"]));
     const why = await screen.findByText(zh.loadError);
     expect(why.parentElement!.querySelector("pre")!.textContent).toBe("no permission");
@@ -262,7 +262,7 @@ test("on the load error screen, a window button that fails adds its reason under
   const spy = vi.spyOn(api, "minimizeWindow").mockRejectedValue("no permission");
   try {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     const why = await screen.findByText(zh.loadError);
     await user.click(button(zh["win.minimize"]));
     const pre = why.parentElement!.querySelector("pre")!;

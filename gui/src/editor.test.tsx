@@ -38,7 +38,7 @@ describe("a tab switch", () => {
 
   test("keeps the team the user picked", async () => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("tab", { name: zh["tab.teams"] });
     await pickInList(user, "Tb");
     expect(nameBox()).toHaveValue("Tb");
@@ -53,7 +53,7 @@ describe("a tab switch", () => {
     ["tab.themepacks", "P2"],
   ] as const)("keeps the plan the user picked in %s", async (label, plan) => {
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("tab", { name: zh["tab.teams"] });
     await user.click(tab(zh[label]));
     await pickInList(user, plan);
@@ -68,7 +68,7 @@ describe("a tab switch", () => {
 async function openOn(s: Settings, start: string) {
   file.text = JSON.stringify(s);
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await user.click(await screen.findByRole("tab", { name: start }));
   return user;
 }
@@ -420,7 +420,7 @@ const requestClose = () => {
 /** The editor with the first team's name changed and not saved. */
 const edited = async () => {
   const user = userEvent.setup();
-  render(<App />);
+  render(<App start="teams" />);
   await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
   return user;
 };
@@ -438,7 +438,7 @@ describe("closing the window", () => {
   test("with nothing unsaved, closes without asking, also after a save", async () => {
     const user = await edited();
     await user.click(screen.getByRole("button", { name: zh.save }));
-    await screen.findByText(zh.savedTeams); // the rename changed the team list too (#780)
+    await screen.findByText(zh.saved);
     expect(requestClose()).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -540,7 +540,7 @@ describe("reloading the page (F5, Ctrl+R)", () => {
   });
 
   test.each(KEYS)("%s with nothing unsaved is left to the browser, which reloads", async (_, init) => {
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("tab", { name: zh["tab.teams"] });
     expect(press(init)).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
@@ -549,7 +549,7 @@ describe("reloading the page (F5, Ctrl+R)", () => {
   test("also after a save: nothing is unsaved then", async () => {
     const user = await edited();
     await user.click(screen.getByRole("button", { name: zh.save }));
-    await screen.findByText(zh.savedTeams); // the rename changed the team list too (#780)
+    await screen.findByText(zh.saved);
     expect(press(KEYS[0][1])).toBe(false);
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
@@ -633,19 +633,19 @@ describe("Ctrl+S", () => {
   test("saves as the Save button does, also while typing in a field", async () => {
     file.text = JSON.stringify(settings());
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
     expect(ctrlS()).toBe(true);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(JSON.parse(file.saved[0]).teams[0].name).toBe("Ta!");
-    expect(await screen.findByText(zh.savedTeams)).toBeInTheDocument(); // the rename changed the team list too (#780)
+    expect(await screen.findByText(zh.saved)).toBeInTheDocument();
   });
 
   test("is refused while a problem stands, and writes nothing", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
     file.text = JSON.stringify(s);
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("tab", { name: zh["tab.teams"] });
     expect(ctrlS()).toBe(true);
     await waitFor(() => expect(plate()).toHaveTextContent(fill(zh["saveState.refused"], { n: 1 })));
@@ -656,7 +656,7 @@ describe("Ctrl+S", () => {
   test("held down, saves once: the key's repeats save nothing more", async () => {
     file.text = JSON.stringify(settings());
     const user = userEvent.setup();
-    render(<App />);
+    render(<App start="teams" />);
     await user.type(await screen.findByRole("textbox", { name: zh.name }), "!");
     ctrlS();
     expect([1, 2, 3].map(() => ctrlS({ repeat: true }))).toEqual([true, true, true]); // still not the browser's Save page
@@ -677,7 +677,7 @@ describe("Ctrl+S", () => {
 
   test("on a Dvorak keyboard, the key that types O does not save", async () => {
     file.text = JSON.stringify(settings());
-    render(<App />);
+    render(<App start="teams" />);
     await screen.findByRole("tab", { name: zh["tab.teams"] });
     expect(ctrlS({ key: "o" })).toBe(false); // KeyS is where Dvorak puts O
   });

@@ -1,6 +1,8 @@
 ---
-status: accepted（取代 ADR 0004，修訂 ADR 0005）；由 ADR 0011、ADR 0013、ADR 0014 修訂
+status: accepted（取代 ADR 0004，修訂 ADR 0005）；由 ADR 0011、ADR 0013、ADR 0014、ADR 0015 修訂
 ---
+
+> [ADR 0015](0015-settings-window-runs-the-tasks.md) 修訂：A1 結束，設定視窗也負責執行。A2 的做法是視窗啟動 Python 執行器，執行器再啟動 Agent，不用 Rust 綁定。執行選項與日常參數回到設定檔（版本 23），另加任務清單、模擬器與排程三段，仍是一份設定檔；下一段 ADR 0013 的修訂已被取代。（#813，2026-11-17）
 
 > [ADR 0013](0013-run-and-daily-options-in-pi-task-options.md) 修訂：執行選項與日常參數（25 個單一的值）改成 MXU／MFAAvalonia 的任務選項與全域選項，用 `pipeline_override` 寫進入口節點與 `GlobalOptions` 的 `attach` 傳給 Agent。下文「鏡牢任務沒有使用者選項」與「`global_option`、用 `pipeline_override` 傳值都不再需要」已不成立；隊伍、方案、清單與覆寫表仍由 GUI 寫進設定檔。（#776、#779，2026-11-16）
 

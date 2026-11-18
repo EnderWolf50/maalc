@@ -1,7 +1,10 @@
 // File access through the Rust side (src-tauri/src/lib.rs). In a plain browser (`pnpm dev`,
 // screenshots) it falls back to localStorage so the editor can be tried without Tauri.
-import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Settings } from "./model";
+import type { Device, Message } from "./runner";
 
 const tauri = isTauri();
 
@@ -79,25 +82,112 @@ export function saveOldSettings(version: number, text: string): Promise<void> {
   return Promise.resolve();
 }
 
-/** The team options file's text (config/team_options.json, #780), null when there is none yet. */
-export const loadTeamOptions = (): Promise<string | null> =>
-  tauri ? invoke("load_team_options") : Promise.resolve(localStorage.getItem("team_options.json"));
-
-/** Write the team options file (a temp file, then a rename, as the settings file): the GUI is its one writer. */
-export function saveTeamOptions(text: string): Promise<void> {
-  if (tauri) return invoke("save_team_options", { text });
-  localStorage.setItem("team_options.json", text);
-  return Promise.resolve();
-}
+/** A file of config/ the read-back reads once (#814, readBack.ts READ_BACK_FILES; lib.rs load_read_back refuses any
+ * other): its text, null when it is not there. Nothing here writes one. */
+export const loadReadBack = (name: string): Promise<string | null> =>
+  tauri ? invoke("load_read_back", { name }) : Promise.resolve(localStorage.getItem(name));
 
 /** Ask `keepOpen` each time the user closes the window (its ✕, Alt+F4): true keeps it open. Returns the function that stops
  * asking. With a listener, Tauri leaves the closing to the page, which destroys the window (needs core:window:allow-destroy,
  * capabilities/default.json). A plain browser has no window to keep. */
-export function onCloseRequested(keepOpen: () => boolean): () => void {
+export function onCloseRequested(keepOpen: () => boolean | Promise<boolean>): () => void {
   if (!tauri) return () => {};
-  const listening = getCurrentWindow().onCloseRequested((e) => { if (keepOpen()) e.preventDefault(); });
+  const listening = getCurrentWindow().onCloseRequested(async (e) => { if (await keepOpen()) e.preventDefault(); });
   return () => { listening.then((stop) => stop()); };
 }
+
+const channel = (onMessage: (m: Message) => void) => {
+  const c = new Channel<Message>();
+  c.onmessage = onMessage;
+  return c;
+};
+
+/** Start the runner on `entries` (the ticked tasks' entry nodes, in run order) and `device` (lib.rs start_run): each message
+ * of the run goes to `onMessage`, the exit last. Each task reads its options from the settings file at its start, so the
+ * page saves first. Refused while a run is under way, and in a plain browser, which has no runner. */
+export function startRun(entries: string[], device: Settings["emulator"], onMessage: (m: Message) => void): Promise<void> {
+  if (!tauri) return Promise.reject(new Error("the runner runs only in the app"));
+  return invoke("start_run", { tasks: entries, device, onMessage: channel(onMessage) });
+}
+
+/** Ask the run to stop: the runner stops MaaFramework, and the window ends its tree when it cannot (lib.rs stop_run). False
+ * when no run is under way. */
+export const stopRun = (): Promise<boolean> => (tauri ? invoke("stop_run") : Promise.resolve(false));
+
+/** The last run's messages so far and the ones to come, for a page loaded again during a run (lib.rs attach_run): true while
+ * that run is under way. */
+export const attachRun = (onMessage: (m: Message) => void): Promise<boolean> =>
+  tauri ? invoke("attach_run", { onMessage: channel(onMessage) }) : Promise.resolve(false);
+
+/** The emulators a scan finds, MuMu first (lib.rs scan_devices). */
+export const scanDevices = (): Promise<Device[]> =>
+  tauri ? invoke("scan_devices") : Promise.reject(new Error("the device scan runs only in the app"));
+
+/** During a run, hide the window in the tray, its icon's tooltip and items in the page's language (lib.rs hide_to_tray): true
+ * when it hid, false when no run is under way. */
+export const hideToTray = (text: { tip: string; show: string; stop: string }): Promise<boolean> =>
+  tauri ? invoke("hide_to_tray", { text }) : Promise.resolve(false);
+
+/** A release newer than this build that the window can update to (lib.rs check_update, update.rs Release). */
+export interface Release { version: string; zip: string; size: number; sha256: string }
+/** How far a download is (update.rs Progress): the bytes so far, then the sha256 check, then the unpack. */
+export type UpdateProgress = { step: "download"; received: number; total: number } | { step: "verify" } | { step: "extract" };
+/** How the last apply went (update.rs Outcome): `applying` is one cut short; `restored`, for `failed`: all of it went back. */
+export interface UpdateOutcome { state: "applying" | "done" | "failed"; from: string; to: string; error: string | null; restored: boolean }
+
+/** This build's version and the newer release GitHub has, asked at most once a day (lib.rs check_update); none when the check
+ * fails. A plain browser has no update. */
+export const checkUpdate = (): Promise<{ current: string; release: Release | null }> =>
+  tauri ? invoke("check_update") : Promise.resolve({ current: "", release: null });
+
+/** How the last apply went, for the page to show (lib.rs last_update); null when there is nothing to show. */
+export const lastUpdate = (): Promise<UpdateOutcome | null> => (tauri ? invoke("last_update") : Promise.resolve(null));
+
+/** Download the newer release, check its sha256 and unpack it (lib.rs download_update); `onProgress` hears how far it is. */
+export function downloadUpdate(onProgress: (p: UpdateProgress) => void): Promise<void> {
+  if (!tauri) return Promise.reject(new Error("the update runs only in the app"));
+  const c = new Channel<UpdateProgress>();
+  c.onmessage = onProgress;
+  return invoke("download_update", { onProgress: c });
+}
+
+/** Apply the downloaded release: this window exits, and the new version replaces the files and opens (lib.rs apply_update).
+ * Refused while a run is under way. */
+export const applyUpdate = (): Promise<void> =>
+  tauri ? invoke("apply_update") : Promise.reject(new Error("the update runs only in the app"));
+
+/** The start of the error of a download whose sha256 is not GitHub's (update.rs MISMATCH). */
+export const MISMATCH = "sha256 mismatch";
+export const isMismatch = (e: unknown) => String(e).includes(MISMATCH);
+/** The error of what a run refuses, an apply too (lib.rs RUN_UNDER_WAY). */
+export const RUN_UNDER_WAY = "a run is under way";
+export const isRunUnderWay = (e: unknown) => String(e).includes(RUN_UNDER_WAY);
+/** A scheduled run's start the window was handed (`maalc-gui.exe --run <id>`, lib.rs take_scheduled): its schedule's id;
+ * whether this window was opened for it (it closes when the run ends) or was open already; and whether an update's apply had
+ * left the folder half replaced when it came (update.rs left_unfinished), which skips it. */
+export interface Scheduled { id: string; opened: boolean; update_unfinished: boolean }
+
+/** The scheduled runs' starts the window got since the last call, in order: its own start's, then each second start's. */
+export const takeScheduled = (): Promise<Scheduled[]> => (tauri ? invoke("take_scheduled") : Promise.resolve([]));
+
+/** Call `more` each time a second start brings a scheduled run (takeScheduled has it). Returns the function that stops. */
+export function onScheduled(more: () => void): () => void {
+  if (!tauri) return () => {};
+  const listening = listen("scheduled", () => more());
+  return () => { listening.then((stop) => stop()); };
+}
+
+/** Append a line to logs/schedule.log (lib.rs log_schedule): what came of a scheduled run's start. */
+export const logSchedule = (line: string): Promise<void> => (tauri ? invoke("log_schedule", { line }) : Promise.resolve());
+
+/** What bringing the Task Scheduler in line with the schedules did (lib.rs sync_schedules, schedule.rs Synced): the task
+ * names written, kept and deleted, and what could not be done; `prefix` begins this folder's task names. */
+export interface Synced { prefix: string; written: string[]; kept: string[]; deleted: string[]; errors: string[] }
+
+/** Write this folder's Task Scheduler tasks as `schedules` say, the settings file's: one task each, those of deleted
+ * schedules deleted. Rejects with why when the Task Scheduler cannot be reached (and in a plain browser). */
+export const syncSchedules = (schedules: Settings["schedules"]): Promise<Synced> =>
+  tauri ? invoke("sync_schedules", { schedules }) : Promise.reject(new Error("only the app reaches the Task Scheduler"));
 
 /** Ask the window to close, as Alt+F4 does: the page's title bar ✕ (tauri.conf.json has no system bar). The request goes
  * to the onCloseRequested listener, which keeps the window open while it asks. */

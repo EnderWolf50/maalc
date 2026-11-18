@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-load-read-back"
+description = "Enables the load_read_back command without any pre-configured scope."
+commands.allow = ["load_read_back"]
+
+[[permission]]
+identifier = "deny-load-read-back"
+description = "Denies the load_read_back command without any pre-configured scope."
+commands.deny = ["load_read_back"]

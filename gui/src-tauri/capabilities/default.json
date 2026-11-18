@@ -14,9 +14,20 @@
     "allow-load-settings",
     "allow-load-game-data",
     "allow-save-settings",
-    "allow-load-team-options",
-    "allow-save-team-options",
     "allow-save-old-settings",
-    "allow-append-runs-log"
+    "allow-load-read-back",
+    "allow-append-runs-log",
+    "allow-start-run",
+    "allow-stop-run",
+    "allow-attach-run",
+    "allow-scan-devices",
+    "allow-hide-to-tray",
+    "allow-check-update",
+    "allow-last-update",
+    "allow-download-update",
+    "allow-apply-update",
+    "allow-take-scheduled",
+    "allow-log-schedule",
+    "allow-sync-schedules"
   ]
 }

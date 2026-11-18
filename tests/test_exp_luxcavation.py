@@ -15,10 +15,9 @@ next step, the Consecutive Battle's count) is tested in process in test_luxcavat
 import json
 
 import numpy as np
-from daily_child import (ROOT, bind, game_class, inside, interface as interface_json, live_frame, load, posted, result,
-                         run_child, said, screen)
+from daily_child import (GLOBAL_DEFAULTS, ROOT, bind, game_class, inside, interface as interface_json, live_frame, load,
+                         result, run_child, said, screen)
 from agent_patch import rebind
-from client_options import GLOBAL_DEFAULTS
 
 WINDOW_TAB = (790, 608, 70, 64)
 DRIVE_TAB = (930, 600, 110, 80)
@@ -72,9 +71,8 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
 # scenario: (start screen, team, count, retries, how the battles end, then for the Thread task the tab Luxcavation
 # opens on and the page a battle ends on); the main window shows 182 Modules, an EXP stage takes 3, a Thread level 2. A
 # battle the list does not reach ends in a win. CONSECUTIVE: the scenarios that fight their wins as Consecutive Battles
-# (#375), off for the rest. DAILY: the scenarios in daily mode (#431), the rest fight count in count mode. The client
-# sends them as the task's options (#781), count only in count mode, as it sends a nested input only under its case,
-# and the team too (#780).
+# (#375), off for the rest. DAILY: the scenarios in daily mode (#431), the rest fight count in count mode. They are the
+# settings file's luxcavation.<task> (#813).
 WIN, LOSE = ["win"], ["lose"]
 SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "lose_retry": ("locked", "b", 1, 1, LOSE + WIN),
              "x12": ("drive", "b", 12, 0, WIN), "done_today": ("drive", "b", 2, 0, WIN), "no_pass": ("drive", "b", 1, 0, WIN)}
@@ -290,14 +288,12 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
     rebind("consecutive_now", lambda context, image, box, enter=None: game.read(box, enter))
     tasker = bind(resource, game)
     out = {"error": None}
-    prefix = {"ExpLuxcavation": "Exp", "ThreadLuxcavation": "Thread"}[task]
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
-        # the count set in daily mode too, as a user who switched back leaves it: the client does not send it there; the
-        # team is the client's dropdown (#780)
-        options = [f"{prefix}Mode={'daily' if scenario in daily else 'count'}", f"{prefix}Count={count}",
-                   f"{prefix}Team={team}", f"{prefix}Retries={retries}",
-                   f"{prefix}Consecutive={'Yes' if scenario in consecutive else 'No'}"]
-        (actions.ROOT / "config" / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+        # the count set in daily mode too, as a user who switched back leaves it
+        opts = {"mode": "daily" if scenario in daily else "count", "count": count, "team": team, "retries": retries,
+                "consecutive": scenario in consecutive}
+        (actions.ROOT / "config" / "settings.json").write_text(
+            json.dumps({**settings, "luxcavation": {"exp": opts, "thread": opts}}), encoding="utf-8")
         game.set(start, *rest)
         game.outcomes = list(outcomes)
         game.event = scenario == "thread_event"
@@ -306,7 +302,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
         for name, value in state.items():
             setattr(game, name, value)
         actions.LOG.clear()
-        out[scenario] = {**result(tasker.post_task(task, posted(task, override, options)).wait().get(), game, actions),
+        out[scenario] = {**result(tasker.post_task(task, override).wait().get(), game, actions),
                          "swipes": game.swipes, "drags": game.drags, "fights": game.fights, "presses": game.presses,
                          "restarts": [game.stops, game.starts],
                          "options": said(actions, " options: ")}
@@ -376,24 +372,24 @@ def test_a_defeat_counts_nothing_and_the_same_stage_is_played_again_within_the_r
     assert o["nodes"][:4] == ["ExpLuxcavation", "ExpCountMode", "ExpHome", "ExpHub"]
 
 
-def test_daily_mode_runs_on_the_options_the_client_sends_with_no_count():
-    # #781: the client sends ExpCount only under ExpMode's count case; daily mode reads the day instead
+def test_daily_mode_reads_the_day_whatever_count_the_file_holds():
+    # #431: the count stays in the file in daily mode, as a user who switched back leaves it; the day decides (#813: the
+    # options line shows what the file holds)
     o = run_child(__file__)["drive"]
-    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=daily, retries=0, consecutive=false, team=b"]
+    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=daily, count=1, team=b, retries=0, consecutive=false"]
     assert o["succeeded"] and o["done"] == "EXP Luxcavation: 1 won"
 
 
-def test_count_mode_fights_the_count_the_client_sends():
-    # #781: ExpMode count, ExpCount 12: twelve won
+def test_count_mode_fights_the_count_the_settings_file_holds():
+    # luxcavation.exp mode count, count 12: twelve won
     o = run_child(__file__)["x12"]
-    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, retries=0, consecutive=true, team=b"]
+    assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, team=b, retries=0, consecutive=true"]
     assert o["succeeded"] and o["fights"] == [10, 2] and o["done"] == "EXP Luxcavation: 12 won"
 
 
 def test_exp_luxcavation_is_a_task_of_the_interface():
     interface = interface_json()
-    assert {"name": "ExpLuxcavation", "label": "$ExpLuxcavation", "entry": "ExpLuxcavation",
-            "option": ["ExpMode", "ExpTeam", "ExpRetries", "ExpConsecutive"]} in interface["task"]
+    assert {"name": "ExpLuxcavation", "label": "$ExpLuxcavation", "entry": "ExpLuxcavation"} in interface["task"]
 
 
 def title_taps(o, box):

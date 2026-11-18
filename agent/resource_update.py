@@ -2,7 +2,7 @@
 take the files maalc-resource published since, so a new event table, template or pipeline reaches the task that found it.
 
 `update(base, log, tasker)` is the one entry; it never raises, and a failure leaves the files as they were, with one log line
-saying why; it says whether it reloaded the bundle, for TaskStart to rebuild the task's entry node (#779). The steps,
+saying why; it says whether it reloaded the bundle, for TaskStart to rebuild the task's entry node (#772). The steps,
 one function each: read the local manifest (`update`), fetch the newest one (`fetch_manifest`), plan what changes for
 each part of the package (`plan_part`), download it into a staging folder and verify it (`stage`), swap it
 in all or nothing and write the new manifest last (`swap`), then reload the bundle and clear what the old files left in memory (`refresh`).
@@ -355,7 +355,7 @@ def refresh(plans, tasker, base, undo, log):
 
 def update(base, log, tasker):
     """Take the newer files of the package maalc-resource published, if any. Never raises. True when it reloaded the
-    bundle, or tried to: the task's entry node may be the one posted on the old bundle (TaskStart, #779)."""
+    bundle, or tried to: the task's entry node may be the one posted on the old bundle (TaskStart, #772)."""
     try:
         return run_update(Path(base), log, tasker)
     except UpdateError as e:

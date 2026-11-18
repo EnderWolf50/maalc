@@ -36,10 +36,13 @@ def test_a_child_started_after_the_root_is_counted_under_its_role_until_the_root
 
 @pytest.mark.parametrize("name, cmdline, expected", [
     ("python.exe", ["python", "-u", "install\\agent\\main.py", "MaaAgent_1"], "agent"),
-    ("python.exe", ["python", "-u", "tools/live/bot.py", "tasker", "--install", "install"], "tasker"),
+    # the runner (#812), which bot.py run and the settings window start
+    ("python.exe", ["python\\python.exe", "-u", "install\\runner\\__main__.py"], "runner"),
+    ("python.exe", ["python", "runner"], "runner"),  # from the root, as runner/__main__.py says it may start
     ("python.exe", ["python", "-u", "tools/live/bot.py", "run", "--install", "install"], "other"),
-    ("mxu.exe", ["mxu.exe"], "client"),
-    ("MFAAvalonia.exe", ["MFAAvalonia.exe"], "client"),
+    # the settings window runs the tasks (ADR 0015): the window itself and its WebView2
+    ("maalc-gui.exe", ["maalc-gui.exe"], "window"),
+    ("msedgewebview2.exe", ["msedgewebview2.exe", "--embedded-browser-webview=1"], "window"),
     ("uv.exe", ["uv", "run", "python", "tools/live/bot.py", "run"], "other"),
     ("python.exe", [], "other"),
 ])
@@ -49,15 +52,15 @@ def test_a_process_role_comes_from_its_command_line(name, cmdline, expected):
 
 def test_the_summary_sums_each_sample_over_the_tree_and_over_each_role_in_sampling_order():
     rows = [
-        {"time": "23:59:55.000", "pid": 1, "role": "tasker", "working_set_mb": 100, "private_mb": 300},
+        {"time": "23:59:55.000", "pid": 1, "role": "runner", "working_set_mb": 100, "private_mb": 300},
         {"time": "23:59:55.000", "pid": 2, "role": "agent", "working_set_mb": 50, "private_mb": 80},
-        {"time": "00:00:00.000", "pid": 1, "role": "tasker", "working_set_mb": 400, "private_mb": 900},
+        {"time": "00:00:00.000", "pid": 1, "role": "runner", "working_set_mb": 400, "private_mb": 900},
         {"time": "00:00:00.000", "pid": 2, "role": "agent", "working_set_mb": 60, "private_mb": 70},
-        {"time": "00:00:05.000", "pid": 1, "role": "tasker", "working_set_mb": 200, "private_mb": 500},
+        {"time": "00:00:05.000", "pid": 1, "role": "runner", "working_set_mb": 200, "private_mb": 500},
     ]
     lines = memwatch.summary(rows)
     assert lines[0] == ("tree: peak working set 460.0 MB at 00:00:00.000, peak private 970.0 MB at 00:00:00.000; "
                         "last 00:00:05.000: working set 200.0 MB, private 500.0 MB")
     assert lines[1] == ("agent: peak working set 60.0 MB at 00:00:00.000, peak private 80.0 MB at 23:59:55.000; "
                         "last 00:00:00.000: working set 60.0 MB, private 70.0 MB")
-    assert lines[2].startswith("tasker: peak working set 400.0 MB at 00:00:00.000")
+    assert lines[2].startswith("runner: peak working set 400.0 MB at 00:00:00.000")

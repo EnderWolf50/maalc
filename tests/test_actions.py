@@ -18,7 +18,6 @@ import shop
 from settings import gift_tables
 from test_settings import DEFAULT_SKILLS
 from agent_patch import patch_all
-from client_options import send_defaults
 
 
 REAL_GUARD = actions.page_guard
@@ -51,7 +50,6 @@ def context(clock, monkeypatch, tmp_path):
     ctx.run_recognition.return_value = None  # OCR reads nothing, no node hits
     ctx.tasker.controller.post_shell.return_value.wait.return_value.get.return_value = ""  # focus not read
     ctx.tasker.stopping = False
-    send_defaults(ctx)  # what a client sends with a task: an entry action reads every option's default (#779)
     actions.RUN.clear()
     actions.RUN.update(settings={}, team={})  # a run plan in memory
     # as at launch, put back after the test: no options read (a test that needs them sets them, #777), and no task left
@@ -123,6 +121,24 @@ def test_until_gives_up_after_its_timeout(context, clock):
     screens(context, [0])
     assert actions.until(context, lambda im: False, timeout=2) is None
     assert 2 <= sum(clock) < 2.5
+
+
+def test_until_ends_at_once_when_the_task_is_stopping(context, clock):
+    # #812: a stop waits for the custom action under way to return; a wait in it gives up as soon as the task stops
+    screens(context, [0])
+    looks = iter([False, False, True])
+    type(context.tasker).stopping = property(lambda self: next(looks))
+    try:
+        assert actions.until(context, lambda im: False, timeout=10) is None
+    finally:
+        del type(context.tasker).stopping
+    assert context.tasker.controller.post_screencap.call_count == 3 and sum(clock) < 1
+
+
+def test_until_still_takes_the_screen_it_waits_for_while_the_task_is_stopping(context, clock):
+    screens(context, [9])
+    context.tasker.stopping = True
+    assert actions.until(context, lambda im: im[0, 0, 0] == 9, timeout=10)[0, 0, 0] == 9
 
 
 def test_until_waits_its_minimum_before_the_first_look(context, clock):

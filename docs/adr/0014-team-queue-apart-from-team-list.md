@@ -1,6 +1,8 @@
 ---
-status: accepted（取代 ADR 0011 的「清單順序就是佇列」，ADR 0011 其餘不變；修訂 ADR 0006）
+status: accepted（取代 ADR 0011 的「清單順序就是佇列」，ADR 0011 其餘不變；修訂 ADR 0006）；由 ADR 0015 修訂
 ---
+
+> [ADR 0015](0015-settings-window-runs-the-tasks.md) 修訂：起頭隊伍改成設定檔的 `run.start_team`（`null` 是「照隊伍佇列」），不再是 client 選項 `MirrorStartTeam`；下文「起頭隊伍」一節的規則不變，「client 會記住選擇」換成設定檔會記住。（#813，2026-11-17）
 
 # 隊伍佇列和隊伍清單分開，存在 `team_queue`
 

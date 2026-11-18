@@ -8,7 +8,8 @@ import { useEditor } from "./ui";
 /** What the title bar gives up, in this order, while its parts ask more room than the window has (#746; English at 800 px wide
  * with unsaved changes asks 906 px), each step on top of the ones before: the gaps tighten and the file path's place goes
  * (the path has shrunk to nothing by then), the name plate and Save take less room inside, the language select's label
- * leaves the eye (the select keeps it as its name), and the save state's text may wrap. Save, Discard and the window buttons
+ * and the update notice's words leave the eye (each keeps them as its name; the notice keeps its mark, #817), and the save
+ * state's text may wrap. Save, Discard and the window buttons
  * keep their labels and their corner. index.css draws each step, `header[data-fit~="<step>"]`. */
 export const FIT_STEPS = ["spacing", "padding", "label", "wrap"] as const;
 

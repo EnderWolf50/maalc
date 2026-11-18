@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-take-scheduled"
+description = "Enables the take_scheduled command without any pre-configured scope."
+commands.allow = ["take_scheduled"]
+
+[[permission]]
+identifier = "deny-take-scheduled"
+description = "Denies the take_scheduled command without any pre-configured scope."
+commands.deny = ["take_scheduled"]

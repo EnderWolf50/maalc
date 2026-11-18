@@ -1,21 +1,29 @@
-// Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2).
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+// Shell: load <root>/config/settings.json, the tabs, and check-then-save (spec 04 section 2); the run the window starts (#815),
+// which outlives a tab switch: Start saves first, and closing the window during a run hides it in the tray. The scheduled runs
+// (#816): the load and each save bring the Task Scheduler's tasks in line with the schedules, and a scheduled start
+// (`maalc-gui.exe --run <id>`) runs the task list as Start does, closing the window it opened when the run ends.
+import { Fragment, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
 import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, type Settings } from "./model";
-import { movedOptions, sayMoved, teamPicks, type Moved } from "./movedOptions";
 import { EventsTab, TrialsTab } from "./Overrides";
+import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
+import { ReadBackNotice } from "./ReadBackNotice";
+import { RunTab, entryKey, taskOfPath } from "./Run";
+import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
+import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
-import { NO_PICKS, teamOptionsText, type TeamPicks } from "./teamOptions";
 import { TeamsTab } from "./Teams";
 import { ThemePackTab } from "./ThemePacks";
-import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, withBreaks, type Picked } from "./ui";
+import { EditorContext, focusPath, nextTab, isPickList, makeCtx, translate, type Picked } from "./ui";
+import { FailureNotice, OutcomeNotice, UpdateChip, type Failure, type Update, type UpdateStep } from "./Update";
 import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
+  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules"]],
   ["teams", "tab.teams", TeamsTab, ["teams", "team_queue"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -27,33 +35,20 @@ export const TABS = [
 
 type TabId = (typeof TABS)[number][0];
 
-/** The tabs in groups (the team and its gift list; the plans; the overrides): the tabs that start a group after the first.
- * How each task runs is the client's (MXU, MFAAvalonia): the Mirror Dungeon task's options and the global ones (#779), the
- * daily tasks' (#781) and the Luxcavation teams (#780), so there is no Run options or Daily tab; the settings file has
- * none of their values since version 21 (#782). */
-const GROUP_STARTS = new Set<TabId>(["deployment", "events"]);
+/** The tabs in groups (what runs: the task list and its options; the team and its gift list; the plans; the overrides): the
+ * tabs that start a group after the first. The Run tab edits the settings file's task options, task list, emulator and
+ * schedules (version 23, #813, #814, #816) and runs the tasks (#815), so the window opens on it. */
+const GROUP_STARTS = new Set<TabId>(["teams", "deployment", "events"]);
 
 const toText = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
 /** A status as the header says it in lang: a TEXT key in that language's words, anything else as it is. */
 const sayStatus = (lang: Settings["language"], status: string) =>
   Object.prototype.hasOwnProperty.call(TEXT[lang], status) ? TEXT[lang][status as Key] : status;
-/** What a write of the team options file says: the status, and whether the write failed. */
-type TeamNote = { note: string; failed: boolean };
-/** An older file's values the client holds now, off its defaults (#782), and the version it had. */
-type MovedList = { from: number; values: Moved[] };
-
-/** Write the team options file when these settings change what it says (#780, teamOptions.ts), a new one starting on
- * picks, and the status after it: `done` (a TEXT key) when it was written, "" when nothing changed, `failed` filled in
- * with the error, in s's language, when the write failed (then `failed` is true). */
-async function teamOptionsNote(s: Settings, picks: TeamPicks, done: Key, failed: Key): Promise<TeamNote> {
-  try {
-    const text = teamOptionsText(await api.loadTeamOptions(), s, picks);
-    if (text === null) return { note: "", failed: false };
-    await api.saveTeamOptions(text);
-    return { note: done as string, failed: false };
-  } catch (e) {
-    return { note: fill(TEXT[s.language][failed], { error: String(e) }), failed: true };
-  }
+/** config/'s files the read-back reads (#814), each as read: a file that cannot be read says why, which the notice shows. */
+async function readBackFiles(): Promise<ReadBackFiles> {
+  const read = (name: string) => api.loadReadBack(name).catch((e: unknown) => ({ error: String(e) }));
+  const [mxu, teamOptions, v20] = await Promise.all([READ_BACK_FILES.mxu, READ_BACK_FILES.teamOptions, READ_BACK_FILES.v20].map(read));
+  return { mxu, teamOptions, v20 };
 }
 /** The element id of the problem at this place in the problems block. */
 const problemId = (i: number) => `problem-${i}`;
@@ -77,12 +72,13 @@ function asBefore(p: Problem, at: string, before: Problem[]): Problem[] {
 const TYPED = new Set(["text", "search", "url", "number"]);
 const typesText = (el: EventTarget) => el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && TYPED.has(el.type));
 
-export default function App() {
+/** `start`: the tab the window opens on, the Run tab unless a caller (a test of another tab) names one. */
+export default function App({ start = "run" }: { start?: TabId } = {}) {
   const [s, setS] = useState<Settings | null>(null);
   const [savedText, setSavedText] = useState("");
   const [loadError, setLoadError] = useState("");
   const [root, setRoot] = useState("");
-  const [tab, setTab] = useState<TabId>("teams");
+  const [tab, setTab] = useState<TabId>(start);
   const [giftList, setGiftList] = useState("default"); // what the gift list tab shows; the teams tab can point it at a list
   const [picked, setPicked] = useState<Picked>({});
   const [jump, setJump] = useState<string | null>(null); // the path of the problem the user clicked
@@ -100,21 +96,69 @@ export default function App() {
   const [revertedFrom, setRevertedFrom] = useState<Settings | null>(null);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
-  // The teams a version 20 file picked for EXP and Thread Luxcavation: what a first team options file starts on, at the
-  // start or at a save, should the start not write one (#782).
-  const picks = useRef<TeamPicks>(NO_PICKS);
-  // An older file read and kept aside, not yet written back (#782): its version and the values the client holds now
-  // that are off the client's defaults, which show once it is written back, until dismissed.
-  const pending = useRef<MovedList | null>(null);
-  const [moved, setMoved] = useState<MovedList | null>(null);
-  /** The file is written: an older one's migration is done, and its list shows. */
+  // An older file's read-back (#814): config/'s files as the load read them, so the old file read again (the Agent writes
+  // back the version it read, #501) reads the same values back; and its report, which shows once the file is written as
+  // the current version, until dismissed.
+  const backFiles = useRef<ReadBackFiles | null>(null);
+  const pending = useRef<Report | null>(null);
+  const [report, setReport] = useState<Report | null>(null);
+  /** The file is written: an older one's read-back is done, and its notice shows. */
   const wroteBack = () => {
     if (!pending.current) return;
-    setMoved(pending.current);
+    setReport(pending.current);
     pending.current = null;
+  };
+  /** A file's settings as the editor holds them: migrated, and an older one's run values read back from the files the load
+   * read; with the read-back's report, null when there was none. */
+  const settingsOf = (text: string) => {
+    const parsed = parseSettings(text);
+    const back = parsed.old && backFiles.current ? readBack(parsed.data, parsed.old.version, backFiles.current) : null;
+    return { ...parsed, data: back?.data ?? parsed.data, report: back?.report ?? null };
   };
   const latest = useRef({ s, savedText });
   latest.current = { s, savedText };
+  // the run: what the backend relays of it, folded into one view (runner.ts); a page loaded again during a run takes it up
+  const [run, dispatch] = useReducer(reduce, IDLE);
+  const [starting, setStarting] = useState(false); // Start's save and the runner's start are under way
+  const startingRef = useRef(false); // the same, at once: a scheduled start right after another reads it before a render
+  const runRef = useRef(run);
+  runRef.current = run;
+  // the scheduled runs (#816): the last sync with the Task Scheduler, the last scheduled start the window took, and the
+  // schedule whose start opened this window, which closes when its run ends
+  const [synced, setSynced] = useState<ScheduleView["synced"]>(null);
+  const [lastScheduled, setLastScheduled] = useState<ScheduleView["last"]>(null);
+  const closeAfter = useRef<string | null>(null);
+  const [reveal, setReveal] = useState(false); // a scheduled run started: the Run tab shows its log and Stop
+  /** Bring the Task Scheduler's tasks in line with `list`, the schedules of the file as read or saved. */
+  const writeTasks = (list: Settings["schedules"]) => {
+    api.syncSchedules(list).then((done) => setSynced({ done }), (e: unknown) => setSynced({ error: String(e) }));
+  };
+  /** What came of a scheduled start: a line in logs/schedule.log (done when the promise is) and the live log, and the
+   * schedules' section's last start. */
+  const noteScheduled = (id: string, outcome: Outcome) => {
+    const line = logLine(id, outcome), at = stamp();
+    dispatch({ type: "note", line });
+    setLastScheduled({ id, at, outcome });
+    return api.logSchedule(`${at} ${line}`).catch(() => {});
+  };
+  useEffect(() => {
+    let live = true; // the development build starts an effect twice: the first channel's messages are dropped
+    api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
+  // its last step failed and how the last apply went (read at the window's start), each above every tab until dismissed.
+  const [update, setUpdate] = useState<Update | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [outcome, setOutcome] = useState<api.UpdateOutcome | null>(null);
+  useEffect(() => {
+    // a check that fails says nothing; the development build asks twice, and the backend answers both from one check
+    api.checkUpdate().then(({ current, release }) => {
+      if (release) setUpdate((u) => u ?? { current, release, at: { step: "available" } });
+    }, () => {});
+    api.lastUpdate().then((o) => { if (o) setOutcome(o); }, () => {});
+  }, []);
+  const stepTo = (at: UpdateStep) => setUpdate((u) => u && { ...u, at });
 
   /** Take what another writer changed in the file, under the unsaved edits (rebase); the settings the editor holds now. */
   const sync = async () => {
@@ -123,7 +167,7 @@ export default function App() {
     if (text === disk.current || !draft) return draft;
     let data: Settings | undefined;
     try {
-      data = text === null ? undefined : parseSettings(text).data;
+      data = text === null ? undefined : settingsOf(text).data;
     } catch {
       return draft; // half an edit by hand: not taken as read, so a save is refused until it parses
     }
@@ -154,23 +198,24 @@ export default function App() {
       if (text === null) return setS(newSettings());
       disk.current = text; // read, even when it does not parse: New file then writes over it
       try {
-        const { data, unknown, old } = parseSettings(text);
-        const migratedText = toText(data);
+        const { old } = parseSettings(text);
         // An older file is kept aside before anything writes over it, a save of a file the checks refuse too (#782). When
         // it cannot be, the load fails with why, and nothing is written.
         if (old) {
           await api.saveOldSettings(old.version, text);
-          picks.current = teamPicks(old.data);
-          pending.current = { from: old.version, values: movedOptions(old.data) };
+          // the run values a v1.0.0 install held outside the file come back once (#814); a version 23 file reads none
+          backFiles.current = await readBackFiles();
         }
+        const { data, unknown, report } = settingsOf(text);
+        pending.current = report;
+        const migratedText = toText(data);
         setS(data);
         setSavedText(migratedText); // dirty = content changed, not formatting; before the write-back, which a poll may meet
-        const ok = !validate(data).length;
-        // the team options file again at the start: one deleted or broken since comes back (#780); not from a file the
-        // checks refuse, whose teams may not read as teams. Before the write-back: a first one from the old file's teams
-        const team = ok ? await teamOptionsNote(data, picks.current, "teamOptions.updated", "teamOptions.failed") : null;
-        // a team options file not written leaves the old file as it is, so the next start makes it from the old teams
-        if (pending.current && team && !team.failed) {
+        // the window's start checks the tasks (a moved folder's point at the old one); schedules the checks refuse wait for
+        // their fix and a save
+        if (!validate(data).some((p) => p.paths.some((m) => within(m, "schedules")))) writeTasks(data.schedules);
+        // written back only when it passes the checks: a file they refuse waits for the user's fixes and a save
+        if (old && !validate(data).length) {
           try {
             await api.saveSettings(migratedText, text);
             disk.current = migratedText;
@@ -179,9 +224,7 @@ export default function App() {
             if (!api.isChanged(e)) throw e; // the Agent wrote first: the next poll reads its file, and a save writes it back
           }
         }
-        const notes = [unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "", team?.note ?? ""].filter(Boolean);
-        // one note stays as it is, a key the header says anew in the language picked next
-        setStatus(notes.length === 1 ? notes[0] : notes.map((n) => sayStatus(data.language, n)).join(" "));
+        setStatus(unknown ? TEXT[data.language]["migrate.unknown"].replace("{n}", String(unknown)) : "");
       } catch (e) {
         setLoadError(String(e));
       }
@@ -210,11 +253,22 @@ export default function App() {
     focusBefore.current ??= document.activeElement; // now: the page behind the prompt goes inert, which takes the focus away
     setAsking((was) => (kind === "close" ? kind : was || kind)); // a close outranks a reload; a reload keeps the prompt that shows
   };
-  useEffect(() => api.onCloseRequested(() => {
-    const keep = unsaved();
-    if (keep) ask("close");
-    return keep;
-  }), []);
+  // During a run the window hides in the tray instead, the run going on, unsaved edits and all (#815); a run that ended
+  // meanwhile (the backend says it hid nothing) closes as below. A hide that fails keeps the window open and says why:
+  // closing it would end the run with the app.
+  useEffect(() => {
+    const askIfUnsaved = () => {
+      const keep = unsaved();
+      if (keep) ask("close");
+      return keep;
+    };
+    return api.onCloseRequested(() => {
+      if (!isRunning(runRef.current)) return askIfUnsaved();
+      const { t } = translate(latest.current.s?.language ?? "zh_tw");
+      return api.hideToTray({ tip: t("tray.tip"), show: t("tray.show"), stop: t("tray.stop") })
+        .then((hid) => hid || askIfUnsaved(), (e: unknown) => { setStatus(String(e)); return true; });
+    });
+  }, []);
   // F5 and Ctrl+R would reload the page and drop the edits (WebView2 keeps the browser's keys on). With unsaved changes the
   // prompt asks first; with none the key is left alone and the browser reloads (#702).
   useEffect(() => {
@@ -250,6 +304,43 @@ export default function App() {
   const held = typed && typed.field === document.activeElement ? typed : null;
   const shown = held ? problems.flatMap((p) => asBefore(p, held.at, held.before)) : problems;
   useEffect(() => { if (!problems.length) setRefused(false); }, [problems.length]);
+  // the schedules as the file holds them: an edit not saved yet is not in the Task Scheduler
+  const savedSchedules = useMemo(() => {
+    try { return JSON.stringify((JSON.parse(savedText) as Settings).schedules ?? []); } catch { return "[]"; }
+  }, [savedText]);
+
+  // A scheduled run's start (#816), taken in turn once the settings are read or failed to: its own start's `--run`, then each
+  // second start's. What runs it is set further down, once a render has the settings; until then (the load error screen) it
+  // is not run, and says so.
+  const scheduledRef = useRef<(r: api.Scheduled) => Promise<unknown>>(async () => {});
+  scheduledRef.current = ({ id }) => noteScheduled(id, { kind: "unread" });
+  const ready = s !== null || loadError !== "";
+  useEffect(() => {
+    if (!ready) return;
+    let queue: Promise<unknown> = Promise.resolve();
+    // taken before a StrictMode double start drops the first effect: the backend hands each start out once
+    const take = () => {
+      queue = queue.then(() => api.takeScheduled()).then(async (all) => { for (const r of all) await scheduledRef.current(r); }).catch(() => {});
+    };
+    take();
+    return api.onScheduled(take);
+  }, [ready]);
+  // the window a schedule opened closes when its run ends, unless it has edits that closing would drop, or the runner crashed:
+  // the exit code and its last lines are only in this window (spec #811 「執行器」: the window stays and says why)
+  useEffect(() => {
+    const id = closeAfter.current;
+    if (run.phase !== "ended" || id === null) return;
+    closeAfter.current = null;
+    if (crashed(run)) {
+      noteScheduled(id, { kind: "crashed", code: run.exit!.code });
+      return;
+    }
+    if (unsaved()) {
+      noteScheduled(id, { kind: "kept_open" });
+      return;
+    }
+    noteScheduled(id, { kind: "closed" }).finally(() => { api.closeWindow().catch(() => {}); });
+  }, [run.phase]);
   const lang = s?.language ?? "zh_tw";
   const { t } = translate(lang);
 
@@ -288,7 +379,7 @@ export default function App() {
   const dirty = toText(s) !== savedText;
   const said = sayStatus(lang, status);
   // shown beside "unsaved" too (a refused save, the file read again), but not what an edit since has made stale
-  const savedNow = status === "saved" || status === "savedTeams";
+  const savedNow = status === "saved";
   const note = savedNow || status === "reverted" ? "" : said;
 
   /** Check, then write; true when the file holds the edits. */
@@ -296,7 +387,6 @@ export default function App() {
     setTyped(null); // a save tried shows every problem, also one still being typed (Ctrl+S in the field)
     setFailed(false);
     setRefused(false);
-    let teamFirst: TeamNote | null = null; // the team options file written before an older file's write-back
     try {
       for (let tries = 1; ; tries++) {
         const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
@@ -306,17 +396,6 @@ export default function App() {
           return false;
         }
         const written = toText(current);
-        // The write-back of an older file writes the team options file first, from its teams (#782). One that cannot be
-        // written stops the save, as at the start: the old file stays for the next try, with its teams.
-        if (pending.current) {
-          const team = await teamOptionsNote(current, picks.current, "savedTeams", "teamOptions.failed");
-          if (team.failed) {
-            setFailed(true);
-            setStatus(team.note);
-            return false;
-          }
-          if (team.note || !teamFirst) teamFirst = team; // a retry finds it written: the first write's note stays
-        }
         try {
           await api.saveSettings(written, disk.current);
         } catch (e) {
@@ -330,8 +409,8 @@ export default function App() {
         latest.current = { s: current, savedText: written };
         setSavedText(written);
         wroteBack();
-        // the team options file follows the teams saved; a change is said once, as the client reads it only at its start
-        setStatus((teamFirst ?? await teamOptionsNote(current, picks.current, "savedTeams", "savedTeamsFailed")).note || "saved");
+        setStatus("saved");
+        writeTasks(current.schedules); // each save checks the tasks against the schedules it wrote
         return true;
       }
     } catch (e) {
@@ -341,6 +420,86 @@ export default function App() {
     }
   };
   saveRef.current = asking ? () => {} : save; // while the close prompt asks, its buttons decide
+
+  /** Start the ticked tasks: unsaved edits are saved first (each task reads the file at its start), then the runner starts on
+   * the file's task list and emulator. A save the checks refuse starts nothing, and says why as any save does. Returns why
+   * nothing started, null when the run did. */
+  type NotStarted = Extract<Outcome, { kind: "refused" }>["why"];
+  const startRun = async (): Promise<NotStarted | null> => {
+    if (startingRef.current || isRunning(runRef.current)) return { error: api.RUN_UNDER_WAY };
+    if (problems.length) return "problems";
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      if (dirty && !(await save())) return "save";
+      const { s: now } = latest.current;
+      const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
+      if (!entries.length) return "no_task";
+      const begin = { type: "begin", entries } as const;
+      runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
+      dispatch(begin);
+      return await api.startRun(entries, now!.emulator, dispatch).then(() => null, (e: unknown) => {
+        dispatch({ type: "refused", error: String(e) });
+        return { error: String(e) };
+      });
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
+    }
+  };
+  /** Apply the downloaded update: the window closes for it, so unsaved edits are saved first, as Start saves them; a save the
+   * checks refuse applies nothing, and says why as any save does. It waits while a run is under way, as the backend does. */
+  const applyUpdate = async () => {
+    if (startingRef.current || isRunning(runRef.current)) return; // a run starting or under way
+    stepTo({ step: "applying" });
+    if (unsaved() && !(await save())) return stepTo({ step: "ready" });
+    try {
+      await api.applyUpdate(); // the window exits: the new version opens once it replaced the files
+    } catch (e) {
+      if (api.isRunUnderWay(e)) return stepTo({ step: "ready" }); // a run started meanwhile
+      setFailure({ why: "apply", error: String(e) });
+      stepTo({ step: "failed" });
+    }
+  };
+  /** Download the newer release, check its sha256 and unpack it, then apply it unless a run is under way. A run may start
+   * meanwhile: the apply then waits for it to end. */
+  const startUpdate = async () => {
+    setFailure(null);
+    stepTo({ step: "download", received: 0, total: update?.release.size ?? 0 });
+    try {
+      await api.downloadUpdate(stepTo); // each progress is a step of the update
+    } catch (e) {
+      setFailure({ why: api.isMismatch(e) ? "mismatch" : "download", error: String(e) });
+      return stepTo({ step: "failed" });
+    }
+    stepTo({ step: "ready" });
+    await applyUpdate();
+  };
+  /** A scheduled run's start (#816, spec #811 「定時執行」): the task list runs as Start runs it, on the Run tab; skipped while a
+   * run is under way or while an update left the folder half replaced (lib.rs Scheduled, #817),
+   * not run when its schedule is not in the settings (a task left from an older file) or Start would not start. The window it
+   * opened closes when the run ends (the effect above); one that stays open says why. */
+  scheduledRef.current = async ({ id, opened, update_unfinished }) => {
+    if (!latest.current.s?.schedules.some((x) => x.id === id)) return noteScheduled(id, { kind: "unknown" });
+    if (update_unfinished) return noteScheduled(id, { kind: "updating" }); // as the backend found it when the start came
+    if (startingRef.current || isRunning(runRef.current)) return noteScheduled(id, { kind: "busy" });
+    setTab("run");
+    if (opened) closeAfter.current = id; // before the start: a run that ends at once still closes the window
+    const why = await startRun();
+    if (why === null) {
+      setReveal(true);
+      return noteScheduled(id, { kind: "started" });
+    }
+    if (closeAfter.current === id) closeAfter.current = null;
+    return noteScheduled(id, { kind: "refused", why });
+  };
+  const runner: Runner = {
+    view: run,
+    start: () => { startRun(); },
+    stop: () => { api.stopRun().catch(() => {}); },
+    blocked: starting ? "saving" : problems.length ? "problems" : s.tasks.some((x) => x.enabled) ? null : "no_task",
+    reveal, revealed: () => setReveal(false),
+  };
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
   const close = () => api.closeWindow().catch((e) => setStatus(String(e)));
@@ -369,8 +528,11 @@ export default function App() {
   const goTo = (path: string) => {
     const [section, index] = path.split("/");
     const at = Number(index);
+    const task = taskOfPath(path); // a task option shows with its task picked
     if (section === "gift_lists" && s.gift_lists[at]) setGiftList(s.gift_lists[at].id);
+    else if (section === "tasks" && s.tasks[at]) ctx.pick("tasks", entryKey(s.tasks, at)); // that entry, not its task's first
     else if (isPickList(section) && s[section][at]) ctx.pick(section, s[section][at].id);
+    else if (task) ctx.pick("tasks", task);
     setTab(tabOf(path)![0]);
     setJump(path);
   };
@@ -386,7 +548,8 @@ export default function App() {
   ].filter(Boolean).join(" · ");
   const saveLook = state === "blocked" || state === "failed" ? " refused" : state === "dirty" ? " armed" : "";
   const canRevert = dirty && savedText !== ""; // a file to go back to: a new one has none
-  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty;
+  // not during a run: Undo would bring back edits to the settings the run reads, which a save would then write (#815)
+  const canUndoRevert = status === "reverted" && revertedFrom !== null && !dirty && !isRunning(run);
   /** Arrow keys walk the tabs and open the one they reach (they are cheap to draw); Home and End go to the ends. */
   const walkTabs = (e: ReactKeyboardEvent) => {
     const next = nextTab(TABS.map((x) => x[0]), tab, e.key);
@@ -400,6 +563,7 @@ export default function App() {
       <TitleBar inert={!!asking}>
         <h1>{t("title")}</h1>
         <span className="muted path" title={`${root}\\config\\settings.json`}>{root}\config\settings.json</span>
+        {update && <UpdateChip update={update} running={isRunning(run)} onUpdate={() => { startUpdate(); }} onApply={() => { applyUpdate(); }} />}
         <label className="lang"><span>{t("language")}</span>
           <select value={s.language} onChange={(e) => ctx.update((d) => { d.language = e.target.value as Settings["language"]; })}>
             <option value="zh_tw">繁體中文</option>
@@ -434,17 +598,11 @@ export default function App() {
         <div id="tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
           {/* the page's heading under the window's: the tab's name, for a screen reader's list of headings */}
           <h2 className="sr-only">{t(TABS.find((x) => x[0] === tab)![1])}</h2>
-          {/* a version 20 file's values to set again in the client, once (#782) */}
-          {moved && moved.values.length > 0 && (
-            <section className="moved" aria-labelledby="moved-title">
-              <h3 id="moved-title">{t("moved.title")}</h3>
-              <p>{withBreaks(fill(t("moved.note"), { version: moved.from }))}</p>
-              <ul>{sayMoved(moved.values, s.teams, lang).map((row) => (
-                <li key={`${row.task} ${row.option}`}>{fill(t("moved.row"), { ...row })}</li>
-              ))}</ul>
-              <button type="button" onClick={() => setMoved(null)}>{t("moved.dismiss")}</button>
-            </section>
-          )}
+          {/* why the update stopped, and how the last apply went (#817) */}
+          {failure && update && <FailureNotice version={update.release.version} failure={failure} onDismiss={() => setFailure(null)} />}
+          {outcome && <OutcomeNotice outcome={outcome} onDismiss={() => setOutcome(null)} />}
+          {/* an older file's run values read back, once (#814) */}
+          {report && <ReadBackNotice report={report} onDismiss={() => setReport(null)} />}
           {/* in the tab panel, so the tab bar stays where it is when problems come and go */}
           {shown.length > 0 && (
             <div className="problems" role="alert">
@@ -457,7 +615,9 @@ export default function App() {
               ))}</ul>
             </div>
           )}
-          <Current />
+          <RunnerContext.Provider value={runner}>
+            <ScheduleContext.Provider value={{ synced, saved: savedSchedules, last: lastScheduled }}><Current /></ScheduleContext.Provider>
+          </RunnerContext.Provider>
         </div>
       </main>
       {leavePrompt}

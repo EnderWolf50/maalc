@@ -79,7 +79,7 @@ def requeue(root, team_id):
 
 
 def to_head(root, team_id):
-    """MirrorDungeon's start team (the client's MirrorStartTeam, #805, ADR 0014): once the task's first new run, which
+    """MirrorDungeon's start team (run.start_team, #805, ADR 0014, ADR 0015): once the task's first new run, which
     picked its team with team_id at the head (headed), opens, move team team_id to the head of the queue, written as a
     claim's move to the end is. Moving it to the head is moving each team before it to the end, in turn, so the settings
     GUI merges it as it merges claims (movedToEnd).
@@ -97,11 +97,11 @@ def to_head(root, team_id):
     try:
         moved = _reorder(root, head)
     except UNUSABLE as e:
-        return f"team queue not written ({e!r}): start team {team_id!r} (MirrorStartTeam) keeps its place"
+        return f"team queue not written ({e!r}): start team {team_id!r} (run.start_team) keeps its place"
     if found is None:
-        return f"team queue: start team {team_id!r} (MirrorStartTeam) is no longer listed, the queue stays"
+        return f"team queue: start team {team_id!r} (run.start_team) is no longer listed, the queue stays"
     name = found.get("name", team_id)
-    return f"team queue: start team {name!r} (MirrorStartTeam) {'to the head' if moved else 'is already at the head'}"
+    return f"team queue: start team {name!r} (run.start_team) {'to the head' if moved else 'is already at the head'}"
 
 
 def migrate_cursor(root, address):

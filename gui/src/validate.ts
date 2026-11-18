@@ -152,8 +152,9 @@ export function crossCheck(data: Settings): Problem[] {
     });
   });
 
-  // The target floor's rule (#385) is the agent's, at the Mirror Dungeon task's start: the target floor is a task option of
-  // the client (MXU, MFAAvalonia; #779), which the GUI does not see. The Teams tab says so (team.target_floor_note).
+  // The target floor's rule (#385), the start team and a Luxcavation task's team are the agent's, at that task's start
+  // (tests/settings_cases.json task_start): a team deleted or disabled stops only the task that names it, so a save is not
+  // refused over it. The Teams tab says so of the target floor (team.target_floor_note).
 
   data.gift_lists.forEach((list, i) => {
     for (const id of list.want.filter((g) => list.keep.includes(g))) {
@@ -165,10 +166,10 @@ export function crossCheck(data: Settings): Problem[] {
     }
   });
 
-  // A Luxcavation task's team is the agent's too, at that task's start: the team is the client's dropdown (ExpTeam,
-  // ThreadTeam, #780), whose cases the team options file gives (teamOptions.ts); a deleted team's case stays, and stops it.
-
   dupes("event_overrides", data.event_overrides.map((o) => o.question), "question", "question", twice("problem.dupeQuestion"));
   dupes("trial_risk_overrides", data.trial_risk_overrides.map((o) => o.trial), "trial", "trial", twice("problem.dupeTrial"));
+  // the schedules (#816): the Run tab makes each one's id, so only a hand edit lists one twice, and the way out is the file's.
+  // A task may be listed more than once (#811: the README's order runs AssembleModules twice).
+  dupes("schedules", data.schedules.map((x) => x.id), "id", "id", twice("problem.dupeSchedule"));
   return errors;
 }

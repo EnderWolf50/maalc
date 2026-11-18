@@ -8,6 +8,7 @@
   "required": [
     "version",
     "language",
+    "run",
     "deployment_order_plans",
     "starlight_plans",
     "theme_pack_plans",
@@ -15,11 +16,64 @@
     "teams",
     "team_queue",
     "event_overrides",
-    "trial_risk_overrides"
+    "trial_risk_overrides",
+    "luxcavation",
+    "charge_enkephalin",
+    "tasks",
+    "emulator",
+    "schedules"
   ],
   "properties": {
-    "version": { "const": 22 },
+    "version": { "const": 23 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "the Mirror Dungeon task's options and the four every task reads (webhook_url, auto_accept_terms, auto_download, keep_dismissed_screens); a task reads them once at its start (agent/task_options.py, #777, #813)",
+      "required": [
+        "difficulty",
+        "target_floor",
+        "runs",
+        "weekly_bonus_use",
+        "weekly_bonus_amount",
+        "stop_when_weekly_bonus_out",
+        "starlight_unaffordable",
+        "wipe_retries",
+        "after_retries",
+        "webhook_url",
+        "theme_pack_refresh",
+        "auto_accept_terms",
+        "auto_download",
+        "keep_dismissed_screens",
+        "start_team"
+      ],
+      "properties": {
+        "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
+        "target_floor": { "enum": [5, 10, 15], "default": 5, "description": "the floor the run is meant to reach: 5 NORMAL/HARD, 10 INFINITY, 15 EXTREME; above 5 every floor of the run must be HARD" },
+        "runs": { "type": ["integer", "null"], "minimum": 1, "default": 1, "description": "null: no limit" },
+        "weekly_bonus_use": { "enum": ["none", "normal", "hard"], "default": "hard" },
+        "weekly_bonus_amount": { "enum": ["one", "all"], "default": "all" },
+        "stop_when_weekly_bonus_out": { "type": "boolean", "default": false },
+        "starlight_unaffordable": { "enum": ["stop", "skip"], "default": "skip" },
+        "wipe_retries": { "type": "integer", "minimum": 0, "default": 2 },
+        "after_retries": { "enum": ["stop", "forfeit"], "default": "forfeit" },
+        "webhook_url": { "type": "string", "default": "" },
+        "theme_pack_refresh": {
+          "enum": ["none", "once", "all"],
+          "default": "all",
+          "description": "free theme pack refreshes a floor may use while the best pack is below the plan's threshold: none, the first one, or all"
+        },
+        "auto_accept_terms": { "type": "boolean", "default": true, "description": "tick both boxes of the title's User Agreement and Confirm; off: stop" },
+        "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" },
+        "keep_dismissed_screens": { "type": "boolean", "default": true, "description": "save the screen to logs/dismissed/ before the bot closes a notice, popup, mailbox, settings menu, help page or parallel-mode prompt, or before recovery presses back" },
+        "start_team": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "default": null,
+          "description": "the team the Mirror Dungeon task starts from, moved to the head of team_queue before its first new run (#805); null: follow the team queue. A team deleted or disabled stops the task at its start (task_options.start_team_errors)"
+        }
+      }
+    },
     "deployment_order_plans": {
       "type": "array",
       "items": {
@@ -70,7 +124,7 @@
           "threshold": {
             "$ref": "#/$defs/pack_weight",
             "default": 0,
-            "description": "a page whose best pack weighs less is refreshed while the Mirror Dungeon task's MirrorThemePackRefresh allows"
+            "description": "a page whose best pack weighs less is refreshed while run.theme_pack_refresh allows"
           },
           "unlisted": { "$ref": "#/$defs/pack_weight", "default": 0, "description": "the weight of a pack not in weights or not read" },
           "event_packs": {
@@ -185,7 +239,7 @@
             "minimum": 0,
             "maximum": 12,
             "default": 0,
-            "description": "fewer alive is handled like used-up wipe retries (the Mirror Dungeon task's MirrorAfterRetries); 0: no check"
+            "description": "fewer alive is handled like used-up wipe retries (run.after_retries); 0: no check"
           },
           "guard_turns": { "type": "integer", "minimum": 0, "maximum": 5, "default": 0 },
           "gift_search": {
@@ -285,9 +339,97 @@
           "risk": { "type": "number", "minimum": 0, "description": "the score in pt, 1 pt = the enemy's Clash Power +1" }
         }
       }
+    },
+    "luxcavation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exp", "thread"],
+      "description": "the Luxcavation daily tasks' options (#362)",
+      "properties": {
+        "exp": { "$ref": "#/$defs/luxcavation" },
+        "thread": { "$ref": "#/$defs/luxcavation" }
+      }
+    },
+    "charge_enkephalin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count"],
+      "description": "Lunacy for Enkephalin (#373, task ChargeEnkephalin): spends Lunacy, so it is off until set",
+      "properties": {
+        "count": { "type": "integer", "minimum": 0, "maximum": 10, "default": 0, "description": "the day's target Daily Count: charges made earlier today, by hand too, count toward it, and none is made once it is reached or when the Daily Count does not read (#429); 0: the Use Lunacy tab is never touched; the game allows 10 a day" }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "description": "the task list the runner posts (#811): the order is the run order, an entry ticked off is skipped; a task may be listed more than once, each entry with its own tick, all of them reading that task's options; default: a new file's list, the README's suggested order (AssembleModules before and after the Luxcavations), ChargeEnkephalin before the first AssembleModules, none ticked",
+      "default": [
+        { "id": "ChargeEnkephalin", "enabled": false },
+        { "id": "AssembleModules", "enabled": false },
+        { "id": "ExpLuxcavation", "enabled": false },
+        { "id": "ThreadLuxcavation", "enabled": false },
+        { "id": "AssembleModules", "enabled": false },
+        { "id": "ClaimPassMissions", "enabled": false },
+        { "id": "ClaimMail", "enabled": false },
+        { "id": "MirrorDungeon", "enabled": false }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "enabled"],
+        "properties": {
+          "id": { "$ref": "#/$defs/task" },
+          "enabled": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "emulator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "mumu_index", "mumu_manager"],
+      "description": "the device the runner connects to (#811); null: not picked or not found yet",
+      "properties": {
+        "address": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "the adb address, as 127.0.0.1:16384" },
+        "mumu_index": { "type": ["integer", "null"], "minimum": 0, "default": null, "description": "the MuMu instance the address belongs to, for MuMuManager to start it when it is not running" },
+        "mumu_manager": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "the path of MuMuManager.exe the last scan found" }
+      }
+    },
+    "schedules": {
+      "type": "array",
+      "default": [],
+      "description": "the scheduled runs (#811): one Windows Task Scheduler task each, which runs the task list; ids once each (agent/settings.py cross_check)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "days", "time", "wake"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "days": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] },
+            "description": "the weekdays it runs on"
+          },
+          "time": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "description": "the local time it starts, HH:MM" },
+          "wake": { "type": "boolean", "default": true, "description": "wake the PC from sleep for it" }
+        }
+      }
     }
   },
   "$defs": {
+    "task": { "enum": ["MirrorDungeon", "AssembleModules", "ClaimMail", "ExpLuxcavation", "ThreadLuxcavation", "ClaimPassMissions", "ChargeEnkephalin"] },
+    "luxcavation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "count", "team", "retries", "consecutive"],
+      "properties": {
+        "mode": { "enum": ["daily", "count"], "default": "daily", "description": "daily: the battles the day still needs, read in the game (EXP: the pass's Daily row Clear EXP Luxcavation, 1 while under way; Thread: its Daily Bonuses n/3 left, n), none when it does not read (#429); count: count battles this run, nothing read (#431)" },
+        "count": { "type": "integer", "minimum": 1, "default": 1, "description": "count mode only: battles to win this run, at the hardest level open (#431); a new or migrated file: EXP 1, Thread 3" },
+        "team": { "type": ["string", "null"], "minLength": 1, "default": null, "description": "a teams[] id: its TEAMS #N and guard_turns; null: none picked yet. A team deleted stops the task at its start (task_options.team_errors)" },
+        "retries": { "type": "integer", "minimum": 0, "default": 0, "description": "defeats of one battle fought again before the task fails; a win starts the next battle with them all" },
+        "consecutive": { "type": "boolean", "default": true, "description": "set the stage's Consecutive Battle to min(10, battles left) and fight them as one battle (a x N win counts N); off: one battle at a time" }
+      }
+    },
     "skill_sinner": {
       "type": "object",
       "additionalProperties": false,

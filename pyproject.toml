@@ -34,7 +34,7 @@ unpack = [
 package = false
 
 [tool.pytest.ini_options]
-pythonpath = ["agent", "tools"]
+pythonpath = ["agent", "tools", "."]  # ".": the runner package (runner/)
 testpaths = ["tests"]
 # pytest-timeout: a test that hangs fails after this many seconds instead of holding the job for 50 minutes.
 timeout = 300

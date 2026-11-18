@@ -1,7 +1,0 @@
-{
-    // The global options' values (#776, ADR 0013): interface.json's global options write their keys into this node's
-    // attach, and every task's entry action reads them there (agent/task_options.py). No next names it: it is never run.
-    "GlobalOptions": {
-        "attach": {}
-    }
-}

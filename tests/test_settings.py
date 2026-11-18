@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -17,9 +18,13 @@ KEYWORDS = ["Burn", "Bleed", "Tremor", "Rupture", "Sinking", "Poise", "Charge", 
 ORDER = ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu",
          "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]
 SWAPS = ["s1_s3", "s2_s3", "s1_s2"]  # data/shop.yaml skill_replacement
+SHARED = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
 # a new team: no sinner listed, so every deck stays the game's 3/2/1; ID Skill Search off, paid in Cost
 # (#454); the GUI's tests read the same literal
-DEFAULT_SKILLS = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))["skill_replacement_default"]
+DEFAULT_SKILLS = SHARED["skill_replacement_default"]
+# the sections version 23 brought back or added (#813), as a new file has them: run, luxcavation, charge_enkephalin, tasks,
+# emulator, schedules
+ADDED = {k: SHARED["valid"][k] for k in SHARED["added_v23"]}
 STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_leftover": False}
 
 
@@ -54,7 +59,7 @@ def custom_skills():
 
 
 VALID = {
-    "version": 22,
+    "version": 23,
     "language": "zh_tw",
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -68,6 +73,7 @@ VALID = {
     "team_queue": ["a", "b"],
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
+    **copy.deepcopy(ADDED),
 }
 
 
@@ -199,39 +205,55 @@ def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
         assert [e.split(":")[0] for e in errors(tmp_path, data)] == ["trial_risk_overrides/0/risk"]
 
 
-V20_NOTE = ("settings version 20: its run, luxcavation and charge_enkephalin are not read, their values are the client's "
-            "task and global options now (#782); open the settings GUI once: it writes the file as version 22 and lists "
-            "the values to set in the client")
+NOTE = ("settings older than version 23: the task options are read from its run, luxcavation and charge_enkephalin "
+        "again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; open the "
+        "settings GUI once: it writes the file as version 23")
 
 
-def before_queue(version, edits=()):
-    """settings_cases' valid file at an older version, without the team_queue version 22 added (#803), these edits made;
-    version 20's with the three sections version 21 dropped (#782)."""
-    old = {k: v for k, v in CASES["valid"].items() if k != "team_queue"}
+def older(version, edits=()):
+    """settings_cases' valid file at an older version, these edits made: without the sections version 23 added (#813),
+    without the team_queue version 22 added below it (#803), and version 20's with the three sections it had."""
+    old = {k: v for k, v in CASES["valid"].items() if k not in CASES["added_v23"] and (version >= 22 or k != "team_queue")}
     return apply_edits({**old, "version": version, **(CASES["v20"] if version == 20 else {})}, list(edits))
 
 
 def v20(edits=()):
-    return before_queue(20, edits)
+    return older(20, edits)
 
 
-def test_a_version_20_file_is_read_as_the_current_version_in_memory_and_says_where_its_values_went(tmp_path):
-    # #782: the three sections go, the file on disk stays as it was, and a task's start logs the line (TaskStart) until
-    # the GUI writes the file back. #803: on to version 22 in the same read, the queue in the order of teams.
-    old = v20()
+@pytest.mark.parametrize("version", [20, 21, 22])
+def test_an_older_file_is_read_as_the_current_version_in_memory_and_says_where_the_options_come_from(tmp_path, version):
+    # #813: the options are the file's again, at their defaults where it has none (a version 20 file has its own); the file
+    # on disk stays as it was, and a task's start logs the line (TaskStart) until the GUI writes the file back.
+    old = older(version)
     notes = []
     got = load(tmp_path, old, notes=notes)
     assert {**got, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
-    assert notes == [V20_NOTE]
+    assert notes == [NOTE]
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 
 
-@pytest.mark.parametrize("version", [22, 21])
-def test_a_version_21_or_22_file_says_nothing(tmp_path, version):
-    # #803: 21 -> 22 takes no value away, so it has no line
+def test_a_current_file_says_nothing(tmp_path):
     notes = []
-    load(tmp_path, VALID if version == 22 else before_queue(21), notes=notes)
+    load(tmp_path, VALID, notes=notes)
     assert notes == []
+
+
+def test_the_sections_version_23_added_are_the_schemas_defaults_as_the_shared_valid_file_has_them():
+    # the agent's migration fills them from the schema, the GUI's from its own new file (validate.test.ts): both give valid
+    assert settings.defaults() == ADDED
+
+
+def test_a_new_files_task_list_is_the_readmes_suggested_order_every_task_listed_none_ticked():
+    # #811: the order runs AssembleModules before and after the Luxcavations; README's 日常任務 table names each task's id
+    readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
+    ids = dict(re.findall(r"^\| (\S+?)（`(\w+)`）", readme, re.M))
+    order = readme.split("### 建議順序", 1)[1].strip().splitlines()[0].split(" → ")
+    tasks = settings.defaults()["tasks"]
+    assert [t["id"] for t in tasks] == [ids[name] for name in order]
+    assert [t["id"] for t in tasks].count("AssembleModules") == 2
+    assert {t["id"] for t in tasks} == set(settings.SCHEMA["$defs"]["task"]["enum"])
+    assert not any(t["enabled"] for t in tasks)
 
 
 def test_every_version_from_the_oldest_has_its_migration():
@@ -299,7 +321,7 @@ def test_every_error_is_reported(tmp_path):
     assert len(errors(tmp_path, data)) == 2
 
 
-CASES = json.loads((Path(__file__).parent / "settings_cases.json").read_text(encoding="utf-8"))
+CASES = SHARED
 
 
 def apply_edits(data, edits):
@@ -338,21 +360,29 @@ def test_shared_valid_loads(tmp_path):
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}  # the list is cleaned on load
 
 
-@pytest.mark.parametrize("case", CASES["migrate_v20"], ids=lambda c: c["name"])
-def test_shared_v20_migration(tmp_path, case):
-    """#782: a version 20 file, its moved sections at any value (broken by hand too), reads as the valid file: the GUI
+@pytest.mark.parametrize("version, case", [(v, c) for v in (20, 22) for c in CASES[f"migrate_v{v}"]],
+                         ids=lambda x: x if isinstance(x, int) else x["name"])
+def test_shared_v20_and_v22_migration(tmp_path, version, case):
+    """#813: a version 20 file keeps its run, luxcavation and charge_enkephalin, a version 22 file gets them at their
+    defaults, both every other section version 23 added; a value broken by hand stays, for the schema to name. The GUI
     migrates the same cases to the same file (gui/src/validate.test.ts)."""
-    loaded = load(tmp_path, v20(case["edits"]))
-    assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
+    old = older(version, case["edits"])
+    if "schema" in case:
+        paths = {e.split(": ", 1)[0] for e in errors(tmp_path, old)}
+        assert paths == set(case["schema"])
+        return
+    loaded = load(tmp_path, old)
+    assert {**loaded, "gift_lists": None} == {**apply_edits(CASES["valid"], case["gives"]), "gift_lists": None}
 
 
 @pytest.mark.parametrize("case", CASES["migrate_v21"], ids=lambda c: c["name"])
 def test_shared_v21_migration(tmp_path, case):
-    """#803: a version 21 file reads as version 22 with team_queue, the queue in the order of teams; the file on disk stays
-    as it was. The GUI migrates the same cases to the same file (gui/src/validate.test.ts)."""
-    old = before_queue(21, case["edits"])
+    """#803: a version 21 file reads with team_queue, the queue in the order of teams, and on to version 23 (#813); the file
+    on disk stays as it was. The GUI migrates the same cases to the same file (gui/src/validate.test.ts)."""
+    old = older(21, case["edits"])
     loaded = load(tmp_path, old)
-    assert {**loaded, "gift_lists": None} == {**old, "version": 22, "team_queue": case["team_queue"], "gift_lists": None}
+    want = {**old, "version": 23, "team_queue": case["team_queue"], **ADDED, "gift_lists": None}
+    assert {**loaded, "gift_lists": None} == want
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 
 

@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -7,9 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import client_override
 import resource_package as rp
-from client_options import TEAM_OPTIONS
 from install import mirror_maafw, mirror_repo, write_resource_manifest
 
 INSTALL = Path(__file__).resolve().parent.parent / "tools/install.py"
@@ -28,40 +25,34 @@ def test_assembling_again_drops_what_the_repo_deleted_and_keeps_config(tmp_path)
     repo, root = tmp_path / "repo", tmp_path / "install"
     for name in ("agent/main.py", "agent/state.py", "agent/old/__init__.py", "assets/interface.json",
                  "assets/locales/zh_tw.json", "assets/resource/base/pipeline/Kept.json",
-                 "assets/resource/base/pipeline/Deleted.json"):
+                 "assets/resource/base/pipeline/Deleted.json", "runner/__main__.py", "runner/gone.py"):
         (repo / name).parent.mkdir(parents=True, exist_ok=True)
         (repo / name).write_text(name, encoding="utf-8")
     mirror_repo(repo, root, EXE)
     (root / "config").mkdir()
     (root / "config/settings.json").write_text("{}", encoding="utf-8")
 
-    for name in ("agent/state.py", "agent/old/__init__.py", "assets/resource/base/pipeline/Deleted.json"):
+    for name in ("agent/state.py", "agent/old/__init__.py", "assets/resource/base/pipeline/Deleted.json", "runner/gone.py"):
         (repo / name).unlink()
     (repo / "agent/old").rmdir()
     mirror_repo(repo, root, EXE)
 
     assert files(root) == {"agent/main.py", "interface.json", "locales/zh_tw.json",
-                           "resource/base/pipeline/Kept.json", "config/settings.json"}
+                           "resource/base/pipeline/Kept.json", "config/settings.json", "runner/__main__.py"}
     assert not (root / "agent/old").exists()
     assert (root / "config/settings.json").read_text(encoding="utf-8") == "{}"
 
 
-def test_assembling_again_keeps_the_team_options_file_interface_json_imports(tmp_path):
-    # #780: the settings GUI writes config/team_options.json; a new assembly writes interface.json again, which still
-    # imports it from there, and leaves the file as it was
+def test_the_install_gets_the_repos_runner_beside_agent(tmp_path):
+    # #812: tools/live/bot.py run and the settings window start <root>/runner/__main__.py; the dev install has it as
+    # the zip does, every module of it and no bytecode
     repo, root = tmp_path / "repo", tmp_path / "install"
-    (repo / "agent").mkdir(parents=True)
-    (repo / "assets").mkdir()
-    shutil.copy(INSTALL.parent.parent / "assets/interface.json", repo / "assets/interface.json")
+    for name in ("agent/main.py", "assets/interface.json", "runner/__main__.py", "runner/session.py",
+                 "runner/__pycache__/session.cpython-312.pyc"):
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo / name).write_text(name, encoding="utf-8")
     mirror_repo(repo, root, EXE)
-    (root / "config").mkdir()
-    shutil.copy(TEAM_OPTIONS, root / "config/team_options.json")
-
-    mirror_repo(repo, root, EXE)
-
-    assert (root / "config/team_options.json").read_bytes() == TEAM_OPTIONS.read_bytes()
-    cases = client_override.load_interface(root / "interface.json")["option"]["ExpTeam"]["cases"]
-    assert [c["name"] for c in cases] == ["none", "a", "b", "gone"]
+    assert files(root) == {"agent/main.py", "interface.json", "runner/__main__.py", "runner/session.py"}
 
 
 def test_maafw_drops_what_the_wheel_dropped_and_keeps_the_fixed_dll(tmp_path):
@@ -83,10 +74,10 @@ OLD = 1_000_000_000  # an mtime no copy leaves: copy2 keeps the source's, a writ
 
 
 def test_a_file_already_the_same_is_not_written_again(tmp_path):
-    """MXU and the bot hold maafw/'s DLLs, so a rebuild that changes none of them must not write them (#757)."""
+    """A running bot holds maafw/'s DLLs, so a rebuild that changes none of them must not write them (#757)."""
     wheel, repo, root = tmp_path / "bin", tmp_path / "repo", tmp_path / "install"
     for path in (wheel / "MaaFramework.dll", wheel / "plugins/MaaPluginDemo.dll", repo / "agent/main.py",
-                 repo / "assets/interface.json", repo / "assets/resource/base/pipeline/Node.json"):
+                 repo / "runner/__main__.py", repo / "assets/interface.json", repo / "assets/resource/base/pipeline/Node.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(path.name.encode())
     (repo / "assets/interface.json").write_bytes(b'{\r\n    "child_exec": "python",\r\n}\r\n')
@@ -182,7 +173,7 @@ def test_a_held_file_that_has_to_change_stops_with_one_line_naming_it(tmp_path, 
         mirror_maafw(wheel, root, fixed)
     message = str(stop.value.code)
     assert len(message.splitlines()) == 1
-    assert str(root / "maafw" / name) in message and "MXU" in message and "run" in message
+    assert str(root / "maafw" / name) in message and "the bot" in message and "run" in message
 
 
 def run(*args):
