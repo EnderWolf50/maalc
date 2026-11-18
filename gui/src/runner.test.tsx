@@ -321,6 +321,37 @@ describe("the device scan", () => {
     expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" }));
   });
 
+  test("an address alone, as MXU's read-back leaves it, starts on 「選一個…」: a pick of its device fills the instance and MuMuManager (#833)", async () => {
+    // readBack.ts takes MXU's adbDeviceAddress only: MXU keeps no MuMu instance or MuMuManager path
+    const s = settings();
+    s.emulator = { address: "127.0.0.1:16384", mumu_index: null, mumu_manager: null };
+    back.text = fileOf(s);
+    back.devices = [MUMU, OTHER];
+    const user = await open();
+    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
+    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
+    expect(found).toHaveDisplayValue(zh["emu.pick"]);
+    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    expect(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] })).toHaveValue(0);
+    expect(screen.getByRole("textbox", { name: zh["emu.mumu_manager"] })).toHaveValue("C:/MuMu/nx_main/MuMuManager.exe");
+    expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(back.saved).toHaveLength(1));
+    expect(lastSaved().emulator).toEqual({ address: "127.0.0.1:16384", mumu_index: 0, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" });
+  });
+
+  test("a field changed by hand after a pick puts the list back on 「選一個…」, so the device can be picked again", async () => {
+    back.devices = [MUMU, OTHER];
+    const user = await open();
+    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
+    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
+    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), { target: { value: "3" } });
+    expect(found).toHaveDisplayValue(zh["emu.pick"]);
+    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    expect(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] })).toHaveValue(0);
+  });
+
   test("an address the runner takes for the same device shows as picked: localhost is 127.0.0.1 (runner/devices.py)", async () => {
     const s = settings();
     s.emulator.address = "localhost:16416";

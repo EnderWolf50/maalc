@@ -406,6 +406,9 @@ type Scan = { state: "none" } | { state: "scanning" } | { state: "found"; device
 const deviceName = (t: (k: Key) => string, d: Device) =>
   d.mumu ? fill(t("emu.device_mumu"), { index: d.mumu.index, address: d.address }) : fill(t("emu.device"), { name: d.name, address: d.address });
 
+/** What a pick of a scanned device writes: its address, and its MuMu instance and MuMuManager.exe (none for another). */
+const pickOf = (d: Device): Settings["emulator"] => ({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
+
 /** The emulator the runner connects to (spec 04 section 14): its adb address, its MuMu instance and MuMuManager.exe; an empty
  * field is none (null). The scan lists the emulators that run, MuMu first; a pick fills in all three, saved with the rest. */
 function EmulatorFields() {
@@ -420,8 +423,15 @@ function EmulatorFields() {
     api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
   };
   const found = scan.state === "found" ? scan.devices : null;
-  const at = found && s.emulator.address !== null ? found.findIndex((d) => sameAddress(d.address, s.emulator.address!)) : -1;
-  const pick = (d: Device) => set({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
+  // the list starts on the device the three fields already name in full, a pick of which would change nothing, and else on
+  // "pick one" (#833): one that started on the device at the address alone (MXU's read-back keeps no instance or MuMuManager)
+  // took no pick of it, as a select fires no change for the option it shows
+  const em = s.emulator;
+  const at = found ? found.findIndex((d) => {
+    const p = pickOf(d);
+    return em.address !== null && sameAddress(d.address, em.address) && p.mumu_index === em.mumu_index && p.mumu_manager === em.mumu_manager;
+  }) : -1;
+  const pick = (d: Device) => set(pickOf(d));
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
