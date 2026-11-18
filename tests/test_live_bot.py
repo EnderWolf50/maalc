@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import signal
 import sys
 import threading
@@ -209,6 +210,27 @@ def test_run_stops_before_any_child_when_the_install_has_no_runner(tmp_path):
     lines = log.read_text(encoding="utf-8").splitlines()
     assert lines[-1].endswith("has no runner/: assemble the install with tools/install.py")
     assert not any("child pid" in line for line in lines)
+
+
+def test_run_reaches_the_real_runners_device_check_while_it_keeps_the_runners_stdin_open(tmp_path):
+    # #829: stamped keeps the runner's stdin open until it exits (a stop may follow), and the runner's real `import maa`
+    # waited on that pipe until a line came. No device listens on port 1, so the start ends at the device check
+    (tmp_path / "interface.json").write_text(INTERFACE, encoding="utf-8")
+    shutil.copytree(REPO / "runner", tmp_path / "runner", ignore=shutil.ignore_patterns("__pycache__"))
+    log, result = tmp_path / "run.log", {}
+    run = threading.Thread(target=lambda: result.update(code=bot.main(
+        ["run", "--install", str(tmp_path), "--log", str(log), "--task", "Mirror", "--port", "1"])), daemon=True)
+    run.start()
+    run.join(60)
+    lines = log.read_text(encoding="utf-8").splitlines()
+    if run.is_alive():
+        pid = int(lines[0].rsplit(" ", 1)[1])  # [run] child pid <pid>
+        bot.kill_tree(pid)
+        run.join(10)
+        pytest.fail(f"the runner did not end in 60 s with its stdin open: {lines}")
+    assert result == {"code": 1}, lines  # the start failed: no device
+    assert any(" [run] error device_missing: no device at 127.0.0.1:1" in line for line in lines), lines
+    assert lines[-1].endswith(" [run] exit 1")
 
 
 def test_a_runner_that_cannot_stop_has_its_process_tree_ended():

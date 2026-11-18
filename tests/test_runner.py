@@ -3,8 +3,10 @@ that prints what a test needs and ends when the runner disconnects from it."""
 
 import json
 import os
+import shutil
 import subprocess
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -525,3 +527,50 @@ def test_a_runner_whose_first_line_breaks_the_protocol_ends_with_code_2(line, sa
     (error,) = [e for e in events if e["event"] == "error"]
     assert error["kind"] == "protocol" and says in error["message"]
     assert events[-1] == {"v": 1, "event": "end", "result": "failed"}
+
+
+def test_a_runner_ends_with_its_code_while_its_stdin_stays_open():
+    # the caller keeps stdin open until the runner exits (#829): the reader still blocked on it at the exit is no
+    # buffered file (sys.stdin's ended the process with an access violation, 0xC0000005)
+    p = subprocess.Popen([sys.executable, "-c", SCRIPT.format(repo=str(REPO))], stdin=subprocess.PIPE,
+                         stdout=subprocess.DEVNULL)
+    try:
+        p.stdin.write(b'{"v": 1, "cmd": "scan"}\n')
+        p.stdin.flush()
+        assert p.wait(60) == 0
+    finally:
+        if p.poll() is None:
+            p.kill()
+        p.stdin.close()
+
+
+def test_the_real_runner_loads_maaframework_and_ends_a_scan_while_its_stdin_stays_open(tmp_path):
+    # #829: the window and tools/live/bot.py keep the runner's stdin open for a stop. The real `import maa` loads numpy's
+    # OpenBLAS, whose libgfortran looks at fd 0 as it loads, and on Windows that waited for the read pending on stdin's
+    # pipe until the next line came. The runner sits in tmp_path as an install lays it out, so its debug/ lands there
+    shutil.copytree(REPO / "runner", tmp_path / "runner", ignore=shutil.ignore_patterns("__pycache__"))
+    p = subprocess.Popen([sys.executable, str(tmp_path / "runner" / "__main__.py")], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE)
+    events, ended = [], threading.Event()
+
+    def read():
+        for line in p.stdout:
+            events.append(json.loads(line))
+            if events[-1]["event"] == "end":
+                ended.set()
+
+    threading.Thread(target=read, daemon=True).start()
+    try:
+        p.stdin.write(b'{"v": 1, "cmd": "scan"}\n')
+        p.stdin.flush()
+        assert ended.wait(60), f"no end event in 60 s with stdin open: {[e['event'] for e in events]}"
+        assert p.wait(10) == 0  # stdin still open: the reader blocked on it does not keep the runner from ending
+    finally:
+        if p.poll() is None:
+            p.kill()  # a runner stuck in the import has started no process of its own
+        p.stdin.close()
+        p.wait(10)
+    for e in events:
+        protocol.check_event(e)
+    assert [e["event"] for e in events if e["event"] != "log"] == ["ready", "devices", "end"]
+    assert events[-1]["result"] == "succeeded"
