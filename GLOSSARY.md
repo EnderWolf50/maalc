@@ -18,7 +18,8 @@ _Avoid_: run（寫程式與英文介面時可用）、輪、場、執行（指�
 INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層；第 11–15 層是 EXTREME，結算視窗的標記推測是 `[EXTREME]`。
 
 **Hidden Battle（隱藏戰鬥）**：
-第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `hiddenBattleInfo`）。確認視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850）。
+第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `HIDDEN_BATTLE`；機率是 `hiddenBattleInfo` 的 `probInfo`），地圖上的 Cost 是困難 1000、普通 800。確認視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850），所以選路時只在它是唯一相連的節點才走過去。程式裡的節點類型是 `hidden`。
+_Avoid_: 隱藏戰、隱藏關
 
 **可領（`claim_ok`）**：
 結算時這一局已通過第 5 層（Exploration Reward 視窗的最後一層，已通過層數 ≥ 5）。可領的局一律 Claim，包括第 6 層以後才失敗或離開的；沒過第 5 層的局放棄獎勵。
