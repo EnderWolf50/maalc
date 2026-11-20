@@ -134,7 +134,7 @@
 - 記錄：每次讀完畫面，log 列出每張卡的標題與分數（套用活動卡包設定的那張標 `event`）和門檻；拉卡時寫出選了哪張、分數，以及是否低於門檻。（#240）
 - 實機：卡片數量會變。買了 `Star of the Beginning` 與 `Interstellar Travel+`（各 `Theme Pack Selection +1`）時第 1 層有 5 張；`Interstellar Travel+` 讓刷新按鈕顯示 `Refresh 4/4`（`Theme Pack Refresh Chance +3`）。所以卡片位置從標題列的 OCR 結果取得，不用固定格位。（#25；2026-10-14 實機）
 - 選主題包時要把卡片往下拉才能選定。（#8）
-- 選主題包之前必須先依第 2 節設定好本層難度。（#8）
+- 選主題包之前必須先依第 2 節設定好本層難度。（#8）第 6 層起不切難度，這一層記成 HARD（第 2 節，#386）。
 - 實機：免費刷新每層一次，用過按鈕就變灰。這一局沒有看到 NEW 標記；第 4 層的主題包左上有紅色 `!` 標記（推測是沒打過的主題包），標題照常可讀。第 5 層的主題包沒有 `CLEAR BONUS` 列。困難局打完 Boss 後直接進入下一層的主題包頁，中間沒有換層畫面。（實機：captures/129_f2_refresh_tapped.png、captures/197_f3boss_rewards_pack.png、captures/222_f4boss_rw_pack.png、captures/127_after_boss_gifts.png）
 
 ## 7. 地圖選路

@@ -80,6 +80,11 @@ def team_difficulty(setting, difficulty, hard_from_floor):
     return "normal" if hard_from_floor is None and setting != "hard" else difficulty
 
 
+def hard_only(floor):
+    """Whether the floor has HARD alone: floor 6 takes floors 1-5 all HARD (the game's tutorial TutoMD05_P19_D2, #386)."""
+    return floor > 5
+
+
 def difficulty_label(shown):
     """The theme pack page's difficulty label as HARD (True), NORMAL (False) or unread (None).
 
@@ -96,7 +101,7 @@ def difficulty_move(floor, shown_hard, want_hard):
     Once a floor is HARD the run stays HARD; only floor 1, before any pack is chosen,
     may still go back to NORMAL. Floors 6 on have no NORMAL (#386): never a switch there.
     """
-    if want_hard is None or shown_hard == want_hard or floor > 5:
+    if want_hard is None or shown_hard == want_hard or hard_only(floor):
         return None
     if want_hard:
         return "hard"

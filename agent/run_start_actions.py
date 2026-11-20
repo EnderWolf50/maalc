@@ -775,7 +775,7 @@ class PickThemePack(CustomAction):
         def label(image):
             return run_start.difficulty_label(text(context, image, [830, 30, 160, 35]))
 
-        def keep(hard):
+        def note_difficulty(hard):
             log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
             RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
             RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
@@ -788,16 +788,16 @@ class PickThemePack(CustomAction):
                 continue
             move = run_start.difficulty_move(floor, hard, want)
             if move is None:
-                if floor > 5 and not hard:
+                if run_start.hard_only(floor) and not hard:
                     log(f"floor {floor} reads NORMAL: a floor past 5 is HARD")
                 elif want is not None and hard != want:
                     log(f"floor {floor} stays HARD: a run never goes back to NORMAL")
-                return keep(hard or floor > 5)
+                return note_difficulty(hard or run_start.hard_only(floor))
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
             tap_then(context, 965 if move == "hard" else 850, 46, lambda im: label(im) == (move == "hard"), timeout=2.5)
             still(context, timeout=1.5)  # the packs re-roll
-        if floor > 5:
+        if run_start.hard_only(floor):
             log(f"floor {floor}: no difficulty label read: a floor past 5 is HARD")
-            return keep(True)
+            return note_difficulty(True)
         return False
