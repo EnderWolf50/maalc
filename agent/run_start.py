@@ -7,6 +7,7 @@ import re
 from difflib import SequenceMatcher
 from functools import lru_cache
 
+import settlement
 from ocrtext import compact, has
 
 # Grace base prices, numbered as on the starlight page (spec 04 section 7).
@@ -23,6 +24,17 @@ def run_difficulty(setting, weekly_left, target_floor):
     if setting != "auto":
         return setting
     return "hard" if weekly_left > 0 or target_floor > 5 else "normal"
+
+
+def parallel_switch(target_floor, floor):
+    """The entry page's Parallel Superposition Mode for this task: True ON, False OFF, None as it is (#434, #847).
+
+    ON takes the run past floor 5, so ON for a target above 5. floor: the paused run's floor the entry page shows, None
+    before a run. A run at floor 6 or later is in the mode already: the switch stays as it is.
+    """
+    if floor is not None and floor > 5:
+        return None
+    return settlement.goes_on(5, target_floor)  # what the prompt after floor 5 is answered by
 
 
 def resolve_plan(settings, team, key):
