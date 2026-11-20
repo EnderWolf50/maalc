@@ -496,7 +496,7 @@ def test_adb_state_asks_as_maaframeworks_connect_does_with_the_devices_own_adb()
         return run
     adb = str(MUMU0.adb_path)
     assert devices.adb_state(MUMU0, run=answer(b"device\r\n")) == "device"
-    assert calls == [[adb, "connect", "127.0.0.1:16384"], [adb, "-s", "127.0.0.1:16384", "get-state"]]
+    assert calls == [[adb, "start-server"], [adb, "connect", "127.0.0.1:16384"], [adb, "-s", "127.0.0.1:16384", "get-state"]]
     assert devices.adb_state(MUMU0, run=answer(b"error: device offline\r\n", 1)) == "error: device offline"
     calls.clear()
     assert devices.adb_state(OTHER, run=answer(b"device\n")) == "device"
@@ -507,7 +507,7 @@ def test_adb_state_asks_as_maaframeworks_connect_does_with_the_devices_own_adb()
     assert devices.adb_state(MUMU0, run=missing).startswith("FileNotFoundError")
 
 
-def test_adb_state_takes_no_longer_than_its_timeout_for_both_calls():
+def test_adb_state_takes_no_longer_than_its_timeout_for_every_call():
     # the runner hands it the time left until 120 s after the launch: a hung adb does not hold the start past it
     timeouts = []
 
@@ -517,10 +517,52 @@ def test_adb_state_takes_no_longer_than_its_timeout_for_both_calls():
         stdout.write(b"device\n")
         return SimpleNamespace(returncode=0)
     assert devices.adb_state(MUMU0, timeout=3.0, run=run) == "device"
-    assert len(timeouts) == 2 and timeouts[0] <= 3.0 and timeouts[1] <= 3.0 - 0.03  # what the first left (a ~50 ms sleep)
-    assert devices.adb_state(MUMU0, timeout=60.0, run=run) == "device" and max(timeouts[2:]) <= devices.ADB_TIMEOUT
+    # each call gets what the ones before left (a ~50 ms sleep each); the connect no more than CONNECT_WAIT
+    assert len(timeouts) == 3 and timeouts[0] <= 3.0 and timeouts[1] <= devices.CONNECT_WAIT and timeouts[2] <= 3.0 - 0.06
+    assert devices.adb_state(MUMU0, timeout=60.0, run=run) == "device" and max(timeouts[3:]) <= devices.ADB_TIMEOUT
     timeouts.clear()
     assert devices.adb_state(MUMU0, timeout=0.0, run=run).startswith("TimeoutExpired") and timeouts == []
+
+
+def stuck_adb(spent, handshake=10.0):
+    """subprocess.run of a MuMu adb whose port takes the connection before the instance's adbd is up, as measured on
+    adb 1.0.41 (platform-tools 36, the one in MuMu's folder) against a port that accepts and never answers: `connect`
+    waits handshake s for the device's answer, then says "failed to connect"; its server keeps the address meanwhile,
+    and `get-state` says "error: device offline" at once, also after a client cut short. spent collects the seconds each
+    call takes."""
+    def run(cmd, stdout, timeout, **kw):
+        if cmd[-2] == "connect":
+            if timeout < handshake:
+                spent.append(timeout)
+                raise subprocess.TimeoutExpired(cmd, timeout)
+            spent.append(handshake)
+            stdout.write(f"failed to connect to {cmd[-1]}\r\n".encode())
+            return SimpleNamespace(returncode=0)
+        spent.append(0.05)
+        stdout.write(b"error: device offline\r\n" if cmd[-1] == "get-state" else b"")
+        return SimpleNamespace(returncode=1 if cmd[-1] == "get-state" else 0)
+    return run
+
+
+def test_a_connect_that_waits_for_a_handshake_does_not_hold_the_look_at_adb():
+    # #839: the first look after MuMu's start took the full 10 s, its `adb connect` waiting for an adbd not yet up
+    spent = []
+    assert devices.adb_state(MUMU0, timeout=100.0, run=stuck_adb(spent)) == "error: device offline"
+    assert len(spent) == 3 and sum(spent) <= devices.CONNECT_WAIT + 0.2 < devices.ADB_TIMEOUT
+
+
+def test_the_server_starts_before_the_connect_with_the_whole_budget():
+    # a connect cut while it starts the server leaves none, and the next look would start it again (measured on adb
+    # 1.0.41): the server starts in a call of its own, which may take the time left
+    timeouts = []
+
+    def run(cmd, stdout, timeout, **kw):
+        timeouts.append((cmd[1], timeout))
+        stdout.write(b"device\n")
+        return SimpleNamespace(returncode=0)
+    devices.adb_state(MUMU0, timeout=8.0, run=run)
+    assert [name for name, _ in timeouts] == ["start-server", "connect", "-s"]
+    assert timeouts[0][1] > 7.9 and timeouts[1][1] == devices.CONNECT_WAIT
 
 
 def test_the_runner_gives_each_look_at_adb_only_the_time_left_until_120_s_after_the_launch(tmp_path):

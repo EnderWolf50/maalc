@@ -48,27 +48,38 @@ def find(devices, address: str):
 
 
 ADB_TIMEOUT = 10  # s adb_state may take at most
+# s its `adb connect` may take. On a port that takes the connection and then says nothing (a MuMu instance's before its
+# adbd is up) the connect waits 10 s for the handshake; adb's server keeps the address meanwhile and says `device` once
+# the handshake comes, whether the client waited or was cut short (adb 1.0.41, platform-tools 36, measured, #839)
+CONNECT_WAIT = 1.0
 
 
 def adb_state(device, timeout: float = ADB_TIMEOUT, run=subprocess.run) -> str:
     """What adb says of device: "device" once MaaFramework's connect can take it, else its answer ("error: device
     offline" while a MuMu instance boots). It asks as that connect does, with the device's own adb: `adb connect` for a
     network address, then `adb -s <address> get-state` (MaaFramework v5.14.3,
-    source/MaaAdbControlUnit/General/Connection.cpp), both in timeout s (ADB_TIMEOUT at most). The answer goes to a
-    file, not a pipe: an adb server the call starts outlives it, and run() would read a pipe that server holds until
-    the server ends."""
+    source/MaaAdbControlUnit/General/Connection.cpp), all in timeout s (ADB_TIMEOUT at most). The connect is cut after
+    CONNECT_WAIT s, as get-state then answers for it; `adb start-server` goes before it, in a call of its own, since a
+    connect cut while it starts the server leaves none (measured, #839). The answer goes to a file, not a pipe: an adb
+    server the call starts outlives it, and run() would read a pipe that server holds until the server ends."""
     adb, address = str(device.adb_path), device.address
-    asks = ([[adb, "connect", address]] if ":" in address else []) + [[adb, "-s", address, "get-state"]]
-    end = time.monotonic() + min(timeout, ADB_TIMEOUT)
+    asks = ([([adb, "start-server"], None), ([adb, "connect", address], CONNECT_WAIT)] if ":" in address else []) \
+        + [([adb, "-s", address, "get-state"], None)]
+    limit = min(timeout, ADB_TIMEOUT)
+    end = time.monotonic() + limit
     with tempfile.TemporaryFile() as answer:
         try:
-            for cmd in asks:
+            for cmd, cut in asks:
                 if (left := end - time.monotonic()) <= 0:
-                    raise subprocess.TimeoutExpired(cmd, min(timeout, ADB_TIMEOUT))
+                    raise subprocess.TimeoutExpired(cmd, limit)
                 answer.seek(0)
                 answer.truncate()
-                r = run(cmd, stdin=subprocess.DEVNULL, stdout=answer, stderr=subprocess.STDOUT, timeout=left,
-                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                try:
+                    r = run(cmd, stdin=subprocess.DEVNULL, stdout=answer, stderr=subprocess.STDOUT,
+                            timeout=min(left, cut or left), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                except subprocess.TimeoutExpired:
+                    if cut is None:
+                        raise
         except (OSError, subprocess.SubprocessError) as e:
             return f"{type(e).__name__}: {e}"
         answer.seek(0)
