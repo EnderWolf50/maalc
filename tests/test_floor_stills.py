@@ -7,6 +7,7 @@ import pytest
 import actions
 import map_actions
 import recovery
+import run_start
 import run_start_actions
 import settle_actions
 import settlement
@@ -111,12 +112,12 @@ def test_the_theme_pack_page_is_kept_once_its_cards_stood_still(context, stamps,
     patch_all(monkeypatch, "still", lambda context, **k: dealt)
     monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: True)
     monkeypatch.setattr(run_start_actions, "theme_pack_plan", lambda settings, team: ({"weights": {}, "threshold": 0}, [], [], {}))
-    monkeypatch.setattr(run_start_actions.run_start, "floor_reads", lambda *a: ([], [], {}))
+    monkeypatch.setattr(run_start, "floor_reads", lambda *a: ([], [], {}))
     monkeypatch.setattr(run_start_actions, "pack_titles", lambda context, image: [(200, ["Pack"])])
 
     def rank(*a):
         raise Read
-    monkeypatch.setattr(run_start_actions.run_start, "rank_packs", rank)
+    monkeypatch.setattr(run_start, "rank_packs", rank)
     actions.RUN.update(difficulty=None, floor=5)
     for _ in range(2):  # MirrorHub's next look on the same floor keeps none
         with pytest.raises(Read):
