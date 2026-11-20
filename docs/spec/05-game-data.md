@@ -141,10 +141,12 @@ trials:
 | 異想體戰 Abnormality（`HARD_AB_BATTLE`） | 5 | 5 |
 | Risky 精銳（`HARD_BATTLE`） | 6 | 8 |
 | 無法辨識 | 9 | 9 |
+| Hidden Battle（`hidden`，第 11–15 層） | 10 | 10 |
 
 - 困難模式的權重和普通模式相同，只把 Risky 改為 8，所以無法辨識仍然排最後。（#12、#19）
 - 商店不在上表：bot 不特地找商店，所以資料檔給它 7，排在可辨識的戰鬥之後、無法辨識之前，兩種難度相同。資料檔是 `resource/base/data/map_weights.yaml`。（#26）
 - Boss 只在它是唯一可走的節點時才走；這是規則，不是權重。（#12）
+- Hidden Battle 排在無法辨識之後（10），而且和 Boss 一樣只在它是唯一相連的節點時才走（`map_route.LAST_RESORT`）：它的確認視窗一律按 Skip（使用者 2026-11-20 定案，#847），走過去沒有好處。權重只在算後面幾欄的路徑時用到。（#849）
 - 同權重時選下一欄可走路線最多的節點，見 [03-decisions.md](03-decisions.md)。（#12）
 
 ## 6. Cost 對照表與商店數字
@@ -160,8 +162,14 @@ trials:
 | Risky 精銳（`risky`） | 120 | 150 | ✔ | ✔ |
 | 異想體戰 Abnormality（`abno`） | 150 | 180 | ✔ | ✔ |
 | Boss（`boss`），第 1／2／3／4–5 層 | 200／240／300／400 | 250／300／375／500 | – | – |
+| Boss（`boss`），第 6–15 層（推論） | 400 | 500 | – | – |
+| Hidden Battle（`hidden`），第 11–15 層 | 800 | 1000 | unverified | unverified |
 
 Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cost（`originbattlevictorycostvalueList` 200、`…HardLevel` 250）乘 `battleCostWeightsByFloor` 的 BOSS 權重（第 1–5 層 1、1.2、1.5、2、2）。2026-10-23 實機的節點面板：普通 200／240／300（第 1–3 層），困難 250／300／375／500（第 1–4 層）；普通第 4、5 層的 400 和困難第 5 層的 500 還沒在實機看過。
+
+第 6 層以後（#849）：`battleCostWeightsByFloor` 只有第 1–5 層（`floor` 0–4）五列，第 6 層以後沿用第 5 層那一列是推論，第 1、2 步探路局（#854、#856）核對。第 6 層以後一定是 HARD（推論：進第 6 層的條件是第 1–5 層全 HARD），所以實際只會看到困難欄的值；普通欄補上是為了表完整。照這個推論，第 6 層以後的 Boss 是 500，表裡已有，不改。
+
+Hidden Battle（#849）：遊戲資料的 `HIDDEN_BATTLE` cost（普通 400、困難 500）乘它的權重（`battleCostWeightsByFloorIdx` 5，每一列都是 2），所以是 800／1000。`hiddenBattleInfo` 的 `minFloorCondition` 是 11：只在第 11–15 層出現。它有沒有外圈、禮物盒，資料看不出來，還沒有實機截圖。1000 是四位數，比其他 Cost 多一位；Cost 數字照右對齊推，1 落在三位數的裁切範圍左邊，所以第一次讀到前導 0（`000`）時，往左加寬再讀一次（`map_actions.coin_text`，合成圖 `tests/data/cost_crops/hard1000.synthetic.png`）。四位數是不是一樣右對齊、1 的寬度，等 #856 的實機截圖核對。
 
 **困難模式的實測 Cost**：下表是 2026-10-13 困難鏡牢實機看到的節點 Cost 標記，不是資料檔的預設值，也不是 wiki 的數字。節點欄是當時的稱呼；照上表（#91）重新對照後與上表一致：外圈 150 是困難 Risky、180 是困難 Abnormality，禮物盒無外圈的 120 是困難 Focused。
 

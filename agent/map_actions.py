@@ -60,6 +60,9 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 # bottom right, hard floors), one torn-frame capture (#287) and the icon over a pack's flame wreath and crossed swords (#840)
 SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn", "MapNodeShopIconFlame")
 ENTER = (1133, 543)
+# coin_text's crop, px either side of the Cost coin box's right edge: three digits, right-aligned on x+w+11; the wider
+# read takes a fourth (#849: the synthetic 1000's 1 on x+w-18..x+w-14)
+COIN_LEFT, COIN_LEFT_WIDE, COIN_RIGHT = 13, 21, 13
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
@@ -178,9 +181,20 @@ def coin_text(context, image, box):
     bright, barely saturated pixels; each keeps its own shading, dark on white, rather than going plain black: its
     1 px counters are what tell an 8 from a 0, and a black cut-out loses them (8 read B). A white margin: the OCR
     reads a glyph on the crop's edge badly (#257; spec 03 section 7).
+    That crop fits three digits. HARD's Hidden Battle costs 1000 (#849), right-aligned as the rest, so its 1 falls left of
+    it and the read is 000: a read with a leading 0 is read again from COIN_LEFT_WIDE, which takes a fourth digit
+    (tests/data/cost_crops/hard1000.synthetic.png, made from live glyphs; no live 1000 seen yet, #856).
     """
+    found = coin_read(context, image, box, COIN_LEFT)
+    if coin_part(re.sub(r"\D", "", found)) == "leading 0":  # #849: a 1000 cut to its 000
+        found = coin_read(context, image, box, COIN_LEFT_WIDE)
+    return found
+
+
+def coin_read(context, image, box, left):
+    """coin_text's OCR of the crop from left px left of the coin box's right edge to COIN_RIGHT px past it."""
     x, y, w, _ = box
-    part = image[y + 24:y + 38, max(0, x + w - 13):x + w + 13]
+    part = image[y + 24:y + 38, max(0, x + w - left):x + w + COIN_RIGHT]
     bright = part.max(axis=2)
     mask = (bright > 100) & (saturation(part) < 120)
     plain = np.where(mask, 255 - bright, 255).astype(np.uint8)[..., None].repeat(3, axis=2)

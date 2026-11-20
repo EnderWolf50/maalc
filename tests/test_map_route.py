@@ -75,6 +75,11 @@ def test_node_type_by_cost(marks, expected):
     (True, {"MapNodeCost", "MapNodeGift"}, "500", "boss"),
     (False, {"MapNodeCost", "MapNodeGift"}, "240", "boss"),
     (True, {"MapNodeCost", "MapNodeGift"}, "240", "focused"),  # a normal floor's boss Cost is none on hard
+    # #849: Hidden Battle (floors 11-15) by its Cost, not unknown: HARD 500 x 2, NORMAL 400 x 2 (common-data md8)
+    (True, {"MapNodeCost", "MapNodeGift"}, "1000", "hidden"),
+    (True, {"MapNodeCost"}, "1000", "hidden"),
+    (False, {"MapNodeCost", "MapNodeGift"}, "800", "hidden"),
+    (True, {"MapNodeCost", "MapNodeGift"}, "800", "focused"),  # NORMAL's Hidden Battle Cost is none on hard
 ])
 def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, marks, number, expected):
     # #91: a Risky node carries the ring, gift box and Cost coin, and read as Focused (weight 4) by its ring.
@@ -87,6 +92,34 @@ def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, mar
     context.run_recognition.side_effect = run_recognition
     actions.RUN.update(settings={}, difficulty="normal", floor_hard=hard)
     assert map_actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == expected
+
+
+def test_a_cost_read_with_a_leading_0_is_read_again_wider_for_a_fourth_digit(context):
+    # #849: HARD's Hidden Battle costs 1000. Its digits are right-aligned as a three-digit Cost's, so the 1 lands left of
+    # the crop that fits three (tests/data/cost_crops/hard1000.synthetic.png): the first read is 000.
+    widths = []
+
+    def run_recognition(name, image, override=None):
+        if name == "MapNodeCost":
+            return SimpleNamespace(hit=True, box=[700, 300, 26, 24])
+        if name == "ReadText":
+            widths.append(image.shape[1])
+            found = "000" if len(widths) == 1 else "1000"
+            return SimpleNamespace(all_results=[SimpleNamespace(text=found, box=(0, 0, 20, 20))])
+        return None
+    context.run_recognition.side_effect = run_recognition
+    actions.RUN.update(settings={}, difficulty="hard", floor_hard=True)
+    assert map_actions.node_at(context, np.zeros((720, 1280, 3), np.uint8), 713, 380) == "hidden"
+    assert len(widths) == 2 and widths[1] > widths[0]
+
+
+def test_a_whole_cost_is_read_once():
+    calls = []
+    context = MagicMock()
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        calls.append(name) or SimpleNamespace(all_results=[SimpleNamespace(text="120", box=(0, 0, 20, 20))]))
+    assert map_actions.coin_text(context, np.zeros((720, 1280, 3), np.uint8), (700, 300, 26, 24)) == "120"
+    assert calls == ["ReadText"]
 
 
 @pytest.mark.parametrize(("hard", "number", "why"), [
@@ -186,6 +219,17 @@ def test_unread_or_equal_routes_fall_back_to_middle_then_top():
 def test_boss_only_when_alone():
     assert mr.rank({"mid": ("boss", 0), "down": ("unknown", 0)}, NORMAL) == ["down"]
     assert mr.rank({"mid": ("boss", 0)}, NORMAL) == ["mid"]
+
+
+@pytest.mark.parametrize("weights", [NORMAL, HARD], ids=["normal", "hard"])
+def test_a_hidden_battle_only_when_it_is_the_only_linked_node(weights):
+    # #849: Hidden Battle is always skipped (user, 2026-11-20), so walking to it gains nothing: after unknown, and even
+    # a path that is cheaper on through it goes elsewhere.
+    assert weights["hidden"] > weights["unknown"]
+    assert mr.rank({"mid": ("hidden", 2), "down": ("unknown", 0)}, weights) == ["down"]
+    ahead = [{"up": ("event", {"up"}), "down": ("risky", {"down"})}, {"up": ("event", {"up"}), "down": ("risky", {"down"})}]
+    assert mr.rank({"up": ("hidden", 1), "down": ("risky", 1)}, weights, ahead) == ["down"]
+    assert mr.rank({"mid": ("hidden", 1)}, weights) == ["mid"]
 
 
 def test_two_columns_take_the_cheapest_path():

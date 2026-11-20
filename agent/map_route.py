@@ -15,6 +15,8 @@ LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
 # A node with no link read onward takes its brightest one from this (#212): faint links over a bright
 # background read 13-14.4, the background alone up to 12.5 (a purple pack's grid), so no one bar parts them.
 FAINT_LINK = 8
+# Nodes taken only when nothing else is linked: the boss, and Hidden Battle (#849), always skipped, so going there gains nothing
+LAST_RESORT = ("boss", "hidden")
 SHIFT_CLEAR = 0.6  # shift: the best shift's difference, at most this share of the median (a drag 0.46, other maps 0.77+)
 
 
@@ -70,10 +72,10 @@ def rank(slots, weights, ahead=()):
     weights on its cheapest path through those columns, lowest first; a node with no link read
     onward goes on as if linked to the cheapest node of the next column in a row next to its own (paths).
     With no column ahead the score is the slot's own weight. On equal score the node with more routes into the next column;
-    then middle, top, bottom. The boss only when it is the only linked node.
+    then middle, top, bottom. The boss and Hidden Battle (LAST_RESORT) only when nothing else is linked.
     """
     best = paths(slots, weights, ahead)
-    rows = [r for r in slots if slots[r][0] != "boss"] or list(slots)
+    rows = [r for r in slots if slots[r][0] not in LAST_RESORT] or list(slots)
     return sorted(rows, key=lambda r: (best[r][0], -(slots[r][1] or 0), ROWS.index(r)))
 
 
