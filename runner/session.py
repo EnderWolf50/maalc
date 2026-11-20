@@ -321,13 +321,17 @@ class Session:
                 return None, None
             if (d := devices.find(fw.devices(), address)) is None:
                 continue
-            # the scan lists MuMu seconds before its adb answers, and MaaFramework's connect needs `device` (#831)
-            if (state := self.adb_state(d, end - self.now())) != "device":
+            # the scan lists MuMu seconds before its adb answers, and MaaFramework's connect needs `device` (#831); each
+            # line says how long that look took (#839)
+            asked = self.now()
+            state = self.adb_state(d, end - asked)
+            said = f"adb says {state} (in {self.now() - asked:.1f} s)"
+            if state != "device":
                 if state != adb_said:
-                    self.say(f"{address} after {self.now() - start:.0f} s: adb says {state}")
+                    self.say(f"{address} after {self.now() - start:.0f} s: {said}")
                 adb_said = state
                 continue
-            self.say(f"{address} is up after {self.now() - start:.0f} s: adb says device; connecting in {SETTLE:g} s")
+            self.say(f"{address} is up after {self.now() - start:.0f} s: {said}; connecting in {SETTLE:g} s")
             return (d, end) if self.waited(SETTLE) else (None, None)
         self.error("device_timeout", f"MuMu instance {want['mumu_index']} did not come up at {address} in {LAUNCH_LIMIT:g} s"
                    + (f": adb says {adb_said}" if adb_said else ""))
