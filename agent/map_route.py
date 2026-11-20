@@ -84,13 +84,18 @@ def paths(slots, weights, ahead=()):
 
     Only rows next to each other link (#212): with no link read onward, a node goes on to the cheapest node
     of a row next to its own; with none there, the cheapest of the column still scores but the path ends.
+    A LAST_RESORT node onward only when the node has nothing else to go on to, as rank takes the first column (#849):
+    RouteMap.follow takes the plan's steps without ranking again.
     """
     best = {}  # the same for the nodes of the column after the one being scored
     for column, after in reversed(list(zip((slots, *ahead), (*ahead, {})))):
         nxt, best = best, {}
+
+        def onward(rows):
+            return [nxt[u] for u in rows if after[u][0] not in LAST_RESORT] or [nxt[u] for u in rows]
         for r, (node, _) in column.items():
-            linked = [nxt[u] for u in nxt if r in after[u][1]]
-            close = [nxt[u] for u in nxt if near(r, u)]
+            linked = onward([u for u in nxt if r in after[u][1]])
+            close = onward([u for u in nxt if near(r, u)])
             score, path = min(linked or close or [(s, []) for s, _ in nxt.values()] or [(0, [])])
             best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
     return best

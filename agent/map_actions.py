@@ -182,12 +182,15 @@ def coin_text(context, image, box):
     1 px counters are what tell an 8 from a 0, and a black cut-out loses them (8 read B). A white margin: the OCR
     reads a glyph on the crop's edge badly (#257; spec 03 section 7).
     That crop fits three digits. HARD's Hidden Battle costs 1000 (#849), right-aligned as the rest, so its 1 falls left of
-    it and the read is 000: a read with a leading 0 is read again from COIN_LEFT_WIDE, which takes a fourth digit
-    (tests/data/cost_crops/hard1000.synthetic.png, made from live glyphs; no live 1000 seen yet, #856).
+    it and the read is 000. Such a read is read again from COIN_LEFT_WIDE, and that read is taken only when it holds four
+    digits: what lies left of a shorter number must not make it another Cost (tests/data/cost_crops/hard1000.synthetic.png,
+    made from live glyphs; no live 1000 seen yet, #856).
     """
     found = coin_read(context, image, box, COIN_LEFT)
-    if coin_part(re.sub(r"\D", "", found)) == "leading 0":  # #849: a 1000 cut to its 000
-        found = coin_read(context, image, box, COIN_LEFT_WIDE)
+    if len(digits := coin_digits(found)) == 3 and digits[0] == "0":  # #849: a 1000 cut to its 000
+        wide = coin_read(context, image, box, COIN_LEFT_WIDE)
+        if len(coin_digits(wide)) == 4:
+            return wide
     return found
 
 
@@ -204,8 +207,13 @@ def coin_read(context, image, box, left):
 
 def coin_number(found):
     """The Cost number in coin_text's OCR text; None for a part read (coin_part says which)."""
-    digits = re.sub(r"\D", "", found)
+    digits = coin_digits(found)
     return None if coin_part(digits) else int(digits)
+
+
+def coin_digits(found):
+    """The digits of a Cost's OCR text, the rest dropped."""
+    return re.sub(r"\D", "", found)
 
 
 def coin_part(digits):
@@ -215,7 +223,7 @@ def coin_part(digits):
 
 def cost_miss(image, box, cx, cy, found, difficulty):
     """Log why a Cost coin's read is no Cost of the floor's difficulty, and keep its crop in logs/cost (#284)."""
-    digits = re.sub(r"\D", "", found)
+    digits = coin_digits(found)
     why = coin_part(digits) or f"{digits} is no {difficulty} Cost"
     x, y, w, h = box
     stamp = f"{settlement.now().replace(':', '-')}_{cx}_{cy}"

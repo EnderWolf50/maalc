@@ -113,13 +113,22 @@ def test_a_cost_read_with_a_leading_0_is_read_again_wider_for_a_fourth_digit(con
     assert len(widths) == 2 and widths[1] > widths[0]
 
 
-def test_a_whole_cost_is_read_once():
+@pytest.mark.parametrize(("narrow", "wide", "found", "reads"), [
+    ("120", "1120", "120", 1),  # a whole Cost is read once
+    ("00", "100", "00", 1),  # two digits are no 1000 cut short: no second read
+    ("000", "100", "000", 2),  # the wider read is taken only for a fourth digit: what lies left of a 000 is no 100
+    ("000", "1000", "1000", 2),
+])
+def test_only_a_three_digit_read_with_a_leading_0_is_read_again_and_only_a_fourth_digit_is_taken(narrow, wide, found, reads):
     calls = []
+
+    def run_recognition(name, image, override=None):
+        calls.append(name)
+        return SimpleNamespace(all_results=[SimpleNamespace(text=narrow if len(calls) == 1 else wide, box=(0, 0, 20, 20))])
     context = MagicMock()
-    context.run_recognition.side_effect = lambda name, image, override=None: (
-        calls.append(name) or SimpleNamespace(all_results=[SimpleNamespace(text="120", box=(0, 0, 20, 20))]))
-    assert map_actions.coin_text(context, np.zeros((720, 1280, 3), np.uint8), (700, 300, 26, 24)) == "120"
-    assert calls == ["ReadText"]
+    context.run_recognition.side_effect = run_recognition
+    assert map_actions.coin_text(context, np.zeros((720, 1280, 3), np.uint8), (700, 300, 26, 24)) == found
+    assert calls == ["ReadText"] * reads
 
 
 @pytest.mark.parametrize(("hard", "number", "why"), [
@@ -230,6 +239,18 @@ def test_a_hidden_battle_only_when_it_is_the_only_linked_node(weights):
     ahead = [{"up": ("event", {"up"}), "down": ("risky", {"down"})}, {"up": ("event", {"up"}), "down": ("risky", {"down"})}]
     assert mr.rank({"up": ("hidden", 1), "down": ("risky", 1)}, weights, ahead) == ["down"]
     assert mr.rank({"mid": ("hidden", 1)}, weights) == ["mid"]
+
+
+@pytest.mark.parametrize("weights", [NORMAL, HARD], ids=["normal", "hard"])
+def test_a_planned_path_takes_a_hidden_battle_only_when_it_is_the_only_linked_node_onward(weights):
+    # #849: the plan is followed without ranking again (RouteMap.follow), so the path itself leaves Hidden Battle aside
+    # past the first column too: event > hidden > battle (1 + 10 + 2) is cheaper than event > risky > unknown, yet risky.
+    ahead = [{"up": ("hidden", {"up"}), "mid": ("risky", {"up"})}, {"up": ("battle", {"up"}), "mid": ("unknown", {"mid"})}]
+    _, path = mr.paths({"up": ("event", 2)}, weights, ahead)["up"]
+    assert path == ["up", "mid", "mid"]
+    # Linked to nothing else, it is taken, and scores its weight.
+    ahead = [{"up": ("hidden", {"up"})}, {"up": ("battle", {"up"})}]
+    assert mr.paths({"up": ("event", 1)}, weights, ahead)["up"] == (weights["event"] + weights["hidden"] + weights["battle"], ["up", "up", "up"])
 
 
 def test_two_columns_take_the_cheapest_path():
