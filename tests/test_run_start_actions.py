@@ -11,6 +11,7 @@ import run_start_actions
 import gifts
 import recovery
 import gift_search
+import memlog
 import pack_cover
 import run_start
 import settlement
@@ -883,6 +884,22 @@ def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     actions.RUN["difficulty"] = None
     run_start_actions.PickThemePack().run(context, None)
     assert actions.RUN["floor"] == 3
+
+
+def test_a_new_floor_logs_the_memory_of_the_tasker_and_the_agent_once(context, monkeypatch):
+    # #391: each floor change writes one memory line; the page read again on the same floor writes none.
+    patch_all(monkeypatch, "text", lambda *a, **k: "Floor 6")
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(memlog, "process_memory", lambda pid=None: memlog.Mem(1800.0, 1900.0) if pid == 4120 else memlog.Mem(540.0, 510.0))
+    monkeypatch.setenv(memlog.TASKER_PID, "4120")
+    monkeypatch.setattr(settlement, "now", lambda: "2026-11-20T03:05:00.000Z")
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    actions.RUN.update(difficulty=None, floor=5, start="2026-11-20T01:00:00.000Z")
+    run_start_actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
+    assert [x for x in lines if "memory" in x] == [
+        "floor 6 memory: tasker 1800 MB (private 1900 MB), agent 540 MB (private 510 MB), 125 min into the run"]
 
 
 def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch):

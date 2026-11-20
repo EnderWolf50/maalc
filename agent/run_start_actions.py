@@ -10,6 +10,7 @@ from maa.context import Context
 from maa.custom_action import CustomAction
 
 import gift_search
+import memlog
 import pack_cover
 import recovery
 import run_start
@@ -717,6 +718,7 @@ class PickThemePack(CustomAction):
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
             STUCK["ladder"].floor(floor, option("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
+            log(memlog.floor_memory(floor, RUN.get("start"), settlement.now()))  # #391: a long run's memory curve
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
