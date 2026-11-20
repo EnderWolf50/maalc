@@ -496,7 +496,7 @@ def held_want_page(context, monkeypatch):
 def test_a_want_class_gift_the_run_holds_is_owned(monkeypatch, kind, held, got):
     # #623: a gift held again only turns into an afterimage, a material too (a recipe that needs two of one); a gift the
     # list drops (want_kind None) stays None, held or not: 「不要」 moves no card back (#416)
-    monkeypatch.setattr(actions, "want_kind", lambda gift_list, i, packs, owned: kind)
+    patch_all(monkeypatch, "want_kind", lambda gift_list, i, packs, owned: kind)
     actions.RUN["owned"] = [9089] if held else []
     assert actions.want_of({"team": {"list": wants()}})(9089) == got
 
