@@ -789,7 +789,7 @@ const en_us: typeof zh_tw = {
   "run.difficulty": "Difficulty",
   "run.target_floor": "Target floor",
   "run.target_floor_note": "Needs the whole run HARD. From floor 6, the game requires every floor of the run to be HARD. So every enabled team must play HARD from floor 1, and its usage cannot be Normal only. The Difficulty cannot be Normal either. If not, the Mirror Dungeon task stops at its start and says why.",
-  "run.target_floor_entry_note": "Floors 6 and on have not been played live yet. The bot switches Parallel Superposition on at the entrance and plays on, but a screen past floor 5 may not be recognised and get it stuck. When recovery runs out it stops, and the run stays in progress.",
+  "run.target_floor_entry_note": "Floors 6 and on have not been played live yet. The bot switches Parallel Superposition on at the entrance and plays on. But a screen past floor 5 may not be recognised and get it stuck. When recovery runs out it stops, and the run stays in progress.",
   "run.runs": "Limit runs",
   "run.runs_note": "On: the Mirror Dungeon task stops when this many runs have claimed their rewards. A run that gives up its rewards does not count. Off: there is no limit, and the task runs until another stop condition holds.",
   "run.theme_pack_refresh": "Theme pack refreshes per floor",
