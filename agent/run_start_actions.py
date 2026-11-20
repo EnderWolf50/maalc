@@ -17,7 +17,7 @@ import run_start
 import settlement
 import task_options
 from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, grid_moved, hands_back, keep_floor_still, log, number, ocr, option, options, page_guard,
+                     finish, grid_moved, hands_back, keep_floor_capture, log, number, ocr, option, options, page_guard,
                      restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
                      text, until)
 from ocrtext import compact, floor_number, has
@@ -719,7 +719,6 @@ class PickThemePack(CustomAction):
             restart_floor_clock()
             STUCK["ladder"].floor(floor, option("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
             log(memlog.floor_memory(floor, RUN.get("start"), settlement.now()))  # #391: a long run's memory curve
-        keep_floor_still("pack", floor, image)  # #848: what floors 6-15 look like
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
@@ -740,6 +739,7 @@ class PickThemePack(CustomAction):
             cards = pack_titles(context, page)
             if not cards:
                 return stuck("no theme pack titles read")
+            keep_floor_capture("pack", floor, page)  # #848: the floor's first dealt hand, once its cards stood still
             ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,
                                           lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed))
             slots = run_start.event_slots(floor, [t for t, _, _ in ranked], event_packs, packs)

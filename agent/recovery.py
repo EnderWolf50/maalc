@@ -48,8 +48,8 @@ UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keep
 DISMISSED_KEEP = 100  # screens of notices, popups and recovery's back key that logs/dismissed/ keeps (#244)
 COST_KEEP = 50  # crops of map Cost coins that read as no Cost that logs/cost/ keeps (#284)
 # logs/floors/ (#848): a run whose target is above 5 keeps each floor's first theme pack page and map from FLOOR_FROM on,
-# and its settlement window. FLOOR_KEEP is three 15-floor runs' worth (10 floors' two pages and a window each, 21), about
-# 0.5-1 MB each as png() writes a 720p screen.
+# and its settlement window. FLOOR_KEEP is three 15-floor runs' worth (21 each: floors 6-15's two pages, one window),
+# about 0.5-1 MB each as png() writes a 720p screen.
 FLOOR_FROM, FLOOR_KEEP = 6, 63
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.

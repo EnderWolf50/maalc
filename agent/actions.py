@@ -872,7 +872,7 @@ def keep_unknown(image):
         log(f"unknown screen not saved: {e}")
 
 
-def keep_floor_still(kind, floor, image):
+def keep_floor_capture(kind, floor, image):
     """Keep image in logs/floors/<time>-floorNN-<kind>.png (#848): kind is "pack" (the theme pack page), "map" or
     "settlement" (the Exploration Reward window). Only in a run whose target is above 5; a page from floor
     recovery.FLOOR_FROM on, the window on any floor; each kind once a floor, the first time the action sees it. floor None
