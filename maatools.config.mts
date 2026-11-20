@@ -72,7 +72,9 @@ const screens: [image: string, hits: string[]][] = [
   ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar', 'ModuleIcon']],
   ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
   ['HelpPager.png', ['HelpPager']],
-  ['HelpPagerLast.png', ['HelpPager']],
+  // Its picture is the Adversity page's (#851): AdversityPage reads the title in it; HelpPager, ahead of HubText, closes
+  // the sheet first.
+  ['HelpPagerLast.png', ['HelpPager', 'AdversityPage']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],

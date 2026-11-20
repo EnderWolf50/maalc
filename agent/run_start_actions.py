@@ -733,7 +733,7 @@ class PassAdversity(CustomAction):
     goes to logs/dismissed/ too (run.keep_dismissed_screens): the first live one is the fixture #855 waits for.
 
     The help sheet's own picture of the page reads `Set Adversities` and `Challenge` in these rois too; HelpPager, ahead
-    of HubText in MirrorHub, closes the help sheet first.
+    of HubText in MirrorHub, closes the help sheet first (tests/screens/HelpPagerLast.png, live, is that sheet).
     """
 
     @hands_back
