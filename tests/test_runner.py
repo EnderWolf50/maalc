@@ -254,6 +254,17 @@ def test_a_start_connects_loads_starts_the_bot_and_reports_each_task_in_turn(tmp
     assert "[run] MirrorDungeon status=succeeded t=" in " ".join(runner) and runner[-1] == "[run] end succeeded"
 
 
+def test_the_bot_is_handed_the_runners_pid_for_its_memory_lines(tmp_path):
+    # #391: the agent logs the tasker's memory at each floor; the runner is the tasker, the bot's parent may be a venv launcher
+    world = World({"MirrorDungeon": (2, "succeeded")})
+    run = Run(tmp_path, world)
+    script = "import os; print('[maalc] tasker ' + os.environ.get('MAALC_TASKER_PID', 'none'), flush=True)\n"
+    script += f"import time\nwhile not os.path.exists({str(world.bye)!r}): time.sleep(0.02)\n"
+    run.session.agent_command = lambda root, identifier: [sys.executable, "-c", script]
+    run.start(TWO[:1])
+    assert f"[maalc] tasker {os.getpid()}" in run.lines("agent")
+
+
 def test_a_task_listed_twice_is_posted_twice_and_reports_each_entry_by_its_place(tmp_path):
     # #811: the README's order runs AssembleModules before and after the Luxcavations
     world = World({"AssembleModules": (1, "succeeded"), "ExpLuxcavation": (2, "failed")})
