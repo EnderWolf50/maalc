@@ -47,6 +47,10 @@ TRANSIT = {"Loading", "Connecting", "RetryPopup", "GoToMirrorEntry", "NavTitle",
 UNKNOWN_KEEP = 30  # screens MirrorHub did not recognise that logs/unknown/ keeps
 DISMISSED_KEEP = 100  # screens of notices, popups and recovery's back key that logs/dismissed/ keeps (#244)
 COST_KEEP = 50  # crops of map Cost coins that read as no Cost that logs/cost/ keeps (#284)
+# logs/floors/ (#848): a run whose target is above 5 keeps each floor's first theme pack page and map from FLOOR_FROM on,
+# and its settlement window. FLOOR_KEEP is three 15-floor runs' worth (21 each: floors 6-15's two pages, one window),
+# about 0.5-1 MB each as png() writes a 720p screen.
+FLOOR_FROM, FLOOR_KEEP = 6, 63
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
@@ -105,6 +109,8 @@ def keep_capture(root, name, image, stamp, keep):
     "unknown": a screen MirrorHub recognised nothing on (UNKNOWN_KEEP). A popup nobody has a capture of (weekly
     reset, tutorial tip, an event's choice page) is otherwise lost once the back key closes it; this is the
     capture its node needs. "dismissed": a screen the bot is about to close (DISMISSED_KEEP, #244). "cost": a map node's Cost coin that read as no Cost (COST_KEEP, #284).
+    "floors": a long run's theme pack pages, maps and settlement window (FLOOR_KEEP, #848). The newest are the last by
+    name: a stamp starts with the time.
     """
     folder = Path(root) / "logs" / name
     folder.mkdir(parents=True, exist_ok=True)

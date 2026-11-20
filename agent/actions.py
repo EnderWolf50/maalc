@@ -865,11 +865,32 @@ def nothing_recognised():
 
 
 def keep_unknown(image):
-    """Keep a screen no node recognised in logs/unknown/ (recovery.keep_capture)."""
+    """Keep a screen no node recognised in logs/unknown/ (recovery.keep_capture); the line names the floor it was on (#848)."""
+    stamp = settlement.now().replace(":", "-")
     try:
-        recovery.keep_capture(ROOT, "unknown", image, settlement.now().replace(":", "-"), recovery.UNKNOWN_KEEP)
+        recovery.keep_capture(ROOT, "unknown", image, stamp, recovery.UNKNOWN_KEEP)
+        log(f"unknown screen kept in logs/unknown/{stamp}.png (floor {RUN.get('floor') or '?'})")
     except OSError as e:
         log(f"unknown screen not saved: {e}")
+
+
+def keep_floor_capture(kind, floor, image):
+    """Keep image in logs/floors/<time>-floorNN-<kind>.png (#848): kind is "pack" (the theme pack page), "map" or
+    "settlement" (the Exploration Reward window). Only in a run whose target is above 5; a page from floor
+    recovery.FLOOR_FROM on, the window on any floor; each kind once a floor, the first time the action sees it. floor None
+    (not read since the agent restarted): none. Only recorded: nothing is decided from it."""
+    if floor is None or option("target_floor", 5) <= 5 or (kind != "settlement" and floor < recovery.FLOOR_FROM):
+        return
+    seen = RUN.setdefault("stills", set())
+    if (floor, kind) in seen:
+        return
+    seen.add((floor, kind))  # a failed save too: a full disk logs once a page, not at every look
+    stamp = f"{settlement.now().replace(':', '-')}-floor{floor:02}-{kind}"
+    try:
+        recovery.keep_capture(ROOT, "floors", image, stamp, recovery.FLOOR_KEEP)
+        log(f"floor {floor} {kind}: screen kept in logs/floors/{stamp}.png")
+    except OSError as e:
+        log(f"floor {floor} {kind}: screen not saved: {e}")
 
 
 def foreground(context):

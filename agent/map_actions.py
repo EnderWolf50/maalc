@@ -11,9 +11,9 @@ from maa.custom_action import CustomAction
 import map_route
 import recovery
 import settlement
-from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, leave_shop, log, number, on_map,
-                     page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap, tap_shown,
-                     tap_then, text, until)
+from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, keep_floor_capture, leave_shop, log,
+                     number, on_map, page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap,
+                     tap_shown, tap_then, text, until)
 from ocrtext import floor_number, has
 
 
@@ -341,6 +341,8 @@ class RouteMap(CustomAction):
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST
             slots = self.read_slots(context, image, bx, by) if bus else {}
+        # #848: the map its bus and links were read on; a run picked up mid-floor knows its floor from the title only
+        keep_floor_capture("map", RUN.get("floor") or map_floor(context, image), image)
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         if slots and RUN.get("after_shop"):  # #279: the page handled last was the shop, so the only node to take is the boss
             if changed := map_route.boss_after_shop({"bus": ("shop", None)}, slots):
