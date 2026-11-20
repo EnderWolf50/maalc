@@ -160,7 +160,7 @@ const screens: [image: string, hits: string[]][] = [
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
   // Live 2026-10-21 (#213): after an abnormality fight, over the map. The map's buttons read through (MirrorMap), so
-  // RouteMap's guard looks for GiftGet first (COVERS in actions.py).
+  // RouteMap's guard looks for GiftGet first (COVERS in actions.py), as for the other windows the map reads under.
   ['GiftGetOverMap.png', ['GiftGet', 'MirrorMap']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
