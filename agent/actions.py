@@ -934,8 +934,9 @@ def keep_dismissed(node, image, now):
 DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)
 DISMISSED_GAP = 60  # seconds: a node that keeps coming back is kept once per gap
 # Kept at most once per gap, every other node each time: RetryPopup comes back on a dropped link; a floor 5/10 prompt
-# whose button does not read is looked at again every 1.5 s (ParallelPrompt). Either would fill the folder with itself.
-GAPPED = {"RetryPopup", "ParallelModePrompt", "ExtremeModePrompt"}
+# whose button does not read is looked at again every 1.5 s (ParallelPrompt), and so is a Hidden Battle window a Skip
+# did not close (#850). Each would fill the folder with itself.
+GAPPED = {"RetryPopup", "ParallelModePrompt", "ExtremeModePrompt", "HiddenBattle"}
 
 
 def popup_button(detail):

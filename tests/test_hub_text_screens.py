@@ -28,9 +28,12 @@ PICKS = {("HubText", "FormationNoSinners.png"): "PopupButton", ("HomeText", "For
          # to_main leaves by Return; the plain shop still by Leave.
          ("HubText", "ShopIdSkillSearchSelect.png"): "Shop", ("HubText", "Shop.png"): "Shop",
          # #85: the expired-run dialog, titled Notifs like the notices, comes to its own node
-         ("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired"}
+         ("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired",
+         # #850: the Hidden Battle window (synthetic, the game's text) over the floor-5 map
+         ("HubText", "HiddenBattleOverMap.synthetic.png"): "HiddenBattle"}
 # (hub text node, capture) -> a node whose recognition box (the part of the screen it acts on) is read too
-BOXES = {("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired"}
+BOXES = {("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired",
+         ("HubText", "HiddenBattleOverMap.synthetic.png"): "HiddenBattle"}
 
 
 def child():
@@ -116,6 +119,17 @@ def test_the_expired_run_dialog_is_tapped_on_confirm_not_cancel(picked):
     confirm, cancel = (662, 477, 208, 38), (410, 477, 208, 38)  # the two buttons' frames on the capture
     assert confirm[0] <= tap[0] < confirm[0] + confirm[2] and confirm[1] <= tap[1] < confirm[1] + confirm[3], (tap, (x, y, w, h))
     assert not (cancel[0] <= tap[0] < cancel[0] + cancel[2])
+
+
+def test_the_hidden_battle_window_is_answered_before_the_map_and_tapped_on_skip(picked):
+    """#850: the first entry picked (the map is in the tail, after every entry); DismissShot taps the node's box, Skip's
+    word; Enter is right of it."""
+    assert picked["HubText HiddenBattleOverMap.synthetic.png"][0] == "HiddenBattle"
+    x, y, w, h = picked["HubText HiddenBattleOverMap.synthetic.png box"]
+    tap = (x + w // 2, y + h // 2)
+    skip, enter = (459, 456, 161, 35), (641, 456, 160, 35)  # the two buttons' frames on the fixture
+    assert skip[0] <= tap[0] < skip[0] + skip[2] and skip[1] <= tap[1] < skip[1] + skip[3], (tap, (x, y, w, h))
+    assert not (enter[0] <= tap[0] < enter[0] + enter[2])
 
 
 if __name__ == "__main__":

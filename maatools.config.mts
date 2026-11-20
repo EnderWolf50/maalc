@@ -52,6 +52,10 @@ const screens: [image: string, hits: string[]][] = [
   // centre over the floor-5 map dimmed to 35%. The map reads under it; the prompt comes first in the hub.
   ['ParallelModePromptOverMap.synthetic.png', ['ParallelModePrompt', 'MapBus', 'MirrorMap']],
   ['ParallelModeExtremeOverMap.synthetic.png', ['ExtremeModePrompt', 'MapBus', 'MirrorMap']],
+  // Synthetic (#850, until #855 brings a live one): ParallelModePromptOverMap with its text repainted as the Hidden
+  // Battle window's (EN_MirrorDungeonUI_6: the COGNITION ERROR WARNING title, Skip / Enter). Where the window sits
+  // is not known; the map reads under it, and the window comes first in the hub.
+  ['HiddenBattleOverMap.synthetic.png', ['HiddenBattle', 'MapBus', 'MirrorMap']],
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
   // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
   // notices and the Mailbox misses NavMainTabs' 0.9; under the menu it still reads. The popups come first in the hub.

@@ -68,6 +68,7 @@
                 "ClaimPopup",
                 "ParallelModePrompt",
                 "ExtremeModePrompt",
+                "HiddenBattle",
                 "PreviousSessionExpired",
                 "PopupButton",
                 "Notices",

@@ -13,7 +13,7 @@ import settlement
 from test_pipeline import load_nodes
 from agent_patch import patch_all
 
-DISMISSERS = ["Notices", "Mailbox", "SettingsMenu", "HelpPager", "RetryPopup", "PopupButton", "RecoverL1"]
+DISMISSERS = ["Notices", "Mailbox", "SettingsMenu", "HelpPager", "RetryPopup", "PopupButton", "RecoverL1", "HiddenBattle"]
 
 
 @pytest.fixture
@@ -96,6 +96,18 @@ def test_only_retry_popup_is_kept_once_a_minute(game, monkeypatch):
     names = sorted(p.name[20:] for p in game.folder.iterdir())
     assert names == ["-Notices.png"] * 2 + ["-PopupButton.png"] + ["-RetryPopup.png"] * 2  # RetryPopup at 100 and 160 s
     assert len(game.taps) == 7  # every popup is still closed
+
+
+def test_a_hidden_battle_window_that_stays_is_kept_once_a_minute(game, monkeypatch):
+    # #850: a Skip that does not close it is pressed again every look; the first live window (#855) is not crowded out
+    clock = iter([100.0, 101.5, 103.0, 160.0])
+    monkeypatch.setattr(actions.time, "monotonic", lambda: next(clock))
+    stamps = iter(f"2026-11-20T00:00:0{i}Z" for i in range(4))
+    monkeypatch.setattr(settlement, "now", lambda: next(stamps))
+    for _ in range(4):
+        actions.DismissShot().run(game.ctx, arg("HiddenBattle"))
+    assert sorted(p.name[20:] for p in game.folder.iterdir()) == ["-HiddenBattle.png"] * 2  # at 100 and 160 s
+    assert len(game.taps) == 4
 
 
 def test_the_folder_keeps_only_the_latest(game):
