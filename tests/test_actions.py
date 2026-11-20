@@ -795,6 +795,15 @@ def test_the_guard_gives_the_page_up_after_a_second(context, clock, guarded):
     assert 1 <= sum(clock) < 1.5
 
 
+def test_a_hidden_battle_window_over_the_map_is_the_map_gone(context, clock, guarded):
+    # #850: the map reads under the window (HiddenBattleOverMap.synthetic.png); RouteMap tapping on would tap through it,
+    # Enter included. MirrorHub answers it with Skip.
+    context.run_recognition.side_effect = lambda name, image, override=None: \
+        SimpleNamespace(hit=True) if name in ("MirrorMap", "HiddenBattle") else None
+    with pytest.raises(actions.PageGone):
+        actions.page_guard(context, "MirrorMap")
+
+
 def test_the_guard_takes_a_fresh_screenshot_showing_the_page_without_another(context, guarded):
     page_until(context, "Event", 1)
     image = np.zeros((720, 1280, 3), np.uint8)

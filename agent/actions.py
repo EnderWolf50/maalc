@@ -244,7 +244,9 @@ def on_page(context, image, *nodes):
 POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popups: answered before any page
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
-COVERS = {"MirrorMap": ("GiftGet",)}
+# #850: the Hidden Battle window may come on a map node RouteMap tapped; the map reads under it, and a tap through it
+# could land on its Enter.
+COVERS = {"MirrorMap": ("GiftGet", "HiddenBattle")}
 # Windows that hide a page's anchor where the action's own taps close them anyway: they pass its guard as its page.
 # #309: an event's GET! windows, over its page or the map it ends on, close on any tap, the text taps on the dead corner too.
 TAPPED_THROUGH = {"Event": ("GiftGet",)}
