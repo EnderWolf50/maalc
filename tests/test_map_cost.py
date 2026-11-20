@@ -46,7 +46,9 @@ CROP_COIN = (8, 8, *COIN)
 # GiftGetOverMap, PauseExploration, ProgressPanel), each answered before the map is read, and of the map zoomed in
 # on the bus (MapZoomed, MapNodePanel), which RouteMap.unzoom resets first. Among them, #268's (live 2026-10-23, HARD):
 # MapBossCost500's boss, its glow unmatched, by its Cost; MapHardF5Warn's Focused 120, Risky 150 and Abnormality 180 by
-# their Costs, not the ring that is often missed.
+# their Costs, not the ring that is often missed. #840's (live 2026-11-17 and 2026-11-18, floor 5, NORMAL, recording
+# frames): MapFloor5Shop and MapFloor5ShopAgain, the shop of a pack that draws every node over a flame wreath and
+# crossed swords, read as an event live; the boss there shows no Cost.
 MAP_NODES = json.loads((ROOT / "tests" / "data" / "map_nodes.json").read_text(encoding="utf-8"))
 NODE_CASES = [(name, x, y, difficulty) for name, shot in MAP_NODES.items() for x, y, _ in shot["nodes"]
               for difficulty in ([shot["difficulty"]] if shot["difficulty"] else ["normal", "hard"])]
@@ -66,7 +68,8 @@ TYPED_INSTEAD = {
 # a battle by its marks, its coin under the star panel read '1'; and a Risky by its ring and gift box, its coin and
 # number under the star panel (#522: HARD, the map at rest).
 UNCOSTED = {("MapBoss.png", 725, 285), ("MapFloor4Panned.png", 1093, 357), ("MapShop.png", 980, 498),
-            ("MapRock.png", 980, 72), ("MapCards.png", 980, 72)}
+            ("MapRock.png", 980, 72), ("MapCards.png", 980, 72), ("MapFloor5Shop.png", 1093, 357),
+            ("MapFloor5ShopAgain.png", 1093, 357)}
 
 
 def child():

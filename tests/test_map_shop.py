@@ -43,6 +43,24 @@ FRAMES = {"MapFloor4 327 144": "event", "MapFloor4 327 357": "focused", "MapFloo
 # against its 1000 (741 in 92 px, 1448 in 120 px), so the dark boss is typed by its marks, as a fight. It is the boss all the same: the shop
 # 255 px before it says so (map_route.boss_after_shop, #279). The shop at x 837 and the boss at x 1092, both middle row.
 BOSS_SHOP, BOSS = (837, 357), (1092, 357)
+# #840, live 2026-11-17 and 2026-11-18 floor 5 (NORMAL, one path; recording frames): a pack that draws every node over a
+# flame wreath and crossed swords. The shop's icon, pale over the orange flames, scored 0.28-0.32 on the grey templates
+# and column 3 read as an event; the boss then stood by its glow alone. Read on from column 1's event, middle row.
+FLOOR5 = ("MapFloor5Shop", "MapFloor5ShopAgain")
+FLOOR5_COLUMN1 = (328, 357)
+# MapNodeShopIconFlame swept over every 1280x720 capture in tests/screens, flattened as shop_icon flattens its window (whole
+# frame, so every window shop_icon could cut): it fires on those two shops only, their icon at about x 837, y 343.
+FLAME_SHOPS = {name: (837, 343) for name in FLOOR5}
+
+
+def screen(name):
+    """tests/screens/<name>.png as a BGR array."""
+    return np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
+
+
+def columns(ahead):
+    """RouteMap.read_ahead's columns as JSON: [{row: [kind, sorted rows linked from]}]."""
+    return [{row: [kind, sorted(src)] for row, (kind, src) in column.items()} for column in ahead]
 
 
 def child():
@@ -85,14 +103,26 @@ def child():
                 for case in FRAMES:
                     name, cx, cy = case.split()
                     cx, cy = int(cx), int(cy)
-                    image = np.asarray(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1].copy()
+                    image = screen(name)
                     out[case] = map_actions.node_at(context, image, cx, cy, costs=cx <= map_actions.MAP_NEAR)
-                image = np.asarray(Image.open(ROOT / "tests" / "screens" / "MapBossDarkAfterShop.png").convert("RGB"))[:, :, ::-1].copy()
+                image = screen("MapBossDarkAfterShop")
                 x, y = BOSS
                 out["boss glow"] = bool(actions.seen(context, image, "MapNodeBoss", (x - 40, y - 40, 80, 80)))
                 out["boss shop"] = map_actions.node_at(context, image, *BOSS_SHOP, costs=False)
                 ahead = map_actions.RouteMap.read_ahead(context, image, *BOSS_SHOP, {"mid": ("shop", {"mid"})}, first=5)
-                out["boss ahead"] = [{row: [kind, sorted(src)] for row, (kind, src) in column.items()} for column in ahead]
+                out["boss ahead"] = columns(ahead)
+                for name in FLOOR5:
+                    ahead = map_actions.RouteMap.read_ahead(context, screen(name), *FLOOR5_COLUMN1, {"mid": ("event", {"mid"})}, first=2)
+                    out[name] = columns(ahead)
+                out["flame"] = {}
+                for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
+                    image = screen(path.stem)
+                    if image.shape[:2] != (720, 1280):
+                        continue
+                    grey = np.repeat(image.max(axis=2)[..., None], 3, axis=2)
+                    if hit := actions.seen(context, grey, "MapNodeShopIconFlame", (0, 0, 1280, 720)):
+                        x, y, w, h = hit.box
+                        out["flame"][path.stem] = [x + w // 2, y + h // 2]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
             return True
@@ -148,6 +178,15 @@ def test_the_dark_boss_of_floor_4_is_missed_by_its_glow(read):
 
 def test_a_dark_boss_whose_glow_misses_is_the_boss_because_the_shop_comes_before_it(read):
     assert read["boss ahead"] == [{"mid": ["boss", ["mid"]]}]
+
+
+@pytest.mark.parametrize("name", FLOOR5)
+def test_the_floor_5_shop_over_flames_and_swords_is_a_shop_and_the_boss_follows_it(read, name):
+    assert read[name] == [{"mid": ["event", ["mid"]]}, {"mid": ["shop", ["mid"]]}, {"mid": ["boss", ["mid"]]}]
+
+
+def test_the_flame_shop_template_fires_on_no_other_capture(read):
+    assert {name: tuple(at) for name, at in read["flame"].items()} == FLAME_SHOPS
 
 
 if __name__ == "__main__":

@@ -142,5 +142,16 @@
         "template": "Map/MapNodeShopIconTorn.png",
         "method": 5,
         "threshold": 0.6
+    },
+    // #840: a pack that draws every node over a flame wreath and crossed swords (The Wedge in the Wake of Dawnbreak, floor 5).
+    // The pale icon over the orange flames scores 0.28-0.32 on the three above. Cut from one run's frame: 0.98 on the other
+    // run's; the other nodes of the same floor 0.36 at most; any other place of the 234 captures in tests/screens 0.55 at
+    // most (BattleMenu; 0.48 on a map), and of 91 archived map frames 0.48. So 0.75, between the two.
+    "MapNodeShopIconFlame": {
+        "recognition": "TemplateMatch",
+        "roi": [640, 0, 180, 620],
+        "template": "Map/MapNodeShopIconFlame.png",
+        "method": 5,
+        "threshold": 0.75
     }
 }

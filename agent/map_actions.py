@@ -57,8 +57,8 @@ MARKS = {  # node -> (mark, roi around the slot centre)
     "MapNodeShop": ("shop", (-60, -60, 120, 120)),
 }
 # The shop's icon in grey, each with its own threshold: the plain one, the "+" variant (a star at the top left, a "+" at the
-# bottom right, hard floors) and one torn-frame capture (#287)
-SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn")
+# bottom right, hard floors), one torn-frame capture (#287) and the icon over a pack's flame wreath and crossed swords (#840)
+SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn", "MapNodeShopIconFlame")
 ENTER = (1133, 543)
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
@@ -103,7 +103,8 @@ def shop_icon(context, image, cx, cy):
     The icon takes the theme pack's hue: cyan and orange packs (live 2026-10-18) matched none of the colour
     templates. TemplateMatch CCOEFF on the brightness alone (max over the channels) is blind to hue and to the
     pack's brightness: the shop scored 0.49-1.0 on 12 packs' captures, anything else 0.31 at most.
-    The "+" variant of the hard floors scored 0.33-0.39 on it, so it has its own templates; the best score of the three decides.
+    The "+" variant of the hard floors scored 0.33-0.39 on it, so it has its own templates, as has the icon over a pack's flame
+    wreath (#840: 0.28-0.32); the best score of SHOP_ICONS decides.
     """
     ox, oy, w, h = MARKS["MapNodeShop"][1]
     window = image[max(0, cy + oy):cy + oy + h, max(0, cx + ox):cx + ox + w]
