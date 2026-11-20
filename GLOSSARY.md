@@ -12,7 +12,7 @@ _Avoid_: run（寫程式與英文介面時可用）、輪、場、執行（指�
 這一局打算打到第幾層，鏡牢任務的任務選項：5、10 或 15，預設 5。大於 5 時，第 6 層起要求這一局第 1–5 層每一層都是 HARD，所以所有輪替的隊伍都要從第 1 層起打 HARD。
 
 **Parallel Superposition（INFINITY、無限鏡牢）**：
-入口頁的 `Parallel Superposition Mode` 開著時，通過第 5 層後跳提示，按 Confirm 進入第 6 層；第 6–10 層是 INFINITY，結算視窗的標記推測是 `[INFINITY]`。進第 6 層要整局 HARD（見「目標層數」）。v1 把這個開關一律關掉（#94）；#434 接上後，目標層數大於 5 時才打開。
+入口頁的 `Parallel Superposition Mode` 開著時，通過第 5 層後跳提示，按 Confirm 進入第 6 層；第 6–10 層是 INFINITY，結算視窗的標記推測是 `[INFINITY]`。進第 6 層要整局 HARD（見「目標層數」）。bot 依目標層數切這個開關：目標 5 關掉（#94），大於 5 打開（#434）。
 
 **EXTREME（極限）**：
 INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層；第 11–15 層是 EXTREME，結算視窗的標記推測是 `[EXTREME]`。

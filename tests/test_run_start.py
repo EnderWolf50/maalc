@@ -19,6 +19,15 @@ def test_run_difficulty(setting, weekly, expected):
     assert rs.run_difficulty(setting, weekly, 5) == expected
 
 
+@pytest.mark.parametrize(("target", "floor", "expected"), [
+    (5, None, False), (10, None, True), (15, None, True),  # a new run: ON past floor 5 only (#434)
+    (5, 3, False), (10, 3, True), (15, 5, True),  # a paused run in floors 1-5 may still switch
+    (10, 7, None), (15, 12, None), (5, 6, None),  # floor 6 on: the run is in the mode already, the switch stays
+])
+def test_parallel_switch_follows_the_target_until_floor_6(target, floor, expected):
+    assert rs.parallel_switch(target, floor) is expected
+
+
 @pytest.mark.parametrize(("setting", "weekly", "target", "expected"), [
     ("auto", 0, 10, "hard"), ("auto", 0, 15, "hard"), ("auto", 3, 15, "hard"), ("auto", 0, 5, "normal"),
     ("hard", 0, 15, "hard"), ("normal", 3, 5, "normal"),

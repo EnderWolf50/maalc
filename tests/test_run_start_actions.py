@@ -1,5 +1,7 @@
 """A run's start actions (agent/run_start_actions.py): the plan, the team, starlight and its graces, the starting gift and its search, and the theme pack."""
 
+import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -17,6 +19,7 @@ import run_start
 import settlement
 from settings import gift_tables
 from agent_patch import patch_all
+from test_pipeline import load_nodes
 import test_actions
 
 from test_actions import SCREENS, argv, listed, moved, no_fixed_wait, page, page_until, screens, taps
@@ -69,31 +72,59 @@ def team_picker(context, title, after_confirm):
                    (1160, 522, 60, 34): "63", (400, 230, 480, 90): after_confirm})
 
 
-def infinity_switch(context, monkeypatch, takes):
-    """The entry page's Parallel Superposition Mode reads ON until a tap on INFINITY MIRROR takes (if it does)."""
+def infinity_switch(context, monkeypatch, on, takes):
+    """The entry page's Parallel Superposition Mode reads the other way until a tap on INFINITY MIRROR takes (if it
+    does); ParallelModeSwitch is to bring it to `on`."""
     taps, stops = [], []
     patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
 
-    def ocr(context, image, roi, only_rec=False):
-        if roi == run_start_actions.INFINITY_TITLE:
-            # As the bot's MaaFramework log read the entry page live, OFF and the red ON (2026-11-08)
-            text = "Parallel Superposition Mode : OFF" if takes and taps else "PParallel Superposition Mode : oN "
-            return [(text, (894, 333, 316, 17))]
-        return []
-    patch_all(monkeypatch, "ocr", ocr)
-    return taps, stops, run_start_actions.ParallelModeOff().run(context, None)
+    def seen(context, image, node, roi=None):  # the label's nodes; maa-tools reads them on the entry page captures
+        reads_on = on if takes and taps else not on
+        return node == ("ParallelModeOn" if reads_on else "ParallelModeOff") or None
+    patch_all(monkeypatch, "seen", seen)
+    return taps, stops, run_start_actions.ParallelModeSwitch().run(context, argv({"on": on}))
 
 
-def test_a_parallel_superposition_switch_left_on_is_switched_off(context, clock, monkeypatch):
-    # #94: the bot never plays past floor 5.
-    taps, stops, result = infinity_switch(context, monkeypatch, takes=True)
+@pytest.mark.parametrize("on", [False, True])
+def test_the_parallel_superposition_switch_is_tapped_to_the_side_asked(context, clock, monkeypatch, on):
+    # #94: OFF for a target of 5; #434: ON for a target above 5.
+    taps, stops, result = infinity_switch(context, monkeypatch, on, takes=True)
     assert result is True and taps == [run_start_actions.INFINITY_BUTTON] and stops == []
 
 
-def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, clock, monkeypatch):
-    taps, stops, result = infinity_switch(context, monkeypatch, takes=False)
-    assert result is False and taps == [run_start_actions.INFINITY_BUTTON] * 2 and len(stops) == 1
+@pytest.mark.parametrize("on", [False, True])
+def test_a_parallel_superposition_switch_that_does_not_move_stops_the_task(context, clock, monkeypatch, on):
+    taps, stops, result = infinity_switch(context, monkeypatch, on, takes=False)
+    assert result is False and taps == [run_start_actions.INFINITY_BUTTON] * 2
+    assert stops == [f"Parallel Superposition Mode stays {'OFF' if on else 'ON'} after tapping INFINITY MIRROR"]
+
+
+@pytest.mark.parametrize(("target", "exploring", "on", "due"), [
+    (5, "Before Entry", False, True), (5, "Before Entry", True, False),  # target 5: OFF, as v1
+    (10, "Before Entry", True, True), (10, "Before Entry", False, False),  # #434: ON past floor 5
+    (15, "Mirror of Sisyphe - F3", True, True), (5, "Mirror of Sisyphe - F3", False, True),  # a paused run in floors 1-5
+    (10, "Mirror of Sisyphe - F7", True, False), (5, "Mirror of Sisyphe - F12", False, False),  # floor 6 on: left as it is
+    (5, "Mirror of SisypheF7", False, False),  # the floor read with the name joined to it
+])
+def test_the_switch_is_due_by_the_target_and_the_floor_the_entry_page_shows(context, monkeypatch, target, exploring, on, due):
+    # #847: a run resumed at floor 6 or later is in the mode already; the switch stays.
+    monkeypatch.setitem(actions.TASK, "options", {"target_floor": target})
+    page(context, {tuple(run_start_actions.EXPLORING): exploring})
+    arg = SimpleNamespace(custom_recognition_param=json.dumps({"on": on}), image=np.zeros((720, 1280, 3), np.uint8),
+                          node_name="ParallelSwitchOn" if on else "ParallelSwitchOff")
+    assert (run_start_actions.ParallelSwitch().analyze(context, arg) is not None) is due
+
+
+def test_the_switch_nodes_read_the_label_and_the_floor_where_the_agent_does():
+    nodes = load_nodes("mirror_dungeon.json")
+    for on in (True, False):
+        node = nodes["ParallelSwitchOn" if on else "ParallelSwitchOff"]
+        label, gate = node["all_of"]
+        assert label == run_start_actions.INFINITY_LABEL[not on]  # the side the switch moves away from
+        assert gate["custom_recognition"] == "ParallelSwitch" and gate["custom_recognition_param"] == {"on": on}
+        assert node["custom_action"] == "ParallelModeSwitch" and node["custom_action_param"] == {"on": on}
+    assert nodes["MirrorEntryNewRun"]["roi"] == run_start_actions.EXPLORING
 
 
 def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock, monkeypatch):
