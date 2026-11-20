@@ -34,18 +34,24 @@ DET_SIDE = 960  # the det model's max side (fastdeploy DBDetector's max_side_len
 GAP = 16  # black rows between two groups of rois on the det canvas, so det joins no text across them
 
 
-def ocr_specs(reco):
+def ocr_specs(reco, named=None):
     """[(roi, expected, threshold, replace)] of an OCR or an And/Or of OCRs (get_node_data form); None when a part is
     anything else or reads differently (only_rec, color_filter, its own model, a roi from another node). In an And,
-    every part HubText cannot judge (a template gate, an OCR that reads differently) is left to the node's own
-    check, as long as one part is an OCR it can judge: each part of an And is necessary on its own."""
+    every part HubText cannot judge (a template gate, an agent's gate, an OCR that reads differently) is left to the
+    node's own check, as long as one part is an OCR it can judge: each part of an And is necessary on its own.
+    A part that names another node (get_node_data keeps the name) is that node's recognition, named(name); without
+    named it is a part HubText cannot judge."""
     kind, param = reco["type"], reco["param"]
     if kind == "OCR":
         if param["only_rec"] or param["color_filter"] or param["model"] or not isinstance(param["roi"], list):
             return None
         return [(param["roi"], [re.compile(e) for e in param["expected"]], param["threshold"], param["replace"])]
     if kind in ("And", "Or"):
-        subs = [ocr_specs(s["recognition"]) for s in param.get("all_of", []) + param.get("any_of", [])]
+        def part(s):
+            if isinstance(s, dict):
+                return ocr_specs(s["recognition"], named)
+            return ocr_specs(named(s), named) if named else None
+        subs = [part(s) for s in param.get("all_of", []) + param.get("any_of", [])]
         judged = [s for s in subs if s is not None]
         if kind == "And" and judged:
             subs = judged
@@ -164,9 +170,11 @@ def screens(context, name):
     """A HubText node's entries as (name, kind, specs), and the rois its pass reads."""
     names = entries(name, lambda n: context.get_node_data(n)["recognition"]["param"]["custom_recognition_param"])
     nodes = []
+    def named(n):
+        return context.get_node_data(n)["recognition"]
     for entry in names:
-        reco = context.get_node_data(entry)["recognition"]
-        nodes.append((entry, reco["type"], ocr_specs(reco)))
+        reco = named(entry)
+        nodes.append((entry, reco["type"], ocr_specs(reco, named)))
     return nodes, [s[0] for *_, specs in nodes for s in specs or []]
 
 

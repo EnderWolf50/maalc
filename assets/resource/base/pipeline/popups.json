@@ -162,26 +162,83 @@
         "custom_action": "ConfirmDownload",
         "post_delay": 2000
     },
-    // After clearing floor 5 (or 10) with the Parallel Superposition Mode engaged: `Enter the Parallel Superposition
-    // Mode and proceed to the next floor?` (EXTREME at floor 10), Cancel / Confirm. The bot does not go on into it:
-    // Cancel (spec 01, 無限鏡牢彈窗; AALC closes it too). Seen only as the game's help-sheet picture of the prompt
-    // (tests/screens/ParallelModePrompt.png), so its place on screen is not confirmed: both ROIs are wide and
-    // the click goes to the Cancel text found. It covers the page under it, so it sits before the pages. Its 1.5 s stay
-    // (#258): ParallelModeOff turns the mode off before each run, so no live log has the prompt to time a change against.
+    // After clearing floor 5 with the Parallel Superposition Mode engaged: `You can enter the Parallel Superposition
+    // Mode.` / `Enter the Parallel Superposition Mode and proceed to the next floor?` (InfinityFloor_CheckEnter_Modal_Desc),
+    // Cancel / Confirm. ParallelPrompt Confirms it towards a target floor above 5, else Cancels (#434, spec 01,
+    // 無限鏡牢彈窗). Seen only as the game's help-sheet picture of the prompt (tests/screens/ParallelModePrompt.png),
+    // so its place on screen is not confirmed (#852): both ROIs are wide and the tap goes to the button text found. It
+    // covers the page under it, so it sits before the pages. Its 1.5 s stay (#258): no live log has the prompt yet to
+    // time a change against.
     "ParallelModePrompt": {
         "recognition": "And",
         "all_of": [
             {
                 "recognition": "OCR",
                 "sub_name": "ParallelModePromptCancel",
-                "roi": [400, 420, 480, 65],
+                "roi": [360, 420, 560, 100],
                 "expected": "Cancel$"
             },
             {
                 "recognition": "OCR",
                 "sub_name": "ParallelModePromptText",
-                "roi": [400, 285, 480, 60],
-                "expected": "(?i)You can enter the .*Mode"
+                "roi": [360, 280, 560, 140],
+                "expected": "(?i)enter the Parallel Superposition Mode"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "ParallelPrompt",
+        "custom_action_param": {"after": 5},
+        "post_delay": 1500
+    },
+    // After clearing floor 10 in the Parallel Superposition Mode: `You can enter the EXTREME Mode.` / `Enter the EXTREME
+    // Mode and proceed to the next floor?` (InfinityFloor_Extreme_CheckEnter_Modal_Desc), Cancel / Confirm.
+    // ParallelPrompt Confirms it towards a target of 15, else Cancels (#434). Seen only as the help sheet's picture
+    // (tests/screens/ParallelModeExtreme.png, #854): as ParallelModePrompt, whose text it does not read.
+    "ExtremeModePrompt": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "ExtremeModePromptCancel",
+                "roi": [360, 420, 560, 100],
+                "expected": "Cancel$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "ExtremeModePromptText",
+                "roi": [360, 280, 560, 140],
+                "expected": "(?i)enter the EXTREME Mode"
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "ParallelPrompt",
+        "custom_action_param": {"after": 10},
+        "post_delay": 1500
+    },
+    // The Hidden Battle window, floors 11-15 (hiddenBattleInfo: 10% a floor): `Dimension Reversal Zone - COGNITION ERROR
+    // WARNING` (mirror_dungeon_hidden_stage_title), Skip / Enter (mirror_hidden_stage_information_quit_button /
+    // _enter_button, EN_MirrorDungeonUI_6). Always Skip, no option (#847, the user's call of 2026-11-20): DismissShot
+    // taps the box of the first part, the Skip read, and keeps the screen in logs/dismissed/ (once a minute, GAPPED).
+    // No capture shows the window (#855): whether it comes on a map node or by itself at the floor change, and where it
+    // sits, are not known, so both rois are wide, the button is found by its text, and it is read before every page.
+    // The Skip box is Skip alone, an icon in front of it read as a sign or a letter: both buttons read as one box are no
+    // Skip, whose centre could be Enter's. RouteMap gives the map up under it (actions.COVERS).
+    // Its 1.5 s stay (#258), as the floor 5/10 prompts': no live log has it to time a change against. Whatever shows after
+    // Skip goes to the hub's next look; a screen it does not know, to the recovery (spec 06).
+    "HiddenBattle": {
+        "recognition": "And",
+        "all_of": [
+            {
+                "recognition": "OCR",
+                "sub_name": "HiddenBattleSkip",
+                "roi": [160, 340, 960, 300],
+                "expected": "(?i)^\\W*[A-Z]?\\s*Skip$"
+            },
+            {
+                "recognition": "OCR",
+                "sub_name": "HiddenBattleTitle",
+                "roi": [160, 80, 960, 260],
+                "expected": "(?i)COGNITION\\s*ERROR|Dimension\\s*Reversal"
             }
         ],
         "action": "Custom",

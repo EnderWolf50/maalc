@@ -121,3 +121,12 @@ def test_mask_keeps_only_the_rois():
     out = ht.mask(image, [[10, 20, 30, 40], [100, 100, 5, 5]])
     assert out.sum() == 255 * 3 * (30 * 40 + 25) and out[20, 10].all() and not out[19, 10].any()
     assert ht.union([[10, 20, 30, 40], [100, 100, 5, 5]]) == [10, 20, 95, 85]
+
+
+def test_an_and_naming_another_node_judges_that_nodes_ocr():
+    # #434: ParallelSwitchOn names ParallelModeOff (the label alone, which the pipeline test reads on the entry page
+    # captures) and gates it with the agent's ParallelSwitch, which HubText leaves to the node's own check.
+    gate = {"recognition": {"type": "Custom", "param": {}}, "sub_name": "Gate"}
+    named = {"type": "And", "param": {"all_of": ["Label", gate]}}
+    assert ht.ocr_specs(named, {"Label": ENTER_RECO}.get) == ht.ocr_specs(ENTER_RECO)
+    assert ht.ocr_specs(named) is None  # no way to look the name up: the node checks itself
