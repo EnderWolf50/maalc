@@ -499,6 +499,19 @@ def test_pooled_pages_whose_same_option_gives_another_gift_rank_it_by_its_hint()
     assert plan([deal, take], pooled[:2]) == (0, False)  # one page alone: the wanted 9001 goes first
 
 
+def test_an_option_that_gives_only_held_gifts_ranks_with_the_rest():
+    # #623: want(9006) "owned": the run holds it, so the direct gain of it gives nothing new (level 4, screen order)
+    want = {9006: "owned"}.get
+    held = gift_opt("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9006, "direct")])
+    check = gift_opt("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9100, "check_pass")])
+    fight = gift_opt("Fight.", "Win the battle to gain", "battle", [(9100, "win_battle")])
+    both = gift_opt("Grab.", "Select to gain a Burn E.G.O Gift", "direct", [(9006, "direct"), (9100, "direct")])
+    texts = lambda page: [o["text"] + " " + o["hint"] for o in page]
+    assert r.choice_plan(texts([held, check]), "Burn", event=[held, check], want=want) == (1, False)
+    assert r.choice_plan(texts([held, fight]), "Burn", event=[held, fight], want=want) == (0, False)  # both the rest
+    assert r.choice_plan(texts([both, check]), "Burn", event=[both, check], want=want) == (0, False)  # 9100 is new
+
+
 def test_without_a_want_the_plan_is_the_old_choice():
     texts = [o["text"] + " " + o["hint"] for o in PAGE]
     none = lambda i: None

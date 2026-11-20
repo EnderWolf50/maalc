@@ -69,6 +69,21 @@ def plate_roi(x, y):
     return [x + PLATE_DX, y + PLATE_DY, PLATE_W, PLATE_H]
 
 
+PLATE_LINE = 17  # px from one line of a wrapped name plate to the next (GET! window, tests/screens/GiftGetOverMap.png)
+
+
+def plate_name(lines):
+    """A name plate's OCR lines [(text, (x, y, w, h))] as one name: top line first, each line left to right. A long name
+    wraps (the GET! window's plate takes three lines), and OCR hands the lines back in no set order (#623)."""
+    rows = []  # [centre y of the row's first box, [(x, text)]]
+    for t, (x, y, w, h) in sorted(lines, key=lambda r: r[1][1] + r[1][3] / 2):
+        if rows and y + h / 2 - rows[-1][0] < PLATE_LINE / 2:
+            rows[-1][1].append((x, t))
+        else:
+            rows.append([y + h / 2, [(x, t)]])
+    return " ".join(t for _, row in rows for _, t in sorted(row))
+
+
 def name_id(text, ids):
     """The id of the gift whose English name `text` (a plate's OCR) stands for, else None; ids: {English name: id}.
 

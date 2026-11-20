@@ -482,7 +482,36 @@ def picked(taps):
     return [x for x, y in taps if y == 300]
 
 
-@pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001])])
+def held_want_page(context, monkeypatch):
+    """The cards PickGift takes on a page of Rusted Muzzle (9089, main, leftmost) and Wound Clerid (main), the team wanting
+    Rusted Muzzle: [236] while it is a want (6), [536] once the run holds it (#623: owned, 0, under Wound Clerid's 3)."""
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
+    actions.RUN["team"]["list"] = wants(9089)
+    event_actions.PickGift().run(context, None)
+    return picked(taps)
+
+
+@pytest.mark.parametrize("kind, held, got", [("pack-want", True, "owned"), ("want", True, "owned"), ("material", True, "owned"),
+                                             ("want", False, "want"), ("material", False, "material"), (None, True, None)])
+def test_a_want_class_gift_the_run_holds_is_owned(monkeypatch, kind, held, got):
+    # #623: a gift held again only turns into an afterimage, a material too (a recipe that needs two of one); a gift the
+    # list drops (want_kind None) stays None, held or not: 「不要」 moves no card back (#416)
+    patch_all(monkeypatch, "want_kind", lambda gift_list, i, packs, owned: kind)
+    actions.RUN["owned"] = [9089] if held else []
+    assert actions.want_of({"team": {"list": wants()}})(9089) == got
+
+
+def test_a_dropped_gift_the_run_holds_still_scores_as_its_keyword(context, monkeypatch):
+    # 「不要」 under #623: Rusted Muzzle, held and dropped by the list, is the main card it is, level with Wound Clerid
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
+    actions.RUN["team"]["list"] = wants()
+    actions.RUN["owned"] = [9089]
+    event_actions.PickGift().run(context, None)
+    assert picked(taps) == [236]
+
+
+@pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001]),
+                                                ({"bought": [9249]}, [9249], [9249])])  # held already (a GET! window read, #623): once
 def test_a_shop_visit_that_ends_leaves_the_run_holding_what_it_counted_as_owned(visit, before, held):
     actions.RUN["owned"] = before
     if visit is not None:

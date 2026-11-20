@@ -778,6 +778,26 @@ def test_n_acquired_gift_popups_are_closed_in_one_action(context, clock):
     no_fixed_wait(clock)
 
 
+def test_a_starting_gift_is_held_for_the_gift_pages(context, clock, monkeypatch):
+    # #623: the cabinet's gift, Rusted Muzzle (9089), wanted: its GET! window holds it, and the first gift page ranks it as
+    # owned (0), under Wound Clerid (main, 3), not as a want (6)
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks == 0 else None, GIFT_NAME: "Rusted Muzzle"})
+    assert run_start_actions.GiftGet().run(context, argv())
+    assert actions.RUN["owned"] == [9089] and lines == ["GET!: Rusted Muzzle held"]
+    assert test_actions.held_want_page(context, monkeypatch) == [536]
+
+
+def test_each_of_n_gift_windows_is_held(context, clock):
+    # #623: a search's 3 gifts, one window each; read before its tap, not on the screen that told it closed
+    names = ["Wound Clerid", "Hardblood Glaive", "Rusted Muzzle"]
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 3 else None,
+                   GIFT_NAME: lambda clicks, looks: names[min(clicks, 2)]})
+    assert run_start_actions.GiftGet().run(context, argv())
+    assert actions.RUN["owned"] == [9005, 9843, 9089]
+
+
 def test_a_name_plate_read_mid_fade_out_is_not_taken_for_the_next_window(context, clock):
     # The last window fading out still shows its title, its plate half drawn ("Spiderw"): a tap then lands on the page
     # under it, the search grid, and picks a gift. The next window is tapped only once the screen is still.
