@@ -115,7 +115,7 @@ def test_the_two_prompts_are_two_nodes_that_read_the_buttons_where_the_agent_doe
 def test_a_prompt_looked_at_again_keeps_one_screen_a_minute(context, clock, monkeypatch, tmp_path):
     # a button that does not read brings the prompt back every 1.5 s: it must not push #852's first capture out
     monkeypatch.setitem(actions.TASK, "options", {"target_floor": 10, "keep_dismissed_screens": True})
-    monkeypatch.setattr(actions, "DISMISSED_AT", {})
+    patch_all(monkeypatch, "DISMISSED_AT", {})
     page(context, {tuple(settle_actions.PROMPT_BUTTONS): PROMPT_BUTTONS[:1]})  # Confirm does not read
     stamps = iter(f"2026-11-20T00:00:0{i}Z" for i in range(3))
     monkeypatch.setattr(settlement, "now", lambda: next(stamps))

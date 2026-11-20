@@ -10,6 +10,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from agent_patch import rebind
 from daily_child import probe_child, run_child, screen
 
 # The entry page captures: a new run, and two runs paused at floor 1 (the switch OFF, ON).
@@ -42,7 +43,7 @@ def child():
             run_recognition=context.run_recognition)
         out["taps"] = {}
         for png, after in PROMPTS.items():
-            settle_actions.screen = lambda ctx, png=png: screen(png)
+            rebind("screen", lambda ctx, png=png: screen(png))
             for target in TARGETS:
                 actions.TASK["options"] = {"target_floor": target, "keep_dismissed_screens": False}
                 clicks.clear()
