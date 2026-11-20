@@ -279,7 +279,7 @@ function MirrorOptions() {
           <KeyField path="run/target_floor" note={pastFive ? t("run.target_floor_note") : undefined}>
             <Select value={String(run.target_floor)} options={runEnum("target_floor")} label={(v) => tv("target_floor", v)}
               onChange={(v) => set({ target_floor: Number(v) })} />
-            {/* Remove with #434: until the entrance switches Parallel Superposition on, a target above 5 still stops at floor 5. */}
+            {/* Remove once the probe runs (#853-#856) have played floors 6-15 live: until then a screen there may be unknown. */}
             {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
           </KeyField>
           <KeyToggleNum path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")} onChange={(v) => set({ runs: v })} />
