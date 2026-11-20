@@ -17,6 +17,9 @@ _Avoid_: run（寫程式與英文介面時可用）、輪、場、執行（指�
 **EXTREME（極限）**：
 INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層；第 11–15 層是 EXTREME，結算視窗的標記推測是 `[EXTREME]`。
 
+**Adversity**：
+第 11–15 層在 Adversity 頁（標題 `Set Adversities`）自己選的負面效果，每層 6 個可選、最多選 5 個，每個有分數（1–5）；選了的層通過後才多拿星光與 Mirror of Sisyphe Pass 的 Projection。bot 一個都不選，直接按 `Challenge`（使用者 2026-11-20 定案，#851）；選 N 個留在 #388。和 Boss 後選的 Mounting Trials（試煉）不同。
+
 **可領（`claim_ok`）**：
 結算時這一局已通過第 5 層（Exploration Reward 視窗的最後一層，已通過層數 ≥ 5）。可領的局一律 Claim，包括第 6 層以後才失敗或離開的；沒過第 5 層的局放棄獎勵。
 

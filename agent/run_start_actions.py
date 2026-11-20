@@ -1,5 +1,5 @@
-"""A run's start: the plan, Parallel Mode, the team, starlight and its graces, the starting gift and its search, and
-the theme pack."""
+"""A run's start: the plan, Parallel Mode, the team, starlight and its graces, the starting gift and its search, the
+theme pack, and the Adversity page of floors 11-15."""
 
 import functools
 import json
@@ -18,10 +18,10 @@ import recovery
 import run_start
 import settlement
 import task_options
-from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, flag_hit, grid_moved, hands_back, log, number, ocr, option, options, page_guard,
-                     restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
-                     text, until)
+from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, box_centre,
+                     current_run, data, dismissed_due, finish, flag_hit, grid_moved, hands_back, keep_dismissed, log,
+                     number, ocr, option, options, page_guard, restart_floor_clock, run_team, screen, scroll, seen, shows,
+                     still, stop, stuck, swipe, tap, tap_then, text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
 from team_queue import headed, pick_team, to_head
@@ -50,6 +50,12 @@ CARDS_SETTLE = 4.0  # s; a page still swinging by then is read anyway
 # frames), greyed 0 (35 frames, the brightest px 54-56). The ThemePack captures of tests/screens: lit 1176-1321, greyed 0.
 REFRESH_BUTTON = (1001, 25, 163, 45)
 REFRESH_BRIGHT, REFRESH_LIT_MIN = 120, 100
+# The Adversity page's button `Challenge` (EN_MirrorDungeonUI_6 mirror_constraint_button; it reads `Challenge 0/6` on
+# the help sheet's picture, MirrorDungeon8_33). No live capture yet (#855): wide enough for the picture as the help sheet
+# draws it (y 525-565) and as a 16:9 screen lays it out (tests/screens/AdversityPage.synthetic.png, y 622-645).
+ADVERSITY_BUTTON = [900, 480, 380, 220]
+ADVERSITY_SHOWS = 3.0  # s: Challenge looked for while the page fades in
+ADVERSITY_LEAVES = 5.0  # s: the page gone by then after the tap
 
 
 @AgentServer.custom_action("PlanRun")
@@ -713,6 +719,39 @@ def refresh_lit(image):
     """Whether the theme pack page's Refresh button is lit: REFRESH_LIT_MIN of its px over REFRESH_BRIGHT (#482)."""
     x, y, w, h = REFRESH_BUTTON
     return bool((image[y:y + h, x:x + w].max(axis=2) > REFRESH_BRIGHT).sum() >= REFRESH_LIT_MIN)
+
+
+@AgentServer.custom_action("PassAdversity")
+class PassAdversity(CustomAction):
+    """The Adversity page of floors 11-15 (#851): none selected, then Challenge (the user's choice of 2026-11-20, no
+    setting; choosing some is #388).
+
+    Challenge is found by its text, not tapped at a fixed place, until a live capture shows where it sits (#855). No
+    card is ever tapped: a Challenge that does not read, or a page still up after it (the game may want one chosen),
+    stops the task, the screen kept as its evidence (#847). The page goes to logs/dismissed/ too
+    (run.keep_dismissed_screens): the first live one is the fixture #855 waits for.
+    """
+
+    @hands_back
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        now = time.monotonic()
+        image = page_guard(context, argv.node_name)
+        if dismissed_due(argv.node_name, now):
+            keep_dismissed(argv.node_name, image, now)
+        floor = f"floor {RUN.get('floor')}"
+        found = []
+
+        def challenge(im):
+            found[:] = [b for t, b in ocr(context, im, ADVERSITY_BUTTON) if has(t, "Challenge")]
+            return bool(found)
+
+        if until(context, challenge, timeout=ADVERSITY_SHOWS) is None:
+            return stop(context, f"{floor}: Adversity page: Challenge not read")
+        log(f"{floor}: Adversity page, none selected: Challenge")
+        x, y = box_centre(found[0])
+        if tap_then(context, x, y, lambda im: seen(context, im, argv.node_name) is None, timeout=ADVERSITY_LEAVES) is None:
+            return stop(context, f"{floor}: the Adversity page stays up after Challenge with none selected")
+        return True
 
 
 @AgentServer.custom_action("PickThemePack")

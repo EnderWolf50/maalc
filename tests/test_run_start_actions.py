@@ -1104,3 +1104,49 @@ def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(contex
     page_until(context, "StartingGift", 2)  # the cabinet, then its first gift
     assert run_start_actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(230, 285), (970, 262)]
+
+
+CHALLENGE = (1097, 621, 82, 24)  # where Challenge reads on tests/screens/AdversityPage.synthetic.png
+
+
+def adversity_page(context, monkeypatch, challenge=True, leaves=True):
+    """The Adversity page on floor 11: its node hits until a tap went out (leaves) or for good; the button's roi reads
+    `Challenge` and its count `0/6` (challenge) or nothing. Returns the stop procedure's reasons."""
+    stops = []
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    actions.RUN["floor"] = 11
+    page(context, {tuple(run_start_actions.ADVERSITY_BUTTON):
+                   [("Challenge", CHALLENGE), ("0/6", (1182, 619, 40, 28))] if challenge else None})
+    page_until(context, "AdversityPage", 1 if leaves else 10**6)
+    return stops
+
+
+def test_the_adversity_page_is_passed_with_none_chosen(context, clock, monkeypatch, tmp_path):
+    # #851, the user's choice of 2026-11-20: no Adversity; Challenge, found by its text, is the one tap.
+    stops = adversity_page(context, monkeypatch)
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is True
+    assert taps(context) == [actions.box_centre(CHALLENGE)] and stops == []
+    assert len(list((tmp_path / "logs" / "dismissed").glob("*-AdversityPage.png"))) == 1  # the fixture #855 waits for
+    no_fixed_wait(clock)
+
+
+def test_an_adversity_page_still_up_after_challenge_stops_the_task(context, clock, monkeypatch):
+    # #847: the game may want one chosen; the bot taps nothing else and stops with the screen as evidence.
+    stops = adversity_page(context, monkeypatch, leaves=False)
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is False
+    assert taps(context) == [actions.box_centre(CHALLENGE)]
+    assert stops == ["floor 11: the Adversity page stays up after Challenge with none selected"]
+
+
+def test_an_adversity_page_whose_challenge_does_not_read_stops_without_a_tap(context, clock, monkeypatch):
+    stops = adversity_page(context, monkeypatch, challenge=False)
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is False
+    assert taps(context) == [] and stops == ["floor 11: Adversity page: Challenge not read"]
+
+
+def test_the_adversity_page_is_a_mirror_hub_page_read_by_its_title():
+    nodes = load_nodes("mirror_dungeon.json")
+    node = nodes["AdversityPage"]
+    assert node["recognition"] == "OCR" and node["expected"] == "Set Adversit"
+    assert node["custom_action"] == "PassAdversity"
+    assert "AdversityPage" in nodes["HubText"]["custom_recognition_param"]["entries"]
