@@ -19,9 +19,9 @@ import run_start
 import settlement
 import task_options
 from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, POPUPS, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, box_centre,
-                     current_run, data, dismissed_due, finish, flag_hit, grid_moved, hands_back, keep_dismissed, log,
-                     number, ocr, on_page, option, options, page_guard, restart_floor_clock, run_team, screen, scroll,
-                     seen, shows, still, stop, stuck, swipe, tap, tap_then, text, until)
+                     current_run, data, dismissed_due, finish, flag_hit, grid_moved, hands_back, keep_dismissed,
+                     keep_floor_capture, log, number, ocr, on_page, option, options, page_guard, restart_floor_clock,
+                     run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then, text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
 from team_queue import headed, pick_team, to_head
@@ -809,6 +809,7 @@ class PickThemePack(CustomAction):
             cards = pack_titles(context, page)
             if not cards:
                 return stuck("no theme pack titles read")
+            keep_floor_capture("pack", floor, page)  # #848: the floor's first dealt hand, once its cards stood still
             ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,
                                           lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed))
             slots = run_start.event_slots(floor, [t for t, _, _ in ranked], event_packs, packs)

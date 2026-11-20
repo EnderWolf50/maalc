@@ -34,8 +34,11 @@ COINS = json.loads((ROOT / "tests" / "data" / "map_costs.json").read_text(encodi
 # PauseExploration and ProgressPanel show the same one.
 UNREAD = {("GiftGetOverMap.png", 1221, 438), ("PauseExploration.png", 1221, 438), ("ProgressPanel.png", 1221, 438)}
 # Live crops of coins the pale link's arrow tip touched (#284), read as '7', '8', '.175' or nothing; the coin sits at (8, 8)
-# in a crop. File name: <difficulty><number printed>-<tag>.
+# in a crop. File name: <difficulty><number printed>-<tag>. A .synthetic one is made, not captured (#849: HARD's Hidden
+# Battle 1000, MapBossCost500's boss coin with its 5 made a 0 and the 1 of MapBoss.png's 150 set left of it; the 1's
+# place is inferred, no live 1000 seen yet, #856).
 CROPS = sorted((ROOT / "tests" / "data" / "cost_crops").glob("*.png"))
+ARROW_CROPS = [c for c in CROPS if not c.stem.endswith(".synthetic")]
 CROP_COIN = (8, 8, *COIN)
 # node_at end to end on every node of the map captures (#228), labelled by eye: image -> the floor's difficulty (null: not
 # known, both are run) and [x, y, the Cost printed, or the kind on screen where no Cost shows] of each node centre. A
@@ -170,10 +173,15 @@ def test_the_live_misreads_read_right(read):
     assert read["MirrorMap.png 709 438"] == 85
 
 
-@pytest.mark.parametrize("crop", [pytest.param(c, id=c.stem) for c in CROPS])
+@pytest.mark.parametrize("crop", [pytest.param(c, id=c.stem) for c in ARROW_CROPS])
 def test_a_coin_under_a_link_arrow_reads_whole(read, crop):
     # #284: the arrow's tip, as cream as the digits, touched the 5 and the OCR read '7' or '8' (7 + 3 distinct live misses)
     assert read[f"crop {crop.name}"] == int(re.search(r"\d+", crop.stem)[0])
+
+
+def test_a_four_digit_cost_reads_whole(read):
+    # #849: HARD's Hidden Battle, 1000; its 1 falls left of the three-digit crop, so a first read of 000 is read again wider
+    assert read["crop hard1000.synthetic.png"] == 1000
 
 
 def test_the_sweep_has_no_unlisted_miss(read):

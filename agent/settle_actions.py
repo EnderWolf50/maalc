@@ -11,8 +11,8 @@ from maa.custom_action import CustomAction
 import recovery
 import settlement
 from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, box_centre, current_run,
-                     dismissed_due, hands_back, keep_dismissed, log, number, ocr, option, options, page_guard, run_line, screen, still,
-                     stop, stuck, tap_shown, tap_then, text, until)
+                     dismissed_due, hands_back, keep_dismissed, keep_floor_capture, log, number, ocr, option, options,
+                     page_guard, run_line, screen, still, stop, stuck, tap_shown, tap_then, text, until)
 from ocrtext import has
 from team_queue import requeue
 
@@ -100,6 +100,7 @@ class Settle(CustomAction):
         if not result:
             return True  # fading in: let MirrorHub look again
         floor, hard = result.floor, result.hard
+        keep_floor_capture("settlement", floor, image)  # #848: a long run's [INFINITY] or [EXTREME] window
         log(f"exploration reward: Floor {floor} [{(result.difficulty or '?').upper()}] {result.cleared}/{result.total}")
         if not settlement.claim_ok(result):
             return self.give_up(context, run, result)
