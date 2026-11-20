@@ -18,10 +18,10 @@ import recovery
 import run_start
 import settlement
 import task_options
-from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, box_centre,
+from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, POPUPS, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, box_centre,
                      current_run, data, dismissed_due, finish, flag_hit, grid_moved, hands_back, keep_dismissed, log,
-                     number, ocr, option, options, page_guard, restart_floor_clock, run_team, screen, scroll, seen, shows,
-                     still, stop, stuck, swipe, tap, tap_then, text, until)
+                     number, ocr, on_page, option, options, page_guard, restart_floor_clock, run_team, screen, scroll,
+                     seen, shows, still, stop, stuck, swipe, tap, tap_then, text, until)
 from ocrtext import compact, floor_number, has
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
 from team_queue import headed, pick_team, to_head
@@ -728,8 +728,12 @@ class PassAdversity(CustomAction):
 
     Challenge is found by its text, not tapped at a fixed place, until a live capture shows where it sits (#855). No
     card is ever tapped: a Challenge that does not read, or a page still up after it (the game may want one chosen),
-    stops the task, the screen kept as its evidence (#847). The page goes to logs/dismissed/ too
-    (run.keep_dismissed_screens): the first live one is the fixture #855 waits for.
+    stops the task, the screen kept as its evidence (#847). A global popup up after the tap (POPUPS: the page's title
+    reads through it) is the hub's to answer first: back to it, and the page, if still up, comes here again. The page
+    goes to logs/dismissed/ too (run.keep_dismissed_screens): the first live one is the fixture #855 waits for.
+
+    The help sheet's own picture of the page reads `Set Adversities` and `Challenge` in these rois too; HelpPager, ahead
+    of HubText in MirrorHub, closes the help sheet first.
     """
 
     @hands_back
@@ -738,19 +742,25 @@ class PassAdversity(CustomAction):
         image = page_guard(context, argv.node_name)
         if dismissed_due(argv.node_name, now):
             keep_dismissed(argv.node_name, image, now)
-        floor = f"floor {RUN.get('floor')}"
+        floor = f"floor {RUN.get('floor', '?')}"
         found = []
 
         def challenge(im):
             found[:] = [b for t, b in ocr(context, im, ADVERSITY_BUTTON) if has(t, "Challenge")]
             return bool(found)
 
-        if until(context, challenge, timeout=ADVERSITY_SHOWS) is None:
+        shown = until(context, challenge, timeout=ADVERSITY_SHOWS)
+        if shown is None:
             return stop(context, f"{floor}: Adversity page: Challenge not read")
+        page_guard(context, argv.node_name, shown)  # ADR 0007: the screen the button was read on still shows the page
         log(f"{floor}: Adversity page, none selected: Challenge")
         x, y = box_centre(found[0])
-        if tap_then(context, x, y, lambda im: seen(context, im, argv.node_name) is None, timeout=ADVERSITY_LEAVES) is None:
+        after = tap_then(context, x, y, lambda im: seen(context, im, argv.node_name) is None or on_page(context, im, *POPUPS),
+                         timeout=ADVERSITY_LEAVES)
+        if after is None:
             return stop(context, f"{floor}: the Adversity page stays up after Challenge with none selected")
+        if popup := on_page(context, after, *POPUPS):
+            log(f"{floor}: {popup} over the Adversity page after Challenge: back to the hub")
         return True
 
 

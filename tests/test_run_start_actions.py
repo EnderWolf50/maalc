@@ -1138,6 +1138,17 @@ def test_an_adversity_page_still_up_after_challenge_stops_the_task(context, cloc
     assert stops == ["floor 11: the Adversity page stays up after Challenge with none selected"]
 
 
+def test_a_popup_over_the_adversity_page_after_challenge_goes_back_to_the_hub(context, clock, monkeypatch):
+    # The title reads through a global popup (ADR 0007): the hub answers the popup, not the stop procedure.
+    stops = adversity_page(context, monkeypatch, leaves=False)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "RetryPopup" and context.tasker.controller.post_click.call_count
+        else inner(name, image, override))
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is True
+    assert taps(context) == [actions.box_centre(CHALLENGE)] and stops == []
+
+
 def test_an_adversity_page_whose_challenge_does_not_read_stops_without_a_tap(context, clock, monkeypatch):
     stops = adversity_page(context, monkeypatch, challenge=False)
     assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is False

@@ -15,7 +15,7 @@ from daily_child import probe_child, run_child, screen
 PAGE = "AdversityPage.synthetic.png"
 AFTER = "ThemePack.png"  # a screen the page may give way to: not the page
 # Where Challenge sits on the page as (x0, x1, y0, y1), by eye; the cards span x 40-1240, y 220-550.
-CHALLENGE = (1090, 1185, 615, 650)
+CHALLENGE_SPAN = (1090, 1185, 615, 650)
 
 
 def child():
@@ -44,7 +44,7 @@ def read():
 
 
 def on_challenge(tap):
-    x0, x1, y0, y1 = CHALLENGE
+    x0, x1, y0, y1 = CHALLENGE_SPAN
     return x0 <= tap[0] <= x1 and y0 <= tap[1] <= y1
 
 
