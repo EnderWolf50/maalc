@@ -879,8 +879,13 @@ def keep_floor_capture(kind, floor, image):
     """Keep image in logs/floors/<time>-floorNN-<kind>.png (#848): kind is "pack" (the theme pack page), "map" or
     "settlement" (the Exploration Reward window). Only in a run whose target is above 5; a page from floor
     recovery.FLOOR_FROM on, the window on any floor; each kind once a floor, the first time the action sees it. floor None
-    (not read since the agent restarted): none. Only recorded: nothing is decided from it."""
-    if floor is None or option("target_floor", 5) <= 5 or (kind != "settlement" and floor < recovery.FLOOR_FROM):
+    (not read since the agent restarted): none. floor may be a function that reads it, called only in such a run, so a
+    run with a target of 5 spends no read on it. Only recorded: nothing is decided from it."""
+    if option("target_floor", 5) <= 5:
+        return
+    if callable(floor):
+        floor = floor()
+    if floor is None or (kind != "settlement" and floor < recovery.FLOOR_FROM):
         return
     seen = RUN.setdefault("stills", set())
     if (floor, kind) in seen:

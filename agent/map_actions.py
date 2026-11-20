@@ -342,7 +342,7 @@ class RouteMap(CustomAction):
             bx, by = bus or BUS_REST
             slots = self.read_slots(context, image, bx, by) if bus else {}
         # #848: the map its bus and links were read on; a run picked up mid-floor knows its floor from the title only
-        keep_floor_capture("map", RUN.get("floor") or map_floor(context, image), image)
+        keep_floor_capture("map", RUN.get("floor") or (lambda: map_floor(context, image)), image)
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         if slots and RUN.get("after_shop"):  # #279: the page handled last was the shop, so the only node to take is the boss
             if changed := map_route.boss_after_shop({"bus": ("shop", None)}, slots):

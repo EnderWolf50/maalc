@@ -161,6 +161,17 @@ def test_a_run_picked_up_mid_floor_reads_its_floor_off_the_map(context, stamps, 
     assert kept(tmp_path) == ["2026-11-20T03-00-00.000Z-floor12-map.png"]
 
 
+def test_a_5_floor_run_picked_up_mid_floor_reads_no_map_title(context, stamps, monkeypatch, tmp_path):
+    # A target of 5 keeps no stills, so its map costs no extra read for one (#847: target 5 unchanged).
+    target(monkeypatch, 5)
+
+    def title(context, image):
+        raise AssertionError("map title read")
+    patch_all(monkeypatch, "map_floor", title)
+    route_map(context, monkeypatch, np.zeros((720, 1280, 3), np.uint8))
+    assert kept(tmp_path) == []
+
+
 def test_a_map_still_the_last_floors_is_not_kept_as_this_ones(context, stamps, monkeypatch, tmp_path):
     target(monkeypatch, 10)
     actions.RUN.update(floor=8)
