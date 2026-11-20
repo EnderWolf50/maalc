@@ -8,10 +8,11 @@ import pytest
 import resource_package as rp
 
 
-def test_the_program_knows_format_1_and_template_3():
+def test_the_program_knows_format_1_and_template_4():
+    # template 4 (#840): the agent matches the map's shop with MapNodeShopIconFlame too, a node template 3's pipeline lacks.
     # template 3 (#813, ADR 0015): the pipeline without the global options' node, as the agent reads the task options
     # from the settings file; template 2's agent read them from the attach of that node and of the entry nodes (#782)
-    assert (rp.FORMAT, rp.TEMPLATE) == (1, 3)
+    assert (rp.FORMAT, rp.TEMPLATE) == (1, 4)
 
 
 def test_versions_compare_as_tuples_of_ints():
