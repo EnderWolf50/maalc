@@ -9,8 +9,9 @@ from __future__ import annotations
 import ctypes
 import os
 import sys
-from datetime import datetime
 from typing import NamedTuple
+
+from recovery import seconds_between
 
 # runner/session.py puts its own pid here for the agent it starts: the tasker, where MaaFramework recognises. The
 # agent's parent is not it in development, where a venv's python.exe is a launcher between the two.
@@ -34,9 +35,17 @@ class _Counters(ctypes.Structure):  # PROCESS_MEMORY_COUNTERS_EX
 
 
 def process_memory(pid=None):
-    """pid's Mem (None: this process), or None off Windows or when pid cannot be read (ended, not allowed)."""
+    """pid's Mem (None: this process), or None off Windows or when pid cannot be read (ended, not allowed, or the call
+    itself failed): the line is only a record, so a failed read never fails the floor (#391)."""
     if sys.platform != "win32":
         return None
+    try:
+        return _read(pid)
+    except (OSError, AttributeError, ctypes.ArgumentError):
+        return None
+
+
+def _read(pid):
     kernel32 = ctypes.WinDLL("kernel32")
     kernel32.OpenProcess.restype = kernel32.GetCurrentProcess.restype = ctypes.c_void_p
     kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
@@ -66,7 +75,7 @@ def tasker_pid(environ=os.environ):
 def seconds_since(start, now):
     """Seconds from start to now (UTC ISO times, settlement.now()'s format), or None when start is unknown."""
     try:
-        return (datetime.fromisoformat(now.replace("Z", "+00:00")) - datetime.fromisoformat(start.replace("Z", "+00:00"))).total_seconds()
+        return seconds_between(start, now)
     except (AttributeError, TypeError, ValueError):
         return None
 

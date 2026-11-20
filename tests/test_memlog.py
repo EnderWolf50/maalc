@@ -39,3 +39,13 @@ def test_this_process_and_another_are_read_and_a_pid_that_runs_nothing_is_not():
     by_pid = memlog.process_memory(os.getpid())
     assert by_pid is not None and abs(by_pid.working_set - me.working_set) < 200
     assert memlog.process_memory(2**31 - 4) is None  # no such process: the line shows "?"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="reads Windows' process counters")
+def test_a_read_that_fails_in_windows_reads_as_unknown_and_does_not_raise(monkeypatch):
+    # the line is only a record (#391): a failed read must not fail PickThemePack, which sets the floor's difficulty after it
+    def broken(name):
+        raise OSError("kernel32 not loaded")
+    monkeypatch.setattr(memlog.ctypes, "WinDLL", broken)
+    monkeypatch.setenv(memlog.TASKER_PID, "4120")
+    assert memlog.floor_memory(3, None, "2026-11-20T03:05:30.000Z") == "floor 3 memory: tasker ?, agent ?, ? min into the run"

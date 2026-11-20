@@ -108,7 +108,7 @@
 
 ### 15 層局的記憶體觀察
 
-每次換層（`PickThemePack` 讀到新樓層時），bot 在 log 記一行執行器（tasker，MaaFramework 辨識的程序）與 Agent 的記憶體、層數和這局開始後的分鐘數，例：`floor 6 memory: tasker 1834 MB (private 1921 MB), agent 540 MB (private 510 MB), 125 min into the run`。前一個數字是 working set（2026-10 實機記錄說的 RSS），括號裡是 private bytes（Windows 的 commit charge）。執行器啟動 Agent 時把自己的 pid 放在環境變數 `MAALC_TASKER_PID` 交給它（`runner/session.py`）：開發環境裡 Agent 的父程序是 venv 的 `python.exe` 啟動器，不是執行器。讀不到的值寫 `?`：不是執行器啟動的 Agent 沒有 tasker 的 pid，接續的局沒有開始時間。這行只記錄，不影響任何決策（`agent/memlog.py`）。（#391）
+每次換層（`PickThemePack` 讀到新樓層時），bot 在 log 記一行執行器（tasker，MaaFramework 辨識的程序）與 Agent 的記憶體、層數和這局開始後的分鐘數，例：`floor 6 memory: tasker 1834 MB (private 1921 MB), agent 540 MB (private 510 MB), 125 min into the run`。前一個數字是 working set（2026-10 實機記錄說的 RSS），括號裡是 private bytes（Windows 的 commit charge）。執行器啟動 Agent 時把自己的 pid 放在環境變數 `MAALC_TASKER_PID` 交給它（`runner/session.py`）：開發環境裡 Agent 的父程序是 venv 的 `python.exe` 啟動器，不是執行器。讀不到的值寫 `?`：不是執行器啟動的 Agent 沒有 tasker 的 pid，接續的局沒有開始時間。Agent 在一層的中途重新啟動時，那一層沒有這行，下一層才有。這行只記錄，不影響任何決策（`agent/memlog.py`）。（#391）
 
 背景：5 層局的實機記錄裡，執行器開局後在第 1 層與第 5 層的戰鬥各有 +277～+425 MB 的階梯，之後約每小時 +100 MB，峰值約 2.0–2.14 GB；Agent 約 523–588 MB，持平。原因沒查證。15 層局要幾小時（推論），所以由探路局 #853 用這行畫出 10 層局的曲線，再決定要不要在層間重啟遊戲；目前沒有層間重啟。（#391、#847）
 
