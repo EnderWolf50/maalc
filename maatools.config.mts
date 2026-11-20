@@ -76,7 +76,8 @@ const screens: [image: string, hits: string[]][] = [
   ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar', 'ModuleIcon']],
   ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
   ['HelpPager.png', ['HelpPager']],
-  ['HelpPagerLast.png', ['HelpPager']],
+  // Its picture is the Adversity page's (#851): AdversityPage reads it; HelpPager comes first (popups.json).
+  ['HelpPagerLast.png', ['HelpPager', 'AdversityPage']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
@@ -184,6 +185,11 @@ const screens: [image: string, hits: string[]][] = [
   ['ThemePackInfinity.synthetic.png', ['ThemePack']],
   ['ThemePackExtreme.synthetic.png', ['ThemePack']],
   ['ThemePackNoLabel.synthetic.png', ['ThemePack']],
+  // Synthetic (#851, until #855 brings a live one): the help sheet's picture of the Adversity page (MirrorDungeon8_33),
+  // laid out as a 16:9 screen: scaled 1.4x as the help sheet's map picture fits the live map, the top band (the title)
+  // at the top, the cards centred, the Challenge band at the bottom, the tutorial's dimming lifted. Challenge is read by
+  // PassAdversity (tests/test_adversity_screens.py).
+  ['AdversityPage.synthetic.png', ['AdversityPage']],
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],

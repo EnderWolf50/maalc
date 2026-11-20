@@ -94,6 +94,7 @@
                 "GiftSearchForgo",
                 "GiftSearch",
                 "StartingGift",
+                "AdversityPage",
                 "ThemePack",
                 "RewardCardForgo",
                 "GiftRefuseDialog",
@@ -423,6 +424,18 @@
         "expected": "THEME ?PACK",
         "action": "Custom",
         "custom_action": "PickThemePack",
+        "post_delay": 0
+    },
+    // The Adversity page, floors 11-15 (#851): its title `Set Adversities` (EN_MirrorDungeonUI_6
+    // mirror_select_constraint_title). PassAdversity selects none and taps Challenge. No live capture yet (#855): the roi
+    // is wide enough for the help sheet's picture of the page (MirrorDungeon8_33) as the help sheet draws it and as a
+    // 16:9 screen lays it out (tests/screens/AdversityPage.synthetic.png).
+    "AdversityPage": {
+        "recognition": "OCR",
+        "roi": [20, 20, 400, 170],
+        "expected": "Set Adversit",
+        "action": "Custom",
+        "custom_action": "PassAdversity",
         "post_delay": 0
     },
     // The free refresh button's count "n/3" (#319): spent (0); unread or some left: no hit. With one free refresh the

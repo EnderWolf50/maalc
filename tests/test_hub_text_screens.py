@@ -29,6 +29,8 @@ PICKS = {("HubText", "FormationNoSinners.png"): "PopupButton", ("HomeText", "For
          ("HubText", "ShopIdSkillSearchSelect.png"): "Shop", ("HubText", "Shop.png"): "Shop",
          # #85: the expired-run dialog, titled Notifs like the notices, comes to its own node
          ("HubText", "PreviousSessionExpired.png"): "PreviousSessionExpired",
+         # #851: the Adversity page of floors 11-15 (synthetic until #855), by its title
+         ("HubText", "AdversityPage.synthetic.png"): "AdversityPage",
          # #850: the Hidden Battle window (synthetic, the game's text) over the floor-5 map
          ("HubText", "HiddenBattleOverMap.synthetic.png"): "HiddenBattle"}
 # (hub text node, capture) -> a node whose recognition box (the part of the screen it acts on) is read too
