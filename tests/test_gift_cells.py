@@ -232,7 +232,7 @@ def child():
             return lambda *args: True
 
     out = {"cases": {}, "ex": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "page_ms": [], "short_prices": {},
-           "got": {}}
+           "got": {}, "windows": []}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -258,10 +258,13 @@ def child():
                     out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
                 for name in GET_WINDOWS:  # the GET! window's plate (#623)
                     image = np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1])
-                    out["got"][name] = actions.got_gift(context, image)
+                    plate = actions.get_plate(context, image)
+                    out["got"][name] = [g.name_id(plate, actions.GIFT_IDS), plate]
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
                     cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
+                    if actions.get_window(context, image):  # #623: Event asks it on every screenshot that moved
+                        out["windows"].append(path.stem)
                     short = [t for t, (_, _, _, h) in actions.ocr(context, image, shop_actions.OFFER_GRID)
                              if h < 18 and not shop.has_letters(t) and sum(c.isdigit() for c in t) >= 3]
                     if short:  # read_slots keeps a price line under 18 px tall that has 3 digits (#341): what else is one
@@ -337,6 +340,7 @@ def test_the_get_window_s_plate_names_its_gift(read):
     # #623: one line, and three lines read out of order (GiftGetOverMap.png)
     assert {name: gift_id for name, (gift_id, _) in read["got"].items()} == GET_WINDOWS
     assert read["got"]["GiftGetOverMap"][1] == "Rusty Commemorative Coin"
+    assert read["windows"] == sorted(GET_WINDOWS)  # the title's sweep: no other screen reads "Gift GET"
 
 
 @pytest.mark.parametrize("case", ["offers", "offers_super", "offers_red"])

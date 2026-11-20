@@ -482,6 +482,15 @@ def picked(taps):
     return [x for x, y in taps if y == 300]
 
 
+def held_want_page(context, monkeypatch):
+    """The cards PickGift takes on a page of Wound Clerid (main, leftmost) and Rusted Muzzle (9089, main), the team wanting
+    Rusted Muzzle: [536] while it is a want (6), [236] once the run holds it (#623: then the main card it is)."""
+    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
+    actions.RUN["team"]["list"] = wants(9089)
+    event_actions.PickGift().run(context, None)
+    return picked(taps)
+
+
 @pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001]),
                                                 ({"bought": [9249]}, [9249], [9249])])  # held already (a GET! window read, #623): once
 def test_a_shop_visit_that_ends_leaves_the_run_holding_what_it_counted_as_owned(visit, before, held):

@@ -16,7 +16,7 @@ import run_start
 import settlement
 import task_options
 from actions import (GET_CONFIRM, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, got_gift, grid_moved, hands_back, log, note_got, number, ocr, option, options, page_guard,
+                     finish, get_plate, grid_moved, hands_back, log, note_got, number, ocr, option, options, page_guard,
                      restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
                      text, until)
 from ocrtext import compact, floor_number, has
@@ -444,19 +444,20 @@ class GiftGet(CustomAction):
     sent ahead: under the last window lies the page the gifts came from (the search grid or the starting gift
     page), where one would pick; a window fading out still shows its title over a half-drawn plate.
     A window still up with the same name after the wait: the tap was lost, and MirrorHub looks again.
-    Each window's gift is held from now on (note_got, #623): the starting gift's, a search's, a reward card's, an event's.
+    Each window's gift is held from now on (note_got, #623): the starting gift's, an observed gift's, a reward card's, an
+    event's.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         title = shows(context, GET_TITLE, "GET")
         image = screen(context)
         for _ in range(GIFT_WINDOWS):
-            before = note_got(context, image)
+            before = note_got(context, image)[0]
 
             def closed(im):
                 if not title(im):
                     return True
-                now = got_gift(context, im)[1]
+                now = get_plate(context, im)
                 return bool(before and now and now != before)
             image = tap_then(context, *GET_CONFIRM, closed, timeout=2)
             if image is not None and title(image):

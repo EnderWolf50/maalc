@@ -16,7 +16,7 @@ import rewards
 import run_start
 import shop
 from actions import (ENDS_ON, GET_TITLE, GIFT_IDS, GIFT_NAMES, POPUPS, RUN, PageEnded, avoided_gifts, columns,
-                     current_run, data, gone, hands_back, log, moved, note_got, ocr, on_page, page_guard, screen, scroll, shows,
+                     current_run, data, get_window, gone, hands_back, hold, log, moved, note_got, ocr, on_page, page_guard, screen, scroll, shows,
                      still, stuck, tap, text, until, want_of)
 from ocrtext import compact, has
 from settings import data_dir
@@ -191,9 +191,11 @@ class Event(CustomAction):
         EVENT_MAP_REST s (#511).
         A GET! window the taps close (#309) has its gift read on the screenshots it moves on, before the next tap, and held
         from now on (note_got, #623): the 2026-11-10 recording of an event's window (Melted Eyeball, 12 frames at 30 fps)
-        reads its plate whole from its first frame on. A still screen costs no read: the map's rest (#511) keeps its pace.
+        reads its plate whole from its first frame on. A still screen costs no read, so the map's rest (#511) keeps its
+        pace; only a plate that named no gift is read again on the next screenshot, moved or not, while the window is up.
         """
-        last, pressed_label, plate = 0.0, None, ""  # None: not in a press's fade (any more); plate: the GET! window's as read
+        last, pressed_label = 0.0, None  # None: not in a press's fade (any more)
+        plate, reread = "", False  # the GET! window's plate as read; whether it named no gift
         if pressed_at is not None:
             last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
         shot_at = still_since = time.monotonic()
@@ -230,8 +232,11 @@ class Event(CustomAction):
                 pressed_at = last = Event.press(context)
                 pressed_label = label
                 continue
-            if moved and has(text(context, image, GET_TITLE), "GET"):  # a window comes in moving: a still screen is no new one
-                plate = note_got(context, image, plate)
+            if (moved or reread) and get_window(context, image):  # a window comes in moving: a still screen is no new one
+                plate, gift_id = note_got(context, image, plate)
+                reread = gift_id is None
+            else:
+                reread = False
             read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
             pressed_label = None
             if card_alone(image):
@@ -523,7 +528,7 @@ class PickGift(CustomAction):
             tap(context, *GIFT_SELECT, wait=0)
             if until(context, lambda im: not has(text(context, im, REFUSE_GIFT), "Refuse")) is not None:
                 # The run's Coin Power units so far, for the budget of pools past early_pools (spec 03 section 12)
-                RUN["owned"] = RUN.get("owned", []) + [cards[i].gift_id for i in taken if cards[i].gift_id]  # held from now on
+                hold([cards[i].gift_id for i in taken if cards[i].gift_id])
                 coins = sum(table["trials"][names[i]]["effects"].get("coin", 0) for i in taken if names[i])
                 if coins:
                     RUN["trial_coins"] = run.get("trial_coins", 0) + coins

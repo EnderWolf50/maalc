@@ -7,7 +7,6 @@ import pytest
 from PIL import Image
 
 import actions
-import event_actions
 import run_start_actions
 import gifts
 import recovery
@@ -712,10 +711,7 @@ def test_a_starting_gift_is_held_for_the_gift_pages(context, clock, monkeypatch)
     page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks == 0 else None, GIFT_NAME: "Rusted Muzzle"})
     assert run_start_actions.GiftGet().run(context, argv())
     assert actions.RUN["owned"] == [9089] and lines == ["GET!: Rusted Muzzle held"]
-    taps = test_actions.gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
-    actions.RUN["team"]["list"] = test_actions.wants(9089)
-    event_actions.PickGift().run(context, None)
-    assert test_actions.picked(taps) == [236]
+    assert test_actions.held_want_page(context, monkeypatch) == [236]
 
 
 def test_each_of_n_gift_windows_is_held(context, clock):

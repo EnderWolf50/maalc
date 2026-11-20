@@ -29,7 +29,7 @@ import run_start
 import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
-from ocrtext import normalize
+from ocrtext import has, normalize
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
 
@@ -1131,27 +1131,38 @@ def reload_gifts():
 reload_gifts()
 
 
-def got_gift(context, image):
-    """(id or None, name as read) of the gift on the E.G.O Gift GET! window over image: its name plate (GET_NAME), its
-    lines put in order (gift_cells.plate_name), against every gift's English name (#623)."""
-    name = gift_cells.plate_name(ocr(context, image, GET_NAME))
-    return gift_cells.name_id(name, GIFT_IDS), name
+def get_window(context, image):
+    """Whether an E.G.O Gift GET! window is over image: its title reads "Gift GET", not a bare "get" of other words (#623;
+    over tests/screens only the three GET! windows, test_gift_cells.py)."""
+    return has(text(context, image, GET_TITLE), "Gift GET")
+
+
+def get_plate(context, image):
+    """The name on the GET! window's plate (GET_NAME), its lines put in order (gift_cells.plate_name, #623)."""
+    return gift_cells.plate_name(ocr(context, image, GET_NAME))
+
+
+def hold(ids):
+    """The run holds `ids` from now on (RUN["owned"]), each once: a gift page's card is held at its Select, and its GET!
+    window comes after (#623). Returns the ones it did not hold yet."""
+    held = RUN.setdefault("owned", [])
+    new = [i for i in dict.fromkeys(ids) if i not in held]
+    held.extend(new)
+    return new
 
 
 def note_got(context, image, last=""):
-    """The run holds the gift of the GET! window over image from now on (RUN["owned"], #623), and the log says so once:
-    an event's, the starting gift's, a search's, a reward card's (a gift page's card is held at its Select already).
-    Returns the plate as read; `last`, the plate read on this window before: no second read of the same window counts."""
-    gift_id, name = got_gift(context, image)
-    if not name or name == last:
-        return name or last
-    held = RUN.setdefault("owned", [])
-    if gift_id is None:
-        log(f"GET!: {name!r} names no gift: not held")
-    elif gift_id not in held:
-        held.append(gift_id)
-        log(f"GET!: {GIFT_NAMES[gift_id]} held")
-    return name
+    """The run holds the gift of the GET! window over image from now on (hold, #623), and the log says so once: an
+    event's, the starting gift's, an observed gift's, a reward card's. (plate as read, its gift's id or None); `last`, the
+    plate read on this window before: the same plate again is no second line. A plate read empty keeps `last`."""
+    name = get_plate(context, image) or last
+    gift_id = gift_cells.name_id(name, GIFT_IDS)
+    if name != last:
+        if gift_id is None:
+            log(f"GET!: {name!r} names no gift: not held")
+        elif hold([gift_id]):
+            log(f"GET!: {GIFT_NAMES[gift_id]} held")
+    return name, gift_id
 
 
 DIALOG_TEXT = [360, 280, 560, 140]
@@ -1235,8 +1246,7 @@ def leave_shop():
     if visit and visit.get("owned") is not None:
         RUN["owned"] = owned_now(visit)
     elif visit:
-        held = RUN.get("owned", [])
-        RUN["owned"] = held + [i for i in owned_now(visit) if i not in held]
+        hold(owned_now(visit))
 
 
 def want_of(run):

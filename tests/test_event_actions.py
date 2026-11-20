@@ -14,7 +14,7 @@ import gifts
 from agent_patch import patch_all
 import test_actions
 
-from test_actions import Choices, DOLL, REAL_GUARD, SCROLLED, TABLE, argv, button_taps, check_page, corner_taps, event_portrait_taps, event_text, gift_page, moved, page_until, picked, reads, shop_team, taps, wants
+from test_actions import Choices, DOLL, REAL_GUARD, SCROLLED, TABLE, argv, button_taps, check_page, corner_taps, event_portrait_taps, event_text, gift_page, held_want_page, moved, page_until, picked, reads, shop_team, taps, wants
 
 clock, context, guarded = test_actions.clock, test_actions.context, test_actions.guarded  # its fixtures
 
@@ -173,26 +173,26 @@ def test_a_gift_taken_on_a_gift_page_is_held_for_the_next_one(context, monkeypat
     assert picked(taps) == [236]
 
 
-def get_window(context, shots, plate):
-    """event_text's screenshots numbered in `shots` show an E.G.O Gift GET! window whose name plate reads `plate`, the
-    window coming in brighter on each."""
+def get_window(context, plates):
+    """event_text's screenshots numbered as the keys of `plates` show an E.G.O Gift GET! window whose name plate reads
+    plates[n]: the first of them moved (the window came in), the next ones hold still."""
     get = context.tasker.controller.post_screencap.return_value.wait.return_value.get
     shoot = get.side_effect
 
     def screencap():
         image = shoot()
-        if image[0, 0, 0] in shots:
-            image[160:560, 300:980] = 40 * image[0, 0, 0]
+        if image[0, 0, 0] in plates:
+            image[160:560, 300:980] = 120
         return image
     get.side_effect = screencap
     inner = context.run_recognition.side_effect
 
     def run_recognition(name, image, override=None):
         roi = tuple((override or {}).get(name, {}).get("roi", ()))
-        if image[0, 0, 0] in shots and roi == tuple(actions.GET_TITLE):
+        if image[0, 0, 0] in plates and roi == tuple(actions.GET_TITLE):
             return SimpleNamespace(all_results=[SimpleNamespace(text="E.G.O Gift GET!", box=(555, 170, 170, 25))])
-        if image[0, 0, 0] in shots and roi == tuple(actions.GET_NAME):
-            return SimpleNamespace(all_results=[SimpleNamespace(text=plate, box=(340, 437, 140, 17))])
+        if image[0, 0, 0] in plates and roi == tuple(actions.GET_NAME):
+            return SimpleNamespace(all_results=[SimpleNamespace(text=plates[image[0, 0, 0]], box=(340, 437, 140, 17))])
         return inner(name, image, override)
     context.run_recognition.side_effect = run_recognition
 
@@ -203,22 +203,29 @@ def test_a_wanted_gift_an_event_gives_is_held_for_the_next_gift_page(context, mo
     lines = []
     patch_all(monkeypatch, "log", lines.append)
     event_text(context, choices_from=7)
-    get_window(context, {4, 5}, "Rusted Muzzle")  # up on two screenshots: one line
+    get_window(context, {4: "Rusted Muzzle", 5: "Rusted Muzzle"})  # up on two screenshots: one line
     event_actions.Event().run(context, None)
     assert actions.RUN["owned"] == [9089] and lines == ["GET!: Rusted Muzzle held"]
-    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
-    actions.RUN["team"]["list"] = wants(9089)
-    event_actions.PickGift().run(context, None)
-    assert picked(taps) == [236]
+    assert held_want_page(context, monkeypatch) == [236]
 
 
 def test_a_gift_window_whose_plate_names_no_gift_holds_nothing_and_says_so(context, monkeypatch):
     lines = []
     patch_all(monkeypatch, "log", lines.append)
     event_text(context, choices_from=7)
-    get_window(context, {4}, "Rusted")  # a plate read in part
+    get_window(context, {4: "Rusted"})  # a plate read in part
     event_actions.Event().run(context, None)
     assert actions.RUN.get("owned", []) == [] and lines == ["GET!: 'Rusted' names no gift: not held"]
+
+
+def test_a_plate_that_named_no_gift_is_read_again_on_the_next_screenshot(context, monkeypatch):
+    # The window's first screenshot read its plate in part; the next one holds still (no new window) and reads it whole
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    event_text(context, choices_from=7)
+    get_window(context, {4: "Rusted", 5: "Rusted Muzzle"})
+    event_actions.Event().run(context, None)
+    assert actions.RUN["owned"] == [9089] and lines == ["GET!: 'Rusted' names no gift: not held", "GET!: Rusted Muzzle held"]
 
 
 def test_a_still_screen_costs_no_gift_window_read(context):
@@ -232,7 +239,7 @@ def test_a_gift_window_for_a_gift_the_run_holds_adds_it_once(context, monkeypatc
     # A gift page's card is held at Select (PickGift), and its GET! window comes after
     actions.RUN["owned"] = [9089]
     event_text(context, choices_from=7)
-    get_window(context, {4}, "Rusted Muzzle")
+    get_window(context, {4: "Rusted Muzzle"})
     event_actions.Event().run(context, None)
     assert actions.RUN["owned"] == [9089]
 
