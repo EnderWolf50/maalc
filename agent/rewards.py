@@ -19,6 +19,7 @@ WANT_CLASSES = ("pack-want", "want", "material")  # gifts.want_kind's classes, s
 TIER_STEP = 0.5  # a main or other gift's score per tier above I (#381)
 UNREAD_LEVELS = 2  # an Enemy Level Up badge that does not read counts as +2, the most seen live (#381)
 KEYWORDS = tuple(GIFT_KEYWORDS)
+REST = (4, True)  # _rank of the rest (level 5 of spec 03 section 10): screen order, the main keyword no tie-break
 
 
 def pick_choice(options, keyword, override=None, closed=(), event=None):
@@ -52,10 +53,15 @@ def choice_plan(options, keyword, override=None, closed=(), event=None, want=Non
     wanted = {i: _wanted(entries[i], want) for i in open_} if want else {}
 
     def rank(i):
-        ids = [g for g, _ in (entries[i] or {}).get("gift_ids", ())]
-        return (4, True) if want and ids and all(want(g) == "owned" for g in ids) else _rank(options[i], entries[i], keyword)
+        return REST if want and _all_owned(entries[i], want) else _rank(options[i], entries[i], keyword)
     best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) else 0), *rank(i), i), default=None)
     return best, bool(wanted.get(best) and wanted[best][1])
+
+
+def _all_owned(entry, want):
+    """Whether a table option gives gifts (gift_ids) and the run holds every one of them (want "owned", #623)."""
+    ids = [g for g, _ in (entry or {}).get("gift_ids", ())]
+    return bool(ids) and all(want(g) == "owned" for g in ids)
 
 
 def _wanted(entry, want):
@@ -96,13 +102,13 @@ def _rank(text, entry, keyword):
                 return 2, not main
             if re.search(r"\bdepending on\b", entry["hint"], re.I):
                 return 3, not main
-            return 4, True  # a hint with neither text (901061, 901023, 971088) matches no AALC template
-        return 4, True
+            return REST  # a hint with neither text (901061, 901023, 971088) matches no AALC template
+        return REST
     main = bool(re.search(rf"\b{keyword}\b", text, re.I))
     if "???" in text:
         return 0, not main
     if not _gift(text) or re.search(r"\bwin the battle|\d%\s*chance", text, re.I):
-        return 4, True
+        return REST
     if re.search(r"\bcheck\b", text, re.I):
         return 2, not main
     return (3 if re.search(r"\bdepending on\b", text, re.I) else 1), not main
