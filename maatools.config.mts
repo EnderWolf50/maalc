@@ -175,6 +175,11 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-11-07 (#482, a frame of the run's recording), HARD floor 5 after its one free refresh: the button greyed
   // with no count, so PackRefreshSpent misses; PickThemePack reads it by its brightness (refresh_lit).
   ['ThemePackRefreshGrey.png', ['ThemePack']],
+  // Synthetic (#386): ThemePack.png with its difficulty label box redrawn as floors 6-15 may show it (INFINITY, EXTREME,
+  // nothing); no capture past floor 5 yet. The page is still ThemePack.
+  ['ThemePackInfinity.synthetic.png', ['ThemePack']],
+  ['ThemePackExtreme.synthetic.png', ['ThemePack']],
+  ['ThemePackNoLabel.synthetic.png', ['ThemePack']],
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],

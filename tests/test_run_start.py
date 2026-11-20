@@ -107,9 +107,21 @@ def test_a_team_with_its_switch_to_hard_off_plays_normal_unless_the_run_says_har
     (3, False, True, "hard"),
     (2, True, True, None),
     (1, True, None, None),  # run difficulty unknown: keep what the game shows
+    (6, False, True, None),  # #386: floors 6 on have no NORMAL to switch from or to
+    (11, True, False, None),
 ])
 def test_difficulty_move(floor, shown_hard, want_hard, expected):
     assert rs.difficulty_move(floor, shown_hard, want_hard) == expected
+
+
+@pytest.mark.parametrize(("shown", "hard"), [
+    ("HARD", True), ("NORMAL", False), ("// NORMAL", False),
+    # #386: the game data's uiConfig.difficultyLabel for floors 6-10 and 11-15; no capture shows the page there yet (#853, #855)
+    ("INFINITY", True), ("[INFINITY]", True), ("EXTREME", True), ("[EXTREME]", True),
+    ("", None), ("Refresh", None),
+])
+def test_difficulty_label(shown, hard):
+    assert rs.difficulty_label(shown) is hard
 
 
 NAMES = ["To be Crushed", "To be Cleaved", "To be Pierced", "Nagel und Hammer",

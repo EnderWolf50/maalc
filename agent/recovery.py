@@ -353,7 +353,8 @@ def read_runs(root):
     return lines
 
 
-def _seconds(start, end):
+def seconds_between(start, end):
+    """Seconds from start to end, UTC ISO times (settlement.now()'s format)."""
     return (datetime.fromisoformat(end.replace("Z", "+00:00")) - datetime.fromisoformat(start.replace("Z", "+00:00"))).total_seconds()
 
 
@@ -371,7 +372,7 @@ def run_limit(lines, team_id, target):
         if (x.get("team") == team_id and x.get("result") == "clear" and (x.get("target") or 5) == target
                 and x.get("target_reached") is not False and x.get("start") and x.get("end")):
             try:
-                times.append(_seconds(x["start"], x["end"]))
+                times.append(seconds_between(x["start"], x["end"]))
             except (TypeError, ValueError):
                 continue
     if len(times) < RUN_LIMIT_MIN_RUNS:

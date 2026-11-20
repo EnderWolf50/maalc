@@ -366,7 +366,8 @@ class Session:
 
     # the bot
     def start_agent(self, root: Path, identifier: str) -> None:
-        env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+        # MAALC_TASKER_PID: this process recognises, so the bot logs its memory at each floor (agent/memlog.py, #391)
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "MAALC_TASKER_PID": str(os.getpid())}
         self.agent = subprocess.Popen(self.agent_command(root, identifier), stdin=subprocess.DEVNULL,
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
