@@ -1,4 +1,7 @@
-"""The run's settlement: the result page, the weekly bonuses, and the claim or the give-up."""
+"""The run's settlement: the prompts after floors 5 and 10, the result page, the weekly bonuses, and the claim or the
+give-up."""
+
+import json
 
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
@@ -6,9 +9,9 @@ from maa.custom_action import CustomAction
 
 import recovery
 import settlement
-from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, current_run, hands_back, log,
-                     number, ocr, options, page_guard, run_line, screen, still, stop, stuck, tap_shown, tap_then, text,
-                     until)
+from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, box_centre, current_run,
+                     hands_back, keep_dismissed, log, number, ocr, option, options, page_guard, run_line, screen, still,
+                     stop, stuck, tap_shown, tap_then, text, until)
 from ocrtext import has
 from team_queue import requeue
 
@@ -40,6 +43,39 @@ def toggles(context, image):
         t = text(context, image, [x + dx, y, w, h], only_rec=True)
         out.append(False if has(t, "OFF") else True if has(t, "ON") else None)
     return out
+
+
+# The prompts after floors 5 and 10 (ParallelModePrompt, ExtremeModePrompt; the pipeline's roi of their buttons). No
+# live capture shows where they sit (#852, #854): wide enough for the help sheet's picture of them (buttons at y 440-466)
+# and for the game's other two-button dialogs (DIALOG_CANCEL, DIALOG_CONFIRM at y 493).
+PROMPT_BUTTONS = [360, 420, 560, 100]
+
+
+@AgentServer.custom_action("ParallelPrompt")
+class ParallelPrompt(CustomAction):
+    """The prompt after floor 5 (`You can enter the Parallel Superposition Mode.`) or 10 (`... the EXTREME Mode.`),
+    param {"after": 5 or 10}: Confirm takes the run on to the next floor, Cancel ends it there (#434). Confirm only
+    towards a target floor past it (settlement.goes_on): target 5 cancels both, 10 confirms the first, 15 both.
+
+    The button is found by its text, not tapped at a fixed place, until a live capture shows where it sits (#852). One
+    that does not read is left for the hub's next look. The screen is kept in logs/dismissed/ (run.keep_dismissed_screens)
+    either way: the first live prompts are the fixtures #852 and #854 wait for.
+    """
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        after = json.loads(argv.custom_action_param)["after"]
+        target = option("target_floor", 5)
+        word = "Confirm" if settlement.goes_on(after, target) else "Cancel"
+        image = screen(context)
+        if option("keep_dismissed_screens", True):
+            keep_dismissed(argv.node_name, image)
+        box = next((b for t, b in ocr(context, image, PROMPT_BUTTONS) if has(t, word)), None)
+        if box is None:
+            log(f"{argv.node_name}: {word} not read (target floor {target}), looking again")
+            return True
+        log(f"{argv.node_name}: {word} after floor {after} (target floor {target})")
+        context.tasker.controller.post_click(*box_centre(box)).wait()
+        return True
 
 
 @AgentServer.custom_action("Settle")

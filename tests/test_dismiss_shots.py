@@ -13,7 +13,7 @@ import settlement
 from test_pipeline import load_nodes
 from agent_patch import patch_all
 
-DISMISSERS = ["Notices", "Mailbox", "SettingsMenu", "HelpPager", "RetryPopup", "PopupButton", "ParallelModePrompt", "RecoverL1"]
+DISMISSERS = ["Notices", "Mailbox", "SettingsMenu", "HelpPager", "RetryPopup", "PopupButton", "RecoverL1"]
 
 
 @pytest.fixture

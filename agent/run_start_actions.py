@@ -2,12 +2,14 @@
 the theme pack."""
 
 import functools
+import json
 import re
 import time
 
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
+from maa.custom_recognition import CustomRecognition
 
 import gift_search
 import pack_cover
@@ -16,7 +18,7 @@ import run_start
 import settlement
 import task_options
 from actions import (GET_CONFIRM, GET_NAME, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, grid_moved, hands_back, log, number, ocr, option, options, page_guard,
+                     finish, flag_hit, grid_moved, hands_back, log, number, ocr, option, options, page_guard,
                      restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
                      text, until)
 from ocrtext import compact, floor_number, has
@@ -133,21 +135,38 @@ INFINITY_TITLE = [890, 330, 330, 28]  # entry page: "Parallel Superposition Mode
 INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
 
 
-@AgentServer.custom_action("ParallelModeOff")
-class ParallelModeOff(CustomAction):
-    """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
+EXPLORING = [990, 140, 230, 35]  # entry page: "Before Entry", or the paused run's "Mirror of Sisyphe - F1"
+SWITCH_READS = {True: r":\s*[Oo0]N\b", False: r":\s*[O0]FF"}  # the red ON reads `oN` (live 2026-11-08)
 
-    v1 never plays past floor 5 (#434 opens it for a target above 5); the prompt after floor 5 (ParallelModePrompt)
-    is cancelled as a second guard.
-    Still ON after two taps: stop, nothing else is tried.
+
+@AgentServer.custom_recognition("ParallelSwitch")
+class ParallelSwitch(CustomRecognition):
+    """The entry page's switch nodes' gate (ParallelSwitchOn, ParallelSwitchOff): hits when the task's target floor wants
+    the switch at param {"on"} (run_start.parallel_switch), the paused run's floor read in the Exploring field. The
+    node's label part has read the other side already, so a hit is a switch to move."""
+
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        on = json.loads(argv.custom_recognition_param)["on"]
+        floor = floor_number(text(context, argv.image, EXPLORING), r"\bf")
+        return flag_hit() if run_start.parallel_switch(option("target_floor", 5), floor) is on else None
+
+
+@AgentServer.custom_action("ParallelModeSwitch")
+class ParallelModeSwitch(CustomAction):
+    """Entry page with Parallel Superposition Mode on the wrong side for the target floor (ParallelSwitch): tap INFINITY
+    MIRROR until it reads param {"on"} (#94, #434, spec 02). OFF keeps a target of 5 to floor 5, the prompt after it
+    (ParallelModePrompt) cancelled as a second guard; ON lets a target above 5 go on past it.
+    Still on the other side after two taps: stop, nothing else is tried.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        on = json.loads(argv.custom_action_param)["on"]
+        side, other = ("ON", "OFF") if on else ("OFF", "ON")
         for _ in range(2):
-            if tap_then(context, *INFINITY_BUTTON, shows(context, INFINITY_TITLE, r":\s*[O0]FF"), timeout=3) is not None:
-                log("Parallel Superposition Mode switched OFF")
+            if tap_then(context, *INFINITY_BUTTON, shows(context, INFINITY_TITLE, SWITCH_READS[on]), timeout=3) is not None:
+                log(f"Parallel Superposition Mode switched {side} (target floor {option('target_floor', 5)})")
                 return True
-        return stop(context, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
+        return stop(context, f"Parallel Superposition Mode stays {other} after tapping INFINITY MIRROR")
 
 
 def team_rows(context, image):

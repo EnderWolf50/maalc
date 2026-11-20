@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 FORMAT = 1  # 格式版本: the structure of the files under data/
-TEMPLATE = 4  # 模板版本: the template images and the pipeline, which go with this agent and assets/interface.json
+TEMPLATE = 5  # 模板版本: the template images and the pipeline, which go with this agent and assets/interface.json
 SOURCES = ["https://raw.githubusercontent.com/EnderWolf50/maalc-resource"]  # the list the release zip's manifest carries
 MANIFEST = "manifest.json"
 PARTS = ("data", "image", "pipeline")  # the folders of the package; `model/` is not one

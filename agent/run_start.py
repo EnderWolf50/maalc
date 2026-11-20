@@ -25,6 +25,17 @@ def run_difficulty(setting, weekly_left, target_floor):
     return "hard" if weekly_left > 0 or target_floor > 5 else "normal"
 
 
+def parallel_switch(target_floor, floor):
+    """The entry page's Parallel Superposition Mode for this task: True ON, False OFF, None as it is (#434, #847).
+
+    ON takes the run past floor 5, so ON for a target above 5. floor: the paused run's floor the entry page shows, None
+    before a run. A run at floor 6 or later is in the mode already: the switch stays as it is.
+    """
+    if floor is not None and floor > 5:
+        return None
+    return target_floor > 5
+
+
 def resolve_plan(settings, team, key):
     """A team's {"plan": id} or {"custom": value} resolved to the value."""
     ref = team[key]

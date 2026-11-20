@@ -910,6 +910,19 @@ def allowed(key):
     return option(key, True)
 
 
+def keep_dismissed(node, image):
+    """Keep image in logs/dismissed/ under the time and node (#244): whether it was saved; a full disk is logged, not
+    raised, so the screen is still answered."""
+    stamp = f"{settlement.now().replace(':', '-')}-{node}"
+    try:
+        recovery.keep_capture(ROOT, "dismissed", image, stamp, recovery.DISMISSED_KEEP)
+    except OSError as e:
+        log(f"{node}: screen not saved: {e}")
+        return False
+    log(f"{node}: screen kept in logs/dismissed/{stamp}.png")
+    return True
+
+
 DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)
 DISMISSED_GAP = 60  # seconds: RetryPopup keeps coming back on a dropped link, so it is kept once per gap
 GAPPED = {"RetryPopup"}  # the only node kept at most once per gap; every other node is kept each time
@@ -941,15 +954,8 @@ class DismissShot(CustomAction):
         keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
         popup = argv.node_name == "PopupButton"
         image = screen(context) if keep or popup else None  # one capture for the kept screen and the popup's text
-        if keep:
-            stamp = f"{settlement.now().replace(':', '-')}-{argv.node_name}"
-            try:
-                recovery.keep_capture(ROOT, "dismissed", image, stamp, recovery.DISMISSED_KEEP)
-                if gap:
-                    DISMISSED_AT[argv.node_name] = now
-                log(f"{argv.node_name}: screen kept in logs/dismissed/{stamp}.png")
-            except OSError as e:
-                log(f"{argv.node_name}: screen not saved: {e}")
+        if keep and keep_dismissed(argv.node_name, image) and gap:
+            DISMISSED_AT[argv.node_name] = now
         if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
         began = time.monotonic() if "until" in p or "known" in p else None

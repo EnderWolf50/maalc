@@ -91,6 +91,16 @@ def test_claim_ok_and_target_reached(text, target, claim, reached):
     assert target_reached(floors_passed(result), target) is reached
 
 
+@pytest.mark.parametrize(("after", "target", "expected"), [
+    (5, 5, False), (10, 5, False),  # target 5: both prompts Cancel, as v1 did
+    (5, 10, True), (10, 10, False),  # target 10: into floor 6, not into floor 11
+    (5, 15, True), (10, 15, True),  # target 15: both Confirm
+])
+def test_the_prompt_after_floor_5_or_10_goes_on_only_towards_a_target_past_it(after, target, expected):
+    # #434: the prompt after floor 5 (Parallel Superposition) and after floor 10 (EXTREME)
+    assert settlement.goes_on(after, target) is expected
+
+
 @pytest.mark.parametrize("text, target, expected", [
     ("Floor 5 [HARD] 6/6", 5, 3),  # reached: the toggles follow use and amount
     ("Floor 5 [NORMAL] 6/6", 5, 0),  # use is "hard": a NORMAL run takes none
