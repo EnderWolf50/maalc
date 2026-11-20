@@ -111,9 +111,9 @@ def test_the_theme_pack_page_is_kept_once_its_cards_stood_still(context, stamps,
     patch_all(monkeypatch, "text", lambda *a, **k: "Floor 6")
     patch_all(monkeypatch, "still", lambda context, **k: dealt)
     monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: True)
-    monkeypatch.setattr(run_start_actions, "theme_pack_plan", lambda settings, team: ({"weights": {}, "threshold": 0}, [], [], {}))
+    patch_all(monkeypatch, "theme_pack_plan", lambda settings, team: ({"weights": {}, "threshold": 0}, [], [], {}))
     monkeypatch.setattr(run_start, "floor_reads", lambda *a: ([], [], {}))
-    monkeypatch.setattr(run_start_actions, "pack_titles", lambda context, image: [(200, ["Pack"])])
+    patch_all(monkeypatch, "pack_titles", lambda context, image: [(200, ["Pack"])])
 
     def rank(*a):
         raise Read
@@ -137,7 +137,7 @@ def route_map(context, monkeypatch, read):
 
     def weights(context):
         raise Read
-    monkeypatch.setattr(map_actions, "map_weights", weights)
+    patch_all(monkeypatch, "map_weights", weights)
     actions.RUN.update(map_entered=True)
     with pytest.raises(Read):
         map_actions.RouteMap().run(context, None)
@@ -156,7 +156,7 @@ def test_the_map_is_kept_as_its_bus_and_links_read(context, stamps, monkeypatch,
 def test_a_run_picked_up_mid_floor_reads_its_floor_off_the_map(context, stamps, monkeypatch, tmp_path):
     # The bot stopped and Resume took the run back (#847): no theme pack page told this agent the floor.
     target(monkeypatch, 15)
-    monkeypatch.setattr(map_actions, "map_floor", lambda context, image: 12)
+    patch_all(monkeypatch, "map_floor", lambda context, image: 12)
     route_map(context, monkeypatch, np.zeros((720, 1280, 3), np.uint8))
     assert kept(tmp_path) == ["2026-11-20T03-00-00.000Z-floor12-map.png"]
 
