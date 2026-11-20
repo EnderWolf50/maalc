@@ -51,6 +51,10 @@ The old scripts stay in `.local/`, unchanged. These are replaced, every copy und
 - the first review reel's builder, `scratch/v1-reel-v2/build_reel_v1.py` → `reel.py`; its contact sheet, `scratch/v1-reel-v2/sheet.py` → `reel.py sheet` (2026-11-09)
 - #473's map-touch analysis, `taps.py`, `after_black.py`, `answer.py`, `first_touch.py`, `follow_first.py`, and #479's acceptance copy `taps_all.py` → `map_taps.py` (2026-11-07); the stills (`still.py`), frame diffs (`framediff.py`) and the seconds from a tap to its node panel (`tap_to_panel.py`, `victory_to_plan.py`) stay one-offs
 
+- the scripts #811's live checks wrote three times on 2026-11-18 (#835): the window started on a scratch install with its own DevTools port and WebView2 folder → `gui_run.py open`; its title made unique → `open`, `gui_run.py title`; the windows whose title holds a word → `gui_run.py windows`; the emulator's recording started when its window appears → `gui_run.py record --wait`; Stop pressed on a run-log line → `gui_run.py stop --on`; each check's clip → `evidence.py clips`; a local path blacked out of a still → `evidence.py mask --box` (2026-11-20)
+
+Not replaced from #811's checks: the scan of a public text for private terms and local paths, which `.claude/hooks/public-text-guard.py` does for every `gh` and commit text.
+
 Not replaced: `scratch/combined-verify/mkclip248.py` (a clip joined from two pieces with time-ranged masks of the Play Store's avatar) and `adbrec.py`/`adbrec.sh` (adb screenrecord).
 
 ## Design
