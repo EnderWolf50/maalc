@@ -11,7 +11,7 @@ from maa.custom_action import CustomAction
 import map_route
 import recovery
 import settlement
-from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, leave_shop, log, number, on_map,
+from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, keep_floor_still, leave_shop, log, number, on_map,
                      page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap, tap_shown,
                      tap_then, text, until)
 from ocrtext import floor_number, has
@@ -294,6 +294,7 @@ class RouteMap(CustomAction):
             return True
         if not self.wait_for_floor(context, image):
             return True  # MirrorHub looks again once the map is this floor's
+        keep_floor_still("map", RUN.get("floor"), image)  # #848: what floors 6-15 look like
         if not self.unzoom(context):  # its slots sit off where the offsets put them: L2 puts the map back
             if seen(context, screen(context), "MapNodePanel"):  # L2 needs the map: enter the node instead
                 return enter_node(context)

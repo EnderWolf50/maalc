@@ -6,7 +6,7 @@ from maa.custom_action import CustomAction
 
 import recovery
 import settlement
-from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, current_run, hands_back, log,
+from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, current_run, hands_back, keep_floor_still, log,
                      number, ocr, options, page_guard, run_line, screen, still, stop, stuck, tap_shown, tap_then, text,
                      until)
 from ocrtext import has
@@ -62,6 +62,7 @@ class Settle(CustomAction):
         if not result:
             return True  # fading in: let MirrorHub look again
         floor, hard = result.floor, result.hard
+        keep_floor_still("settlement", floor, image)  # #848: a long run's [INFINITY] or [EXTREME] window
         log(f"exploration reward: Floor {floor} [{(result.difficulty or '?').upper()}] {result.cleared}/{result.total}")
         if not settlement.claim_ok(result):
             return self.give_up(context, run, result)
