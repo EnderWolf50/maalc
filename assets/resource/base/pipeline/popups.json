@@ -167,8 +167,8 @@
     // Cancel / Confirm. ParallelPrompt Confirms it towards a target floor above 5, else Cancels (#434, spec 01,
     // 無限鏡牢彈窗). Seen only as the game's help-sheet picture of the prompt (tests/screens/ParallelModePrompt.png),
     // so its place on screen is not confirmed (#852): both ROIs are wide and the tap goes to the button text found. It
-    // covers the page under it, so it sits before the pages. Its 1.5 s stay (#258): no live log has the prompt yet to
-    // time a change against.
+    // covers the page under it, so it sits before the pages; RouteMap gives the map up under it (actions.COVERS). Its
+    // 1.5 s stay (#258): no live log has the prompt yet to time a change against.
     "ParallelModePrompt": {
         "recognition": "And",
         "all_of": [
