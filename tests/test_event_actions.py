@@ -14,7 +14,7 @@ import gifts
 from agent_patch import patch_all
 import test_actions
 
-from test_actions import Choices, DOLL, REAL_GUARD, SCROLLED, TABLE, argv, button_taps, check_page, corner_taps, event_portrait_taps, event_text, gift_page, moved, page_until, picked, reads, shop_team, taps, wants
+from test_actions import Choices, DOLL, REAL_GUARD, SCROLLED, TABLE, argv, button_taps, check_page, corner_taps, event_portrait_taps, event_text, gift_page, held_want_page, moved, page_until, picked, reads, shop_team, taps, wants
 
 clock, context, guarded = test_actions.clock, test_actions.context, test_actions.guarded  # its fixtures
 
@@ -173,10 +173,103 @@ def test_a_gift_taken_on_a_gift_page_is_held_for_the_next_one(context, monkeypat
     assert picked(taps) == [236]
 
 
+def get_window(context, plates):
+    """event_text's screenshots numbered as the keys of `plates` show an E.G.O Gift GET! window whose name plate reads
+    plates[n]: the first of them moved (the window came in), the next ones hold still."""
+    get = context.tasker.controller.post_screencap.return_value.wait.return_value.get
+    shoot = get.side_effect
+
+    def screencap():
+        image = shoot()
+        if image[0, 0, 0] in plates:
+            image[160:560, 300:980] = 120
+        return image
+    get.side_effect = screencap
+    inner = context.run_recognition.side_effect
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        if image[0, 0, 0] in plates and roi == tuple(actions.GET_TITLE):
+            return SimpleNamespace(all_results=[SimpleNamespace(text="E.G.O Gift GET!", box=(555, 170, 170, 25))])
+        if image[0, 0, 0] in plates and roi == tuple(actions.GET_NAME):
+            return SimpleNamespace(all_results=[SimpleNamespace(text=plates[image[0, 0, 0]], box=(340, 437, 140, 17))])
+        return inner(name, image, override)
+    context.run_recognition.side_effect = run_recognition
+
+
+def test_a_wanted_gift_an_event_gives_is_held_for_the_next_gift_page(context, monkeypatch):
+    # #623: the event's GET! window, closed by the next corner tap (#309), shows Rusted Muzzle (9089), wanted. The gift page
+    # after the event ranks it as owned (0), under Wound Clerid (main, 3), not as a want (6).
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    event_text(context, choices_from=7)
+    get_window(context, {4: "Rusted Muzzle", 5: "Rusted Muzzle"})  # up on two screenshots: one line
+    event_actions.Event().run(context, None)
+    assert actions.RUN["owned"] == [9089] and lines == ["GET!: Rusted Muzzle held"]
+    assert held_want_page(context, monkeypatch) == [536]
+
+
+def test_a_gift_window_whose_plate_names_no_gift_holds_nothing_and_says_so(context, monkeypatch):
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    event_text(context, choices_from=7)
+    get_window(context, {4: "Rusted"})  # a plate read in part
+    event_actions.Event().run(context, None)
+    assert actions.RUN.get("owned", []) == [] and lines == ["GET!: 'Rusted' names no gift: not held"]
+
+
+def test_a_plate_that_named_no_gift_is_read_again_on_the_next_screenshot(context, monkeypatch):
+    # The window's first screenshot read its plate in part; the next one holds still (no new window) and reads it whole
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    event_text(context, choices_from=7)
+    get_window(context, {4: "Rusted", 5: "Rusted Muzzle"})
+    event_actions.Event().run(context, None)
+    assert actions.RUN["owned"] == [9089] and lines == ["GET!: 'Rusted' names no gift: not held", "GET!: Rusted Muzzle held"]
+
+
+def test_a_still_screen_costs_no_gift_window_read(context):
+    # #623 under #511: the map an event ends on is looked at until it holds still; a read there would slow that look
+    reads = event_text(context, choices_from=7)
+    event_actions.Event().run(context, None)
+    assert tuple(actions.GET_TITLE) not in reads
+
+
+def test_a_gift_window_for_a_gift_the_run_holds_adds_it_once(context, monkeypatch):
+    # A gift page's card is held at Select (PickGift), and its GET! window comes after
+    actions.RUN["owned"] = [9089]
+    event_text(context, choices_from=7)
+    get_window(context, {4: "Rusted Muzzle"})
+    event_actions.Event().run(context, None)
+    assert actions.RUN["owned"] == [9089]
+
+
 def test_a_wanted_gift_the_team_avoids_is_still_taken_last(context, monkeypatch):
     # #90: White Gossypium is on the list as a want; with the team not holding it, the other card goes first
     taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Rusted Muzzle"])
     actions.RUN["team"]["list"] = wants(9020)
+    event_actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
+
+
+def test_a_wanted_gift_the_run_holds_scores_owned_0_under_a_card_it_does_not_hold(context, monkeypatch):
+    # #623 (the user, 2026-11-20): a gift held again only turns into an afterimage. Rusted Muzzle (wanted, held, leftmost,
+    # no Owned on its card) scores 0, so Wound Clerid (main, 3) is taken.
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
+    actions.RUN["team"]["list"] = wants(9089)
+    actions.RUN["owned"] = [9089]
+    event_actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
+    assert "Rusted Muzzle/owned gift 0 total 0, Wound Clerid/main gift 3 total 3" in lines[0]
+
+
+def test_a_held_wanted_gift_still_goes_ahead_of_white_gossypium(context, monkeypatch):
+    # #90 under #623: an avoided gift stays last, after an owned (0) one, both wanted and held
+    taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Rusted Muzzle"])
+    actions.RUN["team"]["list"] = wants(9020, 9089)
+    actions.RUN["owned"] = [9020, 9089]
     event_actions.PickGift().run(context, None)
     assert picked(taps) == [536]
 

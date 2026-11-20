@@ -29,7 +29,7 @@ import run_start
 import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
-from ocrtext import normalize
+from ocrtext import has, normalize
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
 
@@ -1131,6 +1131,40 @@ def reload_gifts():
 reload_gifts()
 
 
+def get_window(context, image):
+    """Whether an E.G.O Gift GET! window is over image: its title reads "Gift GET", not a bare "get" of other words (#623;
+    over tests/screens only the three GET! windows, test_gift_cells.py)."""
+    return has(text(context, image, GET_TITLE), "Gift GET")
+
+
+def get_plate(context, image):
+    """The name on the GET! window's plate (GET_NAME), its lines put in order (gift_cells.plate_name, #623)."""
+    return gift_cells.plate_name(ocr(context, image, GET_NAME))
+
+
+def hold(ids):
+    """The run holds `ids` from now on (RUN["owned"]), each once: a gift page's card is held at its Select, and its GET!
+    window comes after (#623). Returns the ones it did not hold yet."""
+    held = RUN.setdefault("owned", [])
+    new = [i for i in dict.fromkeys(ids) if i not in held]
+    held.extend(new)
+    return new
+
+
+def note_got(context, image, last=""):
+    """The run holds the gift of the GET! window over image from now on (hold, #623), and the log says so once: an
+    event's, the starting gift's, an observed gift's, a reward card's. (plate as read, its gift's id or None); `last`, the
+    plate read on this window before: the same plate again is no second line. A plate read empty keeps `last`."""
+    name = get_plate(context, image) or last
+    gift_id = gift_cells.name_id(name, GIFT_IDS)
+    if name != last:
+        if gift_id is None:
+            log(f"GET!: {name!r} names no gift: not held")
+        elif hold([gift_id]):
+            log(f"GET!: {GIFT_NAMES[gift_id]} held")
+    return name, gift_id
+
+
 DIALOG_TEXT = [360, 280, 560, 140]
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
@@ -1206,23 +1240,25 @@ def owned_now(visit):
 
 def leave_shop():
     """The shop visit RUN["shop"] is over, left by its Leave or without it (#118): the run holds what the visit counted as owned
-    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds only what it bought."""
+    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds what it bought
+    and the run does not hold yet."""
     visit = RUN.pop("shop", None)
     if visit and visit.get("owned") is not None:
         RUN["owned"] = owned_now(visit)
     elif visit:
-        RUN["owned"] = RUN.get("owned", []) + owned_now(visit)
+        hold(owned_now(visit))
 
 
 def want_of(run):
-    """`want(gift_id)` -> "pack-want" | "want" | "material" | None for the team's list (gifts.want_kind), the run's packs and the
-    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages; the start gifts and the events'
-    are not told). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
+    """`want(gift_id)` -> "pack-want" | "want" | "material" | "owned" | None for the team's list (gifts.want_kind), the run's
+    packs and the gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages and the gifts
+    of the GET! windows since, note_got). Always None for a team with no list. A wanted gift the run holds is "owned" (0):
+    taken again it only turns into an afterimage (the user, 2026-11-20, #623)."""
     gift_list, held = run["team"].get("list"), RUN.get("owned", [])
 
     def want(gift_id):
         kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
-        return None if kind in ("pack-want", "want") and gift_id in held else kind
+        return "owned" if kind and gift_id in held else kind
     return want
 
 
