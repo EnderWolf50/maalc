@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import memlog
 from agent_patch import patch_all
 from runner import devices, protocol, runlog, session
 from runner.session import Commands, Out, Session
@@ -258,7 +259,8 @@ def test_the_bot_is_handed_the_runners_pid_for_its_memory_lines(tmp_path):
     # #391: the agent logs the tasker's memory at each floor; the runner is the tasker, the bot's parent may be a venv launcher
     world = World({"MirrorDungeon": (2, "succeeded")})
     run = Run(tmp_path, world)
-    script = "import os; print('[maalc] tasker ' + os.environ.get('MAALC_TASKER_PID', 'none'), flush=True)\n"
+    # memlog.TASKER_PID, the name the agent reads: runner/ does not import agent/, so the two spellings meet here
+    script = f"import os; print('[maalc] tasker ' + os.environ.get({memlog.TASKER_PID!r}, 'none'), flush=True)\n"
     script += f"import time\nwhile not os.path.exists({str(world.bye)!r}): time.sleep(0.02)\n"
     run.session.agent_command = lambda root, identifier: [sys.executable, "-c", script]
     run.start(TWO[:1])

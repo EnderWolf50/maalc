@@ -11,7 +11,9 @@ import resource_package as rp
 def test_the_program_knows_format_2_and_template_5():
     # format 2 (#849): map_weights.yaml weighs Hidden Battle (hidden), a field format 1's data lacks.
     # template 5 (#434): the entry switch and the prompts after floors 5 and 10 act through ParallelModeSwitch,
-    # ParallelSwitch and ParallelPrompt; template 4's pipeline names ParallelModeOff, which this agent no longer has.
+    # ParallelSwitch and ParallelPrompt; template 4's pipeline names the custom action ParallelModeOff, which this agent
+    # no longer has (the label node of that name stays). Template 5 also carries #851's AdversityPage, whose custom action
+    # PassAdversity an agent for template 4 lacks, and #850's HiddenBattle popup.
     # template 4 (#840): the agent matches the map's shop with MapNodeShopIconFlame too, a node template 3's pipeline lacks.
     # template 3 (#813, ADR 0015): the pipeline without the global options' node, as the agent reads the task options
     # from the settings file; template 2's agent read them from the attach of that node and of the entry nodes (#782)
