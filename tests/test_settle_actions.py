@@ -1,4 +1,4 @@
-"""The run's settlement actions (agent/settle_actions.py): the result page, the weekly bonuses, and the claim or the give-up."""
+"""The run's settlement actions (agent/settle_actions.py): the prompts after floors 5 and 10, the result page, the weekly bonuses, and the claim or the give-up."""
 
 import json
 import re
@@ -103,9 +103,22 @@ def test_the_two_prompts_are_two_nodes_that_read_the_buttons_where_the_agent_doe
         buttons, body = nodes[name]["all_of"]
         assert buttons["roi"] == settle_actions.PROMPT_BUTTONS, name
         assert nodes[name]["custom_action"] == "ParallelPrompt" and nodes[name]["custom_action_param"] == {"after": after}
+    assert nodes["ParallelModePrompt"]["all_of"][1]["roi"] == nodes["ExtremeModePrompt"]["all_of"][1]["roi"]  # one dialog
     infinity = re.compile(nodes["ParallelModePrompt"]["all_of"][1]["expected"])
     extreme = re.compile(nodes["ExtremeModePrompt"]["all_of"][1]["expected"])
     # the game's texts (InfinityFloor_CheckEnter_Modal_Desc, InfinityFloor_Extreme_CheckEnter_Modal_Desc)
     after_5, after_10 = "You can enter the Parallel Superposition Mode.", "You can enter the EXTREME Mode."
     assert infinity.search(after_5) and not infinity.search(after_10)
     assert extreme.search(after_10) and not extreme.search(after_5)
+
+
+def test_a_prompt_looked_at_again_keeps_one_screen_a_minute(context, clock, monkeypatch, tmp_path):
+    # a button that does not read brings the prompt back every 1.5 s: it must not push #852's first capture out
+    monkeypatch.setitem(actions.TASK, "options", {"target_floor": 10, "keep_dismissed_screens": True})
+    monkeypatch.setattr(actions, "DISMISSED_AT", {})
+    page(context, {tuple(settle_actions.PROMPT_BUTTONS): PROMPT_BUTTONS[:1]})  # Confirm does not read
+    stamps = iter(f"2026-11-20T00:00:0{i}Z" for i in range(3))
+    monkeypatch.setattr(settlement, "now", lambda: next(stamps))
+    for _ in range(3):
+        settle_actions.ParallelPrompt().run(context, argv({"after": 5}, node="ParallelModePrompt"))
+    assert len(list((tmp_path / "logs" / "dismissed").iterdir())) == 1

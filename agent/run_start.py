@@ -7,6 +7,7 @@ import re
 from difflib import SequenceMatcher
 from functools import lru_cache
 
+import settlement
 from ocrtext import compact
 
 # Grace base prices, numbered as on the starlight page (spec 04 section 7).
@@ -33,7 +34,7 @@ def parallel_switch(target_floor, floor):
     """
     if floor is not None and floor > 5:
         return None
-    return target_floor > 5
+    return settlement.goes_on(5, target_floor)  # what the prompt after floor 5 is answered by
 
 
 def resolve_plan(settings, team, key):

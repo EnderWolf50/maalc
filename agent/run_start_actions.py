@@ -131,12 +131,9 @@ class PlanRun(CustomAction):
         return True
 
 
-INFINITY_TITLE = [890, 330, 330, 28]  # entry page: "Parallel Superposition Mode : ON" / "OFF" (the pipeline's roi)
-INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
-
-
+INFINITY_BUTTON = (1053, 377)  # entry page: INFINITY MIRROR, under the Parallel Superposition Mode label
+INFINITY_LABEL = {True: "ParallelModeOn", False: "ParallelModeOff"}  # the label's nodes, each reading one side
 EXPLORING = [990, 140, 230, 35]  # entry page: "Before Entry", or the paused run's "Mirror of Sisyphe - F1"
-SWITCH_READS = {True: r":\s*[Oo0]N\b", False: r":\s*[O0]FF"}  # the red ON reads `oN` (live 2026-11-08)
 
 
 @AgentServer.custom_recognition("ParallelSwitch")
@@ -147,7 +144,8 @@ class ParallelSwitch(CustomRecognition):
 
     def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
         on = json.loads(argv.custom_recognition_param)["on"]
-        floor = floor_number(text(context, argv.image, EXPLORING), r"\bf")
+        # "F7" wherever it sits: OCR may join it to the dungeon's name ("Sisyphe-F7"); "of" has no number after it
+        floor = floor_number(text(context, argv.image, EXPLORING), r"f")
         return flag_hit() if run_start.parallel_switch(option("target_floor", 5), floor) is on else None
 
 
@@ -163,7 +161,7 @@ class ParallelModeSwitch(CustomAction):
         on = json.loads(argv.custom_action_param)["on"]
         side, other = ("ON", "OFF") if on else ("OFF", "ON")
         for _ in range(2):
-            if tap_then(context, *INFINITY_BUTTON, shows(context, INFINITY_TITLE, SWITCH_READS[on]), timeout=3) is not None:
+            if tap_then(context, *INFINITY_BUTTON, lambda im: seen(context, im, INFINITY_LABEL[on]), timeout=3) is not None:
                 log(f"Parallel Superposition Mode switched {side} (target floor {option('target_floor', 5)})")
                 return True
         return stop(context, f"Parallel Superposition Mode stays {other} after tapping INFINITY MIRROR")

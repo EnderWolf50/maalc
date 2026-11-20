@@ -2,6 +2,7 @@
 give-up."""
 
 import json
+import time
 
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
@@ -10,7 +11,7 @@ from maa.custom_action import CustomAction
 import recovery
 import settlement
 from actions import (DIALOG_CANCEL, DIALOG_CONFIRM, DIALOG_TEXT, ROOT, RUN, STUCK, TASK, box_centre, current_run,
-                     hands_back, keep_dismissed, log, number, ocr, option, options, page_guard, run_line, screen, still,
+                     dismissed_due, hands_back, keep_dismissed, log, number, ocr, option, options, page_guard, run_line, screen, still,
                      stop, stuck, tap_shown, tap_then, text, until)
 from ocrtext import has
 from team_queue import requeue
@@ -58,8 +59,8 @@ class ParallelPrompt(CustomAction):
     towards a target floor past it (settlement.goes_on): target 5 cancels both, 10 confirms the first, 15 both.
 
     The button is found by its text, not tapped at a fixed place, until a live capture shows where it sits (#852). One
-    that does not read is left for the hub's next look. The screen is kept in logs/dismissed/ (run.keep_dismissed_screens)
-    either way: the first live prompts are the fixtures #852 and #854 wait for.
+    that does not read is left for the hub's next look. The screen is kept in logs/dismissed/ (run.keep_dismissed_screens,
+    once a minute, GAPPED) either way: the first live prompts are the fixtures #852 and #854 wait for.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -67,8 +68,9 @@ class ParallelPrompt(CustomAction):
         target = option("target_floor", 5)
         word = "Confirm" if settlement.goes_on(after, target) else "Cancel"
         image = screen(context)
-        if option("keep_dismissed_screens", True):
-            keep_dismissed(argv.node_name, image)
+        now = time.monotonic()
+        if dismissed_due(argv.node_name, now):
+            keep_dismissed(argv.node_name, image, now)
         box = next((b for t, b in ocr(context, image, PROMPT_BUTTONS) if has(t, word)), None)
         if box is None:
             log(f"{argv.node_name}: {word} not read (target floor {target}), looking again")

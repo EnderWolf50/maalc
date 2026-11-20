@@ -910,22 +910,32 @@ def allowed(key):
     return option(key, True)
 
 
-def keep_dismissed(node, image):
-    """Keep image in logs/dismissed/ under the time and node (#244): whether it was saved; a full disk is logged, not
-    raised, so the screen is still answered."""
+def dismissed_due(node, now):
+    """Whether the node's screen goes to logs/dismissed/ at time.monotonic() now (run.keep_dismissed_screens): a GAPPED
+    node once per DISMISSED_GAP."""
+    gap = DISMISSED_GAP if node in GAPPED else 0
+    return allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(node, -gap) >= gap
+
+
+def keep_dismissed(node, image, now):
+    """Keep image in logs/dismissed/ under the time and node (#244), a GAPPED node's gap starting at now; a full disk is
+    logged, not raised, so the screen is still answered, and starts no gap."""
     stamp = f"{settlement.now().replace(':', '-')}-{node}"
     try:
         recovery.keep_capture(ROOT, "dismissed", image, stamp, recovery.DISMISSED_KEEP)
     except OSError as e:
         log(f"{node}: screen not saved: {e}")
-        return False
+        return
+    if node in GAPPED:
+        DISMISSED_AT[node] = now
     log(f"{node}: screen kept in logs/dismissed/{stamp}.png")
-    return True
 
 
 DISMISSED_AT = {}  # node name -> time.monotonic() of its last kept screen (GAPPED nodes only)
-DISMISSED_GAP = 60  # seconds: RetryPopup keeps coming back on a dropped link, so it is kept once per gap
-GAPPED = {"RetryPopup"}  # the only node kept at most once per gap; every other node is kept each time
+DISMISSED_GAP = 60  # seconds: a node that keeps coming back is kept once per gap
+# Kept at most once per gap, every other node each time: RetryPopup comes back on a dropped link; a floor 5/10 prompt
+# whose button does not read is looked at again every 1.5 s (ParallelPrompt). Either would fill the folder with itself.
+GAPPED = {"RetryPopup", "ParallelModePrompt", "ExtremeModePrompt"}
 
 
 def popup_button(detail):
@@ -940,7 +950,7 @@ def popup_button(detail):
 class DismissShot(CustomAction):
     """Keep the screen in logs/dismissed/ (run.keep_dismissed_screens), then close it (#244): the back key with
     {"back": true}, else a tap on the recognised box. File name: time and node, so what the bot closed can be told later.
-    RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup.
+    RetryPopup: one screen per DISMISSED_GAP, or a dropped link fills the folder with one popup (GAPPED).
     "until": a node that hits once the popup is gone (the main window's lit tab under the Mailbox); every 0.2 s, at
     most "timeout" s, until it hits and the popup's own node misses, instead of a post_delay (#258).
     "known": a hub; every 0.2 s, at most "timeout" s, until one of its other screens shows (hub_knows), instead of a
@@ -950,12 +960,11 @@ class DismissShot(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         p = param(argv.custom_action_param) or {}  # "null" when the node sets none
         now = time.monotonic()
-        gap = DISMISSED_GAP if argv.node_name in GAPPED else 0
-        keep = allowed("keep_dismissed_screens") and now - DISMISSED_AT.get(argv.node_name, -gap) >= gap
+        keep = dismissed_due(argv.node_name, now)
         popup = argv.node_name == "PopupButton"
         image = screen(context) if keep or popup else None  # one capture for the kept screen and the popup's text
-        if keep and keep_dismissed(argv.node_name, image) and gap:
-            DISMISSED_AT[argv.node_name] = now
+        if keep:
+            keep_dismissed(argv.node_name, image, now)
         if popup:  # what was closed, e.g. the previous session's "Please claim your rewards" (#382)
             log(f"popup: {text(context, image, DIALOG_TEXT)!r}: pressed {popup_button(argv.reco_detail)!r}")
         began = time.monotonic() if "until" in p or "known" in p else None

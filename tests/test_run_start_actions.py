@@ -78,14 +78,10 @@ def infinity_switch(context, monkeypatch, on, takes):
     patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
 
-    def ocr(context, image, roi, only_rec=False):
-        if roi == run_start_actions.INFINITY_TITLE:
-            # As the bot's MaaFramework log read the entry page live, OFF and the red ON (2026-11-08)
-            reads_on = on if takes and taps else not on
-            text = "PParallel Superposition Mode : oN " if reads_on else "Parallel Superposition Mode : OFF"
-            return [(text, (894, 333, 316, 17))]
-        return []
-    patch_all(monkeypatch, "ocr", ocr)
+    def seen(context, image, node, roi=None):  # the label's nodes; maa-tools reads them on the entry page captures
+        reads_on = on if takes and taps else not on
+        return node == ("ParallelModeOn" if reads_on else "ParallelModeOff") or None
+    patch_all(monkeypatch, "seen", seen)
     return taps, stops, run_start_actions.ParallelModeSwitch().run(context, argv({"on": on}))
 
 
@@ -108,6 +104,7 @@ def test_a_parallel_superposition_switch_that_does_not_move_stops_the_task(conte
     (10, "Before Entry", True, True), (10, "Before Entry", False, False),  # #434: ON past floor 5
     (15, "Mirror of Sisyphe - F3", True, True), (5, "Mirror of Sisyphe - F3", False, True),  # a paused run in floors 1-5
     (10, "Mirror of Sisyphe - F7", True, False), (5, "Mirror of Sisyphe - F12", False, False),  # floor 6 on: left as it is
+    (5, "Mirror of SisypheF7", False, False),  # the floor read with the name joined to it
 ])
 def test_the_switch_is_due_by_the_target_and_the_floor_the_entry_page_shows(context, monkeypatch, target, exploring, on, due):
     # #847: a run resumed at floor 6 or later is in the mode already; the switch stays.
@@ -123,7 +120,7 @@ def test_the_switch_nodes_read_the_label_and_the_floor_where_the_agent_does():
     for on in (True, False):
         node = nodes["ParallelSwitchOn" if on else "ParallelSwitchOff"]
         label, gate = node["all_of"]
-        assert nodes[label]["roi"] == run_start_actions.INFINITY_TITLE
+        assert label == run_start_actions.INFINITY_LABEL[not on]  # the side the switch moves away from
         assert gate["custom_recognition"] == "ParallelSwitch" and gate["custom_recognition_param"] == {"on": on}
         assert node["custom_action"] == "ParallelModeSwitch" and node["custom_action_param"] == {"on": on}
     assert nodes["MirrorEntryNewRun"]["roi"] == run_start_actions.EXPLORING
