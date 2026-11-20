@@ -428,6 +428,48 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
     no_fixed_wait(clock)
 
 
+def difficulty_page(context, monkeypatch, floor, label, want=True):
+    """set_difficulty on a theme pack page whose label reads label (None: never). Returns (result, taps, log lines)."""
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    page(context, {(830, 30, 160, 35): label})
+    actions.RUN.pop("floors_hard", None)
+    return run_start_actions.PickThemePack.set_difficulty(context, floor, want), taps(context), lines
+
+
+@pytest.mark.parametrize(("floor", "label"), [(6, "INFINITY"), (10, "[INFINITY]"), (11, "EXTREME"), (15, "[EXTREME]"), (6, "HARD")])
+def test_a_floor_past_5_reads_its_label_as_hard_and_switches_nothing(context, clock, monkeypatch, floor, label):
+    # #386: INFINITY and EXTREME are the game data's labels for floors 6-10 and 11-15; the log keeps `floor N: HARD`,
+    # which tools/live/evidence_map.py's logged_hard reads.
+    result, tapped, lines = difficulty_page(context, monkeypatch, floor, label)
+    assert result and tapped == []
+    assert f"floor {floor}: HARD" in lines
+    assert actions.RUN["floor_hard"] is True and actions.RUN["floors_hard"] == {floor: True}
+
+
+@pytest.mark.parametrize("floor", [6, 11])
+def test_a_floor_past_5_whose_label_is_not_read_is_hard(context, clock, monkeypatch, floor):
+    # #386: floor 6 is reached only with floors 1-5 HARD (the game's tutorial TutoMD05_P19_D2), so no read is no stuck there
+    result, tapped, lines = difficulty_page(context, monkeypatch, floor, None)
+    assert result and tapped == []
+    assert lines[-1] == f"floor {floor}: HARD"
+    assert actions.RUN["floor_hard"] is True and actions.RUN["floors_hard"] == {floor: True}
+
+
+def test_a_floor_past_5_that_reads_normal_is_still_hard(context, clock, monkeypatch):
+    # A NORMAL floor 6 cannot be (#386): a misread label does not make the map's weights NORMAL
+    result, tapped, lines = difficulty_page(context, monkeypatch, 7, "NORMAL", want=False)
+    assert result and tapped == []
+    assert lines[-1] == "floor 7: HARD" and actions.RUN["floor_hard"] is True
+
+
+def test_a_floor_up_to_5_whose_label_is_not_read_still_fails(context, clock, monkeypatch):
+    # Target 5 acts as before: on floors 1-5 the label decides a switch, and an unread one is the caller's stuck
+    result, tapped, _ = difficulty_page(context, monkeypatch, 5, None)
+    assert result is False and tapped == []
+    assert "floors_hard" not in actions.RUN
+
+
 REFRESH = (1083, 47)
 
 
@@ -579,8 +621,9 @@ def test_the_refresh_button_sweep_over_the_theme_pack_captures():
     # CODING_STANDARDS' sweep, #482: refresh_lit reads unlit the greyed buttons alone, with no count (HardLine1,
     # RefreshGrey, WedgeRefreshed) or #319's `0/3` (Refresh0, which PackRefreshSpent reads too); `Refresh` alone (ThemePack,
     # ThemePackWedge) and 1/3, 2/3, 3/3, 4/4 read lit. Off the theme pack page its box is dark on most captures, but PickThemePack asks it only on a
-    # page page_guard took for ThemePack.
-    lit = {path.stem: run_start_actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))}
+    # page page_guard took for ThemePack. The synthetic pages (#386) are ThemePack.png's button: captures only.
+    lit = {path.stem: run_start_actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))
+           if not path.stem.endswith(".synthetic")}
     assert [stem for stem, on in lit.items() if not on] == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey",
                                                             "ThemePackWedgeRefreshed"]
     assert [stem for stem, on in lit.items() if on] == ["ThemePack", "ThemePackHardLine5", "ThemePackHardLineCover",

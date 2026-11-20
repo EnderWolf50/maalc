@@ -51,6 +51,7 @@
 - 任何一層選了 HARD 之後，之後各層都不能切回 NORMAL：下一層起主題包頁的難度箭頭變灰、點了沒反應。（#19，2026-10-14 定案；實機：captures/128_f2_tap_difficulty_left.png）
 - 實機：第 1 層選主題包之前，HARD 與 NORMAL 可以來回切換；HARD 時點左箭頭（`◀ ▶ HARD`）切到 NORMAL，NORMAL 時點右箭頭（`NORMAL ◀ ▶`）切到 HARD。每次切換都會換一組主題包，切回原本的難度時換回原本那一組。（#25；2026-10-14 實機）
 - 普通局到第 N 層（N > 1）才切到 HARD 是否可行，還沒有實測，見[未決](#未決)。
+- 第 6 層起（#386，2026-11-20 規格 #847 定案）：進第 6 層要第 1–5 層全 HARD（遊戲教學 TutoMD05_P19_D2），所以第 6–15 層一定是 HARD，主題包頁不切難度。標籤讀到 `HARD`、`INFINITY` 或 `EXTREME`（遊戲資料 `uiConfig.difficultyLabel` 第 6–10、11–15 層的值，推測，沒有實機畫面）都記成 HARD；讀到 `NORMAL`（不可能，當成誤讀）或讀了 4 次都讀不到，也記成 HARD，不 stuck。log 照舊寫 `floor N: HARD`（`tools/live/evidence_map.py` 的 `logged_hard` 讀這行），讀不到時前一行寫 `no difficulty label read`。第 1–5 層照舊：讀不到就 stuck。（`run_start.difficulty_label`、`difficulty_move`，`PickThemePack.set_difficulty`）
 
 ## 3. 出戰順序與戰前編隊
 
