@@ -16,7 +16,7 @@ import rewards
 import run_start
 import shop
 from actions import (ENDS_ON, GET_TITLE, GIFT_IDS, GIFT_NAMES, POPUPS, RUN, PageEnded, avoided_gifts, columns,
-                     current_run, data, gone, hands_back, log, moved, ocr, on_page, page_guard, screen, scroll, shows,
+                     current_run, data, gone, hands_back, log, moved, note_got, ocr, on_page, page_guard, screen, scroll, shows,
                      still, stuck, tap, text, until, want_of)
 from ocrtext import compact, has
 from settings import data_dir
@@ -189,8 +189,11 @@ class Event(CustomAction):
         out as page_guard waits, before MirrorHub would answer it.
         On the map the event ends on, the taps go on until the screen a look saw it on has not changed for
         EVENT_MAP_REST s (#511).
+        A GET! window the taps close (#309) has its gift read on the screenshots it moves on, before the next tap, and held
+        from now on (note_got, #623): the 2026-11-10 recording of an event's window (Melted Eyeball, 12 frames at 30 fps)
+        reads its plate whole from its first frame on. A still screen costs no read: the map's rest (#511) keeps its pace.
         """
-        last, pressed_label = 0.0, None  # None: not in a press's fade (any more)
+        last, pressed_label, plate = 0.0, None, ""  # None: not in a press's fade (any more); plate: the GET! window's as read
         if pressed_at is not None:
             last, pressed_label = pressed_at, compact(text(context, image, EVENT_BUTTON_LABEL))
         shot_at = still_since = time.monotonic()
@@ -227,6 +230,8 @@ class Event(CustomAction):
                 pressed_at = last = Event.press(context)
                 pressed_label = label
                 continue
+            if moved and has(text(context, image, GET_TITLE), "GET"):  # a window comes in moving: a still screen is no new one
+                plate = note_got(context, image, plate)
             read = n % EVENT_READ_EVERY == 0 or pressed_label is not None
             pressed_label = None
             if card_alone(image):

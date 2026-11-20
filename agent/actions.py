@@ -1131,6 +1131,29 @@ def reload_gifts():
 reload_gifts()
 
 
+def got_gift(context, image):
+    """(id or None, name as read) of the gift on the E.G.O Gift GET! window over image: its name plate (GET_NAME), its
+    lines put in order (gift_cells.plate_name), against every gift's English name (#623)."""
+    name = gift_cells.plate_name(ocr(context, image, GET_NAME))
+    return gift_cells.name_id(name, GIFT_IDS), name
+
+
+def note_got(context, image, last=""):
+    """The run holds the gift of the GET! window over image from now on (RUN["owned"], #623), and the log says so once:
+    an event's, the starting gift's, a search's, a reward card's (a gift page's card is held at its Select already).
+    Returns the plate as read; `last`, the plate read on this window before: no second read of the same window counts."""
+    gift_id, name = got_gift(context, image)
+    if not name or name == last:
+        return name or last
+    held = RUN.setdefault("owned", [])
+    if gift_id is None:
+        log(f"GET!: {name!r} names no gift: not held")
+    elif gift_id not in held:
+        held.append(gift_id)
+        log(f"GET!: {GIFT_NAMES[gift_id]} held")
+    return name
+
+
 DIALOG_TEXT = [360, 280, 560, 140]
 DIALOG_CANCEL, DIALOG_CONFIRM = (515, 493), (763, 493)
 
@@ -1206,18 +1229,20 @@ def owned_now(visit):
 
 def leave_shop():
     """The shop visit RUN["shop"] is over, left by its Leave or without it (#118): the run holds what the visit counted as owned
-    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds only what it bought."""
+    (owned_now), RUN["owned"], for the gift pages and events after it. A visit that read no owned page adds what it bought
+    and the run does not hold yet."""
     visit = RUN.pop("shop", None)
     if visit and visit.get("owned") is not None:
         RUN["owned"] = owned_now(visit)
     elif visit:
-        RUN["owned"] = RUN.get("owned", []) + owned_now(visit)
+        held = RUN.get("owned", [])
+        RUN["owned"] = held + [i for i in owned_now(visit) if i not in held]
 
 
 def want_of(run):
     """`want(gift_id)` -> "pack-want" | "want" | "material" | None for the team's list (gifts.want_kind), the run's packs and the
-    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages; the start gifts and the events'
-    are not told). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
+    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages and the gifts of the GET!
+    windows since, note_got). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
     gift_list, held = run["team"].get("list"), RUN.get("owned", [])
 
     def want(gift_id):

@@ -7,6 +7,7 @@ import pytest
 from PIL import Image
 
 import actions
+import event_actions
 import run_start_actions
 import gifts
 import recovery
@@ -701,6 +702,29 @@ def test_n_acquired_gift_popups_are_closed_in_one_action(context, clock):
     assert run_start_actions.GiftGet().run(context, argv())
     assert taps(context) == [(640, 532)] * 3
     no_fixed_wait(clock)
+
+
+def test_a_starting_gift_is_held_for_the_gift_pages(context, clock, monkeypatch):
+    # #623: the cabinet's gift, Rusted Muzzle (9089), wanted: its GET! window holds it, and the first gift page ranks it as
+    # the main card it is, level with Wound Clerid (the leftmost), not as a want (6)
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks == 0 else None, GIFT_NAME: "Rusted Muzzle"})
+    assert run_start_actions.GiftGet().run(context, argv())
+    assert actions.RUN["owned"] == [9089] and lines == ["GET!: Rusted Muzzle held"]
+    taps = test_actions.gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
+    actions.RUN["team"]["list"] = test_actions.wants(9089)
+    event_actions.PickGift().run(context, None)
+    assert test_actions.picked(taps) == [236]
+
+
+def test_each_of_n_gift_windows_is_held(context, clock):
+    # #623: a search's 3 gifts, one window each; read before its tap, not on the screen that told it closed
+    names = ["Wound Clerid", "Hardblood Glaive", "Rusted Muzzle"]
+    page(context, {GIFT_POPUP: lambda clicks, looks: "E.G.O Gift GET!" if clicks < 3 else None,
+                   GIFT_NAME: lambda clicks, looks: names[min(clicks, 2)]})
+    assert run_start_actions.GiftGet().run(context, argv())
+    assert actions.RUN["owned"] == [9005, 9843, 9089]
 
 
 def test_a_name_plate_read_mid_fade_out_is_not_taken_for_the_next_window(context, clock):

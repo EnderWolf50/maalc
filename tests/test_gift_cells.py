@@ -89,6 +89,15 @@ def test_a_plate_names_the_gift_it_reads_and_a_non_gift_or_a_slip_names_none():
     assert g.name_id("", ids) is None
 
 
+def test_a_name_plate_of_several_lines_is_read_top_line_first():
+    # #623: the GET! window's plate wraps a long name; MaaFramework's OCR handed GiftGetOverMap.png's three lines back in
+    # this order, boxes as read. Words of one line go left to right.
+    lines = [("Commemorative", (339, 438, 141, 17)), ("Rusty", (382, 419, 55, 22)), ("Coin", (390, 454, 40, 20))]
+    assert g.plate_name(lines) == "Rusty Commemorative Coin"
+    assert g.plate_name([("Clerid", (420, 437, 60, 17)), ("Wound", (346, 438, 70, 16))]) == "Wound Clerid"
+    assert g.plate_name([]) == ""
+
+
 def test_the_icon_and_the_plate_each_vote_and_a_disagreement_is_unknown():
     assert g.vote(9053, 9053) == (9053, False)
     assert g.vote(9053, None) == (9053, False)  # one vote is enough
@@ -187,6 +196,7 @@ CASES = {  # name: (crop under tests/shop, the page's cells, the page)
 
 
 PLATE_CASES = ["offers", "offers_super", "offers_red", "offers_short"]
+GET_WINDOWS = {"GiftGet": 9005, "GiftGetOverMap": 9014, "GiftSearchGet": 9843}  # Wound Clerid, Rusty Commemorative Coin, Hardblood Glaive
 
 
 def child():
@@ -221,7 +231,8 @@ def child():
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"cases": {}, "ex": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "page_ms": [], "short_prices": {}}
+    out = {"cases": {}, "ex": {}, "sweep": {}, "plates": {}, "plate_sweep": {}, "plate_ms": [], "page_ms": [], "short_prices": {},
+           "got": {}}
 
     class Probe(CustomAction):
         def run(self, context, argv):
@@ -245,6 +256,9 @@ def child():
                     plates = shop_actions.read_plates(context, image, cells)
                     out["plate_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
                     out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
+                for name in GET_WINDOWS:  # the GET! window's plate (#623)
+                    image = np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1])
+                    out["got"][name] = actions.got_gift(context, image)
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
                     cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
@@ -317,6 +331,12 @@ def test_an_ex_gifts_cell_is_logged_ex(read):
     # #449: the green "EX" where a cell's numerals go (shop.ex_mark), the only one of every crop's cells: its log line says EX.
     unscored = {case: [re.sub(r"\(\d\.\d\d\)", "(score)", m) for m in lines] for case, lines in read["ex"].items() if lines}
     assert unscored == {"fuse_ex": ["1 EX Keywordless 9799 A Certain Philosophy (score) unselectable: keep"]}
+
+
+def test_the_get_window_s_plate_names_its_gift(read):
+    # #623: one line, and three lines read out of order (GiftGetOverMap.png)
+    assert {name: gift_id for name, (gift_id, _) in read["got"].items()} == GET_WINDOWS
+    assert read["got"]["GiftGetOverMap"][1] == "Rusty Commemorative Coin"
 
 
 @pytest.mark.parametrize("case", ["offers", "offers_super", "offers_red"])

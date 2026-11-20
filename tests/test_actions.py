@@ -482,7 +482,8 @@ def picked(taps):
     return [x for x, y in taps if y == 300]
 
 
-@pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001])])
+@pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001]),
+                                                ({"bought": [9249]}, [9249], [9249])])  # held already (a GET! window read, #623): once
 def test_a_shop_visit_that_ends_leaves_the_run_holding_what_it_counted_as_owned(visit, before, held):
     actions.RUN["owned"] = before
     if visit is not None:
