@@ -44,9 +44,18 @@ const screens: [image: string, hits: string[]][] = [
   // The Parallel Superposition prompt after clearing floor 5 / 10 with the mode engaged (#85). Captured from the
   // game's own help sheet (the page behind it is the help text, not a map): the dialog is its live look, but where
   // it sits on screen is not confirmed. A Cancel / Confirm question, so PopupButton (one centred button) stays out.
-  // Both are help pager pages, so HelpPager (ahead of HubText) closes them there.
+  // Both are help pager pages, so HelpPager (ahead of HubText) closes them there. #434: the prompt after floor 5 and
+  // the one after floor 10 are two nodes, each reading its own text.
   ['ParallelModePrompt.png', ['ParallelModePrompt', 'HelpPager']],
-  ['ParallelModeExtreme.png', ['ParallelModePrompt', 'HelpPager']],
+  ['ParallelModeExtreme.png', ['ExtremeModePrompt', 'HelpPager']],
+  // Synthetic (#434, until #852 and #854 bring live ones): each help-sheet dialog cut out and put at the screen's
+  // centre over the floor-5 map dimmed to 35%. The map reads under it; the prompt comes first in the hub.
+  ['ParallelModePromptOverMap.synthetic.png', ['ParallelModePrompt', 'MapBus', 'MirrorMap']],
+  ['ParallelModeExtremeOverMap.synthetic.png', ['ExtremeModePrompt', 'MapBus', 'MirrorMap']],
+  // Synthetic (#850, until #855 brings a live one): ParallelModePromptOverMap with its text repainted as the Hidden
+  // Battle window's (EN_MirrorDungeonUI_6: the COGNITION ERROR WARNING title, Skip / Enter). Where the window sits
+  // is not known; the map reads under it, and the window comes first in the hub.
+  ['HiddenBattleOverMap.synthetic.png', ['HiddenBattle', 'MapBus', 'MirrorMap']],
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
   // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
   // notices and the Mailbox misses NavMainTabs' 0.9; under the menu it still reads. The popups come first in the hub.
@@ -58,7 +67,7 @@ const screens: [image: string, hits: string[]][] = [
   ['SystemNotices.png', ['Notices', 'EnkephalinBar']],
   // Live 2026-11-12 (#85, 1.118.1): the expired-run dialog over the Mirror Dungeon entry page, titled Notifs as the notices
   // are: Notices reads it too, which is why PreviousSessionExpired sits ahead of it in HubText (tests/test_hub_text_screens.py).
-  ['PreviousSessionExpired.png', ['PreviousSessionExpired', 'Notices']],
+  ['PreviousSessionExpired.png', ['PreviousSessionExpired', 'Notices', 'ParallelModeOff']],  // the entry page's label reads through
   // ClaimMail (#372): the box with mail reads Claim All; the empty one (live 2026-10-26) reads "No mail in storage." and
   // has the button dimmed. MailOpen is the envelope tap on the main window, the Window tab lit as HomeReached.
   ['Mailbox.png', ['Mailbox', 'MailClaimAll', 'EnkephalinBar', 'ModuleIcon']],
@@ -67,7 +76,8 @@ const screens: [image: string, hits: string[]][] = [
   ['MailboxEmpty.png', ['Mailbox', 'MailEmpty', 'EnkephalinBar', 'ModuleIcon']],
   ['SettingsMenu.png', ['SettingsMenu', 'GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
   ['HelpPager.png', ['HelpPager']],
-  ['HelpPagerLast.png', ['HelpPager']],
+  // Its picture is the Adversity page's (#851): AdversityPage reads it; HelpPager comes first (popups.json).
+  ['HelpPagerLast.png', ['HelpPager', 'AdversityPage']],
   ['HelpPagerExtract.png', ['HelpPager']],
   ['HelpPagerSinners.png', ['HelpPager']],
   ['MainWindow.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeReached', 'PassBanner', 'MailOpen', 'AssembleMain', 'ChargeMain', 'EnkephalinBar', 'ModuleIcon']],
@@ -125,13 +135,15 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-27 (#362 D9): the Seasonal tab at its top and at its end after one swipe, every row claimed.
   ['PassMissionsSeasonal.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily', 'PassExpRow']],  // its Clear EXP Luxcavation 30 time(s)
   ['PassMissionsSeasonalEnd.png', ['PassSeasonalLit', 'PassSeasonalSwipe', 'PassFinish', 'ExpPassDaily']],
-  ['EntryNewRun.png', ['MirrorEntryNewRun']],
-  ['EntryPaused.png', ['MirrorEntryPaused']],
+  // #434: the Parallel Superposition label reads OFF on both (ParallelModeOff). ParallelSwitchOn, the agent's gate on
+  // it, is not run here: tests/test_run_start_actions.py.
+  ['EntryNewRun.png', ['MirrorEntryNewRun', 'ParallelModeOff']],
+  ['EntryPaused.png', ['MirrorEntryPaused', 'ParallelModeOff']],
   // Live 2026-11-08 (#94): a paused run with Parallel Superposition Mode ON. ChargePrice: the glowing "! Exploring !"
   // panel reads `95` in its roi; the price is read only on the Use Lunacy tab (ChargeCount).
   ['EntryParallelOn.png', ['ParallelModeOn', 'MirrorEntryPaused', 'ChargePrice']],
-  ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow']],  // the entry page reads through it
-  ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun']],
+  ['ResumeDialog.png', ['ResumeDialog', 'MirrorEntryPaused', 'RecoverToWindow', 'ParallelModeOff']],  // the entry page reads through it
+  ['EnterDialog.png', ['MirrorEnterDialog', 'MirrorEntryNewRun', 'ParallelModeOff']],
   ['TeamSelect.png', ['TeamSelect']],
   // Live 2026-10-26 (#366): Enter on the EXP tab opens the same page, To Battle! for Confirm (LuxTeamSelect needs both).
   ['LuxTeamSelect.png', ['TeamSelect', 'LuxTeamSelect', 'Formation']],  // its Clear Selection button is the formation page's (ExpText has no Formation)
@@ -149,7 +161,7 @@ const screens: [image: string, hits: string[]][] = [
   ['StartingGiftPicked.png', ['StartingGift']],
   ['GiftGet.png', ['GiftGet']],
   // Live 2026-10-21 (#213): after an abnormality fight, over the map. The map's buttons read through (MirrorMap), so
-  // RouteMap's guard looks for GiftGet first (COVERS in actions.py).
+  // RouteMap's guard looks for GiftGet first (COVERS in actions.py), as for the other windows the map reads under.
   ['GiftGetOverMap.png', ['GiftGet', 'MirrorMap']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
@@ -168,6 +180,16 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-11-07 (#482, a frame of the run's recording), HARD floor 5 after its one free refresh: the button greyed
   // with no count, so PackRefreshSpent misses; PickThemePack reads it by its brightness (refresh_lit).
   ['ThemePackRefreshGrey.png', ['ThemePack']],
+  // Synthetic (#386): ThemePack.png with its difficulty label box redrawn as floors 6-15 may show it (INFINITY, EXTREME,
+  // nothing); no capture past floor 5 yet. The page is still ThemePack.
+  ['ThemePackInfinity.synthetic.png', ['ThemePack']],
+  ['ThemePackExtreme.synthetic.png', ['ThemePack']],
+  ['ThemePackNoLabel.synthetic.png', ['ThemePack']],
+  // Synthetic (#851, until #855 brings a live one): the help sheet's picture of the Adversity page (MirrorDungeon8_33),
+  // laid out as a 16:9 screen: scaled 1.4x as the help sheet's map picture fits the live map, the top band (the title)
+  // at the top, the cards centred, the Challenge band at the bottom, the tutorial's dimming lifted. Challenge is read by
+  // PassAdversity (tests/test_adversity_screens.py).
+  ['AdversityPage.synthetic.png', ['AdversityPage']],
   ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
   ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
@@ -332,8 +354,8 @@ if (stray.length) throw new Error(`node marks off the map: ${stray.map(([image])
 const cost: Record<string, number> = {
   MapNodeEvent: 2950, MapNodeShop: 1950, MaintenanceNotice: 1050, MapNodeFocusedHex: 1020, RetryPopup: 900,
   RecoverPauseConfirm: 790, DownloadDialog: 780, Victory: 730, LevelWarning: 570, ParallelModePrompt: 440,
-  MirrorEnterDialog: 350, GiftRefuseDialog: 350, RewardCard: 340, RewardCardForgo: 340, MapNodeFocusedRound: 310,
-  MapBus: 310, ClaimPopup: 290, GiftSearchForgo: 270, WipeDialog: 270, PopupButton: 250,
+  ExtremeModePrompt: 440, MirrorEnterDialog: 350, GiftRefuseDialog: 350, RewardCard: 340, RewardCardForgo: 340,
+  MapNodeFocusedRound: 310, MapBus: 310, ClaimPopup: 290, GiftSearchForgo: 270, WipeDialog: 270, PopupButton: 250,
 }
 const shard = Number(process.env.SHARD ?? 0)
 const shards = Number(process.env.SHARDS ?? 1)

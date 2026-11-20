@@ -31,7 +31,7 @@
 - 「載入畫面過久」看畫面有沒有在動（#179）：縮圖和上一輪有任何不同就算在動，重新計算 80 秒；遊戲停住時每一輪截到的像素完全相同（實機 2026-10-19：bot 的辨識分數到小數 6 位都不變），`NOW LOADING...` 的點與進度條在動時從不相同。數字來自 `tools/wait_spans.py` 對保存的 maafw 日誌（[資料](../perf/data/06-recovery/loading-spans.txt)；原始日誌與錄影留在本機）：30 FPS＋CPU 100% 下，自己載完的載入最長靜止 51 秒；#179 按了返回鍵的兩次，第一次錄影裡靜止 59 秒（日誌到返回鍵前 44 秒，之後 14 秒載完），第二次日誌裡靜止 63 秒到返回鍵、3 秒後畫面才變（約 66 秒），看不出返回鍵有沒有幫上忙，所以當成會自己載完；80 秒比它們長約 20%。2026-10-17 有一段載入從頭就不動 89.5 秒（之後 hub 的輪次就結束了，沒留 agent log，是否卡死未確認），新規則 80 秒就處理（原本 90 秒）。150 秒的上限給一直在動卻載不完的畫面：最長的正常載入 105 秒（#179 第一次，錄影；日誌從 bot 認出載入算起 90 秒）；連線中接著載入最長約 97 秒（日誌）；連不上伺服器時 `CONNECTING` 一直在動，遊戲約 130 秒後自己跳出伺服器錯誤（#84），由 `RetryPopup` 處理，比上限早。
 - 「畫面沒變」的比對：把 1280×720 的截圖切成 40×40 的格子取平均亮度（32×18 的縮圖），和這一串的第一張比，變動超過 8 階的格子少於 3% 就算同一個畫面。不用精確的雜湊：實機（2026-10-16）地圖頁的 Bus 火焰與光暈每一幀都在動，雜湊永遠不會連續相同。
 - 卡住有兩個來源：Agent 的動作發現點了沒反應（例如節點面板按 Enter 沒反應、Chain To Battle! 沒反應），回報卡住後回到 hub，由 `Stuck` 節點接手；或 `MirrorHub` 逾時進入 `GlobalStuck`，算作卡在最後處理的那個畫面。兩者都交給 Agent 的 `Recover` 動作決定恢復等級，再用 `context.run_task` 執行 Pipeline 的 `RecoverL1`–`RecoverL3`，最後明確跳回 `MirrorHub`。
-- `MirrorHub` 逾時（什麼都認不出來）進 `Recover` 時，Agent 把當下的畫面存到 `<root>/logs/unknown/<時間>.png`（只留最新 30 張）。還沒有節點的彈窗與頁面（每週重置、自己跳出的新手提示、「?」選效果頁，見 [02-screens.md](02-screens.md)）出現一次就留下一張截圖，不必等到停止才有證據。（#85、#87）
+- `MirrorHub` 逾時（什麼都認不出來）進 `Recover` 時，Agent 把當下的畫面存到 `<root>/logs/unknown/<時間>.png`（只留最新 30 張），log 記一行檔名與當時的層數（`unknown screen kept in logs/unknown/<時間>.png (floor 12)`；層數還沒讀到時寫 `floor ?`，#848）。還沒有節點的彈窗與頁面（每週重置、自己跳出的新手提示、「?」選效果頁，見 [02-screens.md](02-screens.md)）出現一次就留下一張截圖，不必等到停止才有證據。（#85、#87）
 - 停止條件（設定的停止、存活不足、重打用完、不能確定開關時不 Claim、會花持有星光）不經恢復，直接走停止程序。開局前的結束條件沒有進行中的局，只寫 log 後結束任務，不存證據、不寫 `runs.jsonl`、也不送 webhook：設定錯誤以失敗結束；局數已滿、每週獎勵用完、沒有可用隊伍（完全沒有啟用的隊伍，或沒有隊伍能打這個難度）是正常做完，log 記 `done:`，任務以成功結束（hub 的 `TaskDone` 節點讀 Agent 的完成旗標，`next` 為空），任務清單繼續。停止程序的 log 記 `stop:`，只有它寫 `stop` 的 `runs.jsonl` 行和送 webhook。（#364）
 - 每個任務的入口節點先執行 `TaskStart`，重設卡住階梯、看門狗、證據用的畫面、這個任務的局數與執行完成的遊戲重啟次數（#520）；這一局（`RUN`）只在上一個任務以 `done()` 或停止程序結束時重設，被 client 中途打斷的局留給同一個任務接手（#362 D3，見 [spec 01「日常任務的骨架」](01-architecture.md)）。連續失敗的遊戲重啟（L3，見「上限與停止」，#520）與更新重啟的次數、這次啟動有沒有過帳號層級的停止，仍以整次 bot 啟動累計；有過的話，之後的任務在入口就以失敗結束，不點、不存證據、不送 webhook（#362 D8）。（#364，[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）
 
@@ -64,7 +64,7 @@
 
 - 升級：一次卡住開始一段「卡住」，從 L1（超時從 L2）開始；在 bot 越過那個畫面之前再卡住，就升一級，最高 L3；L3 在次數上限內可以重複（實機 2026-10-16：重啟後的遊戲有時停在標題畫面的 `CONNECTING`，再重啟一次就好）。越過的意思是 hub 分派到別種畫面，回入口頁路上的畫面（載入、連線中、導航、入口頁、Resume 對話框、Dungeon Progress 面板、登入時可能跳出的公告，未驗證）不算。某一級沒能執行（例如地圖頁的齒輪或 To Window 沒反應、L3 的 `am force-stop` 失敗）就直接升到下一級（L3 就再做一次），而且不算進下方該局的次數上限；每次嘗試 L3 都先算進每次執行的連續失敗次數，hub 分派到越過卡住畫面的畫面才歸零，所以一直失敗也會停（#520）。實機（2026-10-17，#70）：`am force-stop` 偶爾回傳 exit 1，3 秒後重試就成功；重啟後 Resume 停在 `NOW LOADING` 也是同一段卡住，在上限內再重啟。（#31、#70）
 - L1 是 Android 的返回鍵，之後回到 hub，全域彈窗排在最前面。（#31）
-- bot 關掉公告、彈窗（`Notices`、`Mailbox`、`SettingsMenu`、`HelpPager`、`RetryPopup`、`PopupButton`、`ParallelModePrompt`）或按 L1 的返回鍵之前，`DismissShot` 先把畫面存到 `logs/dismissed/<時間>-<節點>.png`（最多 100 張，全域選項 `KeepDismissedScreens` 可關；只有 `RetryPopup` 同一種 60 秒內只存一張（斷線時它反覆跳出，不會把額度用完），其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制）並在 log 記一行；截圖含帳號畫面，只存本機。L2 的點擊（`RecoverGear`、`RecoverToWindow`）不存圖（#244 Deferred）。（#244）
+- bot 關掉公告、彈窗（`Notices`、`Mailbox`、`SettingsMenu`、`HelpPager`、`RetryPopup`、`PopupButton`）或按 L1 的返回鍵之前，`DismissShot` 先把畫面存到 `logs/dismissed/<時間>-<節點>.png`（最多 100 張，全域選項 `KeepDismissedScreens` 可關；`RetryPopup` 同一種 60 秒內只存一張（斷線時它反覆跳出，不會把額度用完），下面的兩個提示與 Hidden Battle 視窗也是，其他節點每次都存；`logs/unknown/` 的圖不受這個選項控制）並在 log 記一行；截圖含帳號畫面，只存本機。L2 的點擊（`RecoverGear`、`RecoverToWindow`）不存圖（#244 Deferred）。（#244）第 5、10 層後的提示（`ParallelModePrompt`、`ExtremeModePrompt`）由 `ParallelPrompt` 按 Confirm 或 Cancel，按之前照同一個選項存圖；和 `RetryPopup` 一樣 60 秒內只存一張，因為按鈕讀不到時它每 1.5 秒會再被看到一次（#434）。第 11–15 層的 Hidden Battle 視窗（`HiddenBattle`）由 `DismissShot` 按 Skip，也是 60 秒內只存一張：Skip 沒關掉它時，它每 1.5 秒會再被看到一次（#850）。
 - hub 認不出畫面而逾時時，`Recover` 先讀前景（`dumpsys window` 的 `mCurrentFocus`）。前景不是遊戲（Play 商店、桌面），或沒有視窗取得焦點，這段卡住就直接用 L3：返回鍵與 To Window 在那裡沒用。讀不到前景（不是 adb 控制器）照原本的升級。實機 2026-10-22：Play 商店更新後按「開始玩」，遊戲程序在、畫面全黑約 5 分鐘、`mCurrentFocus=null`；強制關閉再啟動，20 秒內到標題畫面。不依賴 Play 商店的「開始玩」。（#86）
 - 不必等逾時：hub 什麼都認不到時，`StuckFlag` 在最後一個畫面之後 5 秒起每 5 秒讀一次前景（`recovery.Away`）；連續 25 秒的每次讀取都是別的 app 或沒有焦點，就以 L3 起算一段卡住（畫面類型和逾時一樣記成「最後的畫面, then nothing recognised」），畫面存進 `logs/unknown/`。讀到遊戲在前景、讀不到前景，或 hub 又分派了畫面，就重新計算。鏡牢走 `Recover` 的階梯，日常 hub 走 `DailyRecover` 的 `restart_game`，重開後任務接著做（原本要等它自己的 60 秒逾時，以停止任務結束）；次數照「上限與停止」：重開後越過了，就不算進每次執行的連續失敗（#520）。實機 2026-11-08 冷啟動停在沒有焦點的空白啟動視窗超過 60 秒，等 `MirrorHub` 逾時才重開；同日那次 L3 的重開與 11-12 的兩次冷啟動（錄影），空白視窗在出現 PROJECT MOON 標誌前約 6、不到 12、不到 6 秒，25 秒是它的 2 倍多。（#530）
 - L2 只在地圖頁與開著的面板做得到（見上）：Dungeon Progress 面板（L1 的返回鍵已經打開，或點右上齒輪）→ `To Window` → `Pause Exploration` 對話框（`Save your progress and return to the Main Menu?`）按 Confirm → 主畫面，之後由 hub 的導航回到入口頁，入口頁的暫停中的局按 Enter → Resume 對話框按 Resume。（#31）
@@ -97,7 +97,7 @@
 
 下列情況也必須直接停止，不走恢復：
 
-- 入口頁的 `Parallel Superposition Mode` 點兩次 `INFINITY MIRROR` 仍讀到 ON（[02-screens.md](02-screens.md)）。（#94）
+- 入口頁的 `Parallel Superposition Mode` 點兩次 `INFINITY MIRROR` 仍讀不回目標層數要的那一邊：目標 5 仍是 ON，目標 10、15 仍是 OFF（[02-screens.md](02-screens.md)）。（#94、#434）
 - 遇到維護公告。（#14）
 - 遊戲用戶端過舊（標題畫面的 `Game client is not up to date`）：不按 Go to Store。（#86）
 - 全滅後重打次數用完，且全域選項為「停止」（預設是「放棄這局」，#95）。（#16）
@@ -105,6 +105,16 @@
 - 結算時 Claim 要花的腦啡肽模組不夠（[03-decisions.md](03-decisions.md) 第 14 節）。（#19）
 
 每週重置的通知不算停止條件，當成全域彈窗處理，排在 `MirrorHub` `next` 的最前面。升級彈窗同樣加入全域彈窗清單。（#14、#16，[ADR 0002](../adr/0002-pipeline-hub-and-agent-decisions.md)）
+
+### 15 層局的記憶體觀察
+
+每次換層（`PickThemePack` 讀到新樓層時），bot 在 log 記一行執行器（tasker，MaaFramework 辨識的程序）與 Agent 的記憶體、層數和這局開始後的分鐘數，例：`floor 6 memory: tasker 1834 MB (private 1921 MB), agent 540 MB (private 510 MB), 125 min into the run`。前一個數字是 working set（2026-10 實機記錄說的 RSS），括號裡是 private bytes（Windows 的 commit charge）。執行器啟動 Agent 時把自己的 pid 放在環境變數 `MAALC_TASKER_PID` 交給它（`runner/session.py`）：開發環境裡 Agent 的父程序是 venv 的 `python.exe` 啟動器，不是執行器。讀不到的值寫 `?`：不是執行器啟動的 Agent 沒有 tasker 的 pid，接續的局沒有開始時間。Agent 在一層的中途重新啟動時，那一層沒有這行，下一層才有。這行只記錄，不影響任何決策（`agent/memlog.py`）。（#391）
+
+背景：5 層局的實機記錄裡，執行器開局後在第 1 層與第 5 層的戰鬥各有 +277～+425 MB 的階梯，之後約每小時 +100 MB，峰值約 2.0–2.14 GB；Agent 約 523–588 MB，持平。原因沒查證。15 層局要幾小時（推論），所以由探路局 #853 用這行畫出 10 層局的曲線，再決定要不要在層間重啟遊戲；目前沒有層間重啟。（#391、#847）
+
+### 15 層局的每層截圖
+
+目標超過 5 層的局（鏡牢任務選項 `run.target_floor`），bot 把第 6 層以後每一層第一次看到的主題包頁（`PickThemePack` 等卡片停下、讀卡片標題的那張）與地圖頁（`RouteMap` 讀到 Bus 與連線的那張；換層後地圖會先出現、Bus 與連線晚到，#58）各存一張，結算視窗（`Settle` 讀到結果時）也存一張，結算視窗不論在第幾層結束都存。檔名是 `<root>/logs/floors/<時間>-floorNN-<pack|map|settlement>.png`，例：`2026-11-20T03-05-00.000Z-floor06-map.png`；時間在前，所以按檔名排就是按時間排，只留最新 63 張（`recovery.FLOOR_KEEP`：三局 15 層局，每局第 6–15 層的兩頁加一張結算視窗共 21 張）。720p 的一張約 0.5–1 MB（`tests/screens` 的主題包頁、地圖頁、結算視窗量的），一局 15 層約 21 張、約 17 MB，資料夾最多 63 張、不到 63 MB。每存一張 log 記一行 `floor 6 map: screen kept in logs/floors/...`。截圖含帳號畫面，只存本機。同一層同一種畫面只存第一次（記在這一局的 `RUN`）。Agent 重新啟動或停下後用 Resume 接回的局，`RUN` 是空的：地圖頁的層數改讀地圖標題（讀不到就不存），所以接回的那一層地圖照樣有一張，之前已存過的話會再多一張；主題包頁要到下一層才看得到。存檔失敗（磁碟滿）只記一行，局照常打。目標 5 的局不存。這些圖只記錄，不影響任何決策。（#848）
 
 ### 停止程序
 

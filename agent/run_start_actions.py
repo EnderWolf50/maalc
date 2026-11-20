@@ -1,22 +1,26 @@
-"""A run's start: the plan, Parallel Mode, the team, starlight and its graces, the starting gift and its search, and
-the theme pack."""
+"""A run's start: the plan, Parallel Mode, the team, starlight and its graces, the starting gift and its search, the
+theme pack, and the Adversity page of floors 11-15."""
 
 import functools
+import json
 import re
 import time
 
 from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
+from maa.custom_recognition import CustomRecognition
 
 import gift_search
+import memlog
 import pack_cover
 import recovery
 import run_start
 import settlement
 import task_options
-from actions import (GET_CONFIRM, GET_TITLE, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, current_run, data,
-                     finish, get_plate, grid_moved, hands_back, log, note_got, number, ocr, option, options, page_guard,
+from actions import (GET_CONFIRM, GET_TITLE, POPUPS, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, box_centre, current_run,
+                     data, dismissed_due, finish, flag_hit, get_plate, grid_moved, hands_back, keep_dismissed,
+                     keep_floor_capture, log, note_got, number, ocr, on_page, option, options, page_guard,
                      restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
                      text, until)
 from ocrtext import compact, floor_number, has
@@ -47,6 +51,12 @@ CARDS_SETTLE = 4.0  # s; a page still swinging by then is read anyway
 # frames), greyed 0 (35 frames, the brightest px 54-56). The ThemePack captures of tests/screens: lit 1176-1321, greyed 0.
 REFRESH_BUTTON = (1001, 25, 163, 45)
 REFRESH_BRIGHT, REFRESH_LIT_MIN = 120, 100
+# The Adversity page's button `Challenge` (EN_MirrorDungeonUI_6 mirror_constraint_button; it reads `Challenge 0/6` on
+# the help sheet's picture, MirrorDungeon8_33). No live capture yet (#855): wide enough for the picture as the help sheet
+# draws it (y 525-565) and as a 16:9 screen lays it out (tests/screens/AdversityPage.synthetic.png, y 622-645).
+ADVERSITY_BUTTON = [900, 480, 380, 220]
+ADVERSITY_SHOWS = 3.0  # s: Challenge looked for while the page fades in
+ADVERSITY_LEAVES = 5.0  # s: the page gone by then after the tap
 
 
 @AgentServer.custom_action("PlanRun")
@@ -129,25 +139,40 @@ class PlanRun(CustomAction):
         return True
 
 
-INFINITY_TITLE = [890, 330, 330, 28]  # entry page: "Parallel Superposition Mode : ON" / "OFF" (the pipeline's roi)
-INFINITY_BUTTON = (1053, 377)  # INFINITY MIRROR under it
+INFINITY_BUTTON = (1053, 377)  # entry page: INFINITY MIRROR, under the Parallel Superposition Mode label
+INFINITY_LABEL = {True: "ParallelModeOn", False: "ParallelModeOff"}  # the label's nodes, each reading one side
+EXPLORING = [990, 140, 230, 35]  # entry page: "Before Entry", or the paused run's "Mirror of Sisyphe - F1"
 
 
-@AgentServer.custom_action("ParallelModeOff")
-class ParallelModeOff(CustomAction):
-    """Entry page with Parallel Superposition Mode ON: tap INFINITY MIRROR until it reads OFF (#94, spec 02).
+@AgentServer.custom_recognition("ParallelSwitch")
+class ParallelSwitch(CustomRecognition):
+    """The entry page's switch nodes' gate (ParallelSwitchOn, ParallelSwitchOff): hits when the task's target floor wants
+    the switch at param {"on"} (run_start.parallel_switch), the paused run's floor read in the Exploring field. The
+    node's label part has read the other side already, so a hit is a switch to move."""
 
-    v1 never plays past floor 5 (#434 opens it for a target above 5); the prompt after floor 5 (ParallelModePrompt)
-    is cancelled as a second guard.
-    Still ON after two taps: stop, nothing else is tried.
+    def analyze(self, context: Context, argv: CustomRecognition.AnalyzeArg):
+        on = json.loads(argv.custom_recognition_param)["on"]
+        # "F7" wherever it sits: OCR may join it to the dungeon's name ("Sisyphe-F7"); "of" has no number after it
+        floor = floor_number(text(context, argv.image, EXPLORING), r"f")
+        return flag_hit() if run_start.parallel_switch(option("target_floor", 5), floor) is on else None
+
+
+@AgentServer.custom_action("ParallelModeSwitch")
+class ParallelModeSwitch(CustomAction):
+    """Entry page with Parallel Superposition Mode on the wrong side for the target floor (ParallelSwitch): tap INFINITY
+    MIRROR until it reads param {"on"} (#94, #434, spec 02). OFF keeps a target of 5 to floor 5, the prompt after it
+    (ParallelModePrompt) cancelled as a second guard; ON lets a target above 5 go on past it.
+    Still on the other side after two taps: stop, nothing else is tried.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        on = json.loads(argv.custom_action_param)["on"]
+        side, other = ("ON", "OFF") if on else ("OFF", "ON")
         for _ in range(2):
-            if tap_then(context, *INFINITY_BUTTON, shows(context, INFINITY_TITLE, r":\s*[O0]FF"), timeout=3) is not None:
-                log("Parallel Superposition Mode switched OFF")
+            if tap_then(context, *INFINITY_BUTTON, lambda im: seen(context, im, INFINITY_LABEL[on]), timeout=3) is not None:
+                log(f"Parallel Superposition Mode switched {side} (target floor {option('target_floor', 5)})")
                 return True
-        return stop(context, "Parallel Superposition Mode stays ON after tapping INFINITY MIRROR")
+        return stop(context, f"Parallel Superposition Mode stays {other} after tapping INFINITY MIRROR")
 
 
 def team_rows(context, image):
@@ -699,6 +724,53 @@ def refresh_lit(image):
     return bool((image[y:y + h, x:x + w].max(axis=2) > REFRESH_BRIGHT).sum() >= REFRESH_LIT_MIN)
 
 
+@AgentServer.custom_action("PassAdversity")
+class PassAdversity(CustomAction):
+    """The Adversity page of floors 11-15 (#851): none selected, then Challenge (the user's choice of 2026-11-20, no
+    setting; choosing some is #388).
+
+    Challenge is found by its text, not tapped at a fixed place, until a live capture shows where it sits (#855). No
+    card is ever tapped: a Challenge that does not read, or a page still up after it (the game may want one chosen),
+    stops the task, the screen kept as its evidence (#847). A global popup up after the tap (POPUPS: the page's title
+    reads through it) is the hub's to answer first: back to it, and the page, if still up, comes here again. The page
+    goes to logs/dismissed/ too (run.keep_dismissed_screens): the first live one is the fixture #855 waits for.
+
+    The help sheet's own picture of the page reads `Set Adversities` and `Challenge` in these rois too
+    (tests/screens/HelpPagerLast.png): HelpPager comes first in MirrorHub (popups.json), and a sheet that shows here
+    anyway (one frame its templates missed) goes back to the hub untapped.
+    """
+
+    @hands_back
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        now = time.monotonic()
+        image = page_guard(context, argv.node_name)
+        if dismissed_due(argv.node_name, now):
+            keep_dismissed(argv.node_name, image, now)
+        floor = f"floor {RUN.get('floor', '?')}"
+        found = []
+
+        def challenge(im):
+            found[:] = [b for t, b in ocr(context, im, ADVERSITY_BUTTON) if has(t, "Challenge")]
+            return bool(found)
+
+        shown = until(context, challenge, timeout=ADVERSITY_SHOWS)
+        if shown is None:
+            return stop(context, f"{floor}: Adversity page: Challenge not read")
+        page_guard(context, argv.node_name, shown)  # ADR 0007: the screen the button was read on still shows the page
+        if on_page(context, shown, "HelpPager"):
+            log(f"{floor}: the help sheet's picture of the Adversity page: back to the hub")
+            return True
+        log(f"{floor}: Adversity page, none selected: Challenge")
+        x, y = box_centre(found[0])
+        after = tap_then(context, x, y, lambda im: seen(context, im, argv.node_name) is None or on_page(context, im, *POPUPS),
+                         timeout=ADVERSITY_LEAVES)
+        if after is None:
+            return stop(context, f"{floor}: the Adversity page stays up after Challenge with none selected")
+        if popup := on_page(context, after, *POPUPS):
+            log(f"{floor}: {popup} over the Adversity page after Challenge: back to the hub")
+        return True
+
+
 @AgentServer.custom_action("PickThemePack")
 class PickThemePack(CustomAction):
     """Set this floor's difficulty, then pull the best pack: highest weight, leftmost first (spec 03 sections 2, 6)."""
@@ -719,6 +791,7 @@ class PickThemePack(CustomAction):
             RUN.update(floor=floor, map_misses=0)  # a new floor's map gets a fresh retry quota (spec 06)
             restart_floor_clock()
             STUCK["ladder"].floor(floor, option("target_floor", 5))  # floors 6 and 11 refill L2/L3 (#435)
+            log(memlog.floor_memory(floor, RUN.get("start"), settlement.now()))  # #391: a long run's memory curve
         want = None if run["difficulty"] is None else run_start.hard_wanted(floor, run["difficulty"] == "hard", run["team"]["hard_from_floor"])
         if not self.set_difficulty(context, floor, want):
             return stuck(f"floor {floor} difficulty did not switch to {'HARD' if want else 'NORMAL'}")
@@ -739,6 +812,7 @@ class PickThemePack(CustomAction):
             cards = pack_titles(context, page)
             if not cards:
                 return stuck("no theme pack titles read")
+            keep_floor_capture("pack", floor, page)  # #848: the floor's first dealt hand, once its cards stood still
             ranked = run_start.rank_packs([lines for _, lines in cards], names, plan, title_art,
                                           lambda i, allowed: pack_cover.read_cover(page, cards[i][0], allowed))
             slots = run_start.event_slots(floor, [t for t, _, _ in ranked], event_packs, packs)
@@ -768,9 +842,20 @@ class PickThemePack(CustomAction):
 
     @staticmethod
     def set_difficulty(context, floor, want):
+        """Switch the page to the floor's difficulty (want: HARD True, NORMAL False, None keep) and note what it is.
+
+        Floors 6 on (#386) switch nothing: the run got there with floors 1-5 all HARD (the game's tutorial TutoMD05_P19_D2),
+        so the floor is HARD whatever the label reads, or when it reads nothing; the log line stays `floor N: HARD`
+        (tools/live/evidence_map.py logged_hard). Up to floor 5 a label never read is False: the caller's stuck.
+        """
         def label(image):
-            shown = text(context, image, [830, 30, 160, 35])
-            return True if has(shown, "HARD") else False if has(shown, "NORMAL") else None
+            return run_start.difficulty_label(text(context, image, [830, 30, 160, 35]))
+
+        def note_difficulty(hard):
+            log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
+            RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
+            RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
+            return True
 
         for _ in range(4):
             hard = label(page_guard(context, "ThemePack"))
@@ -779,14 +864,16 @@ class PickThemePack(CustomAction):
                 continue
             move = run_start.difficulty_move(floor, hard, want)
             if move is None:
-                if want is not None and hard != want:
+                if run_start.hard_only(floor) and not hard:
+                    log(f"floor {floor} reads NORMAL: a floor past 5 is HARD")
+                elif want is not None and hard != want:
                     log(f"floor {floor} stays HARD: a run never goes back to NORMAL")
-                log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
-                RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
-                RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
-                return True
+                return note_difficulty(hard or run_start.hard_only(floor))
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
             tap_then(context, 965 if move == "hard" else 850, 46, lambda im: label(im) == (move == "hard"), timeout=2.5)
             still(context, timeout=1.5)  # the packs re-roll
+        if run_start.hard_only(floor):
+            log(f"floor {floor}: no difficulty label read: a floor past 5 is HARD")
+            return note_difficulty(True)
         return False

@@ -11,9 +11,9 @@ from maa.custom_action import CustomAction
 import map_route
 import recovery
 import settlement
-from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, leave_shop, log, number, on_map,
-                     page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap, tap_shown,
-                     tap_then, text, until)
+from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, keep_floor_capture, leave_shop, log,
+                     number, on_map, page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap,
+                     tap_shown, tap_then, text, until)
 from ocrtext import floor_number, has
 
 
@@ -60,6 +60,9 @@ MARKS = {  # node -> (mark, roi around the slot centre)
 # bottom right, hard floors), one torn-frame capture (#287) and the icon over a pack's flame wreath and crossed swords (#840)
 SHOP_ICONS = ("MapNodeShopIcon", "MapNodeShopIconPlus", "MapNodeShopIconTorn", "MapNodeShopIconFlame")
 ENTER = (1133, 543)
+# coin_text's crop, px either side of the Cost coin box's right edge: three digits, right-aligned on x+w+11; the wider
+# read takes a fourth (#849: the synthetic 1000's 1 on x+w-18..x+w-14)
+COIN_LEFT, COIN_LEFT_WIDE, COIN_RIGHT = 13, 21, 13
 MAP_RETRIES = 3  # RouteMap calls per floor that may enter nothing before the map is stuck
 MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 # #202: columns up to this x are typed by their Cost too: with the bus at the far left, its two columns (329, 584).
@@ -178,9 +181,23 @@ def coin_text(context, image, box):
     bright, barely saturated pixels; each keeps its own shading, dark on white, rather than going plain black: its
     1 px counters are what tell an 8 from a 0, and a black cut-out loses them (8 read B). A white margin: the OCR
     reads a glyph on the crop's edge badly (#257; spec 03 section 7).
+    That crop fits three digits. HARD's Hidden Battle costs 1000 (#849), right-aligned as the rest, so its 1 falls left of
+    it and the read is 000. Such a read is read again from COIN_LEFT_WIDE, and that read is taken only when it holds four
+    digits: what lies left of a shorter number must not make it another Cost (tests/data/cost_crops/hard1000.synthetic.png,
+    made from live glyphs; no live 1000 seen yet, #856).
     """
+    found = coin_read(context, image, box, COIN_LEFT)
+    if len(digits := coin_digits(found)) == 3 and digits[0] == "0":  # #849: a 1000 cut to its 000
+        wide = coin_read(context, image, box, COIN_LEFT_WIDE)
+        if len(coin_digits(wide)) == 4:
+            return wide
+    return found
+
+
+def coin_read(context, image, box, left):
+    """coin_text's OCR of the crop from left px left of the coin box's right edge to COIN_RIGHT px past it."""
     x, y, w, _ = box
-    part = image[y + 24:y + 38, max(0, x + w - 13):x + w + 13]
+    part = image[y + 24:y + 38, max(0, x + w - left):x + w + COIN_RIGHT]
     bright = part.max(axis=2)
     mask = (bright > 100) & (saturation(part) < 120)
     plain = np.where(mask, 255 - bright, 255).astype(np.uint8)[..., None].repeat(3, axis=2)
@@ -190,8 +207,13 @@ def coin_text(context, image, box):
 
 def coin_number(found):
     """The Cost number in coin_text's OCR text; None for a part read (coin_part says which)."""
-    digits = re.sub(r"\D", "", found)
+    digits = coin_digits(found)
     return None if coin_part(digits) else int(digits)
+
+
+def coin_digits(found):
+    """The digits of a Cost's OCR text, the rest dropped."""
+    return re.sub(r"\D", "", found)
 
 
 def coin_part(digits):
@@ -201,7 +223,7 @@ def coin_part(digits):
 
 def cost_miss(image, box, cx, cy, found, difficulty):
     """Log why a Cost coin's read is no Cost of the floor's difficulty, and keep its crop in logs/cost (#284)."""
-    digits = re.sub(r"\D", "", found)
+    digits = coin_digits(found)
     why = coin_part(digits) or f"{digits} is no {difficulty} Cost"
     x, y, w, h = box
     stamp = f"{settlement.now().replace(':', '-')}_{cx}_{cy}"
@@ -319,6 +341,8 @@ class RouteMap(CustomAction):
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST
             slots = self.read_slots(context, image, bx, by) if bus else {}
+        # #848: the map its bus and links were read on; a run picked up mid-floor knows its floor from the title only
+        keep_floor_capture("map", RUN.get("floor") or (lambda: map_floor(context, image)), image)
         log("map: column 1: " + (", ".join(f"{r} {t} ({'?' if n is None else n} onward)" for r, (t, n) in slots.items()) or "no linked slot read"))
         if slots and RUN.get("after_shop"):  # #279: the page handled last was the shop, so the only node to take is the boss
             if changed := map_route.boss_after_shop({"bus": ("shop", None)}, slots):

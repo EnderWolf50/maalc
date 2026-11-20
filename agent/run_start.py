@@ -7,7 +7,8 @@ import re
 from difflib import SequenceMatcher
 from functools import lru_cache
 
-from ocrtext import compact
+import settlement
+from ocrtext import compact, has
 
 # Grace base prices, numbered as on the starlight page (spec 04 section 7).
 # Live 2026-10-14: base / + / ++ cost 1x / 2x / 3x the base price.
@@ -23,6 +24,17 @@ def run_difficulty(setting, weekly_left, target_floor):
     if setting != "auto":
         return setting
     return "hard" if weekly_left > 0 or target_floor > 5 else "normal"
+
+
+def parallel_switch(target_floor, floor):
+    """The entry page's Parallel Superposition Mode for this task: True ON, False OFF, None as it is (#434, #847).
+
+    ON takes the run past floor 5, so ON for a target above 5. floor: the paused run's floor the entry page shows, None
+    before a run. A run at floor 6 or later is in the mode already: the switch stays as it is.
+    """
+    if floor is not None and floor > 5:
+        return None
+    return settlement.goes_on(5, target_floor)  # what the prompt after floor 5 is answered by
 
 
 def resolve_plan(settings, team, key):
@@ -80,14 +92,28 @@ def team_difficulty(setting, difficulty, hard_from_floor):
     return "normal" if hard_from_floor is None and setting != "hard" else difficulty
 
 
+def hard_only(floor):
+    """Whether the floor has HARD alone: floor 6 takes floors 1-5 all HARD (the game's tutorial TutoMD05_P19_D2, #386)."""
+    return floor > 5
+
+
+def difficulty_label(shown):
+    """The theme pack page's difficulty label as HARD (True), NORMAL (False) or unread (None).
+
+    INFINITY (floors 6-10) and EXTREME (11-15) are the game data's uiConfig.difficultyLabel, no capture shows them yet
+    (#853, #855): either is a HARD run, since floor 6 takes floors 1-5 all HARD (#386).
+    """
+    return True if has(shown, "HARD", "INFINITY", "EXTREME") else False if has(shown, "NORMAL") else None
+
+
 def difficulty_move(floor, shown_hard, want_hard):
     """None (keep), "hard" or "normal": the switch to make on the theme pack page.
 
     want_hard None means the run's difficulty is unknown: keep what the game shows.
     Once a floor is HARD the run stays HARD; only floor 1, before any pack is chosen,
-    may still go back to NORMAL.
+    may still go back to NORMAL. Floors 6 on have no NORMAL (#386): never a switch there.
     """
-    if want_hard is None or shown_hard == want_hard:
+    if want_hard is None or shown_hard == want_hard or hard_only(floor):
         return None
     if want_hard:
         return "hard"

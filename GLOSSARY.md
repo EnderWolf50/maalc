@@ -12,10 +12,17 @@ _Avoid_: run（寫程式與英文介面時可用）、輪、場、執行（指�
 這一局打算打到第幾層，鏡牢任務的任務選項：5、10 或 15，預設 5。大於 5 時，第 6 層起要求這一局第 1–5 層每一層都是 HARD，所以所有輪替的隊伍都要從第 1 層起打 HARD。
 
 **Parallel Superposition（INFINITY、無限鏡牢）**：
-入口頁的 `Parallel Superposition Mode` 開著時，通過第 5 層後跳提示，按 Confirm 進入第 6 層；第 6–10 層是 INFINITY，結算視窗的標記推測是 `[INFINITY]`。進第 6 層要整局 HARD（見「目標層數」）。v1 把這個開關一律關掉（#94）；#434 接上後，目標層數大於 5 時才打開。
+入口頁的 `Parallel Superposition Mode` 開著時，通過第 5 層後跳提示，按 Confirm 進入第 6 層；第 6–10 層是 INFINITY，結算視窗的標記推測是 `[INFINITY]`。進第 6 層要整局 HARD（見「目標層數」）。bot 依目標層數切這個開關：目標 5 關掉（#94），大於 5 打開（#434）。
 
 **EXTREME（極限）**：
 INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層；第 11–15 層是 EXTREME，結算視窗的標記推測是 `[EXTREME]`。
+
+**Adversity**：
+第 11–15 層在 Adversity 頁（標題 `Set Adversities`）自己選的負面效果，每層 6 個可選、最多選 5 個，每個有分數（1–5）；選了的層通過後才多拿星光與 Mirror of Sisyphe Pass 的 Projection。bot 一個都不選，直接按 `Challenge`（使用者 2026-11-20 定案，#851）；選 N 個留在 #388。和 Boss 後選的 Mounting Trials（試煉）不同。
+
+**Hidden Battle（隱藏戰鬥）**：
+第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `HIDDEN_BATTLE`；機率是 `hiddenBattleInfo` 的 `probInfo`），地圖上的 Cost 是困難 1000、普通 800。確認視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850），所以選路時只在它是唯一相連的節點才走過去。程式裡的節點類型是 `hidden`。
+_Avoid_: 隱藏戰、隱藏關
 
 **可領（`claim_ok`）**：
 結算時這一局已通過第 5 層（Exploration Reward 視窗的最後一層，已通過層數 ≥ 5）。可領的局一律 Claim，包括第 6 層以後才失敗或離開的；沒過第 5 層的局放棄獎勵。
@@ -29,7 +36,7 @@ _Avoid_: 達到目標（沒說是可領還是達標）
 _Avoid_: 中斷的局、held run
 
 **難度**：
-每一層的 NORMAL 或 HARD，在該層的主題包頁切換。一局之中，不同層的難度可以不同。
+每一層的 NORMAL 或 HARD，在該層的主題包頁切換。一局之中，不同層的難度可以不同。第 6 層起只有 HARD（進第 6 層要第 1–5 層全 HARD），沒有切換；主題包頁的標籤推測寫 INFINITY（第 6–10 層）或 EXTREME（第 11–15 層），bot 當成 HARD。
 _Avoid_: 模式、困牢（指整局時）
 
 **復刻版**：

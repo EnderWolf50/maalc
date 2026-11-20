@@ -64,6 +64,12 @@ def target_reached(floors, target):
     return floors >= target
 
 
+def goes_on(after, target):
+    """Whether the prompt after floor `after` (5: Parallel Superposition, 10: EXTREME) is Confirmed, which takes the run
+    to the next floor; Cancel ends it there (#434). On only towards a target past that floor."""
+    return target > after
+
+
 def claim_bonuses(result, target, use, amount, left, floors_hard, read_first):
     """How many weekly-bonus toggles go ON for a claimed run: none short of the target, none when the marker did not read."""
     if not target_reached(floors_passed(result), target) or result.difficulty is None:

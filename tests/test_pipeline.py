@@ -81,11 +81,12 @@ def test_mirror_hub_reads_its_ocr_screens_through_hub_text():
     assert hub.index("BattleHUD") < hub.index("Connecting") < hub.index("HubText")
     param = nodes["HubText"]["custom_recognition_param"]
     assert param["tail"] == [n for n in hub[hub.index("HubText") + 1:] if n != "NoBatchOCR"]
-    for name in hub_entries(nodes, "HubText"):  # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And
+    # OCR HubText judges (hub_text.ocr_specs): OCR, And / Or of OCR, gates in an And (a template, the agent's: #434)
+    for name in hub_entries(nodes, "HubText"):
         kind, params = recognition(nodes[name])
         subs = [recognition(s)[0] for s in parts(nodes, params)]
         assert (kind == "OCR" or kind == "Or" and subs and all(s == "OCR" for s in subs)
-                or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or") for s in subs)), name
+                or kind == "And" and "OCR" in subs and all(s in ("OCR", "TemplateMatch", "Or", "Custom") for s in subs)), name
     assert len(batch_plan(nodes, ["NoBatchOCR", *hub_entries(nodes, "HubText"), *param["tail"]])) == 1
 
 

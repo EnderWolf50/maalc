@@ -51,6 +51,8 @@
 - 任何一層選了 HARD 之後，之後各層都不能切回 NORMAL：下一層起主題包頁的難度箭頭變灰、點了沒反應。（#19，2026-10-14 定案；實機：captures/128_f2_tap_difficulty_left.png）
 - 實機：第 1 層選主題包之前，HARD 與 NORMAL 可以來回切換；HARD 時點左箭頭（`◀ ▶ HARD`）切到 NORMAL，NORMAL 時點右箭頭（`NORMAL ◀ ▶`）切到 HARD。每次切換都會換一組主題包，切回原本的難度時換回原本那一組。（#25；2026-10-14 實機）
 - 普通局到第 N 層（N > 1）才切到 HARD 是否可行，還沒有實測，見[未決](#未決)。
+- 第 6 層起（#386，2026-11-20 規格 #847 定案）：進第 6 層要第 1–5 層全 HARD（遊戲教學 TutoMD05_P19_D2），所以第 6–15 層一定是 HARD，主題包頁不切難度。標籤讀到 `HARD`、`INFINITY` 或 `EXTREME`（遊戲資料 `uiConfig.difficultyLabel` 第 6–10、11–15 層的值，推測，沒有實機畫面）都記成 HARD；讀到 `NORMAL`（不可能，當成誤讀）或讀了 4 次都讀不到，也記成 HARD，不 stuck。log 照舊寫 `floor N: HARD`（`tools/live/evidence_map.py` 的 `logged_hard` 讀這行），讀不到時前一行寫 `no difficulty label read`。第 1–5 層照舊：讀不到就 stuck。（`run_start.difficulty_label`、`difficulty_move`，`PickThemePack.set_difficulty`）
+- Adversity（第 11–15 層，#851，2026-11-20 規格 #847 定案）：v2 一個都不選，Adversity 頁直接按 `Challenge`，沒有設定。代價（使用者已知）：拿不到 Adversity 的星光加成，也拿不到大部分要求選了某些 Adversity 的 EXTREME 成就。按鈕讀不到，或按了之後仍在這頁（例如遊戲要先選一個），就停止並存證據，不點任何卡片。選 N 個（依分數或名單）留在 #388。畫面見 [02](02-screens.md) 開局的「Adversity 頁」。（`PassAdversity`）
 
 ## 3. 出戰順序與戰前編隊
 
@@ -133,7 +135,7 @@
 - 記錄：每次讀完畫面，log 列出每張卡的標題與分數（套用活動卡包設定的那張標 `event`）和門檻；拉卡時寫出選了哪張、分數，以及是否低於門檻。（#240）
 - 實機：卡片數量會變。買了 `Star of the Beginning` 與 `Interstellar Travel+`（各 `Theme Pack Selection +1`）時第 1 層有 5 張；`Interstellar Travel+` 讓刷新按鈕顯示 `Refresh 4/4`（`Theme Pack Refresh Chance +3`）。所以卡片位置從標題列的 OCR 結果取得，不用固定格位。（#25；2026-10-14 實機）
 - 選主題包時要把卡片往下拉才能選定。（#8）
-- 選主題包之前必須先依第 2 節設定好本層難度。（#8）
+- 選主題包之前必須先依第 2 節設定好本層難度。（#8）第 6 層起不切難度，這一層記成 HARD（第 2 節，#386）。
 - 實機：免費刷新每層一次，用過按鈕就變灰。這一局沒有看到 NEW 標記；第 4 層的主題包左上有紅色 `!` 標記（推測是沒打過的主題包），標題照常可讀。第 5 層的主題包沒有 `CLEAR BONUS` 列。困難局打完 Boss 後直接進入下一層的主題包頁，中間沒有換層畫面。（實機：captures/129_f2_refresh_tapped.png、captures/197_f3boss_rewards_pack.png、captures/222_f4boss_rw_pack.png、captures/127_after_boss_gifts.png）
 
 ## 7. 地圖選路
@@ -166,6 +168,7 @@
 | 異想體戰 Abnormality（`abno`） | 150 | 180 | ✔ | ✔ | 5 |
 | Risky 精銳（`risky`） | 120 | 150 | ✔ | ✔ | 6（困難模式 8） |
 | 無法辨識 | - | - | | | 9 |
+| Hidden Battle（`hidden`，第 11–15 層） | 800 | 1000 | unverified | unverified | 10，只在唯一相連時走 |
 
 Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒有矛盾；解包資料裡沒有這張表（#91）。權重放在資料檔（[05-game-data.md](05-game-data.md)）。困難鏡牢實機看到的 Cost 列在 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)。（#12、#19）
 
@@ -181,6 +184,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
     - 讀完把地圖拖回同樣的距離，最後剩 30 px 以內就不拖（`BUS_SLACK`，和 `find_bus` 把 Bus 當作已在家的容許相同；#490：拖兩欄量到 511 px，拖回 510 px 後剩下的 1 px 拖了地圖也不動，每次白花約 1.4 秒），再找一次 Bus（`find_bus`，偏了就拖回最左邊；找不到就照「Bus 不在畫面上」的後備），然後才點第一欄。選好的路線照下面的計畫走，`map:` 的記錄列出每段讀到的欄（`map: dragged the map … px; reading on from column N`）和整層的路線。
   - 後面的欄都讀不到時，分數就是第一欄的權重，與原本相同。
 - Boss 只在它是唯一可走的節點時才走。不特地找商店，每層 Boss 前一定有一家。
+- Hidden Battle 也只在它是唯一相連的節點時才走（和 Boss 同一條規則，`map_route.LAST_RESORT`）。計畫照走、不再排序（`follow`），所以算後面幾欄的路徑時也一樣：前一個節點還連到別的節點，就不經過它；它是唯一出路時權重 10，排在無法辨識之後。它的確認視窗一律按 Skip（使用者 2026-11-20 定案，#847），走過去沒有好處。Cost 怎麼讀見 [05-game-data.md](05-game-data.md#6-cost-對照表與商店數字)。（#849）
 - 同分時，選下一欄可走路線最多的節點；節點連線辨識不出來時，改成中間列優先，再來是上列。
 - 讀完一次就照選好的路線走，不必每一步重讀（使用者決定，#111，2026-10-18；原本「每一步都重新辨識，不保存路線」改掉）。路線存成這一層的計畫：之後每一步從 Bus 的位置看下一格（上、中、下），確認它和 Bus 相連（亮線或箭頭）、類型和計畫相同就點，不拖地圖、不讀其他格子；那一格在資源列或右側按鈕底下時才先把 Bus 拖到最左邊。有疑問就重讀，不為省下的秒數冒險（使用者，2026-10-18）。
   - 重新規劃（完整讀一次）：沒有計畫、計畫走完（困難模式兩欄走完一步就用完）、下一格讀不到相連、類型和計畫不同（Bus 不在計畫以為的位置，或遠處讀錯）、點了沒出現節點面板，或換了一層。程式重開後記憶體裡沒有計畫，一定重讀。

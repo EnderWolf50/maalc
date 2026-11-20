@@ -1,5 +1,7 @@
 """A run's start actions (agent/run_start_actions.py): the plan, the team, starlight and its graces, the starting gift and its search, and the theme pack."""
 
+import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -11,11 +13,13 @@ import run_start_actions
 import gifts
 import recovery
 import gift_search
+import memlog
 import pack_cover
 import run_start
 import settlement
 from settings import gift_tables
 from agent_patch import patch_all
+from test_pipeline import load_nodes
 import test_actions
 
 from test_actions import SCREENS, argv, listed, moved, no_fixed_wait, page, page_until, screens, taps
@@ -68,31 +72,59 @@ def team_picker(context, title, after_confirm):
                    (1160, 522, 60, 34): "63", (400, 230, 480, 90): after_confirm})
 
 
-def infinity_switch(context, monkeypatch, takes):
-    """The entry page's Parallel Superposition Mode reads ON until a tap on INFINITY MIRROR takes (if it does)."""
+def infinity_switch(context, monkeypatch, on, takes):
+    """The entry page's Parallel Superposition Mode reads the other way until a tap on INFINITY MIRROR takes (if it
+    does); ParallelModeSwitch is to bring it to `on`."""
     taps, stops = [], []
     patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
 
-    def ocr(context, image, roi, only_rec=False):
-        if roi == run_start_actions.INFINITY_TITLE:
-            # As the bot's MaaFramework log read the entry page live, OFF and the red ON (2026-11-08)
-            text = "Parallel Superposition Mode : OFF" if takes and taps else "PParallel Superposition Mode : oN "
-            return [(text, (894, 333, 316, 17))]
-        return []
-    patch_all(monkeypatch, "ocr", ocr)
-    return taps, stops, run_start_actions.ParallelModeOff().run(context, None)
+    def seen(context, image, node, roi=None):  # the label's nodes; maa-tools reads them on the entry page captures
+        reads_on = on if takes and taps else not on
+        return node == ("ParallelModeOn" if reads_on else "ParallelModeOff") or None
+    patch_all(monkeypatch, "seen", seen)
+    return taps, stops, run_start_actions.ParallelModeSwitch().run(context, argv({"on": on}))
 
 
-def test_a_parallel_superposition_switch_left_on_is_switched_off(context, clock, monkeypatch):
-    # #94: the bot never plays past floor 5.
-    taps, stops, result = infinity_switch(context, monkeypatch, takes=True)
+@pytest.mark.parametrize("on", [False, True])
+def test_the_parallel_superposition_switch_is_tapped_to_the_side_asked(context, clock, monkeypatch, on):
+    # #94: OFF for a target of 5; #434: ON for a target above 5.
+    taps, stops, result = infinity_switch(context, monkeypatch, on, takes=True)
     assert result is True and taps == [run_start_actions.INFINITY_BUTTON] and stops == []
 
 
-def test_a_parallel_superposition_switch_that_stays_on_stops_the_task(context, clock, monkeypatch):
-    taps, stops, result = infinity_switch(context, monkeypatch, takes=False)
-    assert result is False and taps == [run_start_actions.INFINITY_BUTTON] * 2 and len(stops) == 1
+@pytest.mark.parametrize("on", [False, True])
+def test_a_parallel_superposition_switch_that_does_not_move_stops_the_task(context, clock, monkeypatch, on):
+    taps, stops, result = infinity_switch(context, monkeypatch, on, takes=False)
+    assert result is False and taps == [run_start_actions.INFINITY_BUTTON] * 2
+    assert stops == [f"Parallel Superposition Mode stays {'OFF' if on else 'ON'} after tapping INFINITY MIRROR"]
+
+
+@pytest.mark.parametrize(("target", "exploring", "on", "due"), [
+    (5, "Before Entry", False, True), (5, "Before Entry", True, False),  # target 5: OFF, as v1
+    (10, "Before Entry", True, True), (10, "Before Entry", False, False),  # #434: ON past floor 5
+    (15, "Mirror of Sisyphe - F3", True, True), (5, "Mirror of Sisyphe - F3", False, True),  # a paused run in floors 1-5
+    (10, "Mirror of Sisyphe - F7", True, False), (5, "Mirror of Sisyphe - F12", False, False),  # floor 6 on: left as it is
+    (5, "Mirror of SisypheF7", False, False),  # the floor read with the name joined to it
+])
+def test_the_switch_is_due_by_the_target_and_the_floor_the_entry_page_shows(context, monkeypatch, target, exploring, on, due):
+    # #847: a run resumed at floor 6 or later is in the mode already; the switch stays.
+    monkeypatch.setitem(actions.TASK, "options", {"target_floor": target})
+    page(context, {tuple(run_start_actions.EXPLORING): exploring})
+    arg = SimpleNamespace(custom_recognition_param=json.dumps({"on": on}), image=np.zeros((720, 1280, 3), np.uint8),
+                          node_name="ParallelSwitchOn" if on else "ParallelSwitchOff")
+    assert (run_start_actions.ParallelSwitch().analyze(context, arg) is not None) is due
+
+
+def test_the_switch_nodes_read_the_label_and_the_floor_where_the_agent_does():
+    nodes = load_nodes("mirror_dungeon.json")
+    for on in (True, False):
+        node = nodes["ParallelSwitchOn" if on else "ParallelSwitchOff"]
+        label, gate = node["all_of"]
+        assert label == run_start_actions.INFINITY_LABEL[not on]  # the side the switch moves away from
+        assert gate["custom_recognition"] == "ParallelSwitch" and gate["custom_recognition_param"] == {"on": on}
+        assert node["custom_action"] == "ParallelModeSwitch" and node["custom_action_param"] == {"on": on}
+    assert nodes["MirrorEntryNewRun"]["roi"] == run_start_actions.EXPLORING
 
 
 def test_select_team_waits_for_the_title_after_the_tap_and_for_the_page_after_confirm(context, clock, monkeypatch):
@@ -428,6 +460,48 @@ def test_a_difficulty_label_not_readable_yet_is_looked_at_again_not_slept_on(con
     no_fixed_wait(clock)
 
 
+def difficulty_page(context, monkeypatch, floor, label, want=True):
+    """set_difficulty on a theme pack page whose label reads label (None: never). Returns (result, taps, log lines)."""
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    page(context, {(830, 30, 160, 35): label})
+    actions.RUN.pop("floors_hard", None)
+    return run_start_actions.PickThemePack.set_difficulty(context, floor, want), taps(context), lines
+
+
+@pytest.mark.parametrize(("floor", "label"), [(6, "INFINITY"), (10, "[INFINITY]"), (11, "EXTREME"), (15, "[EXTREME]"), (6, "HARD")])
+def test_a_floor_past_5_reads_its_label_as_hard_and_switches_nothing(context, clock, monkeypatch, floor, label):
+    # #386: INFINITY and EXTREME are the game data's labels for floors 6-10 and 11-15; the log keeps `floor N: HARD`,
+    # which tools/live/evidence_map.py's logged_hard reads.
+    result, tapped, lines = difficulty_page(context, monkeypatch, floor, label)
+    assert result and tapped == []
+    assert f"floor {floor}: HARD" in lines
+    assert actions.RUN["floor_hard"] is True and actions.RUN["floors_hard"] == {floor: True}
+
+
+@pytest.mark.parametrize("floor", [6, 11])
+def test_a_floor_past_5_whose_label_is_not_read_is_hard(context, clock, monkeypatch, floor):
+    # #386: floor 6 is reached only with floors 1-5 HARD (the game's tutorial TutoMD05_P19_D2), so no read is no stuck there
+    result, tapped, lines = difficulty_page(context, monkeypatch, floor, None)
+    assert result and tapped == []
+    assert lines[-1] == f"floor {floor}: HARD"
+    assert actions.RUN["floor_hard"] is True and actions.RUN["floors_hard"] == {floor: True}
+
+
+def test_a_floor_past_5_that_reads_normal_is_still_hard(context, clock, monkeypatch):
+    # A NORMAL floor 6 cannot be (#386): a misread label does not make the map's weights NORMAL
+    result, tapped, lines = difficulty_page(context, monkeypatch, 7, "NORMAL", want=False)
+    assert result and tapped == []
+    assert lines[-1] == "floor 7: HARD" and actions.RUN["floor_hard"] is True
+
+
+def test_a_floor_up_to_5_whose_label_is_not_read_still_fails(context, clock, monkeypatch):
+    # Target 5 acts as before: on floors 1-5 the label decides a switch, and an unread one is the caller's stuck
+    result, tapped, _ = difficulty_page(context, monkeypatch, 5, None)
+    assert result is False and tapped == []
+    assert "floors_hard" not in actions.RUN
+
+
 REFRESH = (1083, 47)
 
 
@@ -579,8 +653,9 @@ def test_the_refresh_button_sweep_over_the_theme_pack_captures():
     # CODING_STANDARDS' sweep, #482: refresh_lit reads unlit the greyed buttons alone, with no count (HardLine1,
     # RefreshGrey, WedgeRefreshed) or #319's `0/3` (Refresh0, which PackRefreshSpent reads too); `Refresh` alone (ThemePack,
     # ThemePackWedge) and 1/3, 2/3, 3/3, 4/4 read lit. Off the theme pack page its box is dark on most captures, but PickThemePack asks it only on a
-    # page page_guard took for ThemePack.
-    lit = {path.stem: run_start_actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))}
+    # page page_guard took for ThemePack. The synthetic pages (#386) are ThemePack.png's button: captures only.
+    lit = {path.stem: run_start_actions.refresh_lit(bgr(path)) for path in sorted(SCREENS.glob("ThemePack*.png"))
+           if not path.stem.endswith(".synthetic")}
     assert [stem for stem, on in lit.items() if not on] == ["ThemePackHardLine1", "ThemePackRefresh0", "ThemePackRefreshGrey",
                                                             "ThemePackWedgeRefreshed"]
     assert [stem for stem, on in lit.items() if on] == ["ThemePack", "ThemePackHardLine5", "ThemePackHardLineCover",
@@ -905,6 +980,22 @@ def test_the_theme_pack_page_reads_its_floor_in_any_case(context, monkeypatch):
     assert actions.RUN["floor"] == 3
 
 
+def test_a_new_floor_logs_the_memory_of_the_tasker_and_the_agent_once(context, monkeypatch):
+    # #391: each floor change writes one memory line; the page read again on the same floor writes none.
+    patch_all(monkeypatch, "text", lambda *a, **k: "Floor 6")
+    monkeypatch.setattr(run_start_actions.PickThemePack, "set_difficulty", lambda *a: False)
+    monkeypatch.setattr(memlog, "process_memory", lambda pid=None: memlog.Mem(1800.0, 1900.0) if pid == 4120 else memlog.Mem(540.0, 510.0))
+    monkeypatch.setenv(memlog.TASKER_PID, "4120")
+    monkeypatch.setattr(settlement, "now", lambda: "2026-11-20T03:05:00.000Z")
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    actions.RUN.update(difficulty=None, floor=5, start="2026-11-20T01:00:00.000Z")
+    run_start_actions.PickThemePack().run(context, None)
+    run_start_actions.PickThemePack().run(context, None)
+    assert [x for x in lines if "memory" in x] == [
+        "floor 6 memory: tasker 1800 MB (private 1900 MB), agent 540 MB (private 510 MB), 125 min into the run"]
+
+
 def test_a_new_floor_forgets_the_shop_left_before_the_boss(context, monkeypatch):
     # #279: the boss' floor ends with the boss; the next floor's first map is read by its marks again.
     patch_all(monkeypatch, "text", lambda *a, **k: "Floor 3")
@@ -1033,3 +1124,70 @@ def test_a_starting_gift_page_gone_after_a_gift_tap_does_not_press_select(contex
     page_until(context, "StartingGift", 2)  # the cabinet, then its first gift
     assert run_start_actions.PickStartingGift().run(context, argv())
     assert taps(context) == [(230, 285), (970, 262)]
+
+
+CHALLENGE = (1097, 621, 82, 24)  # where Challenge reads on tests/screens/AdversityPage.synthetic.png
+
+
+def adversity_page(context, monkeypatch, challenge=True, leaves=True):
+    """The Adversity page on floor 11: its node hits until a tap went out (leaves) or for good; the button's roi reads
+    `Challenge` and its count `0/6` (challenge) or nothing. Returns the stop procedure's reasons."""
+    stops = []
+    patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)
+    actions.RUN["floor"] = 11
+    page(context, {tuple(run_start_actions.ADVERSITY_BUTTON):
+                   [("Challenge", CHALLENGE), ("0/6", (1182, 619, 40, 28))] if challenge else None})
+    page_until(context, "AdversityPage", 1 if leaves else 10**6)
+    return stops
+
+
+def test_the_adversity_page_is_passed_with_none_chosen(context, clock, monkeypatch, tmp_path):
+    # #851, the user's choice of 2026-11-20: no Adversity; Challenge, found by its text, is the one tap.
+    stops = adversity_page(context, monkeypatch)
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is True
+    assert taps(context) == [actions.box_centre(CHALLENGE)] and stops == []
+    assert len(list((tmp_path / "logs" / "dismissed").glob("*-AdversityPage.png"))) == 1  # the fixture #855 waits for
+    no_fixed_wait(clock)
+
+
+def test_an_adversity_page_still_up_after_challenge_stops_the_task(context, clock, monkeypatch):
+    # #847: the game may want one chosen; the bot taps nothing else and stops with the screen as evidence.
+    stops = adversity_page(context, monkeypatch, leaves=False)
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is False
+    assert taps(context) == [actions.box_centre(CHALLENGE)]
+    assert stops == ["floor 11: the Adversity page stays up after Challenge with none selected"]
+
+
+def test_a_popup_over_the_adversity_page_after_challenge_goes_back_to_the_hub(context, clock, monkeypatch):
+    # The title reads through a global popup (ADR 0007): the hub answers the popup, not the stop procedure.
+    stops = adversity_page(context, monkeypatch, leaves=False)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "RetryPopup" and context.tasker.controller.post_click.call_count
+        else inner(name, image, override))
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is True
+    assert taps(context) == [actions.box_centre(CHALLENGE)] and stops == []
+
+
+def test_the_help_sheets_picture_of_the_adversity_page_is_not_tapped(context, clock, monkeypatch):
+    # tests/screens/HelpPagerLast.png reads the title and Challenge; HelpPager is the hub's to close.
+    stops = adversity_page(context, monkeypatch, leaves=False)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "HelpPager" else inner(name, image, override))
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is True
+    assert taps(context) == [] and stops == []
+
+
+def test_an_adversity_page_whose_challenge_does_not_read_stops_without_a_tap(context, clock, monkeypatch):
+    stops = adversity_page(context, monkeypatch, challenge=False)
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is False
+    assert taps(context) == [] and stops == ["floor 11: Adversity page: Challenge not read"]
+
+
+def test_the_adversity_page_is_a_mirror_hub_page_read_by_its_title():
+    nodes = load_nodes("mirror_dungeon.json")
+    node = nodes["AdversityPage"]
+    assert node["recognition"] == "OCR" and node["expected"] == "Set Adversit"
+    assert node["custom_action"] == "PassAdversity"
+    assert "AdversityPage" in nodes["HubText"]["custom_recognition_param"]["entries"]

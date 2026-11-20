@@ -67,6 +67,8 @@
             "entries": [
                 "ClaimPopup",
                 "ParallelModePrompt",
+                "ExtremeModePrompt",
+                "HiddenBattle",
                 "PreviousSessionExpired",
                 "PopupButton",
                 "Notices",
@@ -79,7 +81,8 @@
                 "ExplorationComplete",
                 "MirrorEnterDialog",
                 "ResumeDialog",
-                "ParallelModeOn",
+                "ParallelSwitchOff",
+                "ParallelSwitchOn",
                 "MirrorEntryUnclaimed",
                 "MirrorEntryPaused",
                 "MirrorEntryNewRun",
@@ -91,6 +94,7 @@
                 "GiftSearchForgo",
                 "GiftSearch",
                 "StartingGift",
+                "AdversityPage",
                 "ThemePack",
                 "RewardCardForgo",
                 "GiftRefuseDialog",
@@ -181,16 +185,51 @@
             }
         ]
     },
-    // Entry page with Parallel Superposition Mode ON (#94): switched OFF before anything else, the bot never plays
-    // past floor 5. Texts: EN_MirrorDungeonUI_5_InfinityFloor ("Parallel Superposition Mode : " + ON / OFF).
-    // Its dialogs (Resume, Enter) come first in the hub: the label reads through them. The red ON reads `oN` (live
-    // 2026-11-08, EntryParallelOn.png).
+    // The entry page's Parallel Superposition Mode label, ON or OFF (EN_MirrorDungeonUI_5_InfinityFloor: "Parallel
+    // Superposition Mode : " + ON / OFF). The red ON reads `oN` (live 2026-11-08, EntryParallelOn.png). Labels only:
+    // the switch nodes below act.
     "ParallelModeOn": {
         "recognition": "OCR",
         "roi": [890, 330, 330, 28],
-        "expected": "Superposition.*:\\s*[Oo0]N\\b",
+        "expected": "Superposition.*:\\s*[Oo0]N\\b"
+    },
+    "ParallelModeOff": {
+        "recognition": "OCR",
+        "roi": [890, 330, 330, 28],
+        "expected": "Superposition.*:\\s*[O0]FF"
+    },
+    // The switch on the wrong side for the task's target floor, before anything else on the entry page (#94, #434):
+    // OFF for a target of 5, ON above it; a paused run at floor 6 or later is left as it is (the agent's ParallelSwitch
+    // gate, run_start.parallel_switch). Its dialogs (Resume, Enter) come first in the hub: the label reads through them.
+    "ParallelSwitchOff": {
+        "recognition": "And",
+        "all_of": [
+            "ParallelModeOn",
+            {
+                "recognition": "Custom",
+                "sub_name": "ParallelSwitchOffDue",
+                "custom_recognition": "ParallelSwitch",
+                "custom_recognition_param": {"on": false}
+            }
+        ],
         "action": "Custom",
-        "custom_action": "ParallelModeOff"
+        "custom_action": "ParallelModeSwitch",
+        "custom_action_param": {"on": false}
+    },
+    "ParallelSwitchOn": {
+        "recognition": "And",
+        "all_of": [
+            "ParallelModeOff",
+            {
+                "recognition": "Custom",
+                "sub_name": "ParallelSwitchOnDue",
+                "custom_recognition": "ParallelSwitch",
+                "custom_recognition_param": {"on": true}
+            }
+        ],
+        "action": "Custom",
+        "custom_action": "ParallelModeSwitch",
+        "custom_action_param": {"on": true}
     },
     // Entry page: branch on the Exploring: field (spec 01, 入口頁的分流).
     "MirrorEntryNewRun": {
@@ -385,6 +424,18 @@
         "expected": "THEME ?PACK",
         "action": "Custom",
         "custom_action": "PickThemePack",
+        "post_delay": 0
+    },
+    // The Adversity page, floors 11-15 (#851): its title `Set Adversities` (EN_MirrorDungeonUI_6
+    // mirror_select_constraint_title). PassAdversity selects none and taps Challenge. No live capture yet (#855): the roi
+    // is wide enough for the help sheet's picture of the page (MirrorDungeon8_33) as the help sheet draws it and as a
+    // 16:9 screen lays it out (tests/screens/AdversityPage.synthetic.png).
+    "AdversityPage": {
+        "recognition": "OCR",
+        "roi": [20, 20, 400, 170],
+        "expected": "Set Adversit",
+        "action": "Custom",
+        "custom_action": "PassAdversity",
         "post_delay": 0
     },
     // The free refresh button's count "n/3" (#319): spent (0); unread or some left: no hit. With one free refresh the

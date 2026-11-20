@@ -19,6 +19,15 @@ def test_run_difficulty(setting, weekly, expected):
     assert rs.run_difficulty(setting, weekly, 5) == expected
 
 
+@pytest.mark.parametrize(("target", "floor", "expected"), [
+    (5, None, False), (10, None, True), (15, None, True),  # a new run: ON past floor 5 only (#434)
+    (5, 3, False), (10, 3, True), (15, 5, True),  # a paused run in floors 1-5 may still switch
+    (10, 7, None), (15, 12, None), (5, 6, None),  # floor 6 on: the run is in the mode already, the switch stays
+])
+def test_parallel_switch_follows_the_target_until_floor_6(target, floor, expected):
+    assert rs.parallel_switch(target, floor) is expected
+
+
 @pytest.mark.parametrize(("setting", "weekly", "target", "expected"), [
     ("auto", 0, 10, "hard"), ("auto", 0, 15, "hard"), ("auto", 3, 15, "hard"), ("auto", 0, 5, "normal"),
     ("hard", 0, 15, "hard"), ("normal", 3, 5, "normal"),
@@ -98,9 +107,21 @@ def test_a_team_with_its_switch_to_hard_off_plays_normal_unless_the_run_says_har
     (3, False, True, "hard"),
     (2, True, True, None),
     (1, True, None, None),  # run difficulty unknown: keep what the game shows
+    (6, False, True, None),  # #386: floors 6 on have no NORMAL to switch from or to
+    (11, True, False, None),
 ])
 def test_difficulty_move(floor, shown_hard, want_hard, expected):
     assert rs.difficulty_move(floor, shown_hard, want_hard) == expected
+
+
+@pytest.mark.parametrize(("shown", "hard"), [
+    ("HARD", True), ("NORMAL", False), ("// NORMAL", False),
+    # #386: the game data's uiConfig.difficultyLabel for floors 6-10 and 11-15; no capture shows the page there yet (#853, #855)
+    ("INFINITY", True), ("[INFINITY]", True), ("EXTREME", True), ("[EXTREME]", True),
+    ("", None), ("Refresh", None),
+])
+def test_difficulty_label(shown, hard):
+    assert rs.difficulty_label(shown) is hard
 
 
 NAMES = ["To be Crushed", "To be Cleaved", "To be Pierced", "Nagel und Hammer",

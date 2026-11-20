@@ -37,6 +37,7 @@
 
 - 主題包清單：這一季所有主題包的英文名稱，用來和 OCR 讀到的卡片標題列比對；GUI 也用它列出可以標記的主題包。困難限定的主題包列在同一份清單裡（#11、#19）。每個名稱對到資料標的樓層，是一個結構化的值（#387，使用者 2026-10-29 定案：最終目標是 15 層，所以格式先支援 6–15 層與 INFINITY／EXTREME）：`N`（普通）、`H`（困難）是樓層數字的清單（1–15 的整數、由小到大不重複），`I`（INFINITY）、`X`（EXTREME）是 `true`，表示該模式的每一層都會出現（遊戲資料的 INFINITY／EXTREME 條目沒有 `selectableFloors`），例如 `{N: [1, 2], H: [1]}` 是普通第 1–2 層、困難第 1 層。樓層是整數清單，不再拼成字串，所以 10 以上的層數不會黏在一起。一局 15 層裡，第 6–10 層算 INFINITY、第 11–15 層算 EXTREME（[GLOSSARY](../../GLOSSARY.md) 的 INFINITY、EXTREME；`run_start.MODE_BANDS`，GUI 的 `MODE_BANDS` 同值）。設定 GUI 用 `N`、`H`、`I`、`X` 篩選要顯示的主題包並標出小標（[04](04-settings.md) 第 8 節），分數本身不分難度與樓層。（#240、#387）
 - 每層比對的名稱（#387，`run_start.floor_packs`、`floor_reads`）：第 1–5 層比對所有有普通或困難樓層的包（不分是第幾層，和 #387 之前收錄的清單相同），所以 EXTREME 專用的 20 個包不會搶走第 1–5 層的卡；第 6–10 層比對 `I` 的包、第 11–15 層比對 `X` 的包，再加上 `N`、`H` 清單裡有那一層的包。復刻版的卡面是原包的標題，靠原包名比到再換成復刻版；INFINITY 有 2 個復刻版的原包不在 INFINITY 裡，這一層的原包標題就當成復刻版的標題藝術字（`title_art`），所以 `BokGak` 那行沒讀到的卡也認成復刻版，不會認成這層不會出現的原包（#615：合成卡讀成 `20 BokG`）。方案裡有分數、資料檔卻沒有的包照舊參加比對。`title_art` 只留指向這一層會比對的包的那幾條；封面比對（`cover`）標題沒縮小範圍時，只比這一層會比對的包。必要性：`tests/screens/ThemePackHardLineCover.png` 的 Line 1 卡，OCR 把藝術字 `LINE 1 MADNESS` 讀全時，拿全部 121 個名稱比，會被認成 EXTREME 專用的 `Line 1 : MADNESS`（`tests/test_pack_cover.py`）。第 6–15 層的對應來自資料推論（INFINITY 50 包都是困難包、EXTREME 專用包只有 EXTREME 的條目），實機還沒打到第 6 層以後。
+- 難度標籤（#386）：主題包頁右上與結算視窗的難度字，遊戲資料 `uiConfig.difficultyLabel` 第 6–10 層是 `[INFINITY]`、第 11–15 層是 `[EXTREME]`（客戶端 1.117.0 解包）。主題包頁第 1–5 層實機寫 `HARD`／`NORMAL`（不帶括號），第 6 層起寫什麼還沒有實機畫面，`run_start.difficulty_label` 帶不帶括號都認（[03](03-decisions.md) 第 2 節）。
 - 清單從遊戲客戶端的靜態資料產生（`mirrordungeon-theme-floor`，1.117.0、1.118.1 有 121 個，1.119.0 加了 1129 `The Wedge in the Wake of Dawnbreak` 是 122 個，#773）：收錄在任何模式有樓層的主題包，共 121 個（`Pilgrimage of Compassion`，1122，沒有任何模式的樓層，不收）：有普通或困難樓層的 101 個，加上 EXTREME 專用的 20 個（id 1501–1520，`mirrordungeon-theme-floor-t6.json`，清單最後一段）。`I` 標在 50 個包（全部也是困難包），`X` 標在 24 個包（EXTREME 專用 20 個，加上 `Line 3`、`Line 4 - Section #3`、`Line 4 - Section #4`、`Line 5`）。名稱照資料，實機看到的標題不同時以實機為準（目前只有 `Walpurgis Night: Hatred and Despair`，資料寫 `Hatred and Despair`）；EXTREME 專用包的名稱都還沒在實機標題上核對過。檔頭寫來源與版本，每個名稱的值是樓層（上一條的格式），名稱後的註解只寫 `DIFFICULT`（資料標為困難的包）。樓層、`DIFFICULT` 註解和 `pack_ids` 由 `tools/theme_pack_floors.py` 從解包的遊戲資料寫入（`--check` 只比對不寫）：已列的包保留檔案裡的名稱，缺的包用 `EN_MirrorDungeonTheme-1` 的名稱接在 `packs` 最後；其他行（分段註解、活動包、標題藝術字、預設方案）是手寫的，工具不動。（#89，2026-10-18；#387）
 - 主題包 id（#306）：`pack_ids` 是名稱 → id，順序同 `packs`，收錄 `packs` 的每個名稱（配方資料 `gift_recipes.json` 的 `packs` 提到的 1507、1514、1518 現在也在 `packs` 裡）；6 個 BokGak 復刻版（1113、1116、1120、1123、1125、1127）是 `packs` 的獨立項目，id 在 `pack_ids` 同一處。名稱照資料（`EN_MirrorDungeonTheme-1`）。Agent 用它把選走的主題包名稱換成 id，GUI 用它把配方的 `packs` 顯示成名稱（找不到才顯示 `#id`）。換季檢查：`tests/test_gift_recipes.py` 檢查 `packs` 的每個名稱都有 id、id 不重複、配方 `packs` 的每個 id 都在 `pack_ids` 裡（換季新增的包 id 沒補會在這裡失敗），有解包的遊戲資料時再核對每個 id 的名稱（`1119` 的名稱是實機讀到的，資料不同，例外）。
 - 復刻版（資料的 `bokgak`，1.117.0 有 6 個：`Miracle in District 20`、`Yield My Flesh to Claim Their Bones`、`Timekilling Time`、`Murder on the WARP Express`、`LCB Regular Check-up`、`Nocturnal Sweeping` 各一個，id 1113、1116、1120、1123、1125、1127，都在困難第 4–5 層）：卡面是原包的標題，下面多一行小字 `BokGak`，boss 圖不同（1113 另有 Long Battle 疊圖，`isShowBaton`）。清單收成獨立的包，名稱是原包名加 ` BokGak`（資料的名稱），不是活動包；預設方案的分數和原包相同（AALC 的片段在復刻版的標題裡一樣找得到原包）。比對時復刻版的名稱不參加標題比對和關鍵字（它包含原包的整個名稱），任何一條路認出原包、而卡片文字裡有 `BokGak` 時，就換成那個包的復刻版（`run_start.rerun_copy`）；沒有 `BokGak` 的卡是原包，但原包不在那一層時是復刻版（上面「每層比對的名稱」，#615）；標題都讀不到時，復刻版的封面（boss 圖不同）也認得出它。2026-10-22 的 112 頁裡 8 張復刻版卡加上 `tests/screens/ThemePackRefresh0`、`1` 的 2 張，`BokGak` 每次都讀得完整（有時接在標題行尾，例如 `Express BokGak`）。使用者自己的方案沒有列復刻版時，復刻版用方案的「沒列出的包」分數（設定 GUI 顯示的也是這個），不沿用原包的分數。（2026-10-25）
@@ -140,10 +141,12 @@ trials:
 | 異想體戰 Abnormality（`HARD_AB_BATTLE`） | 5 | 5 |
 | Risky 精銳（`HARD_BATTLE`） | 6 | 8 |
 | 無法辨識 | 9 | 9 |
+| Hidden Battle（`hidden`，第 11–15 層） | 10 | 10 |
 
-- 困難模式的權重和普通模式相同，只把 Risky 改為 8，所以無法辨識仍然排最後。（#12、#19）
+- 困難模式的權重和普通模式相同，只把 Risky 改為 8，所以無法辨識仍然排在可辨識的戰鬥之後，只有 Hidden Battle 在它後面。（#12、#19）
 - 商店不在上表：bot 不特地找商店，所以資料檔給它 7，排在可辨識的戰鬥之後、無法辨識之前，兩種難度相同。資料檔是 `resource/base/data/map_weights.yaml`。（#26）
 - Boss 只在它是唯一可走的節點時才走；這是規則，不是權重。（#12）
+- Hidden Battle 排在無法辨識之後（10），而且和 Boss 一樣只在它是唯一相連的節點時才走（`map_route.LAST_RESORT`），第一欄和計畫裡後面幾欄都一樣：它的確認視窗一律按 Skip（使用者 2026-11-20 定案，#847），走過去沒有好處。權重只在它是唯一出路、算路徑總分時用到。（#849）
 - 同權重時選下一欄可走路線最多的節點，見 [03-decisions.md](03-decisions.md)。（#12）
 
 ## 6. Cost 對照表與商店數字
@@ -159,8 +162,14 @@ trials:
 | Risky 精銳（`risky`） | 120 | 150 | ✔ | ✔ |
 | 異想體戰 Abnormality（`abno`） | 150 | 180 | ✔ | ✔ |
 | Boss（`boss`），第 1／2／3／4–5 層 | 200／240／300／400 | 250／300／375／500 | – | – |
+| Boss（`boss`），第 6–15 層（推論） | 400 | 500 | – | – |
+| Hidden Battle（`hidden`），第 11–15 層 | 800 | 1000 | unverified | unverified |
 
 Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cost（`originbattlevictorycostvalueList` 200、`…HardLevel` 250）乘 `battleCostWeightsByFloor` 的 BOSS 權重（第 1–5 層 1、1.2、1.5、2、2）。2026-10-23 實機的節點面板：普通 200／240／300（第 1–3 層），困難 250／300／375／500（第 1–4 層）；普通第 4、5 層的 400 和困難第 5 層的 500 還沒在實機看過。
+
+第 6 層以後（#849）：`battleCostWeightsByFloor` 只有第 1–5 層（`floor` 0–4）五列，第 6 層以後沿用第 5 層那一列是推論，第 1、2 步探路局（#854、#856）核對。第 6 層以後一定是 HARD（推論：進第 6 層的條件是第 1–5 層全 HARD），所以實際只會看到困難欄的值；普通欄補上是為了表完整。照這個推論，第 6 層以後的 Boss 是 500，表裡已有，不改。
+
+Hidden Battle（#849）：遊戲資料的 `HIDDEN_BATTLE` cost（普通 400、困難 500）乘它的權重（`battleCostWeightsByFloorIdx` 5，每一列都是 2），所以是 800／1000。`hiddenBattleInfo` 的 `minFloorCondition` 是 11、`probInfo` 每層 0.1：只在第 11–15 層出現，每層 10%。它有沒有外圈、禮物盒，資料看不出來，還沒有實機截圖。1000 是四位數，比其他 Cost 多一位；Cost 數字照右對齊推，1 落在三位數的裁切範圍左邊，所以三位數的讀數以 0 開頭（`000`）時，往左加寬再讀一次，讀到四位數才採用，免得左邊的雜點把較短的數字讀成別的 Cost（`map_actions.coin_text`，合成圖 `tests/data/cost_crops/hard1000.synthetic.png`）。四位數是不是一樣右對齊、1 的寬度，等 #856 的實機截圖核對。
 
 **困難模式的實測 Cost**：下表是 2026-10-13 困難鏡牢實機看到的節點 Cost 標記，不是資料檔的預設值，也不是 wiki 的數字。節點欄是當時的稱呼；照上表（#91）重新對照後與上表一致：外圈 150 是困難 Risky、180 是困難 Abnormality，禮物盒無外圈的 120 是困難 Focused。
 
