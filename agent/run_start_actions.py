@@ -732,8 +732,9 @@ class PassAdversity(CustomAction):
     reads through it) is the hub's to answer first: back to it, and the page, if still up, comes here again. The page
     goes to logs/dismissed/ too (run.keep_dismissed_screens): the first live one is the fixture #855 waits for.
 
-    The help sheet's own picture of the page reads `Set Adversities` and `Challenge` in these rois too; HelpPager, ahead
-    of HubText in MirrorHub, closes the help sheet first (tests/screens/HelpPagerLast.png, live, is that sheet).
+    The help sheet's own picture of the page reads `Set Adversities` and `Challenge` in these rois too
+    (tests/screens/HelpPagerLast.png): HelpPager comes first in MirrorHub (popups.json), and a sheet that shows here
+    anyway (one frame its templates missed) goes back to the hub untapped.
     """
 
     @hands_back
@@ -753,6 +754,9 @@ class PassAdversity(CustomAction):
         if shown is None:
             return stop(context, f"{floor}: Adversity page: Challenge not read")
         page_guard(context, argv.node_name, shown)  # ADR 0007: the screen the button was read on still shows the page
+        if on_page(context, shown, "HelpPager"):
+            log(f"{floor}: the help sheet's picture of the Adversity page: back to the hub")
+            return True
         log(f"{floor}: Adversity page, none selected: Challenge")
         x, y = box_centre(found[0])
         after = tap_then(context, x, y, lambda im: seen(context, im, argv.node_name) is None or on_page(context, im, *POPUPS),

@@ -1149,6 +1149,16 @@ def test_a_popup_over_the_adversity_page_after_challenge_goes_back_to_the_hub(co
     assert taps(context) == [actions.box_centre(CHALLENGE)] and stops == []
 
 
+def test_the_help_sheets_picture_of_the_adversity_page_is_not_tapped(context, clock, monkeypatch):
+    # tests/screens/HelpPagerLast.png reads the title and Challenge; HelpPager is the hub's to close.
+    stops = adversity_page(context, monkeypatch, leaves=False)
+    inner = context.run_recognition.side_effect
+    context.run_recognition.side_effect = lambda name, image, override=None: (
+        SimpleNamespace(hit=True, box=[0, 0, 1, 1]) if name == "HelpPager" else inner(name, image, override))
+    assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is True
+    assert taps(context) == [] and stops == []
+
+
 def test_an_adversity_page_whose_challenge_does_not_read_stops_without_a_tap(context, clock, monkeypatch):
     stops = adversity_page(context, monkeypatch, challenge=False)
     assert run_start_actions.PassAdversity().run(context, argv(node="AdversityPage")) is False

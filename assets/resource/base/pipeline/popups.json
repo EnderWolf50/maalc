@@ -400,8 +400,9 @@
     // Sinners 17, Extract 4, Dispense 5; tests/screens/HelpPager*.png). Its title changes with the page, so it is found
     // by its frame: the back button at the top left and the page dots along the bottom. The back button alone also
     // scores 0.98 on the entry page's own back button (EntryPaused.png); the dots are what tell the pager apart. The back key closes it; the
-    // arrow at the right only turns the page. Page 1 of the Mirror Dungeon one is a picture of the entry page, so it
-    // sits in MirrorHub before HubText. Its 1.5 s stay (#258): no live log has the pager to time its close against.
+    // arrow at the right only turns the page. Page 1 of the Mirror Dungeon one is a picture of the entry page, its
+    // last page one of the Adversity page (HelpPagerLast.png, #851), others the floor 5/10 prompts: so it sits in
+    // MirrorHub before HubText. Its 1.5 s stay (#258): no live log has the pager to time its close against.
     "HelpPager": {
         "recognition": "And",
         "all_of": [
