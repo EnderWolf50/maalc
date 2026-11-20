@@ -65,6 +65,7 @@ SCREENREC = Path.home() / ".claude" / "skills" / "screen-record" / "scripts" / "
 APP = "maalc-gui.exe"
 APP_TITLE = "maalc"  # gui/src-tauri/tauri.conf.json app.windows[0].title; the app never sets it again
 PHASES = ("idle", "running", "stopping", "ended")
+UNDER_WAY = {"running", "stopping"}
 START = ".runner-bar button.primary"
 STOP = "js:document.querySelectorAll('.runner-bar button')[1]"
 RUN_END = "[run] end "  # runner/session.py: the run's last line
@@ -128,8 +129,15 @@ def default_title(port: int) -> str:
 # --- the run log (pure) -------------------------------------------------------------------------------------------
 
 def run_logs(folder: Path) -> list[Path]:
-    """The runner's logs in folder, oldest first (runner/runlog.py names them run-YYYYmmdd-HHMMSS[-n].log)."""
-    return sorted(folder.glob("run-*.log"), key=lambda p: (p.stat().st_mtime_ns, p.name))
+    """The runner's logs in folder, oldest first (runner/runlog.py names them run-YYYYmmdd-HHMMSS[-n].log); one the
+    runner prunes meanwhile (it keeps 30) is left out."""
+    stamped = []
+    for p in folder.glob("run-*.log"):
+        try:
+            stamped.append((p.stat().st_mtime_ns, p.name, p))
+        except FileNotFoundError:
+            pass
+    return [p for *_, p in sorted(stamped)]
 
 
 def watched_log(folder: Path, before: set[str], under_way: bool) -> Path | None:
@@ -319,11 +327,13 @@ def run_state(port: int) -> dict:
     return state
 
 
-def wait_phase(port: int, phases: set[str], timeout: float, every: float = 0.5) -> dict:
+def wait_phase(port: int, phases: set[str], timeout: float, every: float = 0.5, past: dict | None = None) -> dict:
+    """The Run tab's state once its phase is one of phases; with `past`, a state equal to it (what the page showed before
+    a press: the last run's `ended`) does not count."""
     end = time.monotonic() + timeout
     while True:
         state = run_state(port)
-        if state["phase"] in phases:
+        if state["phase"] in phases and state != past:
             return state
         if time.monotonic() > end:
             raise Refused(f"the run is still {state['phase']!r} after {timeout:g} s ({state['status']})")
@@ -458,13 +468,13 @@ def record_cmd(a) -> int:
                     raise Refused(f"the window holding {title!r} is {target['hwnd']}, not {a.hwnd}")
             else:
                 title, target = a.window, sole(top_windows(), a.window)
+            if target["iconic"] or not (target["w"] and target["h"]):  # screen-record refuses both; MuMu may show so first
+                raise Refused(f"window {target['hwnd']} is minimised or has no size: restore it first")
             break
         except Refused as e:
             if isinstance(e, Ambiguous) or a.wait <= 0 or time.monotonic() > end:
                 raise
             time.sleep(0.5)
-    if target["iconic"]:
-        raise Refused(f"window {target['hwnd']} is minimised: restore it first")
     args = ["start", "--window", title, "--out", a.out, "--profile", a.profile, "--height", str(a.height)]
     if a.crop_top is not None:
         args += ["--crop-top", str(a.crop_top)]
@@ -485,12 +495,13 @@ def record_cmd(a) -> int:
 
 def start_cmd(a) -> int:
     state = run_state(a.port)
-    if state["phase"] in ("running", "stopping"):
+    if state["phase"] in UNDER_WAY:
         raise Refused(f"a run is already {state['phase']}: {state['status']}")
     if not state["start"]:
         raise Refused(f"Start is disabled: {'; '.join(x for x in state['alerts'] if x) or state['status']}")
     press(a.port, START)
-    say(wait_phase(a.port, {"running", "stopping", "ended"}, a.timeout))
+    # the page shows the last run's end until this run's begin comes: that state is not this run's
+    say(wait_phase(a.port, UNDER_WAY | {"ended"}, a.timeout, every=0.2, past=state if state["phase"] == "ended" else None))
     return 0
 
 
@@ -500,8 +511,9 @@ def stop_cmd(a) -> int:
             raise Refused("--on reads the run's log: pass --root, the install the window runs from")
         folder = Path(a.root) / "logs" / "runner"
         before = {p.name for p in folder.glob("run-*.log")}
-        under_way = run_state(a.port)["phase"] in ("running", "stopping")
+        under_way = run_state(a.port)["phase"] in UNDER_WAY
         end = time.monotonic() + a.limit
+        say({"watching": str(folder), "for": a.on, "log": "the newest" if under_way else "the next new one"})
         log = None
         while log is None:
             if time.monotonic() > end:

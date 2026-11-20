@@ -558,6 +558,8 @@ def test_clips_spec_resolves_paths_against_its_folder_and_checks_each_clip(tmp_p
     ({"from": "10:00:05", "to": "10:00:01"}, "from first"),
     ({"to": "10:00:01"}, "from first"),
     ({"from": "10:00:00", "to": "10:00:01", "boxes": [[1, 2, 3]]}, "a box is"),
+    ({"from": "10:00:00", "to": "10:00:01", "boxes": [[-1, 2, 3, 4]]}, "a box is"),
+    ({"from": "10:00:00", "to": "10:00:01", "boxes": [[1, 2, 0, 4]]}, "a box is"),
     ({"from": "10:00:00", "to": "10:00:01", "steps": [{"from": "10:00:00", "to": "10:00:01"}]}, "a title"),
     ({"from": "10:00:00", "to": "10:00:01", "colour": "red"}, "unknown keys"),
     ({"from": "10:00:00", "to": "10:00:01", "video": "no-start.mp4"}, "PATH@START"),

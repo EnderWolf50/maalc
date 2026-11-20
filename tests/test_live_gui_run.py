@@ -25,7 +25,7 @@ def win(hwnd, title, w=800, h=600, iconic=False, pid=1):
 # --- matching -----------------------------------------------------------------------------------------------------
 
 def test_matching_is_screen_records_case_insensitive_substring():
-    ws = [win(1, "maalc"), win(2, "D:/Dev/maalc - Editor", 1900, 1000), win(3, "Android Device"), win(4, "MAALC-live-9333")]
+    ws = [win(1, "maalc"), win(2, "notes on maalc - Editor", 1900, 1000), win(3, "Android Device"), win(4, "MAALC-live-9333")]
     assert [w["hwnd"] for w in gr.matching(ws, "maalc")] == [1, 2, 4]
     assert [w["hwnd"] for w in gr.matching(ws, "maalc-live-9333")] == [4]
 
@@ -56,6 +56,15 @@ def log(folder: Path, name: str, text: str = "", mtime: float | None = None) -> 
         import os
         os.utime(p, (mtime, mtime))
     return p
+
+
+def test_a_log_the_runner_prunes_meanwhile_is_left_out(tmp_path, monkeypatch):
+    kept = log(tmp_path, "run-20261118-145743.log")
+    gone = log(tmp_path, "run-20261118-145311.log")
+    real_stat = Path.stat
+    monkeypatch.setattr(Path, "stat", lambda p, **kw: (_ for _ in ()).throw(FileNotFoundError(p)) if p.name == gone.name
+                        else real_stat(p, **kw))
+    assert gr.run_logs(tmp_path) == [kept]
 
 
 def test_the_watch_takes_the_next_new_log_or_the_newest_when_a_run_is_under_way(tmp_path):
@@ -152,11 +161,23 @@ def test_record_stops_a_recording_of_another_window(tmp_path, monkeypatch, scree
 
 def test_record_waits_for_the_window_to_appear(tmp_path, monkeypatch, screenrec):
     polls = iter([[], [], [win(3, "Android Device", 1280, 780)]])
-    seen = []
-    monkeypatch.setattr(gr, "top_windows", lambda: (seen.append(1), next(polls, [win(3, "Android Device", 1280, 780)]))[1])
+    reads = []
+    monkeypatch.setattr(gr, "top_windows", lambda: (reads.append(1), next(polls, [win(3, "Android Device", 1280, 780)]))[1])
     monkeypatch.setattr(gr.time, "sleep", lambda s: None)
     assert gr.record_cmd(rec_args(tmp_path, window="Android Device", wait=60, crop_top=60)) == 0
-    assert len(seen) >= 3 and screenrec.calls[0][:3] == ["start", "--window", "Android Device"]
+    assert len(reads) >= 3 and screenrec.calls[0][:3] == ["start", "--window", "Android Device"]
+
+
+def test_record_waits_while_the_window_is_minimised_or_has_no_size(tmp_path, monkeypatch, screenrec):
+    polls = iter([[win(3, "Android Device", iconic=True)], [win(3, "Android Device", 0, 0)]])
+    reads = []
+    monkeypatch.setattr(gr, "top_windows", lambda: (reads.append(1), next(polls, [win(3, "Android Device", 1280, 780)]))[1])
+    monkeypatch.setattr(gr.time, "sleep", lambda s: None)
+    assert gr.record_cmd(rec_args(tmp_path, window="Android Device", wait=60)) == 0
+    assert len(reads) >= 3
+    monkeypatch.setattr(gr, "top_windows", lambda: [win(3, "Android Device", iconic=True)])
+    with pytest.raises(gr.Refused, match="minimised"):
+        gr.record_cmd(rec_args(tmp_path, window="Android Device"))
 
 
 def test_record_without_wait_refuses_a_missing_window(tmp_path, monkeypatch, screenrec):
@@ -189,6 +210,13 @@ def test_start_presses_start_and_waits_for_the_run(page):
     page.states = [phase("idle"), phase("idle"), phase("running")]
     assert gr.start_cmd(SimpleNamespace(port=9333, timeout=5)) == 0
     assert page.presses == [gr.START]
+
+
+def test_start_after_a_run_waits_for_this_runs_state_not_the_last_runs_end(page):
+    last = {**phase("ended"), "status": "成功", "tasks": [{"name": "領信", "state": "succeeded", "reason": None}]}
+    page.states = [last, last, last, phase("running")]
+    assert gr.start_cmd(SimpleNamespace(port=9333, timeout=5)) == 0
+    assert page.states == [phase("running")]  # every read of the last run's end was passed over
 
 
 def test_start_refuses_when_start_is_disabled_and_says_why(page):
@@ -227,6 +255,14 @@ def test_state_until_refuses_an_unknown_phase(page):
     page.states = [phase("idle")]
     with pytest.raises(gr.Refused, match="--until takes"):
         gr.state_cmd(SimpleNamespace(port=9333, until="done", timeout=1))
+
+
+def test_the_users_own_settings_window_keeps_its_title(monkeypatch):
+    monkeypatch.setattr(gr, "window_title", lambda hwnd: "maalc")
+    monkeypatch.setattr(gr, "users_window", lambda hwnd: True)
+    monkeypatch.setattr(gr, "_user32", lambda: pytest.fail("no title may be set"))
+    with pytest.raises(gr.Refused, match="user's own"):
+        gr.set_title(5, "maalc-live-9333", windows=lambda: [])
 
 
 def test_the_command_line_needs_a_window_to_record_and_a_port_for_the_page():
@@ -303,14 +339,6 @@ def test_the_job_ends_a_child_when_the_holder_is_killed(tmp_path):
     else:
         subprocess.run(["taskkill", "/F", "/PID", str(child)], capture_output=True)
         pytest.fail("the child outlived its holder")
-
-
-def test_the_users_own_settings_window_keeps_its_title(monkeypatch):
-    monkeypatch.setattr(gr, "window_title", lambda hwnd: "maalc")
-    monkeypatch.setattr(gr, "users_window", lambda hwnd: True)
-    monkeypatch.setattr(gr, "_user32", lambda: pytest.fail("no title may be set"))
-    with pytest.raises(gr.Refused, match="user's own"):
-        gr.set_title(5, "maalc-live-9333", windows=lambda: [])
 
 
 @windows_only

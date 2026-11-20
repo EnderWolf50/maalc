@@ -229,6 +229,12 @@ def annotated_clip(footage: Footage, t0: float, t1: float, out: Path, events: di
 CLIP_KEYS = {"from", "to", "log", "idle", "boxes", "steps", "video"}
 
 
+def valid_box(b) -> bool:
+    """[x, y, w, h]: whole pixels, x and y at least 0, w and h at least 1 (a clip's boxes and `mask --box` alike)."""
+    return (isinstance(b, (list, tuple)) and len(b) == 4 and all(isinstance(v, int) and not isinstance(v, bool) for v in b)
+            and min(b[:2]) >= 0 and min(b[2:]) >= 1)
+
+
 def read_spec(path: Path) -> dict:
     """clips' SPEC, checked, its paths made absolute: {name: {footage, t0, t1, log, idle, boxes, steps, color}}."""
     doc = json.loads(path.read_text(encoding="utf-8"))
@@ -251,8 +257,8 @@ def read_spec(path: Path) -> dict:
         if not ("from" in c and "to" in c and secs(c["from"]) < secs(c["to"])):
             sys.exit(f"{path}: clip {name}: needs from and to, from first")
         for b in c.get("boxes", []):
-            if not (isinstance(b, list) and len(b) == 4 and all(isinstance(v, (int, float)) for v in b)):
-                sys.exit(f"{path}: clip {name}: a box is [x, y, w, h], not {b!r}")
+            if not valid_box(b):
+                sys.exit(f"{path}: clip {name}: a box is [x, y, w, h] in whole pixels, w and h at least 1, not {b!r}")
         steps = [dict(s) for s in c.get("steps", [])]
         for s in steps:
             if not (s.get("title") and "from" in s and "to" in s):
@@ -326,9 +332,10 @@ def apply_masks(im: Image.Image, masks) -> Image.Image:
 
 def box_arg(text: str) -> tuple[int, int, int, int]:
     parts = [p.strip() for p in text.split(",")]
-    if len(parts) != 4 or not all(p.isdigit() for p in parts) or int(parts[2]) < 1 or int(parts[3]) < 1:
+    box = [int(p) if p.isdigit() else None for p in parts]
+    if not valid_box(box):
         raise argparse.ArgumentTypeError(f"{text!r}: a box is X,Y,W,H in whole pixels, W and H at least 1")
-    x, y, w, h = map(int, parts)
+    x, y, w, h = box
     return x, y, w, h
 
 
