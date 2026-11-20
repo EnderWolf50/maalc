@@ -768,9 +768,20 @@ class PickThemePack(CustomAction):
 
     @staticmethod
     def set_difficulty(context, floor, want):
+        """Switch the page to the floor's difficulty (want: HARD True, NORMAL False, None keep) and note what it is.
+
+        Floors 6 on (#386) switch nothing: the run got there with floors 1-5 all HARD (the game's tutorial TutoMD05_P19_D2),
+        so the floor is HARD whatever the label reads, or when it reads nothing; the log line stays `floor N: HARD`
+        (tools/live/evidence_map.py logged_hard). Up to floor 5 a label never read is False: the caller's stuck.
+        """
         def label(image):
-            shown = text(context, image, [830, 30, 160, 35])
-            return True if has(shown, "HARD") else False if has(shown, "NORMAL") else None
+            return run_start.difficulty_label(text(context, image, [830, 30, 160, 35]))
+
+        def note_difficulty(hard):
+            log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
+            RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
+            RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
+            return True
 
         for _ in range(4):
             hard = label(page_guard(context, "ThemePack"))
@@ -779,14 +790,16 @@ class PickThemePack(CustomAction):
                 continue
             move = run_start.difficulty_move(floor, hard, want)
             if move is None:
-                if want is not None and hard != want:
+                if run_start.hard_only(floor) and not hard:
+                    log(f"floor {floor} reads NORMAL: a floor past 5 is HARD")
+                elif want is not None and hard != want:
                     log(f"floor {floor} stays HARD: a run never goes back to NORMAL")
-                log(f"floor {floor}: {'HARD' if hard else 'NORMAL'}")
-                RUN["floor_hard"] = hard  # the map does not show it; RouteMap's weights need it
-                RUN.setdefault("floors_hard", {})[floor] = hard  # what Settle's weekly bonuses count on (#382)
-                return True
+                return note_difficulty(hard or run_start.hard_only(floor))
             # The arrows sit left of HARD, right of NORMAL; switching re-rolls the packs.
             log(f"floor {floor}: switch to {move.upper()}")
             tap_then(context, 965 if move == "hard" else 850, 46, lambda im: label(im) == (move == "hard"), timeout=2.5)
             still(context, timeout=1.5)  # the packs re-roll
+        if run_start.hard_only(floor):
+            log(f"floor {floor}: no difficulty label read: a floor past 5 is HARD")
+            return note_difficulty(True)
         return False

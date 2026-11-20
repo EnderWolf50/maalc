@@ -51,6 +51,7 @@
 - 任何一層選了 HARD 之後，之後各層都不能切回 NORMAL：下一層起主題包頁的難度箭頭變灰、點了沒反應。（#19，2026-10-14 定案；實機：captures/128_f2_tap_difficulty_left.png）
 - 實機：第 1 層選主題包之前，HARD 與 NORMAL 可以來回切換；HARD 時點左箭頭（`◀ ▶ HARD`）切到 NORMAL，NORMAL 時點右箭頭（`NORMAL ◀ ▶`）切到 HARD。每次切換都會換一組主題包，切回原本的難度時換回原本那一組。（#25；2026-10-14 實機）
 - 普通局到第 N 層（N > 1）才切到 HARD 是否可行，還沒有實測，見[未決](#未決)。
+- 第 6 層起（#386，2026-11-20 規格 #847 定案）：進第 6 層要第 1–5 層全 HARD（遊戲教學 TutoMD05_P19_D2），所以第 6–15 層一定是 HARD，主題包頁不切難度。標籤讀到 `HARD`、`INFINITY` 或 `EXTREME`（遊戲資料 `uiConfig.difficultyLabel` 第 6–10、11–15 層的值，推測，沒有實機畫面）都記成 HARD；讀到 `NORMAL`（不可能，當成誤讀）或讀了 4 次都讀不到，也記成 HARD，不 stuck。log 照舊寫 `floor N: HARD`（`tools/live/evidence_map.py` 的 `logged_hard` 讀這行），讀不到時前一行寫 `no difficulty label read`。第 1–5 層照舊：讀不到就 stuck。（`run_start.difficulty_label`、`difficulty_move`，`PickThemePack.set_difficulty`）
 
 ## 3. 出戰順序與戰前編隊
 
@@ -133,7 +134,7 @@
 - 記錄：每次讀完畫面，log 列出每張卡的標題與分數（套用活動卡包設定的那張標 `event`）和門檻；拉卡時寫出選了哪張、分數，以及是否低於門檻。（#240）
 - 實機：卡片數量會變。買了 `Star of the Beginning` 與 `Interstellar Travel+`（各 `Theme Pack Selection +1`）時第 1 層有 5 張；`Interstellar Travel+` 讓刷新按鈕顯示 `Refresh 4/4`（`Theme Pack Refresh Chance +3`）。所以卡片位置從標題列的 OCR 結果取得，不用固定格位。（#25；2026-10-14 實機）
 - 選主題包時要把卡片往下拉才能選定。（#8）
-- 選主題包之前必須先依第 2 節設定好本層難度。（#8）
+- 選主題包之前必須先依第 2 節設定好本層難度。（#8）第 6 層起不切難度，這一層記成 HARD（第 2 節，#386）。
 - 實機：免費刷新每層一次，用過按鈕就變灰。這一局沒有看到 NEW 標記；第 4 層的主題包左上有紅色 `!` 標記（推測是沒打過的主題包），標題照常可讀。第 5 層的主題包沒有 `CLEAR BONUS` 列。困難局打完 Boss 後直接進入下一層的主題包頁，中間沒有換層畫面。（實機：captures/129_f2_refresh_tapped.png、captures/197_f3boss_rewards_pack.png、captures/222_f4boss_rw_pack.png、captures/127_after_boss_gifts.png）
 
 ## 7. 地圖選路
