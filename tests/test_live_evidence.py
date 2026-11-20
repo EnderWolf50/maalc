@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -189,7 +191,7 @@ def test_map_clip_cuts_into_local_not_beside_the_output(tmp_path, footage, monke
     local, cuts, runs = tmp_path / "local", [], []
     local.mkdir()
     monkeypatch.setattr(ev, "local_dir", lambda *parts: local)
-    monkeypatch.setattr(ev, "cut", lambda f, t0, t1, out: (cuts.append(Path(out)), Path(out).write_text("raw")))
+    monkeypatch.setattr(ev, "cut", lambda f, t0, t1, out, boxes=(): (cuts.append(Path(out)), Path(out).write_text("raw")))
     monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: runs.append(cmd))
     ev.main(["map", str(tmp_path / "run.log"), "--floor", "1", "-o", str(tmp_path / "route"), "--clip", *footage])
     assert cuts[0].parent == local and not cuts[0].exists()  # the unmasked cut is gone once annotate.py ran
@@ -487,7 +489,7 @@ def test_mask_blacks_out_boxes_where_the_template_matches(tmp_path):
 
 def test_an_annotated_clip_hands_its_blocks_to_annotate(tmp_path, monkeypatch):
     runs = []
-    monkeypatch.setattr(ev, "cut", lambda footage, t0, t1, out: None)
+    monkeypatch.setattr(ev, "cut", lambda footage, t0, t1, out, boxes=(): None)
     monkeypatch.setattr(ev, "local_dir", lambda *parts: tmp_path)
     monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: runs.append(cmd))
     (masks := tmp_path / "masks.json").write_text("{}")
@@ -497,3 +499,101 @@ def test_an_annotated_clip_hands_its_blocks_to_annotate(tmp_path, monkeypatch):
     [cmd] = runs
     path = Path(cmd[cmd.index("--blocks") + 1])
     assert json.loads(path.read_text(encoding="utf-8")) == blocks
+
+
+def test_mask_also_blacks_out_each_box_in_the_images_own_pixels(tmp_path):
+    (tmp_path / "masks.json").write_text(json.dumps({"space": [1280, 720], "masks": []}))
+    shot = tmp_path / "gui.png"
+    Image.new("RGB", (1500, 860), (200, 200, 200)).save(shot)
+    ev.main(["mask", "--masks", str(tmp_path / "masks.json"), str(shot), "--box", "10,20,300,24", "--box", "0,800,1500,60"])
+    px = np.asarray(Image.open(shot))
+    assert px[20:44, 10:310].max() == 0 and px[800:860].max() == 0
+    assert px[19, 10:310].min() == 200 and px[20:44, 310].min() == 200 and px[100, 100].min() == 200
+
+
+@pytest.mark.parametrize("box", ["1,2,3", "1,2,0,4", "a,2,3,4", "-1,2,3,4"])
+def test_mask_refuses_a_box_that_is_not_x_y_w_h(box):
+    with pytest.raises(SystemExit):
+        ev.main(["mask", "x.png", "--box", box])
+
+
+def test_a_box_filter_scales_the_1280x720_box_to_the_frame():
+    assert ev.box_filter([]) == []
+    assert ev.box_filter([[0, 0, 640, 36]]) == ["-vf", "drawbox=x=iw*0/1280:y=ih*0/720:w=iw*640/1280:h=ih*36/720:color=black:t=fill"]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_a_cut_blacks_out_its_boxes_at_the_recordings_own_size(tmp_path):
+    src = tmp_path / "rec.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=white:s=1254x720:d=2:r=30", "-pix_fmt", "yuv420p",
+                    str(src)], check=True)
+    out = tmp_path / "cut.mp4"
+    ev.cut(ev.Footage([f"{src}@10:00:00"]), ev.secs("10:00:00.5"), ev.secs("10:00:01.5"), out, [[0, 0, 640, 360]])
+    frame = ev.decode(out, 0.2, None, None)[0]  # scaled to 1280x720, as frames are
+    assert frame[10:350, 10:630].max() < 30 and frame[400:700, 700:1270].min() > 220
+
+
+def spec(tmp_path, clips, **top):
+    p = tmp_path / "clips.json"
+    p.write_text(json.dumps({"video": "rec_gui.mp4@14:51:32.220", "clips": clips, **top}, ensure_ascii=False), encoding="utf-8")
+    return p
+
+
+def test_clips_spec_resolves_paths_against_its_folder_and_checks_each_clip(tmp_path):
+    (tmp_path / "run.log").write_text(RUN, encoding="utf-8")
+    got = ev.read_spec(spec(tmp_path, {
+        "c3-stop": {"from": "14:57:43.5", "to": "14:57:53", "idle": 4, "boxes": [[0, 0, 1280, 30]],
+                    "steps": [{"from": "14:57:47.9", "to": "14:57:53", "title": "按「停止」", "tag": "結果"}]},
+        "c2-mumu": {"from": "15:52:57", "to": "15:53:10", "log": "run.log", "video": ["rec_default.mp4@15:52:50"]}}, color="#F0A830"))
+    assert got["c3-stop"]["footage"] == [f"{tmp_path / 'rec_gui.mp4'}@14:51:32.220"]
+    assert got["c3-stop"]["boxes"] == [[0, 0, 1280, 30]] and got["c3-stop"]["idle"] == 4
+    assert got["c2-mumu"]["footage"] == [f"{tmp_path / 'rec_default.mp4'}@15:52:50"]
+    # a clip with a log shows its touches; one without (the settings window's recording) shows no pointer
+    assert [e["kind"] for e in ev.clip_events(got["c2-mumu"])["events"]] == ["swipe", "tap"]
+    assert ev.clip_events(got["c2-mumu"])["style"] == {"color": "#F0A830"}
+    assert ev.clip_events(got["c3-stop"]) == {"space": [1280, 720], "pointer": "none", "events": [], "style": {"color": "#F0A830"}}
+
+
+@pytest.mark.parametrize("clip, words", [
+    ({"from": "10:00:05", "to": "10:00:01"}, "from first"),
+    ({"to": "10:00:01"}, "from first"),
+    ({"from": "10:00:00", "to": "10:00:01", "boxes": [[1, 2, 3]]}, "a box is"),
+    ({"from": "10:00:00", "to": "10:00:01", "steps": [{"from": "10:00:00", "to": "10:00:01"}]}, "a title"),
+    ({"from": "10:00:00", "to": "10:00:01", "colour": "red"}, "unknown keys"),
+    ({"from": "10:00:00", "to": "10:00:01", "video": "no-start.mp4"}, "PATH@START"),
+])
+def test_clips_spec_refuses_a_clip_it_cannot_cut(tmp_path, clip, words, capsys):
+    with pytest.raises(SystemExit) as e:
+        ev.read_spec(spec(tmp_path, {"c1": clip}))
+    assert words in str(e.value)
+
+
+def test_clips_cuts_each_named_clip_with_its_boxes_and_idle_speed(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ev, "annotated_clip", lambda footage, t0, t1, out, events, steps, a, boxes=(), extra=():
+                        calls.append((footage.pieces, ev.hms(t0), out.name, boxes, list(extra), steps)))
+    p = spec(tmp_path, {
+        "c1": {"from": "14:52:00", "to": "14:52:10", "steps": [{"from": "14:52:00", "to": "14:52:10", "title": "開始"}]},
+        "c3-stop": {"from": "14:57:43.5", "to": "14:57:53", "idle": 4, "boxes": [[0, 0, 1280, 30]]}})
+    a = type("A", (), {"spec": str(p), "names": ["c3-stop"], "out": str(tmp_path / "clips"), "masks": None, "annotate": "annotate.py"})()
+    assert ev.clips_cmd(a) == 0
+    assert calls == [([(ev.secs("14:51:32.220"), str(tmp_path / "rec_gui.mp4"))], "14:57:43.500", "c3-stop.mp4", [[0, 0, 1280, 30]],
+                      ["--idle-speed", "4", "--idle-after", "6"], [])]
+    a.names = []
+    calls.clear()
+    assert ev.clips_cmd(a) == 0 and [c[2] for c in calls] == ["c1.mp4", "c3-stop.mp4"]
+    a.names = ["c9"]
+    with pytest.raises(SystemExit, match="no clip c9"):
+        ev.clips_cmd(a)
+
+
+def test_an_annotated_clip_hands_its_boxes_to_the_cut_and_extra_options_to_annotate(tmp_path, monkeypatch):
+    runs, cuts = [], []
+    monkeypatch.setattr(ev, "cut", lambda footage, t0, t1, out, boxes=(): cuts.append(boxes))
+    monkeypatch.setattr(ev, "local_dir", lambda *parts: tmp_path)
+    monkeypatch.setattr(ev.subprocess, "run", lambda cmd, check: runs.append(cmd))
+    (masks := tmp_path / "masks.json").write_text("{}")
+    a = type("A", (), {"annotate": "annotate.py", "masks": str(masks)})()
+    ev.annotated_clip(ev.Footage(["a.mp4@10:00:00"]), 1.0, 5.0, tmp_path / "c.mp4", {"space": [1280, 720], "events": []}, [], a,
+                      boxes=[[0, 0, 10, 10]], extra=["--idle-speed", "4"])
+    assert cuts == [[[0, 0, 10, 10]]] and runs[0][-2:] == ["--idle-speed", "4"]
