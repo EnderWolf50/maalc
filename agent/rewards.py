@@ -37,10 +37,11 @@ def pick_choice(options, keyword, override=None, closed=(), event=None):
 def choice_plan(options, keyword, override=None, closed=(), event=None, want=None):
     """(index of the option to take, whether its check goes to the lowest-odds sinner) (spec 03 section 10, #420).
 
-    As pick_choice, but with `want(gift_id)` -> "pack-want" | "want" | "material" | None (gifts.want_kind) an option whose
-    table entry gives a wanted gift, by any way (gift_ids), goes ahead of every level: the higher gift score first
-    (GIFT_SCORE), then the levels above, then the screen order. The flag is set when that option's best wanted gift is
-    only given when a check fails: the sinner least likely to pass is sent. An override's option wins over all of it.
+    As pick_choice, but with `want(gift_id)` -> "pack-want" | "want" | "material" | "owned" | None (actions.want_of) an
+    option whose table entry gives a wanted gift, by any way (gift_ids), goes ahead of every level: the higher gift score
+    first (GIFT_SCORE), then the levels above, then the screen order. The flag is set when that option's best wanted gift is
+    only given when a check fails: the sinner least likely to pass is sent. An option whose gifts are all owned (held by
+    the run, #623) gives nothing new: it ranks as the rest (level 4). An override's option wins over all of it.
     """
     open_ = [i for i in range(len(options)) if i not in closed]
     if override:
@@ -49,8 +50,11 @@ def choice_plan(options, keyword, override=None, closed=(), event=None, want=Non
                 return i, False
     entries = {i: _entry(options[i], event) if event else None for i in open_}
     wanted = {i: _wanted(entries[i], want) for i in open_} if want else {}
-    best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) else 0),
-                                      *_rank(options[i], entries[i], keyword), i), default=None)
+
+    def rank(i):
+        ids = [g for g, _ in (entries[i] or {}).get("gift_ids", ())]
+        return (4, True) if want and ids and all(want(g) == "owned" for g in ids) else _rank(options[i], entries[i], keyword)
+    best = min(open_, key=lambda i: (wanted.get(i) is None, -(wanted[i][0] if wanted.get(i) else 0), *rank(i), i), default=None)
     return best, bool(wanted.get(best) and wanted[best][1])
 
 
@@ -340,7 +344,7 @@ class Card(NamedTuple):
     """One gift card of the choice page, what the pick and its log need (#418).
 
     kind: main, other, owned or avoid, the page's own reading; category: what the card scores as, kind or the want class
-    (pack-want, want, material, #416), None meaning kind; tier: from
+    (pack-want, want, material, #416; owned: a wanted gift the run holds, #623), None meaning kind; tier: from
     the numeral over the icon (boss page only, else None); burden: its trial's cost in pt, None without trials; label: the
     gift's name, or the title as read when no gift matches; gift_id: None then; trial: the log's words for its trial.
     """
@@ -354,7 +358,8 @@ class Card(NamedTuple):
 
 
 def category(kind, want):
-    """A card's category (#416): avoid > owned > the want class (pack-want, want, material) > main > other."""
+    """A card's category (#416): avoid > owned (the card's Owned, or `want` "owned": the run holds it, #623) > the want
+    class (pack-want, want, material) > main > other."""
     return kind if kind in ("avoid", "owned") or not want else want
 
 

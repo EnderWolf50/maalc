@@ -380,6 +380,18 @@ def test_a_wanted_gift_the_run_already_holds_does_not_jump_the_hint_levels(conte
     assert page.tapped == ["Gamble."]
 
 
+def test_an_option_whose_only_gift_the_run_holds_comes_after_one_giving_a_gift_it_does_not(context, monkeypatch):
+    # #623: 9001 is wanted and held, owned (0): its direct gain gives nothing new, so it ranks with the rest (level 4) and
+    # the check for 9100 (level 2) goes first, though the direct gain (level 1) is first on screen.
+    want_team(9001)
+    actions.RUN["owned"] = [9001]
+    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]),
+                            ("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9100, "check_pass")]))
+    page = Choices(context, monkeypatch, options, test_actions.DOLL)
+    event_actions.Event().run(context, None)
+    assert page.tapped == ["Look closer."]
+
+
 @pytest.mark.parametrize("wanted, taken", [(9001, "Reach out."), (9104, "Enter the haze.")])
 def test_the_committed_table_entry_of_901001_sends_the_option_that_gives_the_wanted_gift(context, monkeypatch, wanted, taken):
     # #420: 9001 comes from Reach out. (direct) and Enter the haze. (battle, with 9104); the real story and option texts

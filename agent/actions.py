@@ -1250,14 +1250,15 @@ def leave_shop():
 
 
 def want_of(run):
-    """`want(gift_id)` -> "pack-want" | "want" | "material" | None for the team's list (gifts.want_kind), the run's packs and the
-    gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages and the gifts of the GET!
-    windows since, note_got). Always None for a team with no list. A wanted gift held is no want (#416: owned 0), a material is still counted."""
+    """`want(gift_id)` -> "pack-want" | "want" | "material" | "owned" | None for the team's list (gifts.want_kind), the run's
+    packs and the gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages and the gifts
+    of the GET! windows since, note_got). Always None for a team with no list. A wanted gift the run holds is "owned" (0):
+    taken again it only turns into an afterimage (the user, 2026-11-20, #623)."""
     gift_list, held = run["team"].get("list"), RUN.get("owned", [])
 
     def want(gift_id):
         kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
-        return None if kind in ("pack-want", "want") and gift_id in held else kind
+        return "owned" if kind and gift_id in held else kind
     return want
 
 

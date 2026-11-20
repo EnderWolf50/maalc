@@ -483,9 +483,9 @@ def picked(taps):
 
 
 def held_want_page(context, monkeypatch):
-    """The cards PickGift takes on a page of Wound Clerid (main, leftmost) and Rusted Muzzle (9089, main), the team wanting
-    Rusted Muzzle: [536] while it is a want (6), [236] once the run holds it (#623: then the main card it is)."""
-    taps = gift_page(context, monkeypatch, ["Wound Clerid", "Rusted Muzzle"])
+    """The cards PickGift takes on a page of Rusted Muzzle (9089, main, leftmost) and Wound Clerid (main), the team wanting
+    Rusted Muzzle: [236] while it is a want (6), [536] once the run holds it (#623: owned, 0, under Wound Clerid's 3)."""
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
     actions.RUN["team"]["list"] = wants(9089)
     event_actions.PickGift().run(context, None)
     return picked(taps)
