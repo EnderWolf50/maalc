@@ -47,13 +47,13 @@ export type Message =
   | { type: "exit"; code: number | null; ended: boolean; tail: string[] };
 
 /** A task list as the settings hold it: each entry's task and tick, in run order. */
-export type TaskList = { id: string; enabled: boolean }[];
+export type TaskEntries = { id: string; enabled: boolean }[];
 
 /** What the page itself adds: a start it asked for (the entries it posts, and the whole list it starts from), a start the
  * backend refused, a line of its own for the live log (what came of a scheduled run's start, #816), and the settings' task
  * list each time it changes (App: the run's `list`). */
-export type Action = Message | { type: "begin"; entries: string[]; list?: TaskList } | { type: "refused"; error: string }
-  | { type: "note"; line: string } | { type: "list"; list: TaskList };
+export type Action = Message | { type: "begin"; entries: string[]; list?: TaskEntries } | { type: "refused"; error: string }
+  | { type: "note"; line: string } | { type: "list"; list: TaskEntries };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
  * protocol), `window` one of the window's own. `n` numbers the lines of a run. */
@@ -80,10 +80,10 @@ export interface RunView {
    * runner sends none (it sends one only when the bot stopped the whole list, runner/session.py finish). */
   bot?: { entry: string; stop?: string }[];
   /** The task list the run's states are written on (the Run tab's rows), its unticked entries too: the one the window
-   * started the run from (Start, a scheduled start), or, for a run a page loaded again took up, the settings' list as the
-   * page first saw it with the run. Dropped for good once the settings' list is another (`unlisted`): the list was edited,
-   * and its rows no longer read with the run. */
-  list?: TaskList;
+   * started the run from (Start, a scheduled start), or, for a run under way a page loaded again took up, the settings' list
+   * as the page first saw it with the run (none for an ended one). Dropped for good once the settings' list is another
+   * (`unlisted`): the list was edited, and its rows no longer read with the run. */
+  list?: TaskEntries;
   unlisted?: boolean;
 }
 
@@ -94,14 +94,15 @@ const BOT_START = /^\[maalc\] task (\S+) started$/;
 const STOP_LINE = "[maalc] stop: ";
 
 /** Whether two task lists are one: the same entries, ticked the same, in one order. */
-export const sameList = (a: TaskList, b: TaskList) =>
+export const sameList = (a: TaskEntries, b: TaskEntries) =>
   a.length === b.length && a.every((x, j) => x.id === b[j].id && x.enabled === b[j].enabled);
 
-/** The run's list after the settings' list changed to `list`: a run with none takes it, the same list keeps it, and another
- * drops it for good. Nothing before a run's tasks are known. */
-function listed(v: RunView, list: TaskList): RunView {
+/** The run's list after the settings' list changed to `list`: a run with none takes it while it runs (the lock keeps the
+ * list then as the run read it), the same list keeps it, and another drops it for good. Nothing before a run's tasks are
+ * known; an ended run a page took up takes none, as the list may have changed since it ran. */
+function listed(v: RunView, list: TaskEntries): RunView {
   if (!v.tasks.length || v.unlisted) return v;
-  if (!v.list) return { ...v, list };
+  if (!v.list) return isRunning(v) ? { ...v, list } : v;
   return sameList(v.list, list) ? v : { ...v, list: undefined, unlisted: true };
 }
 

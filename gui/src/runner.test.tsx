@@ -265,12 +265,22 @@ describe("what the run shows", () => {
     expect(rowStates().every((x) => x === null)).toBe(true);
   });
 
-  test("a page loaded again after a run takes the list as it reads it for the run's: its states show, and go at the list's first edit", async () => {
+  test("a page loaded again during a run takes the list as it reads it for the run's: its states show, and stay after the end until an edit", async () => {
+    back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "running")],
+      active: true };
+    const user = await open();
+    await waitFor(() => expect(rowStates().slice(0, 2)).toEqual(["running", "pending"]));
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true));
+    expect(rowStates().slice(0, 2)).toEqual(["succeeded", "failed"]);
+    await altMove(user, taskRows()[7], "ArrowUp"); // an unticked row: the ticked ones are the run's still
+    expect(rowStates().every((x) => x === null)).toBe(true);
+  });
+
+  test("a page loaded again after a run ended writes no states on the rows: the list may have changed since the run", async () => {
     back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "succeeded"),
       task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true)], active: false };
-    const user = await open();
-    await waitFor(() => expect(rowStates().slice(0, 2)).toEqual(["succeeded", "failed"]));
-    await altMove(user, taskRows()[7], "ArrowUp"); // an unticked row: the ticked ones are the run's still
+    await open();
+    await waitFor(() => expect(screen.getByText(/^跑完了，有任務沒成功$/)).toBeVisible());
     expect(rowStates().every((x) => x === null)).toBe(true);
   });
 
@@ -736,10 +746,13 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
     const edited = reduce(begun, { type: "list", list: other });
     expect([edited.list, edited.unlisted]).toEqual([undefined, true]);
     expect(reduce(edited, { type: "list", list: one }).list).toBeUndefined(); // the list as it was again: still gone
-    // a page that took the run up: nothing before the run's tasks are known, then the settings' list as they read
+    // a page that took the run up: nothing before the run's tasks are known, then the settings' list as they read while it
+    // runs; an ended one takes none
     const taken = reduce(IDLE, task(0, "ClaimMail", "succeeded"));
     expect(reduce(IDLE, { type: "list", list: one })).toBe(IDLE);
     expect(reduce(taken, { type: "list", list: one }).list).toEqual(one);
+    const ended = reduce(taken, exit(0, true));
+    expect(reduce(ended, { type: "list", list: one }).list).toBeUndefined();
     // a new run starts on its own list
     expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other })).toMatchObject({ list: other });
     expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other }).unlisted).toBeUndefined();

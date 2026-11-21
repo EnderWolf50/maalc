@@ -187,12 +187,12 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
   // the row the focus goes to after the render: a removed row's button, or the Undo note's, leaves with what it removed or
   // put back, and the focus would drop to the page's top; it goes to the row that took the removed one's place, or to the
   // row put back (加入任務 when the list is empty)
-  const list = useRef<HTMLElement>(null);
+  const aside = useRef<HTMLElement>(null);
   const focusAt = useRef<number | null>(null);
   useLayoutEffect(() => {
     if (focusAt.current === null) return;
-    const rowEls = list.current?.querySelectorAll<HTMLElement>("ol.reorder > li");
-    (rowEls?.[Math.min(focusAt.current, rowEls.length - 1)] ?? list.current?.querySelector<HTMLElement>(".add-task > button"))?.focus();
+    const rowEls = aside.current?.querySelectorAll<HTMLElement>("ol.reorder > li");
+    (rowEls?.[Math.min(focusAt.current, rowEls.length - 1)] ?? aside.current?.querySelector<HTMLElement>(".add-task > button"))?.focus();
     focusAt.current = null;
   });
   // an Undo puts the entry back where it was and picks it, as the team list's does
@@ -219,9 +219,9 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
     focusAt.current = j;
   };
   return (
-    <aside className="task-list" data-path="tasks" ref={list}>
+    <aside className="task-list" data-path="tasks" ref={aside}>
       {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
-      <ReorderList items={rows} keyOf={(x) => x.key} selected={pickedAt} onSelect={(j, l) => setSel(entryKey(l, j))}
+      <ReorderList items={rows} keyOf={(x) => x.key} selected={pickedAt} onSelect={(j, list) => setSel(entryKey(list, j))}
         label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
         onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
         render={(x, j) => {
@@ -235,7 +235,8 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
             // wrong one
             <span className="task-row" title={fill(t("tasks.row_tip"), { name, id: x.id })}
               data-state={states ? task?.state ?? "off" : undefined}>
-              {/* the tick's own hit area, the row's height; a click there ticks and leaves the picked task as it is */}
+              {/* the tick's own hit area, the first line and the row's padding; a click there ticks and leaves the picked task as
+                  it is */}
               <label className="tick" onClick={(e) => e.stopPropagation()}>
                 <Input type="checkbox" checked={x.enabled} aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name, n: x.nth + 1 })}
                   onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
@@ -307,7 +308,9 @@ function AddTask({ onPick }: { onPick: (id: string) => void }) {
           {TASK_ORDER.map((id) => {
             const n = s.tasks.filter((x) => x.id === id).length;
             return (
-              <button type="button" role="menuitem" tabIndex={-1} key={id} onClick={() => { onPick(id); close(true); }}>
+              // the pointer moves the focus as the arrows do: one item lit, the one a key acts on
+              <button type="button" role="menuitem" tabIndex={-1} key={id} onPointerEnter={(e) => e.currentTarget.focus()}
+                onClick={() => { onPick(id); close(true); }}>
                 <span>{taskName(t, id)}</span><small>{n === 0 ? t("tasks.absent") : n > 1 ? fill(t("tasks.listed"), { n }) : ""}</small>
               </button>
             );

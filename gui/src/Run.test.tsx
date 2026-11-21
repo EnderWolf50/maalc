@@ -321,6 +321,11 @@ describe("the task list", () => {
     expect(items[6]).toHaveFocus();
     await r.user.keyboard("{Home}");
     expect(items[0]).toHaveFocus();
+    // the pointer moves the focus too: one item lit, the one Enter picks
+    await r.user.hover(items[3]);
+    expect(items[3]).toHaveFocus();
+    await r.user.keyboard("{Home}");
+    expect(items[0]).toHaveFocus();
     await r.user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).toBeNull();
     expect(addButton()).toHaveFocus();

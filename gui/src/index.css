@@ -527,7 +527,7 @@ fieldset.queue { align-items: stretch; }
   border-color: transparent; background: none;
 }
 .add-menu button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-/* the item under the pointer, and the one with the focus however the menu opened: the arrows move it */
+/* the item with the focus, however the menu opened: the arrows move it, and so does the pointer (AddTask), so one is lit */
 .add-menu button:hover:not(:disabled), .add-menu button:focus { background: var(--hov); border-color: transparent; }
 .add-menu button:focus-visible { outline-offset: -2px; }
 /* the Mirror Dungeon task's options in groups, two side by side where they fit */
