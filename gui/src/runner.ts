@@ -158,8 +158,8 @@ export interface Runner {
   reveal?: boolean;
   revealed?: () => void;
   /** whether the window knows yet if a run is under way or starting as it opens (#876): false until the backend answered
-   * whether the page took up a run (a page loaded again) and handed out the scheduled starts this window opened for, each
-   * begun. The Run tab scans for devices as it opens, unless one is. Absent: known (a page with no backend). */
+   * whether the page took up a run (a page loaded again) and handed out the scheduled starts this window opened for, the
+   * first of them begun. The Run tab scans for devices as it opens, unless one is. Absent: known (a page with no backend). */
   settled?: boolean;
 }
 

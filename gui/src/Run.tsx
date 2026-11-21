@@ -662,9 +662,9 @@ function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
   const label = currentLabel(t, current);
   // a scan that found none, or failed, says so on a line under the list, which describes the list to a screen reader too;
   // what to do next after finding none is that line's tooltip, and read after it
-  const outcome = useId();
+  const outcomeId = useId(), nextId = `${outcomeId}-next`;
   const none = scan.state === "found" && !found.length;
-  const described = none ? `${outcome} ${outcome}-next` : scan.state === "failed" ? outcome : "";
+  const described = none ? `${outcomeId} ${nextId}` : scan.state === "failed" ? outcomeId : "";
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
@@ -680,9 +680,9 @@ function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
           {t(scan.state === "scanning" ? "emu.scanning" : scan.state === "none" ? "emu.scan" : "emu.rescan")}
         </button>
       </div>
-      {none && <p className="muted" id={outcome} title={t("emu.none_found_note")}>{t("emu.none_found")}</p>}
-      {none && <span id={`${outcome}-next`} hidden>{t("emu.none_found_note")}</span>}
-      {scan.state === "failed" && <p className="caution" id={outcome}>{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
+      {none && <p className="muted" id={outcomeId} title={t("emu.none_found_note")}>{t("emu.none_found")}</p>}
+      {none && <span id={nextId} hidden>{t("emu.none_found_note")}</span>}
+      {scan.state === "failed" && <p className="caution" id={outcomeId}>{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
       {/* folded, its title turns red when a field inside has a problem; a problem's jump opens it (ui.tsx focusPath) */}
       <details className={"emu-manual" + (bad("emulator") ? " bad" : "")} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary title={t("emu.manual_note")}>{t("emu.manual")}</summary>
