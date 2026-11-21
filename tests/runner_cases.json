@@ -67,6 +67,7 @@
     {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "failed"}, "valid": true},
     {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "stopped"}, "valid": true},
     {"event": {"v": 1, "event": "task", "index": 1, "entry": "ExpLuxcavation", "state": "cancelled", "reason": "maintenance"}, "valid": true},
+    {"event": {"v": 1, "event": "task", "index": 0, "entry": "ChargeEnkephalin", "state": "failed", "reason": "ClientOutdated: the game client is out of date"}, "valid": true},
     {"event": {"v": 1, "event": "task", "index": 1, "entry": "ExpLuxcavation", "state": "cancelled", "reason": null}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "agent_exit", "message": "the bot exited with code 3", "code": 3, "tail": ["Traceback (most recent call last):"]}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "stop_timeout", "message": "MaaFramework did not stop in 60 s"}, "valid": true},

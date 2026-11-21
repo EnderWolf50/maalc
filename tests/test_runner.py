@@ -48,17 +48,18 @@ class Job:
 
 class World:
     """A fake MaaFramework on a fake clock; a sleep of the runner is a tick. The tasker runs the posted tasks in turn,
-    each for its plan's ticks, and ends it succeeded, failed, or halt: the bot's account-level stop, which fails it and
-    stops the tasker with the rest unrun, once halt_when() holds (the bot's lines are in). post_stop clears the queue at
+    each for its plan's ticks, and ends it succeeded, failed, or halt: the bot's account-level stop, which ends it
+    halt_ends (succeeded, as MaaFramework says of the action that posted the stop and returned, #870) and stops the
+    tasker with the rest unrun, once halt_when() holds (the bot's lines are in). post_stop clears the queue at
     once and ends the running task stop_ends (failed, or succeeded as MaaFramework says when the agent's action returns
     normally after post_stop, #832) stop_ticks ticks later (None: never, until free()). at: {time: call}.
     adb says `offline` to the first `offline` looks at a device's state, and a connect fails while it does, as
     MaaFramework's does (its get-state); each look takes `asks` s; the first `refusals` connects fail besides."""
 
     def __init__(self, plan, *, found=(MUMU0,), appear=None, stop_ticks=1, at=None, connects=True, halt_when=None,
-                 offline=0, asks=0.0, refusals=0, stop_ends="failed"):
+                 offline=0, asks=0.0, refusals=0, stop_ends="failed", halt_ends="succeeded"):
         self.plan, self.found, self.appear, self.stop_ticks = plan, list(found), appear, stop_ticks
-        self.stop_ends, self.asks = stop_ends, asks
+        self.stop_ends, self.halt_ends, self.asks = stop_ends, halt_ends, asks
         self.at, self.connects, self.halt_when = dict(at or {}), connects, halt_when or (lambda: True)
         self.offline, self.refusals = offline, refusals
         self.t, self.queue, self.current, self.stop_left = 1000.0, [], None, None
@@ -95,7 +96,7 @@ class World:
             outcome = self.plan[self.current.entry][1]
             if self.current.left > 0 or (outcome == "halt" and not self.halt_when()):
                 return
-            self.current.state = "failed" if outcome == "halt" else outcome
+            self.current.state = self.halt_ends if outcome == "halt" else outcome
             self.current = None
             if outcome == "halt":
                 self.queue.clear()
@@ -358,15 +359,32 @@ def test_a_stop_while_mumu_boots_ends_the_run_before_it_connects(tmp_path):
     assert run.states() == [(0, "pending"), (0, "cancelled")] and world.controllers == []
 
 
-def test_the_bots_own_stop_of_the_whole_list_cancels_the_rest_with_its_reason(tmp_path):
-    # #364: an account-level stop (maintenance) posts post_stop from the bot; the rest of the list never runs
+@pytest.mark.parametrize("halt_ends", ["succeeded", "failed"])
+def test_the_bots_own_stop_of_the_whole_list_fails_its_task_and_cancels_the_rest_with_its_reason(tmp_path, halt_ends):
+    # #364: an account-level stop (maintenance) posts post_stop from the bot; the rest of the list never runs. #870: the
+    # task it stopped in failed, whatever MaaFramework says of it (succeeded: the action that posted the stop returned)
     run = None
-    world = World({"MirrorDungeon": (2, "halt"), "ExpLuxcavation": (2, "succeeded")},
+    world = World({"MirrorDungeon": (2, "halt"), "ExpLuxcavation": (2, "succeeded")}, halt_ends=halt_ends,
                   halt_when=lambda: any(line.startswith("[maalc] account-level stop") for line in run.lines("agent")))
     run = Run(tmp_path, world, "[maalc] stop: maintenance", "[maalc] account-level stop: the rest of the task list is cancelled")
     assert run.start(TWO) == "failed"
-    assert run.states() == [(0, "pending"), (1, "pending"), (0, "running"), (0, "failed"), (1, "cancelled", "maintenance")]
+    assert run.states() == [(0, "pending"), (1, "pending"), (0, "running"), (0, "failed", "maintenance"),
+                            (1, "cancelled", "maintenance")]
+    assert "[run] MirrorDungeon status=failed t=" in " ".join(run.lines("runner"))
     assert not run.of("error") and world.stops == []  # the bot stopped it; the runner had nothing to stop
+
+
+def test_a_halt_line_that_comes_after_the_tasker_stopped_still_fails_the_task(tmp_path):
+    # the bot's lines come through a pipe its post_stop does not wait for: the tasker may stop before the runner reads
+    # them. Its stop line comes first (it saves the evidence before the post_stop), so the task it stopped in waits once
+    run = None
+    world = World({"MirrorDungeon": (2, "halt"), "ExpLuxcavation": (2, "succeeded")},
+                  halt_when=lambda: any(line.startswith("[maalc] stop") for line in run.lines("agent")))
+    run = Run(tmp_path, world, "[maalc] stop: maintenance", "[maalc] account-level stop: the rest of the task list is cancelled")
+    take = run.session.agent_line
+    run.session.agent_line = lambda text: (time.sleep(0.2) if "account-level" in text else None, take(text))
+    assert run.start(TWO) == "failed"
+    assert run.states()[-2:] == [(0, "failed", "maintenance"), (1, "cancelled", "maintenance")]
 
 
 def test_a_tasker_that_stops_with_no_reason_from_the_bot_waits_for_one_once(tmp_path):

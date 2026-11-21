@@ -7,7 +7,8 @@ has stopped (G1: wait() and status go through a runner id a clear_cache drops). 
 stopped, so the bot is not closed under a task still running.
 
 A task ends succeeded or failed as MaaFramework says; stopped when the caller's stop came while it ran, whatever
-MaaFramework says of it (#832); cancelled when it never ran: after a stop, after the bot stopped the whole list (the
+MaaFramework says of it (#832); failed, with the reason the bot logged, when the bot stopped the whole list while it
+ran, whatever MaaFramework says of it (#870); cancelled when it never ran: after a stop, after the bot stopped the whole list (the
 reason it logged comes with it), after the bot exited, or when the run failed before its first task.
 """
 from __future__ import annotations
@@ -459,12 +460,15 @@ class Session:
             self.sleep(TICK)
 
     def finish(self, i: int, detail, seconds: float) -> None:
-        """A task that ran ends as MaaFramework says, or stopped when the caller's stop came first: MaaFramework says
-        succeeded of a task whose agent action returns normally after post_stop (#832). The runner decides it, not the
+        """A task that ran ends as MaaFramework says; stopped when the caller's stop came first; failed, with the bot's
+        reason, when the bot stopped the whole list in it. MaaFramework says succeeded of a task whose agent action
+        returns normally after post_stop (#832), the bot's own post_stop too (#870). The runner decides it, not the
         actions: a stop is no failure of theirs, and their waits end on it as on a timeout (agent/actions.py until)."""
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
-        if self.stop_at is None and status and status.succeeded:
+        if ran and self.stop_at is None and (halt := self.halted_in()) is not None:
+            self.task(i, "failed", halt)
+        elif self.stop_at is None and status and status.succeeded:
             self.task(i, "succeeded")
         elif ran:
             self.task(i, "stopped" if self.stop_at is not None else "failed")
@@ -473,6 +477,15 @@ class Session:
         self.say(f"{self.tasks[i]['entry']} status={self.states[i]} t={seconds:.0f}s")
         for n in (detail.nodes[-NODES:] if detail else []):
             self.say(f"node {n.name} {n.completed}")
+
+    def halted_in(self) -> str | None:
+        """The bot's reason when it stopped the whole list, else None. Its account-level stop line comes through a
+        pipe its post_stop does not wait for: once the tasker stopped after a stop line of the bot (logged before the
+        evidence, seconds ahead of the post_stop), the line is waited for once."""
+        if self.halt is None and self.last_stop is not None and not self.tasker.running and not self.halt_awaited:
+            self.halt_awaited = True
+            self.halted.wait(HALT_WAIT)
+        return self.halt
 
     def why_unrun(self) -> str:
         """Why a task never ran though nobody stopped the run: the bot exited, or it stopped the whole list (its
