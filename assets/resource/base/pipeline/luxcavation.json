@@ -250,11 +250,13 @@
         "template": "Luxcavation/ModuleIcon.png",
         "threshold": 0.8
     },
-    // Drive's Luxcavation button (tests/screens/Drive.png): tapped until Drive goes (TapUntil, #362).
+    // Drive's Luxcavation button (tests/screens/Drive.png): tapped until Drive goes (TapUntil, #362). Client 1.119.1
+    // (2026-11-21, the Walpurgis Night event) redrew the Drive buttons smaller and higher (DriveWalpurgis.png): the
+    // second template is that button, 1.0 there and at most 0.52 on the older Drive; the first stays for the old look.
     "NavLuxcavation": {
         "recognition": "TemplateMatch",
         "roi": [340, 80, 240, 160],
-        "template": "Navigation/NavLuxcavation.png",
+        "template": ["Navigation/NavLuxcavation.png", "Navigation/NavLuxcavationEvent.png"],
         "threshold": 0.8,
         "action": "Custom",
         "custom_action": "TapUntil",

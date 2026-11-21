@@ -10,7 +10,7 @@ import threading
 
 from daily_child import bind, game_class, inside, load, result, run_child, run_task, screen
 
-CARD = (340, 240, 240, 140)  # NavDrive's roi: the card is tapped at the middle of the box found in it
+CARD = (340, 170, 240, 210)  # NavDrive's roi: the card is tapped at the middle of the box found in it
 SCREENS = {"drive": "Drive.png", "entry": "EntryNewRun.png"}
 LIMIT = 8  # s: a scenario still going by then is stopped (each JumpBack gives the hub a new timeout)
 
