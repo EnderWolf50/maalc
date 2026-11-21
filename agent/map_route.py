@@ -15,8 +15,9 @@ LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
 # A node with no link read onward takes its brightest one from this (#212): faint links over a bright
 # background read 13-14.4, the background alone up to 12.5 (a purple pack's grid), so no one bar parts them.
 FAINT_LINK = 8
-# Nodes taken only when nothing else is linked: the boss, and Hidden Battle (#849), always skipped, so going there gains nothing
-LAST_RESORT = ("boss", "hidden")
+# Nodes taken only when nothing else is linked: the boss. Hidden Battle is no map node (#868): a battle node turns into
+# it once tapped, and its window is answered over the map (HiddenBattle, #850).
+LAST_RESORT = ("boss",)
 SHIFT_CLEAR = 0.6  # shift: the best shift's difference, at most this share of the median (a drag 0.46, other maps 0.77+)
 
 
@@ -72,7 +73,7 @@ def rank(slots, weights, ahead=()):
     weights on its cheapest path through those columns, lowest first; a node with no link read
     onward goes on as if linked to the cheapest node of the next column in a row next to its own (paths).
     With no column ahead the score is the slot's own weight. On equal score the node with more routes into the next column;
-    then middle, top, bottom. The boss and Hidden Battle (LAST_RESORT) only when nothing else is linked.
+    then middle, top, bottom. The boss (LAST_RESORT) only when it is the only linked node.
     """
     best = paths(slots, weights, ahead)
     rows = [r for r in slots if slots[r][0] not in LAST_RESORT] or list(slots)
@@ -84,18 +85,13 @@ def paths(slots, weights, ahead=()):
 
     Only rows next to each other link (#212): with no link read onward, a node goes on to the cheapest node
     of a row next to its own; with none there, the cheapest of the column still scores but the path ends.
-    A LAST_RESORT node onward only when the node has nothing else to go on to, as rank takes the first column (#849):
-    RouteMap.follow takes the plan's steps without ranking again.
     """
     best = {}  # the same for the nodes of the column after the one being scored
     for column, after in reversed(list(zip((slots, *ahead), (*ahead, {})))):
         nxt, best = best, {}
-
-        def onward(rows):
-            return [nxt[u] for u in rows if after[u][0] not in LAST_RESORT] or [nxt[u] for u in rows]
         for r, (node, _) in column.items():
-            linked = onward([u for u in nxt if r in after[u][1]])
-            close = onward([u for u in nxt if near(r, u)])
+            linked = [nxt[u] for u in nxt if r in after[u][1]]
+            close = [nxt[u] for u in nxt if near(r, u)]
             score, path = min(linked or close or [(s, []) for s, _ in nxt.values()] or [(0, [])])
             best[r] = (weights.get(node, weights["unknown"]) + score, [r, *path])
     return best
