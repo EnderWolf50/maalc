@@ -46,9 +46,11 @@ export type Message =
   | { type: "killed"; reason: string }
   | { type: "exit"; code: number | null; ended: boolean; tail: string[] };
 
-/** What the page itself adds: a start it asked for (the entries it posts), a start the backend refused, and a line of its
- * own for the live log (what came of a scheduled run's start, #816). */
-export type Action = Message | { type: "begin"; entries: string[] } | { type: "refused"; error: string } | { type: "note"; line: string };
+/** What the page itself adds: a start it asked for (the entries it posts), a start the backend refused, a line of its own
+ * for the live log (what came of a scheduled run's start, #816), and the backend's word that the page it loaded took up a
+ * run under way, which is running from then on, before the run's messages come (#876). */
+export type Action = Message | { type: "begin"; entries: string[] } | { type: "refused"; error: string } | { type: "note"; line: string }
+  | { type: "attached" };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
  * protocol), `window` one of the window's own. `n` numbers the lines of a run. */
@@ -90,6 +92,7 @@ export function reduce(v: RunView, a: Action): RunView {
   if (a.type === "begin") return { phase: "running", tasks: a.entries.map((entry) => ({ entry, state: "pending" })), log: [] };
   if (a.type === "refused") return { ...IDLE, refused: a.error };
   if (a.type === "note") return addLine(v, "window", a.line); // the run, or no run, as it was
+  if (a.type === "attached") return v.phase === "idle" ? { ...IDLE, phase: "running" } : v; // its messages may be in already
   if (v.phase === "idle" || (v.phase === "ended" && a.type !== "exit")) v = { ...IDLE, phase: "running" };
   switch (a.type) {
     case "invalid": return addLine(v, "raw", a.line);
@@ -154,6 +157,10 @@ export interface Runner {
   /** a scheduled run started (#816): the Run tab brings its log and Stop into view, then calls revealed */
   reveal?: boolean;
   revealed?: () => void;
+  /** whether the window knows yet if a run is under way or starting as it opens (#876): false until the backend answered
+   * whether the page took up a run (a page loaded again) and handed out the scheduled starts this window opened for, the
+   * first of them begun. The Run tab scans for devices as it opens, unless one is. Absent: known (a page with no backend). */
+  settled?: boolean;
 }
 
 export const RunnerContext = createContext<Runner>({ view: IDLE, start: () => {}, stop: () => {}, blocked: null });

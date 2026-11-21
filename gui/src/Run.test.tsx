@@ -341,7 +341,31 @@ describe("the global options and the emulator", () => {
 
   test("the tab's long notes show one topic to a line", async () => {
     await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
-    for (const key of ["run.start_team_note", "emu.note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);
+    for (const key of ["run.start_team_note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);
+  });
+
+  test("手動設定 is a panel folded at first that holds the three fields; its title's tooltip names them (#876)", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    const fields = [screen.getByRole("textbox", { name: zh["emu.address"] }), screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }),
+      screen.getByRole("textbox", { name: zh["emu.mumu_manager"] })];
+    for (const field of fields) expect(field).not.toBeVisible();
+    const title = screen.getByText(zh["emu.manual"]);
+    expect(title).toHaveAttribute("title", zh["emu.manual_note"]);
+    await r.user.click(title);
+    for (const field of fields) expect(field).toBeVisible();
+  });
+
+  test("how the address and the MuMu instance work is their tooltip and their description, not a line on the page (#876)", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await r.user.click(screen.getByText(zh["emu.manual"]));
+    for (const [control, note] of [
+      [screen.getByRole("textbox", { name: zh["emu.address"] }), zh["emu.address_note"]],
+      [screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), zh["emu.mumu_index_note"]],
+    ] as const) {
+      expect(control.closest("label")).toHaveAttribute("title", note);
+      expect(control).toHaveAccessibleDescription(new RegExp(`${note}$`));
+      for (const shown of screen.queryAllByText(note)) expect(shown).not.toBeVisible();
+    }
   });
 });
 
@@ -430,13 +454,14 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
       [screen.getByRole("checkbox", { name: zh["run.stop_when_weekly_bonus_out"] }), "run/stop_when_weekly_bonus_out"],
       [screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) }), "run/webhook_url"],
       [screen.getByRole("checkbox", { name: zh["run.auto_download"] }), "run/auto_download"],
-      [screen.getByRole("textbox", { name: zh["emu.address"] }), "emulator/address"],
-      [screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), "emulator/mumu_index"],
+      [screen.getByRole("textbox", { name: zh["emu.address"] }), "emulator/address", zh["emu.address_note"]],
+      [screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), "emulator/mumu_index", zh["emu.mumu_index_note"]],
       [screen.getByRole("textbox", { name: zh["emu.mumu_manager"] }), "emulator/mumu_manager"],
     ] as const;
-    for (const [control, path] of fields) {
+    // the key first, then how the field works where its tooltip says it (#876)
+    for (const [control, path, help] of fields) {
       expect(control).not.toHaveAccessibleName(new RegExp(path));
-      expect(control).toHaveAccessibleDescription(path);
+      expect(control).toHaveAccessibleDescription(help ? `${path} ${help}` : path);
     }
     await show(r, "經驗本");
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) })).toHaveAccessibleDescription("luxcavation/exp/team");
