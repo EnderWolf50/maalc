@@ -145,7 +145,7 @@ trials:
 - 困難模式的權重和普通模式相同，只把 Risky 改為 8，所以無法辨識仍然排最後。（#12、#19）
 - 商店不在上表：bot 不特地找商店，所以資料檔給它 7，排在可辨識的戰鬥之後、無法辨識之前，兩種難度相同。資料檔是 `resource/base/data/map_weights.yaml`。（#26）
 - Boss 只在它是唯一可走的節點時才走；這是規則，不是權重。（#12）
-- Hidden Battle 不在上表：它不在地圖上，點了戰鬥節點之後才轉變成 Hidden Battle（使用者 2026-11-22，#868）。資料檔裡 #849 加的 `hidden: 10` 留著、程式不再讀：拿掉這個欄位會改變欄位結構，要換資料格式版本（[ADR 0012](../adr/0012-resource-package-hot-update.md)），這次不換。
+- Hidden Battle 不在上表：它不在地圖上，點了戰鬥節點之後才轉變成 Hidden Battle（使用者 2026-11-22，#868）。資料檔的 `hidden: 10`（#849）沒有程式讀，留著是為了維持資料格式 2 的欄位結構（拿掉要換格式版本，[ADR 0012](../adr/0012-resource-package-hot-update.md)）。
 - 同權重時選下一欄可走路線最多的節點，見 [03-decisions.md](03-decisions.md)。（#12）
 
 ## 6. Cost 對照表與商店數字
@@ -167,7 +167,7 @@ Boss 的 Cost 是遊戲資料 `mirror-dungeon-common-data-md8.json` 的 BOSS cos
 
 第 6 層以後（#849）：`battleCostWeightsByFloor` 只有第 1–5 層（`floor` 0–4）五列，第 6 層以後沿用第 5 層那一列是推論，第 1、2 步探路局（#854、#856）核對。第 6 層以後一定是 HARD（推論：進第 6 層的條件是第 1–5 層全 HARD），所以實際只會看到困難欄的值；普通欄補上是為了表完整。照這個推論，第 6 層以後的 Boss 是 500，表裡已有，不改。
 
-Hidden Battle 不在上表（#868）：遊戲資料的 `HIDDEN_BATTLE` cost（普通 400、困難 500）乘它的權重（`battleCostWeightsByFloorIdx` 5，每一列都是 2）是 800／1000，`hiddenBattleInfo` 的 `minFloorCondition` 是 11、`probInfo` 每層 0.1（只在第 11–15 層，每層 10%）。但它不在地圖上：地圖上看起來就是一般戰鬥節點，點了之後才轉變成 Hidden Battle（使用者 2026-11-22），所以地圖上不會有這個 Cost。#849 照它在地圖上認節點、為四位數的 1000 加寬重讀 Cost 都拿掉了：`node_costs` 沒有 800／1000，Cost 數字只讀三位數的裁切範圍一次。
+Hidden Battle 不在上表（#868）：遊戲資料的 `HIDDEN_BATTLE` cost（普通 400、困難 500）乘它的權重（`battleCostWeightsByFloorIdx` 5，每一列都是 2）是 800／1000，`hiddenBattleInfo` 的 `minFloorCondition` 是 11、`probInfo` 每層 0.1（只在第 11–15 層，每層 10%）。但它不在地圖上：地圖上看起來就是一般戰鬥節點，點了之後才轉變成 Hidden Battle（使用者 2026-11-22），所以地圖上不會有這個 Cost：`node_costs` 沒有 800／1000，地圖上讀到它們也不當成任何節點類型（由外圈、禮物盒決定），Cost 數字只讀三位數的裁切範圍一次。
 
 **困難模式的實測 Cost**：下表是 2026-10-13 困難鏡牢實機看到的節點 Cost 標記，不是資料檔的預設值，也不是 wiki 的數字。節點欄是當時的稱呼；照上表（#91）重新對照後與上表一致：外圈 150 是困難 Risky、180 是困難 Abnormality，禮物盒無外圈的 120 是困難 Focused。
 

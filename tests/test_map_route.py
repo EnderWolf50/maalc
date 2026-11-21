@@ -80,6 +80,7 @@ def test_node_type_by_cost(marks, expected):
     (True, {"MapNodeCost", "MapNodeGift"}, "1000", "focused"),
     (True, {"MapNodeCost"}, "1000", "battle"),
     (False, {"MapNodeCost", "MapNodeGift"}, "800", "focused"),
+    (False, {"MapNodeCost"}, "800", "battle"),
 ])
 def test_a_node_is_typed_by_its_cost_on_the_floors_difficulty(context, hard, marks, number, expected):
     # #91: a Risky node carries the ring, gift box and Cost coin, and read as Focused (weight 4) by its ring.
