@@ -124,7 +124,7 @@ export function RunTab() {
   const raw = useState(false);
   // the device scan the tab's opening starts, and whether 手動設定 is open: held here too, so a NARROW crossing, which moves
   // the emulator, neither scans again nor folds it
-  const scan = useScan(locked);
+  const scan = useScan();
   const manual = useState(false);
   // a scheduled run's window shows its log and Stop (spec #811 「定時執行」): the console, held in view beside the list; a
   // narrow window's log, under the list and the options (Stop stays on the line held at the page's top)
@@ -599,36 +599,43 @@ function GlobalOptions() {
 /** The last device scan: none yet, under way, the devices it found, or why it found none. */
 type Scan = { state: "none" } | { state: "scanning" } | { state: "found"; devices: Device[] } | { state: "failed"; error: string };
 
-/** The device scan (#876): once as the tab opens, unless a run is under way (偵測 is locked until it ends; the user's call,
- * 2026-11-20), and at each press of 偵測 or 重新偵測. It lists the adb devices only and connects to none. A tab that opens to
- * a scan shows it under way from its first frame, so 偵測 does not flash before 偵測中…; the development build's second
- * start of the effect does not scan again. */
-function useScan(running: boolean) {
-  const [scan, setScan] = useState<Scan>(() => (running ? { state: "none" } : { state: "scanning" }));
+/** The device scan (#876): once as the tab opens, unless a run is under way or starting then (偵測 is locked until it ends;
+ * the user's call, 2026-11-20), and at each press of 偵測 or 重新偵測. It lists the adb devices only and connects to none.
+ * The first scan waits until the window knows whether a run is under way or starting (Runner.settled: a page loaded again
+ * during a run, a window a schedule opened). A tab that opens to a scan shows it under way from its first frame, so 偵測
+ * does not flash before 偵測中…; the development build's second start of the effect does not scan again. */
+function useScan() {
+  const { view, blocked, settled = true } = useRunner();
+  const busy = isRunning(view) || blocked === "saving"; // a run, or a start's save and launch
+  const [scan, setScan] = useState<Scan>(() => (busy ? { state: "none" } : { state: "scanning" }));
   const find = () => {
     setScan({ state: "scanning" });
     api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
   };
   const asked = useRef(false);
   useEffect(() => {
-    if (running || asked.current) return;
+    if (asked.current || !settled) return;
     asked.current = true;
-    find();
-  }, []);
+    if (busy) setScan({ state: "none" });
+    else find();
+  }, [settled]);
   return { scan, find };
 }
 
+/** A MuMu instance at its address, as the pick list names it. */
+const mumuName = (t: (k: Key) => string, index: number, address: string) => fill(t("emu.device_mumu"), { index, address });
+
 /** A device of a scan as its pick list names it: a MuMu one by its instance. */
 const deviceName = (t: (k: Key) => string, d: Device) =>
-  d.mumu ? fill(t("emu.device_mumu"), { index: d.mumu.index, address: d.address }) : fill(t("emu.device"), { name: d.name, address: d.address });
+  d.mumu ? mumuName(t, d.mumu.index, d.address) : fill(t("emu.device"), { name: d.name, address: d.address });
 
 /** What a pick of a scanned device writes: its address, and its MuMu instance and MuMuManager.exe (none for another). */
 const pickOf = (d: Device): Settings["emulator"] => ({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
 
-/** The emulator the settings name, as the pick list says it while it lists no device that is that one: the MuMu instance at
+/** The pick list's entry for the emulator the settings name, while it lists no device that is that one: the MuMu instance at
  * its address, the address alone, or none set. */
-const currentName = (t: (k: Key) => string, e: Settings["emulator"]) => e.address === null ? t("emu.unset")
-  : fill(t("emu.current"), { device: e.mumu_index === null ? e.address : fill(t("emu.device_mumu"), { index: e.mumu_index, address: e.address }) });
+const currentLabel = (t: (k: Key) => string, e: Settings["emulator"]) => e.address === null ? t("emu.unset")
+  : fill(t("emu.current"), { device: e.mumu_index === null ? e.address : mumuName(t, e.mumu_index, e.address) });
 
 /** The emulator the runner connects to (4A, spec 04 section 14): one pick list of the emulators the scan found, MuMu first,
  * 偵測 beside it; before a scan's devices come, the list holds what the settings name. A pick fills in the three values,
@@ -652,22 +659,30 @@ function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
     return current.address !== null && sameAddress(d.address, current.address)
       && writes.mumu_index === current.mumu_index && writes.mumu_manager === current.mumu_manager;
   });
-  const now = currentName(t, current);
+  const label = currentLabel(t, current);
+  // a scan that found none, or failed, says so on a line under the list, which describes the list to a screen reader too;
+  // what to do next after finding none is that line's tooltip, and read after it
+  const outcome = useId();
+  const none = scan.state === "found" && !found.length;
+  const described = none ? `${outcome} ${outcome}-next` : scan.state === "failed" ? outcome : "";
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
       <div className="emu-line">
-        <Choice value={at >= 0 ? String(at) : ""} aria-label={t("emu.title")} title={found.length ? t("emu.found_note") : undefined}
-          onChange={(e) => { if (e.target.value !== "") set(pickOf(found[Number(e.target.value)])); }}>
-          {at < 0 && <option value="">{found.length ? fill(t("emu.pick"), { current: now }) : now}</option>}
-          {found.map((d, j) => <option key={j} value={j}>{deviceName(t, d)}</option>)}
-        </Choice>
+        <DescribeContext.Provider value={described}>
+          <Choice value={at >= 0 ? String(at) : ""} aria-label={t("emu.title")} title={found.length ? t("emu.found_note") : undefined}
+            onChange={(e) => { if (e.target.value !== "") set(pickOf(found[Number(e.target.value)])); }}>
+            {at < 0 && <option value="">{found.length ? fill(t("emu.pick"), { current: label }) : label}</option>}
+            {found.map((d, j) => <option key={j} value={j}>{deviceName(t, d)}</option>)}
+          </Choice>
+        </DescribeContext.Provider>
         <button type="button" disabled={scan.state === "scanning" || running} onClick={find}>
           {t(scan.state === "scanning" ? "emu.scanning" : scan.state === "none" ? "emu.scan" : "emu.rescan")}
         </button>
       </div>
-      {scan.state === "found" && !found.length && <p className="muted" title={t("emu.none_found_note")}>{t("emu.none_found")}</p>}
-      {scan.state === "failed" && <p className="caution">{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
+      {none && <p className="muted" id={outcome} title={t("emu.none_found_note")}>{t("emu.none_found")}</p>}
+      {none && <span id={`${outcome}-next`} hidden>{t("emu.none_found_note")}</span>}
+      {scan.state === "failed" && <p className="caution" id={outcome}>{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
       {/* folded, its title turns red when a field inside has a problem; a problem's jump opens it (ui.tsx focusPath) */}
       <details className={"emu-manual" + (bad("emulator") ? " bad" : "")} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary title={t("emu.manual_note")}>{t("emu.manual")}</summary>

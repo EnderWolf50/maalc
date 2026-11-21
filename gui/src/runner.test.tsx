@@ -448,8 +448,8 @@ const MUMU_0_NAME = fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:
 const MUMU_1_NAME = fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" });
 const OTHER_NAME = fill(zh["emu.device"], { name: "emulator-5554", address: "emulator-5554" });
 /** What the pick list says of settings() (MuMu instance 1) before a scan, and as its first entry when no device is that one. */
-const NOW = fill(zh["emu.current"], { device: MUMU_1_NAME });
-const pickOne = (now: string) => fill(zh["emu.pick"], { current: now });
+const CURRENT = fill(zh["emu.current"], { device: MUMU_1_NAME });
+const pickOne = (current: string) => fill(zh["emu.pick"], { current });
 
 /** The emulator's frame, its pick list and its scan button (偵測, 偵測中…, 重新偵測). */
 const emuFrame = () => screen.getByRole("group", { name: zh["emu.title"] });
@@ -502,15 +502,39 @@ describe("the device scan (#876)", () => {
     expect(back.scans).toBe(1);
     expect(scanButton()).toHaveTextContent(zh["emu.scan"]);
     expect(scanButton()).toBeDisabled();
-    expect(emuText()).toBe(zh["emu.title"] + NOW + zh["emu.scan"]);
+    expect(emuText()).toBe(zh["emu.title"] + CURRENT + zh["emu.scan"]);
     send(exit(0, true));
     // before a scan: the list holds what the settings name, the button says 偵測
     expect(scanButton()).toBeEnabled();
-    expect(options(emuPick())).toEqual([NOW]);
+    expect(options(emuPick())).toEqual([CURRENT]);
     await user.click(scanButton());
     await scanned();
     expect(back.scans).toBe(2);
-    expect(options(emuPick())).toEqual([pickOne(NOW), MUMU_0_NAME]);
+    expect(options(emuPick())).toEqual([pickOne(CURRENT), MUMU_0_NAME]);
+  });
+
+  test("a page loaded again during a run scans nothing, though the run's messages come after the settings", async () => {
+    back.history = { messages: [task(0, "ClaimMail", "running"), log("[maalc] task ClaimMail started")], active: true };
+    await open();
+    await waitFor(() => expect(logLines()).toHaveLength(1));
+    expect(back.scans).toBe(0);
+    expect(scanButton()).toHaveTextContent(zh["emu.scan"]);
+    expect(scanButton()).toBeDisabled();
+  });
+
+  test("a scan that found none, or failed, describes the pick list to a screen reader, with what to do next", async () => {
+    back.devices = [];
+    const user = await open();
+    await scanned();
+    expect(emuPick()).toHaveAccessibleDescription(`${zh["emu.none_found"]} ${zh["emu.none_found_note"]}`);
+    back.devices = new Error("no module named maa");
+    await user.click(scanButton());
+    await scanned();
+    expect(emuPick()).toHaveAccessibleDescription(fill(zh["emu.scan_failed"], { error: "Error: no module named maa" }));
+    back.devices = [MUMU];
+    await user.click(scanButton());
+    await scanned();
+    expect(emuPick()).toHaveAccessibleDescription(zh["emu.found_note"]); // its tooltip
   });
 
   test("during a scan its button says so, no line under it; after it the devices are the list; none found and a failure say so", async () => {
@@ -519,42 +543,42 @@ describe("the device scan (#876)", () => {
     // a line of its own under the button moved the log 26 px at each open of the tab
     expect(scanButton()).toHaveTextContent(zh["emu.scanning"]);
     expect(scanButton()).toBeDisabled();
-    expect(emuText()).toBe(zh["emu.title"] + NOW + zh["emu.scanning"]);
+    expect(emuText()).toBe(zh["emu.title"] + CURRENT + zh["emu.scanning"]);
     await end([MUMU, OTHER]);
     // the devices found are the list's entries, MuMu first as the runner sends them, with no count of them; the order its tooltip
     expect(scanButton()).toHaveTextContent(zh["emu.rescan"]);
     expect(scanButton()).toBeEnabled();
-    expect(options(emuPick())).toEqual([pickOne(NOW), MUMU_0_NAME, OTHER_NAME]);
+    expect(options(emuPick())).toEqual([pickOne(CURRENT), MUMU_0_NAME, OTHER_NAME]);
     expect(emuPick()).toHaveAttribute("title", zh["emu.found_note"]);
-    expect(emuText()).toBe(zh["emu.title"] + pickOne(NOW) + MUMU_0_NAME + OTHER_NAME + zh["emu.rescan"]);
+    expect(emuText()).toBe(zh["emu.title"] + pickOne(CURRENT) + MUMU_0_NAME + OTHER_NAME + zh["emu.rescan"]);
     back.devices = [];
     await user.click(scanButton());
     await scanned();
     expect(screen.getByText(zh["emu.none_found"])).toBeVisible();
     expect(screen.getByText(zh["emu.none_found"])).toHaveAttribute("title", zh["emu.none_found_note"]);
-    expect(options(emuPick())).toEqual([NOW]);
+    expect(options(emuPick())).toEqual([CURRENT]);
     back.devices = new Error("no module named maa");
     await user.click(scanButton());
     await scanned();
     expect(screen.getByText(fill(zh["emu.scan_failed"], { error: "Error: no module named maa" }))).toBeVisible();
     expect(screen.queryByText(zh["emu.none_found"])).toBeNull();
-    expect(options(emuPick())).toEqual([NOW]);
+    expect(options(emuPick())).toEqual([CURRENT]);
   });
 
   test.each([
-    ["a MuMu instance", { address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" }, NOW],
+    ["a MuMu instance", { address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" }, CURRENT],
     ["an address alone", { address: "127.0.0.1:5555", mumu_index: null, mumu_manager: null }, fill(zh["emu.current"], { device: "127.0.0.1:5555" })],
     ["no emulator", { address: null, mumu_index: null, mumu_manager: null }, zh["emu.unset"]],
-  ])("before the scan comes back, the list holds what the settings name: %s", async (_, emulator, now) => {
+  ])("before the scan comes back, the list holds what the settings name: %s", async (_, emulator, current) => {
     const s = settings();
     s.emulator = emulator;
     back.text = fileOf(s);
     const end = slowScan();
     await open();
-    expect(options(emuPick())).toEqual([now]);
+    expect(options(emuPick())).toEqual([current]);
     // a device the settings do not name: the list starts on their entry, to pick one
     await end([MUMU]);
-    expect(options(emuPick())).toEqual([pickOne(now), MUMU_0_NAME]);
+    expect(options(emuPick())).toEqual([pickOne(current), MUMU_0_NAME]);
   });
 
   test("a pick fills in the three fields, which a save writes", async () => {
@@ -635,7 +659,7 @@ describe("the device scan (#876)", () => {
       act(() => heard.forEach((on) => on()));
       expect(tick("領信").compareDocumentPosition(emuPick()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(back.scans).toBe(1);
-      expect(options(emuPick())).toEqual([pickOne(NOW), MUMU_0_NAME]);
+      expect(options(emuPick())).toEqual([pickOne(CURRENT), MUMU_0_NAME]);
       expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeVisible();
     } finally {
       vi.unstubAllGlobals();

@@ -390,7 +390,7 @@ legend::before { content: ""; width: 5px; height: 14px; background: var(--line-2
 details.panel { padding: 0 14px; display: flex; flex-direction: column; }
 details.panel[open] { padding-bottom: 14px; }
 details.panel > summary { cursor: pointer; padding: 10px 0; list-style: none; }
-details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::-webkit-details-marker, details.emu-manual > summary::-webkit-details-marker { display: none; }
 /* the disclosure triangle: a 6 x 10 box cut to a right-pointing triangle; the emulator's 手動設定 too, a panel with no frame */
 details.panel > summary::before, details.emu-manual > summary::before {
   content: ""; width: 6px; height: 10px; background: var(--accent-line); clip-path: polygon(0 0, 100% 50%, 0 100%);
@@ -449,18 +449,17 @@ fieldset.queue { align-items: stretch; }
 .emu-line { display: flex; gap: 8px; align-items: center; }
 .emu-line > select { flex: 1; min-width: 0; }
 .emu-line > button { flex: none; min-width: calc(4em + 26px); white-space: nowrap; }
-.run-page .emulator > p { font-size: 12.5px; line-height: 1.45; text-wrap: pretty; }
+fieldset.emulator > p { font-size: 12.5px; line-height: 1.45; text-wrap: pretty; }
 /* its title at least 24 px tall, the smallest target WCAG 2.2 (2.5.8) takes without counting the space around it */
 details.emu-manual > summary {
   width: max-content; min-height: 24px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
   font-size: 13px; color: var(--fg-2);
 }
-details.emu-manual > summary::-webkit-details-marker { display: none; }
 details.emu-manual.bad > summary { color: var(--bad); }
 details.emu-manual[open] > summary { margin-bottom: 8px; }
 .emu-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: start; }
 .emu-fields .field:has(input.wide) { grid-column: 1 / -1; }
-.run-page .emu-fields input { width: 100%; }
+.emu-fields input { width: 100%; }
 /* a field's settings key after its label, as the agent's stop lines name it (run/start_team): shown while the pointer is over
  * the field, its label included, or the field draws a focus ring (:focus-visible: the keyboard moved the focus in, or a text
  * or number box has it, clicked or not; a click on a switch or a choice leaves it to the pointer). Hidden, it keeps its room,

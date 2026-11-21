@@ -141,9 +141,17 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setLastScheduled({ id, at, outcome });
     return api.logSchedule(`${at} ${line}`).catch(() => {});
   };
+  // whether the backend answered if this page took up a run, and handed out the scheduled starts this window opened for (each
+  // begun): until both, the Run tab does not know whether a run is under way or starting as it opens (#876)
+  const [attached, setAttached] = useState(false);
+  const [taken, setTaken] = useState(false);
   useEffect(() => {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
-    api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
+    api.attachRun((m) => { if (live) dispatch(m); }).then((underWay) => {
+      if (!live) return;
+      if (underWay) dispatch({ type: "attached" }); // running now: the run's messages come after the answer
+      setAttached(true);
+    }, () => { if (live) setAttached(true); });
     return () => { live = false; };
   }, []);
   // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
@@ -319,8 +327,15 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     if (!ready) return;
     let queue: Promise<unknown> = Promise.resolve();
     // taken before a StrictMode double start drops the first effect: the backend hands each start out once
+    // taken once the first start has begun (a run's start marks the window busy at once, startRun) or none came
     const take = () => {
-      queue = queue.then(() => api.takeScheduled()).then(async (all) => { for (const r of all) await scheduledRef.current(r); }).catch(() => {});
+      queue = queue.then(() => api.takeScheduled()).then(async (all) => {
+        for (const r of all) {
+          const done = scheduledRef.current(r);
+          setTaken(true);
+          await done;
+        }
+      }).catch(() => {}).then(() => setTaken(true));
     };
     take();
     return api.onScheduled(take);
@@ -499,6 +514,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     stop: () => { api.stopRun().catch(() => {}); },
     blocked: starting ? "saving" : problems.length ? "problems" : s.tasks.some((x) => x.enabled) ? null : "no_task",
     reveal, revealed: () => setReveal(false),
+    settled: attached && taken,
   };
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */
