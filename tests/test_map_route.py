@@ -75,8 +75,8 @@ def test_node_type_by_cost(marks, expected):
     (True, {"MapNodeCost", "MapNodeGift"}, "500", "boss"),
     (False, {"MapNodeCost", "MapNodeGift"}, "240", "boss"),
     (True, {"MapNodeCost", "MapNodeGift"}, "240", "focused"),  # a normal floor's boss Cost is none on hard
-    # #868: Hidden Battle never shows on the map (its window comes after an event node is tapped), so its game-data Cost,
-    # HARD 1000 / NORMAL 800, is no node kind: the marks decide
+    # #868: Hidden Battle never shows on the map (its window comes after an event node is tapped), so its game-data
+    # Cost, HARD 1000 / NORMAL 800, is no node kind: the marks decide
     (True, {"MapNodeCost", "MapNodeGift"}, "1000", "focused"),
     (True, {"MapNodeCost"}, "1000", "battle"),
     (False, {"MapNodeCost", "MapNodeGift"}, "800", "focused"),
