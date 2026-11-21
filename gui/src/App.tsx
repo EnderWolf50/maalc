@@ -141,7 +141,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setLastScheduled({ id, at, outcome });
     return api.logSchedule(`${at} ${line}`).catch(() => {});
   };
-  // a run under way that this page took up (the backend's word, not the phase of the moment: its messages come one by one)
+  // the run this page took up was under way when it did (the backend's word, not the phase of the moment: its messages come
+  // one by one); a run this page starts carries its own list, so this stays as it is for good
   const [takenUp, setTakenUp] = useState(false);
   useEffect(() => {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
