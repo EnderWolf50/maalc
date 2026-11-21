@@ -361,16 +361,15 @@
     },
     "tasks": {
       "type": "array",
-      "description": "the task list the runner posts (#811): the order is the run order, an entry ticked off is skipped; a task may be listed more than once, each entry with its own tick, all of them reading that task's options; default: a new file's list, the README's suggested order (AssembleModules before and after the Luxcavations), ChargeEnkephalin before the first AssembleModules, none ticked",
+      "description": "the task list the runner posts (#811): the order is the run order, an entry ticked off is skipped; a task may be listed more than once, each entry with its own tick, all of them reading that task's options; a task may be left out, and a load does not put it back (#874); default: a new file's list, every task once, all ticked, in the user's order (the README's suggested order)",
       "default": [
-        { "id": "ChargeEnkephalin", "enabled": false },
-        { "id": "AssembleModules", "enabled": false },
-        { "id": "ExpLuxcavation", "enabled": false },
-        { "id": "ThreadLuxcavation", "enabled": false },
-        { "id": "AssembleModules", "enabled": false },
-        { "id": "ClaimPassMissions", "enabled": false },
-        { "id": "ClaimMail", "enabled": false },
-        { "id": "MirrorDungeon", "enabled": false }
+        { "id": "ExpLuxcavation", "enabled": true },
+        { "id": "ThreadLuxcavation", "enabled": true },
+        { "id": "ClaimMail", "enabled": true },
+        { "id": "ChargeEnkephalin", "enabled": true },
+        { "id": "AssembleModules", "enabled": true },
+        { "id": "ClaimPassMissions", "enabled": true },
+        { "id": "MirrorDungeon", "enabled": true }
       ],
       "items": {
         "type": "object",

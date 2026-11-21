@@ -68,7 +68,7 @@ describe("from MXU's config file", () => {
       thread: { mode: "daily", count: 3, team: null, retries: 0, consecutive: true },
     });
     expect(data.charge_enkephalin).toEqual({ count: 4 });
-    // MXU's order; a task MXU did not list goes last, unticked
+    // MXU's order; a task MXU did not list goes last, unticked though a new file ticks it (#874)
     expect(data.tasks).toEqual([
       { id: "ExpLuxcavation", enabled: true }, { id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true },
       { id: "AssembleModules", enabled: false }, { id: "ThreadLuxcavation", enabled: true }, { id: "ChargeEnkephalin", enabled: true },
@@ -166,10 +166,10 @@ describe("from MXU's config file", () => {
       { taskName: "ClaimMail", enabled: true },
     ]);
     const { data, report } = readBack(migrated(), 22, files(text));
-    // the tasks MXU did not list go last, unticked, once each in a new file's order
+    // the tasks MXU did not list go last, unticked, once each in a new file's order (#874: Thread Luxcavation before Charge)
     expect(data.tasks).toEqual([
       { id: "AssembleModules", enabled: true }, { id: "ExpLuxcavation", enabled: false }, { id: "AssembleModules", enabled: false },
-      { id: "ClaimMail", enabled: true }, { id: "ChargeEnkephalin", enabled: false }, { id: "ThreadLuxcavation", enabled: false },
+      { id: "ClaimMail", enabled: true }, { id: "ThreadLuxcavation", enabled: false }, { id: "ChargeEnkephalin", enabled: false },
       { id: "ClaimPassMissions", enabled: false }, { id: "MirrorDungeon", enabled: false },
     ]);
     expect(report.tasks).toEqual(data.tasks);
@@ -228,7 +228,7 @@ describe("without MXU's file", () => {
     expect([data.run.difficulty, data.run.runs, data.run.wipe_retries, data.run.webhook_url, data.run.start_team])
       .toEqual(["hard", null, 2, "https://hook.invalid/y", null]);
     expect([data.luxcavation.exp.team, data.luxcavation.thread.team, data.charge_enkephalin.count]).toEqual(["a", null, 2]);
-    expect(data.tasks).toEqual(newSections().tasks); // v1.0.0's task list was MXU's: every task, none ticked
+    expect(data.tasks).toEqual(newSections().tasks); // v1.0.0's task list was MXU's: without it, a new file's
     expect(data.emulator.address).toBeNull();
     expect(report).toMatchObject({ source: "v20", instance: null, tasks: null, address: null, problems: [] });
     expect(report.missed).toEqual([

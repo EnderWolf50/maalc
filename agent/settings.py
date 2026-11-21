@@ -30,8 +30,8 @@ def _queue_in_list_order(data):
 
 def defaults():
     """The sections version 23 added (#813) as a new file has them, from the schema's defaults: run, luxcavation (Thread's
-    count 3, the day's bonuses), charge_enkephalin, emulator; tasks the README's suggested order, AssembleModules twice,
-    none ticked (#811); schedules none."""
+    count 3, the day's bonuses), charge_enkephalin, emulator; tasks every task once, all ticked, in the user's order
+    (#874); schedules none."""
     props, lux = SCHEMA["properties"], SCHEMA["$defs"]["luxcavation"]["properties"]
 
     def of(properties):

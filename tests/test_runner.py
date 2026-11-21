@@ -269,7 +269,7 @@ def test_the_bot_is_handed_the_runners_pid_for_its_memory_lines(tmp_path):
 
 
 def test_a_task_listed_twice_is_posted_twice_and_reports_each_entry_by_its_place(tmp_path):
-    # #811: the README's order runs AssembleModules before and after the Luxcavations
+    # #811: a list may run AssembleModules before and after the Luxcavations
     world = World({"AssembleModules": (1, "succeeded"), "ExpLuxcavation": (2, "failed")})
     run = Run(tmp_path, world)
     assert run.start([{"entry": "AssembleModules"}, {"entry": "ExpLuxcavation"}, {"entry": "AssembleModules"}]) == "failed"
