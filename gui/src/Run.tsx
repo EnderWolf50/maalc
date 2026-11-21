@@ -66,13 +66,23 @@ function KeyLabel({ path, text }: { path: string; text?: string }) {
     </span>
   );
 }
+/** The id of the hidden text that holds how a field works (its tooltip), which its controls take as their description too. */
+const helpId = (path: string) => `help:${path}`;
 /** The controls inside take settings key `path` as their description, so a screen reader reads the field's label as its name and
- * the key after it, whether or not the key shows. Every field of the tab that shows a key is one of the three below. */
-const DescribedByKey = ({ path, children }: { path: string; children: ReactNode }) =>
-  <DescribeContext.Provider value={keyId(path)}>{children}</DescribeContext.Provider>;
-/** A field of the tab: its label and settings key, the control, a note. */
-const KeyField = ({ path, label, note, children }: { path: string; label?: string; note?: string; children: ReactNode }) =>
-  <DescribedByKey path={path}><Field label={<KeyLabel path={path} text={label} />} path={path} note={note}>{children}</Field></DescribedByKey>;
+ * the key after it, whether or not the key shows; then `help`, how the field works, which the eye gets as the field's tooltip
+ * (spec #871: on the page stays what warns of a cost or a risk). Every field of the tab that shows a key is one of the three
+ * below. */
+const DescribedByKey = ({ path, help, children }: { path: string; help?: string; children: ReactNode }) => (
+  <DescribeContext.Provider value={help ? `${keyId(path)} ${helpId(path)}` : keyId(path)}>
+    {children}{help && <span id={helpId(path)} hidden>{help}</span>}
+  </DescribeContext.Provider>
+);
+/** A field of the tab: its label and settings key, the control, a note; how it works (`help`) its tooltip. */
+const KeyField = ({ path, label, note, help, children }: { path: string; label?: string; note?: string; help?: string; children: ReactNode }) => (
+  <DescribedByKey path={path} help={help}>
+    <Field label={<KeyLabel path={path} text={label} />} path={path} note={note} title={help}>{children}</Field>
+  </DescribedByKey>
+);
 /** A switch of the tab with its note under it (#721): the label's text the size of the fields', its key after it. */
 function Switch({ path, checked, note, onChange }: { path: string; checked: boolean; note?: string; onChange: (on: boolean) => void }) {
   return (
@@ -112,6 +122,10 @@ export function RunTab() {
   const narrow = useNarrow();
   // MaaFramework's own output in the log: held here, so the log keeps it when the window crosses NARROW and moves the log
   const raw = useState(false);
+  // the device scan the tab's opening starts, and whether 手動設定 is open: held here too, so a NARROW crossing, which moves
+  // the emulator, neither scans again nor folds it
+  const scan = useScan(locked);
+  const manual = useState(false);
   // a scheduled run's window shows its log and Stop (spec #811 「定時執行」): the console, held in view beside the list; a
   // narrow window's log, under the list and the options (Stop stays on the line held at the page's top)
   const shown = useRef<HTMLElement | null>(null);
@@ -141,7 +155,7 @@ export function RunTab() {
         {narrow ? <RunControls /> : (
           <div className="run-console" ref={keep}>
             <RunControls />
-            <EmulatorFields />
+            <EmulatorFields scan={scan} manual={manual} />
             <RunLog raw={raw} />
           </div>
         )}
@@ -179,7 +193,7 @@ export function RunTab() {
             </aside>
             <section className="task-options">{picked && <TaskOptions id={picked.id} />}</section>
           </div>
-          {narrow && <><EmulatorFields /><RunLog folded raw={raw} boxRef={keep} /></>}
+          {narrow && <><EmulatorFields scan={scan} manual={manual} /><RunLog folded raw={raw} boxRef={keep} /></>}
           <GlobalOptions />
           {/* the run reads no schedule: they stay open to edits during a run (#816) */}
           <LockContext.Provider value={false}><SchedulesSection /></LockContext.Provider>
@@ -585,6 +599,25 @@ function GlobalOptions() {
 /** The last device scan: none yet, under way, the devices it found, or why it found none. */
 type Scan = { state: "none" } | { state: "scanning" } | { state: "found"; devices: Device[] } | { state: "failed"; error: string };
 
+/** The device scan (#876): once as the tab opens, unless a run is under way (偵測 is locked until it ends; the user's call,
+ * 2026-11-20), and at each press of 偵測 or 重新偵測. It lists the adb devices only and connects to none. A tab that opens to
+ * a scan shows it under way from its first frame, so 偵測 does not flash before 偵測中…; the development build's second
+ * start of the effect does not scan again. */
+function useScan(running: boolean) {
+  const [scan, setScan] = useState<Scan>(() => (running ? { state: "none" } : { state: "scanning" }));
+  const find = () => {
+    setScan({ state: "scanning" });
+    api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
+  };
+  const asked = useRef(false);
+  useEffect(() => {
+    if (running || asked.current) return;
+    asked.current = true;
+    find();
+  }, []);
+  return { scan, find };
+}
+
 /** A device of a scan as its pick list names it: a MuMu one by its instance. */
 const deviceName = (t: (k: Key) => string, d: Device) =>
   d.mumu ? fill(t("emu.device_mumu"), { index: d.mumu.index, address: d.address }) : fill(t("emu.device"), { name: d.name, address: d.address });
@@ -592,64 +625,66 @@ const deviceName = (t: (k: Key) => string, d: Device) =>
 /** What a pick of a scanned device writes: its address, and its MuMu instance and MuMuManager.exe (none for another). */
 const pickOf = (d: Device): Settings["emulator"] => ({ address: d.address, mumu_index: d.mumu?.index ?? null, mumu_manager: d.mumu?.manager ?? null });
 
-/** The emulator the runner connects to (spec 04 section 14): its adb address, its MuMu instance and MuMuManager.exe; an empty
- * field is none (null). The scan lists the emulators that run, MuMu first; a pick fills in all three, saved with the rest. */
-function EmulatorFields() {
-  const { s, update, t } = useEditor();
+/** The emulator the settings name, as the pick list says it while it lists no device that is that one: the MuMu instance at
+ * its address, the address alone, or none set. */
+const currentName = (t: (k: Key) => string, e: Settings["emulator"]) => e.address === null ? t("emu.unset")
+  : fill(t("emu.current"), { device: e.mumu_index === null ? e.address : fill(t("emu.device_mumu"), { index: e.mumu_index, address: e.address }) });
+
+/** The emulator the runner connects to (4A, spec 04 section 14): one pick list of the emulators the scan found, MuMu first,
+ * 偵測 beside it; before a scan's devices come, the list holds what the settings name. A pick fills in the three values,
+ * saved with the rest. A scan under way says so on its button, not on a line of its own (it moved the log 26 px at each
+ * open of the tab), and what it found is the list itself: only finding none, or failing, takes a line under them. The three
+ * values' own fields fold under 手動設定 (`manual`, open or not). During a run the whole frame is locked. */
+function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
+  scan: ReturnType<typeof useScan>; manual: [boolean, (open: boolean) => void];
+}) {
+  const { s, update, t, bad } = useEditor();
   const set = (patch: Partial<Settings["emulator"]>) => update((d) => { Object.assign(d.emulator, patch); });
   const text = (v: string) => (v.trim() === "" ? null : v);
   const running = isRunning(useRunner().view);
-  // the last scan: its devices, or why it found none; null before the first
-  const [scan, setScan] = useState<Scan>({ state: "none" });
-  const find = () => {
-    setScan({ state: "scanning" });
-    api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
-  };
-  const found = scan.state === "found" ? scan.devices : null;
-  // The list shows a device only when the fields already hold all that a pick of it writes, and "pick one" otherwise. A select
-  // fires no change for the option it shows, so a list that showed the device at the address alone (after MXU's read-back,
-  // which keeps no instance or MuMuManager) could not fill the other two (#833).
+  const found = scan.state === "found" ? scan.devices : [];
+  // The list shows a device only when the fields already hold all that a pick of it writes, and the settings' own entry to
+  // pick from otherwise. A select fires no change for the option it shows, so a list that showed the device at the address
+  // alone (after MXU's read-back, which keeps no instance or MuMuManager) could not fill the other two (#833).
   const current = s.emulator;
-  const at = found ? found.findIndex((d) => {
+  const at = found.findIndex((d) => {
     const writes = pickOf(d);
     return current.address !== null && sameAddress(d.address, current.address)
       && writes.mumu_index === current.mumu_index && writes.mumu_manager === current.mumu_manager;
-  }) : -1;
-  const pick = (d: Device) => set(pickOf(d));
+  });
+  const now = currentName(t, current);
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
-      <div className="row scan">
+      <div className="emu-line">
+        <Choice value={at >= 0 ? String(at) : ""} aria-label={t("emu.title")} title={found.length ? t("emu.found_note") : undefined}
+          onChange={(e) => { if (e.target.value !== "") set(pickOf(found[Number(e.target.value)])); }}>
+          {at < 0 && <option value="">{found.length ? fill(t("emu.pick"), { current: now }) : now}</option>}
+          {found.map((d, j) => <option key={j} value={j}>{deviceName(t, d)}</option>)}
+        </Choice>
         <button type="button" disabled={scan.state === "scanning" || running} onClick={find}>
-          {scan.state === "scanning" ? t("emu.scanning") : t("emu.scan")}
+          {t(scan.state === "scanning" ? "emu.scanning" : scan.state === "none" ? "emu.scan" : "emu.rescan")}
         </button>
-        {found && found.length > 0 && (
-          <label className="field">
-            <span>{t("emu.found")}</span>
-            <Choice value={at >= 0 ? String(at) : ""} onChange={(e) => { if (e.target.value !== "") pick(found[Number(e.target.value)]); }}>
-              {at < 0 && <option value="">{t("emu.pick")}</option>}
-              {found.map((d, j) => <option key={j} value={j}>{deviceName(t, d)}</option>)}
-            </Choice>
-            <small>{t("emu.found_note")}</small>
-          </label>
-        )}
-        {found && found.length === 0 && <p className="muted">{t("emu.none_found")}</p>}
-        {scan.state === "failed" && <p className="caution">{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
       </div>
-      <div className="row">
-        <KeyField path="emulator/address" label={t("emu.address")}>
-          <Input type="text" value={s.emulator.address ?? ""} spellCheck={false} onChange={(e) => set({ address: text(e.target.value) })} />
-        </KeyField>
-        <KeyField path="emulator/mumu_index" label={t("emu.mumu_index")}>
-          <Input type="number" min={0} step={1} value={s.emulator.mumu_index ?? ""}
-            onChange={(e) => set({ mumu_index: e.target.value === "" ? null : Math.max(0, Math.trunc(Number(e.target.value))) })} />
-        </KeyField>
-        <KeyField path="emulator/mumu_manager" label={t("emu.mumu_manager")}>
-          <Input type="text" className="wide" value={s.emulator.mumu_manager ?? ""} spellCheck={false}
-            onChange={(e) => set({ mumu_manager: text(e.target.value) })} />
-        </KeyField>
-      </div>
-      <p className="muted">{withBreaks(t("emu.note"))}</p>
+      {scan.state === "found" && !found.length && <p className="muted" title={t("emu.none_found_note")}>{t("emu.none_found")}</p>}
+      {scan.state === "failed" && <p className="caution">{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
+      {/* folded, its title turns red when a field inside has a problem; a problem's jump opens it (ui.tsx focusPath) */}
+      <details className={"emu-manual" + (bad("emulator") ? " bad" : "")} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary title={t("emu.manual_note")}>{t("emu.manual")}</summary>
+        <div className="emu-fields">
+          <KeyField path="emulator/address" label={t("emu.address")} help={t("emu.address_note")}>
+            <Input type="text" value={current.address ?? ""} spellCheck={false} onChange={(e) => set({ address: text(e.target.value) })} />
+          </KeyField>
+          <KeyField path="emulator/mumu_index" label={t("emu.mumu_index")} help={t("emu.mumu_index_note")}>
+            <Input type="number" min={0} step={1} value={current.mumu_index ?? ""}
+              onChange={(e) => set({ mumu_index: e.target.value === "" ? null : Math.max(0, Math.trunc(Number(e.target.value))) })} />
+          </KeyField>
+          <KeyField path="emulator/mumu_manager" label={t("emu.mumu_manager")}>
+            <Input type="text" className="wide" value={current.mumu_manager ?? ""} spellCheck={false}
+              onChange={(e) => set({ mumu_manager: text(e.target.value) })} />
+          </KeyField>
+        </div>
+      </details>
     </fieldset>
   );
 }

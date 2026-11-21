@@ -197,14 +197,14 @@ export function useMark() {
 
 /** The frame of a field, red when a check fails at `path` or under it, with the data-path a problem's jump finds (focusPath).
  * The controls inside take the mark (Input, Choice). `as` is its tag; `marked` false keeps the mark off, for a frame whose
- * problems are marked further in. */
-export function Mark({ as: Tag = "div", path, className, marked = true, children }: {
-  as?: "div" | "label" | "td"; path?: string; className?: string; marked?: boolean; children: ReactNode;
+ * problems are marked further in. `title` is its tooltip. */
+export function Mark({ as: Tag = "div", path, className, marked = true, title, children }: {
+  as?: "div" | "label" | "td"; path?: string; className?: string; marked?: boolean; title?: string; children: ReactNode;
 }) {
   const { problemIds } = useEditor();
   const ids = path && marked ? problemIds(path) : "";
   return (
-    <Tag className={[className, ids && "bad"].filter(Boolean).join(" ") || undefined} data-path={path}>
+    <Tag className={[className, ids && "bad"].filter(Boolean).join(" ") || undefined} data-path={path} title={title}>
       <MarkContext.Provider value={ids}>{children}</MarkContext.Provider>
     </Tag>
   );
@@ -219,9 +219,12 @@ export const LockContext = createContext(false);
 export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
 export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
 
-export function Field({ label, path, note, children }: { label: ReactNode; path?: string; note?: string; children: ReactNode }) {
+/** A field: its label, the control, a note under it; `title` is the tooltip of the whole field, its label included. */
+export function Field({ label, path, note, title, children }: {
+  label: ReactNode; path?: string; note?: string; title?: string; children: ReactNode;
+}) {
   return (
-    <Mark as="label" className="field" path={path}>
+    <Mark as="label" className="field" path={path} title={title}>
       <span>{label}</span>
       {children}
       {note && <small>{withBreaks(note)}</small>}

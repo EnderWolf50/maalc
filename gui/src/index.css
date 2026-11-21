@@ -391,12 +391,12 @@ details.panel { padding: 0 14px; display: flex; flex-direction: column; }
 details.panel[open] { padding-bottom: 14px; }
 details.panel > summary { cursor: pointer; padding: 10px 0; list-style: none; }
 details.panel > summary::-webkit-details-marker { display: none; }
-/* the disclosure triangle: a 6 x 10 box cut to a right-pointing triangle */
-details.panel > summary::before {
+/* the disclosure triangle: a 6 x 10 box cut to a right-pointing triangle; the emulator's 手動設定 too, a panel with no frame */
+details.panel > summary::before, details.emu-manual > summary::before {
   content: ""; width: 6px; height: 10px; background: var(--accent-line); clip-path: polygon(0 0, 100% 50%, 0 100%);
   transition: transform 0.15s ease-out; flex: none;
 }
-details.panel[open] > summary::before { transform: rotate(90deg); }
+details.panel[open] > summary::before, details.emu-manual[open] > summary::before { transform: rotate(90deg); }
 details.panel[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
 details.panel > * + * { margin-top: 12px; }
 details.panel > summary + * { margin-top: 0; }
@@ -441,14 +441,26 @@ fieldset.queue { align-items: stretch; }
 .qtag.next { color: var(--accent-ink); border-color: var(--accent-line); background: var(--sel); }
 /* The Run tab (#814, #815, #875): its fields and the run console's parts; the two columns are the section at the end. */
 .run-page fieldset.emulator, .run-page details.globals, .run-page .run-log-box, .run-page .task-opts { align-items: stretch; }
-/* the emulator's fields in the console's column (400 px inside its frame): the address and the instance side by side, the
- * MuMuManager path the frame's width, the scan's pick list under 偵測模擬器 */
-.run-page .emulator .row .field { flex: 1 1 11em; min-width: 0; }
-.run-page .emulator .row .field:has(input.wide) { flex-basis: 100%; }
-.run-page .emulator input.wide { width: 100%; }
-.run-page .emulator .row.scan { align-items: flex-start; }
-.run-page .emulator .row.scan > button { margin-top: 2px; }
-.run-page .emulator .row.scan .field { flex-basis: 100%; }
+/* The emulator (#876, spec #871 「模擬器（4A）」), in the console's column (400 px inside its frame): the pick list the
+ * frame's width but for 偵測 beside it, whose room fits its longest Chinese word (重新偵測), so the list keeps its width as a
+ * scan starts and ends; a scan that found none, or failed, on a line under them; then 手動設定, folded at first, its
+ * triangle the panels' (details.panel), holding the three fields: the address and the instance side by side, their boxes'
+ * tops on one line, the MuMuManager path the frame's width. */
+.emu-line { display: flex; gap: 8px; align-items: center; }
+.emu-line > select { flex: 1; min-width: 0; }
+.emu-line > button { flex: none; min-width: calc(4em + 26px); white-space: nowrap; }
+.run-page .emulator > p { font-size: 12.5px; line-height: 1.45; text-wrap: pretty; }
+/* its title at least 24 px tall, the smallest target WCAG 2.2 (2.5.8) takes without counting the space around it */
+details.emu-manual > summary {
+  width: max-content; min-height: 24px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--fg-2);
+}
+details.emu-manual > summary::-webkit-details-marker { display: none; }
+details.emu-manual.bad > summary { color: var(--bad); }
+details.emu-manual[open] > summary { margin-bottom: 8px; }
+.emu-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: start; }
+.emu-fields .field:has(input.wide) { grid-column: 1 / -1; }
+.run-page .emu-fields input { width: 100%; }
 /* a field's settings key after its label, as the agent's stop lines name it (run/start_team): shown while the pointer is over
  * the field, its label included, or the field draws a focus ring (:focus-visible: the keyboard moved the focus in, or a text
  * or number box has it, clicked or not; a click on a switch or a choice leaves it to the pointer). Hidden, it keeps its room,

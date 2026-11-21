@@ -408,7 +408,7 @@ describe("a narrow window (1180 px wide and less)", () => {
   test("Start, Stop and the status come first, then the list and the options, then the emulator and the log", async () => {
     await open();
     const order = [startButton(), stopButton(), document.querySelector(".runner-bar [role=status]")!, tick("領信"),
-      screen.getByRole("group", { name: zh["task.ClaimMail"] }), screen.getByRole("textbox", { name: zh["emu.address"] }),
+      screen.getByRole("group", { name: zh["task.ClaimMail"] }), emuPick(), screen.getByRole("textbox", { name: zh["emu.address"] }),
       screen.getByRole("list", { name: zh["runner.log"] })];
     for (let k = 1; k < order.length; k++) {
       expect(order[k - 1].compareDocumentPosition(order[k]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -442,83 +442,204 @@ describe("a narrow window (1180 px wide and less)", () => {
 
 const MUMU: Device = { name: "MuMuPlayer-12.0-0", address: "127.0.0.1:16384", adb_path: "C:/MuMu/nx_main/adb.exe",
   mumu: { index: 0, manager: "C:/MuMu/nx_main/MuMuManager.exe", path: "C:/MuMu" } };
+const MUMU_1: Device = { ...MUMU, address: "127.0.0.1:16416", mumu: { ...MUMU.mumu!, index: 1 } };
 const OTHER: Device = { name: "emulator-5554", address: "emulator-5554", adb_path: "C:/adb/adb.exe", mumu: null };
+const MUMU_0_NAME = fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" });
+const MUMU_1_NAME = fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" });
+const OTHER_NAME = fill(zh["emu.device"], { name: "emulator-5554", address: "emulator-5554" });
+/** What the pick list says of settings() (MuMu instance 1) before a scan, and as its first entry when no device is that one. */
+const NOW = fill(zh["emu.current"], { device: MUMU_1_NAME });
+const pickOne = (now: string) => fill(zh["emu.pick"], { current: now });
 
-describe("the device scan", () => {
-  test("lists the emulators found, MuMu first as the runner sends them; a pick fills in the three fields, which a save writes", async () => {
+/** The emulator's frame, its pick list and its scan button (偵測, 偵測中…, 重新偵測). */
+const emuFrame = () => screen.getByRole("group", { name: zh["emu.title"] });
+const emuPick = () => within(emuFrame()).getByRole("combobox", { name: zh["emu.title"] });
+const scanButton = () => within(emuFrame()).getByRole("button", { name: new RegExp(`^(${zh["emu.scan"]}|${zh["emu.scanning"]}|${zh["emu.rescan"]})$`) });
+const options = (select: HTMLElement) => [...select.querySelectorAll("option")].map((o) => o.textContent);
+/** What the emulator's frame says above 手動設定: its title, the pick list's entries, the button, and a scan's outcome. */
+const emuText = () => {
+  const frame = emuFrame().cloneNode(true) as HTMLElement;
+  frame.querySelector("details")!.remove();
+  return frame.textContent;
+};
+/** Until the scan the tab started has come back. */
+const scanned = () => waitFor(() => expect(scanButton()).toHaveTextContent(zh["emu.rescan"]));
+/** A scan that ends when the test says, with the devices it found or why it failed. */
+function slowScan() {
+  let end!: (found: Device[] | Error) => void;
+  back.devices = new Promise((resolve, reject) => { end = (found) => (found instanceof Error ? reject(found) : resolve(found)); });
+  return (found: Device[] | Error) => act(async () => end(found));
+}
+const toTab = async (user: ReturnType<typeof userEvent.setup>, name: string) => user.click(screen.getByRole("tab", { name }));
+
+describe("the device scan (#876)", () => {
+  test("opening the tab scans once, as the window opens on it and each time it is opened again", async () => {
+    back.devices = [MUMU];
+    const user = await open();
+    await scanned();
+    expect(back.scans).toBe(1);
+    await toTab(user, zh["tab.teams"]);
+    await toTab(user, zh["tab.run"]);
+    await scanned();
+    expect(back.scans).toBe(2);
+  });
+
+  test("the development build's double start of an effect scans once", async () => {
+    back.devices = [MUMU];
+    render(<StrictMode><App /></StrictMode>);
+    await screen.findByRole("button", { name: zh["runner.start"] });
+    await scanned();
+    expect(back.scans).toBe(1);
+  });
+
+  test("the tab opened during a run scans nothing: 偵測 is locked, and no line asks for it; after the run a press scans", async () => {
+    back.devices = [MUMU];
+    const user = await open();
+    await scanned();
+    await started(user);
+    await toTab(user, zh["tab.teams"]);
+    await toTab(user, zh["tab.run"]);
+    expect(back.scans).toBe(1);
+    expect(scanButton()).toHaveTextContent(zh["emu.scan"]);
+    expect(scanButton()).toBeDisabled();
+    expect(emuText()).toBe(zh["emu.title"] + NOW + zh["emu.scan"]);
+    send(exit(0, true));
+    // before a scan: the list holds what the settings name, the button says 偵測
+    expect(scanButton()).toBeEnabled();
+    expect(options(emuPick())).toEqual([NOW]);
+    await user.click(scanButton());
+    await scanned();
+    expect(back.scans).toBe(2);
+    expect(options(emuPick())).toEqual([pickOne(NOW), MUMU_0_NAME]);
+  });
+
+  test("during a scan its button says so, no line under it; after it the devices are the list; none found and a failure say so", async () => {
+    const end = slowScan();
+    const user = await open();
+    // a line of its own under the button moved the log 26 px at each open of the tab
+    expect(scanButton()).toHaveTextContent(zh["emu.scanning"]);
+    expect(scanButton()).toBeDisabled();
+    expect(emuText()).toBe(zh["emu.title"] + NOW + zh["emu.scanning"]);
+    await end([MUMU, OTHER]);
+    // the devices found are the list's entries, MuMu first as the runner sends them, with no count of them; the order its tooltip
+    expect(scanButton()).toHaveTextContent(zh["emu.rescan"]);
+    expect(scanButton()).toBeEnabled();
+    expect(options(emuPick())).toEqual([pickOne(NOW), MUMU_0_NAME, OTHER_NAME]);
+    expect(emuPick()).toHaveAttribute("title", zh["emu.found_note"]);
+    expect(emuText()).toBe(zh["emu.title"] + pickOne(NOW) + MUMU_0_NAME + OTHER_NAME + zh["emu.rescan"]);
+    back.devices = [];
+    await user.click(scanButton());
+    await scanned();
+    expect(screen.getByText(zh["emu.none_found"])).toBeVisible();
+    expect(screen.getByText(zh["emu.none_found"])).toHaveAttribute("title", zh["emu.none_found_note"]);
+    expect(options(emuPick())).toEqual([NOW]);
+    back.devices = new Error("no module named maa");
+    await user.click(scanButton());
+    await scanned();
+    expect(screen.getByText(fill(zh["emu.scan_failed"], { error: "Error: no module named maa" }))).toBeVisible();
+    expect(screen.queryByText(zh["emu.none_found"])).toBeNull();
+    expect(options(emuPick())).toEqual([NOW]);
+  });
+
+  test.each([
+    ["a MuMu instance", { address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" }, NOW],
+    ["an address alone", { address: "127.0.0.1:5555", mumu_index: null, mumu_manager: null }, fill(zh["emu.current"], { device: "127.0.0.1:5555" })],
+    ["no emulator", { address: null, mumu_index: null, mumu_manager: null }, zh["emu.unset"]],
+  ])("before the scan comes back, the list holds what the settings name: %s", async (_, emulator, now) => {
+    const s = settings();
+    s.emulator = emulator;
+    back.text = fileOf(s);
+    const end = slowScan();
+    await open();
+    expect(options(emuPick())).toEqual([now]);
+    // a device the settings do not name: the list starts on their entry, to pick one
+    await end([MUMU]);
+    expect(options(emuPick())).toEqual([pickOne(now), MUMU_0_NAME]);
+  });
+
+  test("a pick fills in the three fields, which a save writes", async () => {
     back.devices = [MUMU, OTHER];
     const user = await open();
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
-    expect([...found.querySelectorAll("option")].map((o) => o.textContent)).toEqual([zh["emu.pick"],
-      fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }), fill(zh["emu.device"], { name: "emulator-5554", address: "emulator-5554" })]);
-    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    await scanned();
+    await user.selectOptions(emuPick(), MUMU_0_NAME);
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toHaveValue("127.0.0.1:16384");
     expect(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] })).toHaveValue(0);
     expect(screen.getByRole("textbox", { name: zh["emu.mumu_manager"] })).toHaveValue("C:/MuMu/nx_main/MuMuManager.exe");
-    await user.selectOptions(found, fill(zh["emu.device"], { name: "emulator-5554", address: "emulator-5554" }));
+    // the picked device is the list's entry, the settings' own entry gone: they now name that device
+    expect(options(emuPick())).toEqual([MUMU_0_NAME, OTHER_NAME]);
+    await user.selectOptions(emuPick(), OTHER_NAME);
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(back.saved).toHaveLength(1));
     expect(lastSaved().emulator).toEqual({ address: "emulator-5554", mumu_index: null, mumu_manager: null });
   });
 
-  test("the address the settings hold shows as picked", async () => {
-    back.devices = [MUMU, { ...MUMU, address: "127.0.0.1:16416", mumu: { ...MUMU.mumu!, index: 1 } }];
-    const user = await open();
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
-    expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" }));
+  test("the device the settings hold shows as picked, with no entry of its own for them", async () => {
+    back.devices = [MUMU, MUMU_1];
+    await open();
+    await scanned();
+    expect(emuPick()).toHaveDisplayValue(MUMU_1_NAME);
+    expect(options(emuPick())).toEqual([MUMU_0_NAME, MUMU_1_NAME]);
   });
 
-  test("an address alone, as MXU's read-back leaves it, starts on 「選一個…」: a pick of its device fills the instance and MuMuManager (#833)", async () => {
+  test("an address alone, as MXU's read-back leaves it, starts on 「…・選一台…」: a pick of its device fills the instance and MuMuManager (#833)", async () => {
     // readBack.ts takes MXU's adbDeviceAddress only: MXU keeps no MuMu instance or MuMuManager path
     const s = settings();
     s.emulator = { address: "127.0.0.1:16384", mumu_index: null, mumu_manager: null };
     back.text = fileOf(s);
     back.devices = [MUMU, OTHER];
     const user = await open();
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
-    expect(found).toHaveDisplayValue(zh["emu.pick"]);
-    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    await scanned();
+    expect(emuPick()).toHaveDisplayValue(pickOne(fill(zh["emu.current"], { device: "127.0.0.1:16384" })));
+    await user.selectOptions(emuPick(), MUMU_0_NAME);
     expect(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] })).toHaveValue(0);
     expect(screen.getByRole("textbox", { name: zh["emu.mumu_manager"] })).toHaveValue("C:/MuMu/nx_main/MuMuManager.exe");
-    expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    expect(emuPick()).toHaveDisplayValue(MUMU_0_NAME);
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(back.saved).toHaveLength(1));
     expect(lastSaved().emulator).toEqual({ address: "127.0.0.1:16384", mumu_index: 0, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" });
   });
 
-  test("a field changed by hand after a pick puts the list back on 「選一個…」, so the device can be picked again", async () => {
+  test("a field changed by hand after a pick puts the list back on 「…・選一台…」, so the device can be picked again", async () => {
     back.devices = [MUMU, OTHER];
     const user = await open();
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
-    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    await scanned();
+    await user.selectOptions(emuPick(), MUMU_0_NAME);
     fireEvent.change(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), { target: { value: "3" } });
-    expect(found).toHaveDisplayValue(zh["emu.pick"]);
-    await user.selectOptions(found, fill(zh["emu.device_mumu"], { index: 0, address: "127.0.0.1:16384" }));
+    expect(emuPick()).toHaveDisplayValue(pickOne(fill(zh["emu.current"], { device: fill(zh["emu.device_mumu"], { index: 3, address: "127.0.0.1:16384" }) })));
+    await user.selectOptions(emuPick(), MUMU_0_NAME);
     expect(screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] })).toHaveValue(0);
   });
 
   test("an address the runner takes for the same device shows as picked: localhost is 127.0.0.1 (runner/devices.py)", async () => {
     const s = settings();
     s.emulator.address = "localhost:16416";
-    back.text = JSON.stringify(s, null, 2) + "\n";
-    back.devices = [MUMU, { ...MUMU, address: "127.0.0.1:16416", mumu: { ...MUMU.mumu!, index: 1 } }];
-    const user = await open();
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    const found = await screen.findByRole("combobox", { name: new RegExp(`^${zh["emu.found"]}`) });
-    expect(found).toHaveDisplayValue(fill(zh["emu.device_mumu"], { index: 1, address: "127.0.0.1:16416" }));
+    back.text = fileOf(s);
+    back.devices = [MUMU, MUMU_1];
+    await open();
+    await scanned();
+    expect(emuPick()).toHaveDisplayValue(MUMU_1_NAME);
   });
 
-  test("a scan that finds none, and one that fails, say so", async () => {
-    const user = await open();
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    expect(await screen.findByText(zh["emu.none_found"])).toBeVisible();
-    back.devices = new Error("no module named maa");
-    await user.click(screen.getByRole("button", { name: zh["emu.scan"] }));
-    expect(await screen.findByText(fill(zh["emu.scan_failed"], { error: "Error: no module named maa" }))).toBeVisible();
+  test("the scan and an open 手動設定 outlive the window crossing 1180 px, which moves the emulator under the options", async () => {
+    let narrow = false;
+    const heard: (() => void)[] = [];
+    vi.stubGlobal("matchMedia", (media: string) => ({
+      media, get matches() { return narrow; }, addEventListener: (_: string, on: () => void) => heard.push(on), removeEventListener() {},
+    }));
+    try {
+      back.devices = [MUMU];
+      const user = await open();
+      await scanned();
+      await user.click(screen.getByText(zh["emu.manual"]));
+      narrow = true;
+      act(() => heard.forEach((on) => on()));
+      expect(tick("領信").compareDocumentPosition(emuPick()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(back.scans).toBe(1);
+      expect(options(emuPick())).toEqual([pickOne(NOW), MUMU_0_NAME]);
+      expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeVisible();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -540,8 +661,10 @@ describe("during a run", () => {
     await altMove(user, list.getAllByRole("listitem")[0], "ArrowDown");
     expect(order()).toEqual(before);
     expect(screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) })).toBeDisabled();
+    // the emulator's whole frame: its pick list, the scan and the fields under 手動設定
+    expect(emuPick()).toBeDisabled();
+    expect(scanButton()).toBeDisabled();
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeDisabled();
-    expect(screen.getByRole("button", { name: zh["emu.scan"] })).toBeDisabled();
     await user.click(list.getByText(zh["task.MirrorDungeon"]));
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) })).toBeDisabled();
     await user.click(list.getByText(zh["task.ExpLuxcavation"]));
@@ -553,6 +676,8 @@ describe("during a run", () => {
     expect(screen.getByRole("button", { name: zh["tasks.remove"] })).toBeDisabled();
     send(exit(0, true));
     expect(tick("領信")).toBeEnabled();
+    expect(emuPick()).toBeEnabled();
+    expect(scanButton()).toBeEnabled();
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeEnabled();
   });
 
