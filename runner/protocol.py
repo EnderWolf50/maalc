@@ -9,8 +9,9 @@ Commands (one runner process takes one start or one scan, then ends):
 - stop: during a start, stop MaaFramework; the running task ends `stopped`, the ones after it `cancelled`.
 
 Events: ready, log (a line of the run log, `source` runner, agent or console), devices, connection, resource, task (a
-task's `state`: pending, running, succeeded, failed, stopped or cancelled, with the bot's `reason` for one it cancelled),
-error (its `kind`), end (the run's `result`). tests/runner_cases.json holds the shared cases.
+task's `state`: pending, running, succeeded, failed, stopped or cancelled, with the bot's `reason` for one it cancelled
+and for the one it failed by stopping the whole list), error (its `kind`), end (the run's `result`).
+tests/runner_cases.json holds the shared cases.
 """
 from __future__ import annotations
 

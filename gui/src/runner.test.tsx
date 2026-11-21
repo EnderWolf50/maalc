@@ -161,19 +161,21 @@ describe("Start and Stop", () => {
 });
 
 describe("what the run shows", () => {
-  test("each posted task shows its state, in all six; a task the bot cancelled shows why", async () => {
+  test("each posted task shows its state, in all six; a task the bot cancelled or stopped in shows why (#870)", async () => {
     const user = await open();
     await started(user);
     expect(runTasks().map((x) => x.textContent)).toEqual([`${zh["task.ClaimMail"]}${zh["runner.state.pending"]}`,
       `${zh["task.MirrorDungeon"]}${zh["runner.state.pending"]}`]);
     const states = ["pending", "running", "succeeded", "failed", "stopped", "cancelled"] as const;
-    send(...states.map((state, i) => task(i, "ClaimMail", state, state === "cancelled" ? "maintenance" : undefined)));
+    const why: Partial<Record<string, string>> = { failed: "ClientOutdated: the game client is out of date", cancelled: "maintenance" };
+    send(...states.map((state, i) => task(i, "ClaimMail", state, why[state])));
     const rows = runTasks();
     expect(rows).toHaveLength(6);
     states.forEach((state, i) => {
       expect(rows[i]).toHaveAttribute("data-state", state);
       expect(within(rows[i]).getByText(zh[`runner.state.${state}`])).toBeVisible();
     });
+    expect(within(rows[3]).getByText(why.failed!)).toBeVisible();
     expect(within(rows[5]).getByText("maintenance")).toBeVisible();
   });
 

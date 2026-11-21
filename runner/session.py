@@ -7,8 +7,9 @@ has stopped (G1: wait() and status go through a runner id a clear_cache drops). 
 stopped, so the bot is not closed under a task still running.
 
 A task ends succeeded or failed as MaaFramework says; stopped when the caller's stop came while it ran, whatever
-MaaFramework says of it (#832); cancelled when it never ran: after a stop, after the bot stopped the whole list (the
-reason it logged comes with it), after the bot exited, or when the run failed before its first task.
+MaaFramework says of it (#832); failed, with the reason the bot logged, when the bot stopped the whole list while it
+ran, whatever MaaFramework says of it (#870); cancelled when it never ran: after a stop, after the bot stopped the whole
+list (the reason it logged comes with it), after the bot exited, or when the run failed before its first task.
 """
 from __future__ import annotations
 
@@ -453,18 +454,22 @@ class Session:
                     self.task(i, "running")
                 self.tick()
                 self.sleep(TICK)
-            self.finish(i, job.get(), self.now() - t0)
+            self.finish(i, job.get(), self.now() - t0, jobs[i + 1] if i + 1 < len(jobs) else None)
         while self.tasker.running:
             self.tick()
             self.sleep(TICK)
 
-    def finish(self, i: int, detail, seconds: float) -> None:
-        """A task that ran ends as MaaFramework says, or stopped when the caller's stop came first: MaaFramework says
-        succeeded of a task whose agent action returns normally after post_stop (#832). The runner decides it, not the
-        actions: a stop is no failure of theirs, and their waits end on it as on a timeout (agent/actions.py until)."""
+    def finish(self, i: int, detail, seconds: float, after=None) -> None:
+        """A task that ran ends as MaaFramework says; stopped when the caller's stop came first; failed, with the bot's
+        reason, when the bot stopped the whole list in it. MaaFramework says succeeded of a task whose agent action
+        returns normally after post_stop (#832), the bot's own post_stop too (#870). The runner decides it, not the
+        actions: a stop is no failure of theirs, and their waits end on it as on a timeout (agent/actions.py until).
+        after: the job of the task that follows it in the list, None for the last."""
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
-        if self.stop_at is None and status and status.succeeded:
+        if ran and self.stop_at is None and (halt := self.halt_reason(after)) is not None:
+            self.task(i, "failed", halt)
+        elif self.stop_at is None and status and status.succeeded:
             self.task(i, "succeeded")
         elif ran:
             self.task(i, "stopped" if self.stop_at is not None else "failed")
@@ -474,12 +479,24 @@ class Session:
         for n in (detail.nodes[-NODES:] if detail else []):
             self.say(f"node {n.name} {n.completed}")
 
+    def halt_reason(self, after) -> str | None:
+        """The bot's reason when it stopped the whole list in the task that just ended, else None. Not in it when the
+        task after it ran: the runner looks every TICK, and that one may start and stop the list in between. The
+        account-level stop line comes through a pipe the bot's post_stop does not wait for, so after a stop line of
+        the bot (logged before its evidence, seconds ahead of the post_stop) it is waited for (await_halt)."""
+        status = after is not None and (detail := after.get()) and detail.status
+        if status and (status.done or status.running):
+            return None
+        return self.await_halt() if self.last_stop is not None else self.halt
+
+    def await_halt(self) -> str | None:
+        """The bot's account-level stop reason, waited for HALT_WAIT once a run: the next task has the same answer."""
+        if self.halt is None and not self.halt_awaited:
+            self.halt_awaited = True
+            self.halted.wait(HALT_WAIT)
+        return self.halt
+
     def why_unrun(self) -> str:
         """Why a task never ran though nobody stopped the run: the bot exited, or it stopped the whole list (its
         reason, which it logged before the post_stop that the tasker's stop came from)."""
-        if self.crash:
-            return self.crash
-        if self.halt is None and not self.halt_awaited:  # once: the next unrun task has the same answer
-            self.halt_awaited = True
-            self.halted.wait(HALT_WAIT)
-        return self.halt or "MaaFramework stopped the task list"
+        return self.crash or self.await_halt() or "MaaFramework stopped the task list"
