@@ -20,6 +20,13 @@ const tick = (name: string) => screen.getByRole("checkbox", { name: fill(zh["tas
 /** The tick of a task's nth entry (from 1), a task listed more than once. */
 const nthTick = (name: string, n: number) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick_nth"], { name, n }) });
 const again = (name: string) => screen.getByRole("button", { name: fill(zh["tasks.again"], { name }) });
+/** Settings whose task list has Assemble Modules before and after the Luxcavations, a task listed twice, none ticked. */
+function assembleTwice() {
+  const s = newSettings();
+  s.tasks = ["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions",
+    "ClaimMail", "MirrorDungeon"].map((id) => ({ id, enabled: false }));
+  return s;
+}
 /** Show the options of the task named `name`, listed once, as the user clicks its row. */
 const show = (r: ReturnType<typeof renderEditor>, name: string) => r.user.click(list().getByText(name));
 
@@ -40,14 +47,14 @@ describe("the page's layout (#875)", () => {
     renderEditor(<RunTab />, newSettings());
     expect(screen.queryByRole("heading", { name: zh["tasks.title"] })).toBeNull();
     expect(screen.queryByText("勾選的任務由上往下依序執行", { exact: false })).toBeNull(); // the note the list had
-    expect(screen.queryByRole("heading", { name: /狂氣換腦啡肽/ })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /經驗本/ })).toBeNull(); // the task picked at the start
   });
 
   test("a task's options sit in a frame titled with its name, no id; the Mirror Dungeon's groups carry their own titles", async () => {
     const r = renderEditor(<RunTab />, newSettings());
     // the first task shows at the start
-    expect(within(screen.getByRole("group", { name: "狂氣換腦啡肽" })).getByRole("spinbutton", { name: zh["charge.count"] })).toBeVisible();
-    expect(screen.queryByText("ChargeEnkephalin")).toBeNull();
+    expect(within(screen.getByRole("group", { name: "經驗本" })).getByRole("combobox", { name: zh["lux.mode"] })).toBeVisible();
+    expect(screen.queryByText("ExpLuxcavation")).toBeNull();
     await show(r, "領信");
     expect(within(screen.getByRole("group", { name: "領信" })).getByText(zh["tasks.none"])).toBeVisible();
     expect(screen.queryByText("ClaimMail")).toBeNull();
@@ -66,17 +73,19 @@ describe("the page's layout (#875)", () => {
 });
 
 describe("the task list", () => {
-  test("a new file lists the README's suggested order, Assemble Modules before and after the Luxcavations, none ticked (#811)", () => {
+  test("a new file lists every task once, all ticked, in the user's order (#874)", () => {
     renderEditor(<RunTab />, newSettings());
-    // README 建議順序: 狂氣換腦啡肽 → 換腦啡肽模組 → 經驗本 → 紐本 → 換腦啡肽模組 → 領通行證任務 → 領信 → 鏡牢
+    // README 建議順序: 經驗本 → 紐本 → 領信 → 狂氣換腦啡肽 → 換腦啡肽模組 → 領通行證任務 → 鏡牢
     expect(rows().map((x) => x.textContent)).toEqual([
-      "狂氣換腦啡肽", "換腦啡肽模組", "經驗本", "紐本", "換腦啡肽模組", "領通行證任務", "領信", "鏡牢",
+      "經驗本", "紐本", "領信", "狂氣換腦啡肽", "換腦啡肽模組", "領通行證任務", "鏡牢",
     ].map((name) => expect.stringContaining(name)));
-    for (const box of list().getAllByRole("checkbox")) expect(box).not.toBeChecked();
+    const boxes = list().getAllByRole("checkbox");
+    expect(boxes).toHaveLength(7);
+    for (const box of boxes) expect(box).toBeChecked();
   });
 
   test("lists the file's tasks in its order with their ticks; a tick is saved", async () => {
-    const s = newSettings();
+    const s = assembleTwice();
     s.tasks = [{ id: "ClaimMail", enabled: true }, ...s.tasks.filter((x) => x.id !== "ClaimMail")];
     const r = renderEditor(<RunTab />, s);
     expect(rows()[0]).toHaveTextContent("領信");
@@ -89,7 +98,7 @@ describe("the task list", () => {
   });
 
   test("each entry of a task listed twice has its own tick, named by its place among them", async () => {
-    const r = renderEditor(<RunTab />, newSettings());
+    const r = renderEditor(<RunTab />, assembleTwice());
     expect(screen.queryByRole("checkbox", { name: fill(zh["tasks.tick"], { name: "換腦啡肽模組" }) })).toBeNull();
     await r.user.click(nthTick("換腦啡肽模組", 2));
     expect(r.settings().tasks.filter((x) => x.id === "AssembleModules")).toEqual([
@@ -100,7 +109,7 @@ describe("the task list", () => {
   });
 
   test("a tick's hit area is larger than its box, and a click there leaves the picked task as it is", async () => {
-    const r = renderEditor(<RunTab />, newSettings());
+    const r = renderEditor(<RunTab />, assembleTwice());
     const area = tick("領信").closest("label")!;
     expect(area).toHaveClass("tick");
     await r.user.click(area); // beside the box, inside its area
@@ -112,7 +121,7 @@ describe("the task list", () => {
   });
 
   test("Alt with an arrow and a drag change the run order, ticks moving with their tasks", async () => {
-    const s = newSettings();
+    const s = assembleTwice();
     s.tasks[0].enabled = true; // ChargeEnkephalin
     const r = renderEditor(<RunTab />, s);
     expect(screen.getByRole("list", { name: zh["tasks.title"] })).toBe(document.querySelector(".task-list ol"));
@@ -129,7 +138,7 @@ describe("the task list", () => {
   });
 
   test("a click on a task shows its options; a task without options says so", async () => {
-    const r = renderEditor(<RunTab />, newSettings());
+    const r = renderEditor(<RunTab />, assembleTwice());
     // the first task shows at the start
     expect(screen.getByRole("group", { name: "狂氣換腦啡肽" })).toBeVisible();
     await r.user.click(within(rows()[6]).getByText("領信"));
@@ -139,7 +148,7 @@ describe("the task list", () => {
   });
 
   test("either entry of a task listed twice shows that task's options and stays picked, also when it moves", async () => {
-    const s = newSettings();
+    const s = assembleTwice();
     s.tasks.push({ id: "MirrorDungeon", enabled: false });
     const r = renderEditor(<RunTab />, s);
     await r.user.click(within(rows()[8]).getByText("鏡牢"));
@@ -161,7 +170,7 @@ describe("the task list", () => {
   });
 
   test("再加一次 lists the picked task once more, unticked, right after it, and picks it; an extra entry can be removed, a task's last one not", async () => {
-    const r = renderEditor(<RunTab />, newSettings());
+    const r = renderEditor(<RunTab />, assembleTwice());
     await r.user.click(within(rows()[7]).getByText("鏡牢"));
     expect(screen.queryByRole("button", { name: zh["tasks.remove"] })).toBeNull(); // the task's only entry
     await r.user.click(again("鏡牢"));

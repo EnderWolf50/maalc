@@ -142,6 +142,8 @@ test("a problem in a global option marks their folded panel, and its jump opens 
 
 test("a problem in a task list entry picks that entry, the second of a task listed twice too (#811)", async () => {
   const s = newSettings();
+  s.tasks = ["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules"]
+    .map((id) => ({ id, enabled: false }));
   (s.tasks[4] as { enabled: unknown }).enabled = "yes"; // the second Assemble Modules, broken by hand
   file.text = JSON.stringify(s, null, 2) + "\n";
   const user = userEvent.setup();
@@ -242,7 +244,11 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     const saved = JSON.parse(file.saved[0]);
     expect([saved.version, saved.run.difficulty, saved.run.start_team, saved.luxcavation.exp.team, saved.emulator.address])
       .toEqual([23, "hard", null, "a", "127.0.0.1:16384"]);
-    expect(saved.tasks.slice(0, 2)).toEqual([{ id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true }]);
+    // MXU's two, then each task MXU did not list, unticked though a new file ticks it, in a new file's order (#874)
+    expect(saved.tasks).toEqual([
+      { id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true },
+      ...["ThreadLuxcavation", "ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
+    ]);
     // MXU's file and the others are only read
     expect(file.writes).toEqual(["old", "settings"]);
     expect([...file.reads].sort()).toEqual(["mxu-maalc.json", "settings.v20.json", "team_options.json"]);
@@ -271,7 +277,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     expect(shown).toHaveTextContent(TEXT.en_us["rb.webhook"]);
   });
 
-  test("with neither MXU's file nor settings.v20.json, the notice says the options are at their defaults, no task ticked", async () => {
+  test("with neither MXU's file nor settings.v20.json, the notice says the options and the task list are at their defaults", async () => {
     write(olderFile(22));
     render(<App start="teams" />);
     const shown = await notice();
@@ -362,10 +368,7 @@ test("a save keeps the task options, the task list, the emulator and the schedul
   expect(saved.teams[0].name).toBe("Ta!");
   const kept = ["run", "luxcavation", "charge_enkephalin", "emulator", "schedules"] as const;
   expect(Object.fromEntries(kept.map((k) => [k, saved[k]]))).toEqual(Object.fromEntries(kept.map((k) => [k, s[k]])));
-  // the tasks the list left out come last, unticked, once each in a new file's order (#814)
-  expect(saved.tasks).toEqual([
-    ...s.tasks, ...["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
-  ]);
+  expect(saved.tasks).toEqual(s.tasks); // the tasks the file's list leaves out stay out (#874)
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

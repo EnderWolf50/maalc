@@ -52,12 +52,14 @@ vi.mock("./api", async (original) => ({
   hideToTray: () => { back.hid++; return back.hideFail ? Promise.reject(new Error(back.hideFail)) : Promise.resolve(true); },
 }));
 
-/** Settings with Claim Mail and Mirror Dungeon ticked, in that order, on the MuMu instance at 16416, and one team. */
+/** Settings with Claim Mail and Mirror Dungeon ticked, in that order, the other tasks after them unticked (Assemble Modules
+ * twice), on the MuMu instance at 16416, and one team. */
 function settings() {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "T1")]));
   s.tasks = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true },
-    ...s.tasks.filter((x) => x.id !== "ClaimMail" && x.id !== "MirrorDungeon")];
+    ...["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions"]
+      .map((id) => ({ id, enabled: false }))];
   s.emulator = { address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" };
   return s;
 }
