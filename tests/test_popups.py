@@ -32,7 +32,7 @@ def test_the_help_pager_is_looked_at_before_the_entry_page_under_it():
 
 
 def test_the_hidden_battle_window_is_skipped_before_every_page_and_never_entered():
-    # #850: the window covers the page under it (map or the floor change), so it sits with the popups, ahead of the
+    # #850: the window covers the page under it (the map, after an event node tap), so it sits with the popups, ahead of the
     # first page. DismissShot taps the box of its first part (no box_index), the Skip it read; nothing reads an option
     # there. A read of both buttons as one box is no Skip: its centre could be Enter's.
     nodes = load_nodes()

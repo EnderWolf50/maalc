@@ -244,7 +244,7 @@ def on_page(context, image, *nodes):
 POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popups: answered before any page
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
-# #850: the Hidden Battle window may come on a map node RouteMap tapped; the map reads under it, and a tap through it
+# #850: the Hidden Battle window may come after RouteMap tapped an event node; the map reads under it, and a tap through it
 # could land on its Enter. #434: the map reads under the floor 5 and 10 prompts too (ParallelMode*OverMap.synthetic.png),
 # and where they come after the boss is not known (#852): a tap through one could land on its Confirm.
 COVERS = {"MirrorMap": ("GiftGet", "HiddenBattle", "ParallelModePrompt", "ExtremeModePrompt")}

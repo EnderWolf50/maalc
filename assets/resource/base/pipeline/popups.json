@@ -219,8 +219,9 @@
     // WARNING` (mirror_dungeon_hidden_stage_title), Skip / Enter (mirror_hidden_stage_information_quit_button /
     // _enter_button, EN_MirrorDungeonUI_6). Always Skip, no option (#847, the user's call of 2026-11-20): DismissShot
     // taps the box of the first part, the Skip read, and keeps the screen in logs/dismissed/ (once a minute, GAPPED).
-    // No capture shows the window (#855): whether it comes on a map node or by itself at the floor change, and where it
-    // sits, are not known, so both rois are wide, the button is found by its text, and it is read before every page.
+    // No capture shows the window (#855): it comes over the map after an event node is tapped (the user, 2026-11-22), and
+    // where it sits is not known, so both rois are wide, the button is found by its text, and it is read before every
+    // page.
     // The Skip box is Skip alone, an icon in front of it read as a sign or a letter: both buttons read as one box are no
     // Skip, whose centre could be Enter's. RouteMap gives the map up under it (actions.COVERS).
     // Its 1.5 s stay (#258), as the floor 5/10 prompts': no live log has it to time a change against. Whatever shows after
