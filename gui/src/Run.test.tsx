@@ -7,7 +7,7 @@ import { TABS } from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import css from "./index.css?raw";
-import { cssRules, cssValueOf, dragOnto, expectLines, queuedTeams, renderEditor } from "./testing";
+import { altMove, cssRules, cssValueOf, dragOnto, expectLines, queuedTeams, renderEditor } from "./testing";
 import { GLOBAL_KEYS } from "./Run";
 import { useEditor } from "./ui";
 
@@ -75,13 +75,14 @@ describe("the task list", () => {
     expect(rows()[0]).toHaveAttribute("aria-current", "true");
   });
 
-  test("↑↓ and a drag change the run order, ticks moving with their tasks", async () => {
+  test("Alt with an arrow and a drag change the run order, ticks moving with their tasks", async () => {
     const s = newSettings();
     s.tasks[0].enabled = true; // ChargeEnkephalin
     const r = renderEditor(<RunTab />, s);
-    await r.user.click(within(rows()[0]).getByRole("button", { name: zh.down }));
+    expect(screen.getByRole("list", { name: zh["tasks.title"] })).toBe(document.querySelector(".task-list ol"));
+    await altMove(r.user, rows()[0], "ArrowDown");
     expect(ids(r.settings()).slice(0, 2)).toEqual(["AssembleModules", "ChargeEnkephalin"]);
-    await r.user.click(within(rows()[7]).getByRole("button", { name: zh.up }));
+    await altMove(r.user, rows()[7], "ArrowUp");
     expect(ids(r.settings()).slice(6)).toEqual(["MirrorDungeon", "ClaimMail"]);
     dragOnto(rows()[1], rows()[7]);
     expect(r.settings().tasks).toEqual([
@@ -114,7 +115,7 @@ describe("the task list", () => {
     await r.user.selectOptions(screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "hard");
     expect(r.settings().run.difficulty).toBe("hard");
     // the second entry moved above the first stays the one picked
-    await r.user.click(within(rows()[8]).getByRole("button", { name: zh.up }));
+    await altMove(r.user, rows()[8], "ArrowUp");
     expect(rows()[7]).toHaveAttribute("aria-current", "true");
     expect(rows()[8]).not.toHaveAttribute("aria-current");
     await r.user.click(within(rows()[1]).getByText("換腦啡肽模組"));
