@@ -1,6 +1,7 @@
-// Native HTML drag and drop for a set of sortable items (the gift list tab's tiles and its purchase order dialog). An item can
-// only be dropped on another of its group. The Tauri window needs "dragDropEnabled": false for this (see ReorderList in ui.tsx,
-// which sorts one whole list and brings its own buttons; the gift list tab drags between rows of many groups).
+// Native HTML drag and drop for a set of sortable items (the gift list tab's tiles, its purchase order dialog and a team's skill
+// replacement rows). An item can only be dropped on another of its group. The Tauri window needs "dragDropEnabled": false for
+// this (see ReorderList in ui.tsx, which sorts one whole list, its rows also moved from the keyboard by useKeyMoves; the gift
+// list tab drags between rows of many groups).
 import { useRef, useState, type DragEvent } from "react";
 
 /** The props `useDragSort` gives one draggable element. */

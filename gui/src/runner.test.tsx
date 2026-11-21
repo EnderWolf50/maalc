@@ -16,7 +16,7 @@ import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import { IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message } from "./runner";
 import css from "./index.css?raw";
-import { cssValueOf, queuedTeams } from "./testing";
+import { altMove, cssValueOf, dragOnto, queuedTeams } from "./testing";
 
 const zh = TEXT.zh_tw;
 // text: the settings file; saved: each text written; starts: each start the page asked for; send: the last run's channel;
@@ -529,8 +529,14 @@ describe("during a run", () => {
     expect(tick("領信")).toBeDisabled();
     for (const row of list.getAllByRole("listitem")) {
       expect(row).toHaveAttribute("draggable", "false");
-      for (const b of within(row).getAllByRole("button")) expect(b).toBeDisabled();
+      for (const b of within(row).queryAllByRole("button")) expect(b).toBeDisabled();
     }
+    // neither a drag nor Alt with an arrow moves a task (#873)
+    const order = () => list.getAllByRole("listitem").map((li) => li.textContent);
+    const before = order();
+    dragOnto(list.getAllByRole("listitem")[2], list.getAllByRole("listitem")[0]);
+    await altMove(user, list.getAllByRole("listitem")[0], "ArrowDown");
+    expect(order()).toEqual(before);
     expect(screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) })).toBeDisabled();
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeDisabled();
     expect(screen.getByRole("button", { name: zh["emu.scan"] })).toBeDisabled();

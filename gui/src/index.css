@@ -262,7 +262,10 @@ nav[role="tablist"] button.bad::before {
   content: ""; position: absolute; top: 6px; right: 4px; width: 9px; height: 9px; background: linear-gradient(45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%),
     linear-gradient(-45deg, transparent 38%, var(--bad) 38% 62%, transparent 62%);
 }
-main { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-width: 0; }
+/* position: what is drawn out of the flow inside the page (a sortable list's words for a screen reader, .sr-only) has the page
+ * as its box and scrolls with it: with the window as their box they made the whole document scroll and the header shift left
+ * by the scrollbar's width (#873: the teams tab's document grew to 2427 px in an 860 px window, the header 15 px left) */
+main { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 28px; min-width: 0; }
 
 /* Save refused: inside the page, above the tab's content, never between the header and the tabs. */
 .problems {
@@ -415,8 +418,14 @@ ol.reorder li.selected { border-color: var(--accent-line); background: var(--sel
 ol.reorder li.selected.bad { border-color: var(--bad); outline-color: var(--bad); } /* picked and wrong: the error shows */
 ol.reorder li.bad { border-style: dashed; }
 ol.reorder .badmark { color: var(--bad); font-weight: 700; font-size: 12px; }
+/* the whole row drags (#873): no handle and no move buttons; the dragged row dimmed, and a line in the gap where it lands,
+ * after the row under it when dragged down, before it when dragged up; locked (a run), the row only picks */
 ol.reorder li.dragging { opacity: 0.4; }
-ol.reorder .grip { color: var(--muted); font-size: 11px; }
+/* the skill rows' drag (useDragSort) marks only the two rows, so their order tells the way it was dragged */
+ol.reorder li.drop-after, ol.skill-sinners > li[data-dragging] ~ li[data-over] { box-shadow: 0 3px 0 -1px var(--accent-line); }
+ol.reorder li.drop-before, ol.skill-sinners > li[data-over]:has(~ li[data-dragging]) { box-shadow: 0 -3px 0 -1px var(--accent-line); }
+ol.reorder.locked li { cursor: default; }
+ol.reorder li:focus-visible, ol.skill-sinners > li:focus-visible { outline-offset: 1px; } /* inside the 4 px gap to the next row */
 ol.reorder .item { flex: 1; min-width: 0; }
 ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--muted); letter-spacing: 0.03em; }
 .qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
@@ -804,9 +813,7 @@ ol.skill-sinners > li {
   border-radius: 4px; corner-shape: bevel; cursor: grab; user-select: none;
 }
 ol.skill-sinners > li.faulty { border-color: var(--bad); outline: 1px solid var(--bad); }
-ol.skill-sinners > li[data-dragging] { opacity: 0.4; }
-ol.skill-sinners > li[data-over] { background: var(--sel); }
-ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
+ol.skill-sinners > li[data-dragging] { opacity: 0.4; } /* and the line where it lands with ol.reorder's */
 .skill-rank { min-width: 1.5em; text-align: right; color: var(--accent-ink); font: 700 16px/1 var(--font-display); }
 .skill-name {
   flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -831,7 +838,7 @@ ol.skill-sinners .grip { color: var(--muted); font-size: 11px; }
 .skill-pill.err { background: var(--bad-soft); color: var(--bad); white-space: normal; font-weight: 600; }
 /* 「先換 S1→S3」 (74 px) beside the drawn chevron's 40 px (#734); the pill cell gave up the 7 px, so DON QUIXOTE keeps its room */
 .skill-first { width: 9em; flex: none; }
-.skill-arrows { display: inline-flex; margin-left: auto; }
+.skill-remove { margin-left: auto; }
 
 /* E.G.O Gift Search, drawn after the game's page: keyword tabs with the keyword's icon, a band per tier, a gift's icon with its
  * name under it (#721; its card, GiftPopover's, holds both names and the effect); a picked one takes the amber of what is in use,

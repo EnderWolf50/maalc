@@ -1,5 +1,5 @@
 // The Run tab (#814, #815, #816, #875, spec #811 「設定視窗」, spec #871 「版面（L1 B）」, spec 04 sections 5, 12 and 14), in two
-// columns with no titles over them, whose first frames start on one line. Left, the task list (ticks, drag or ↑↓: the run
+// columns with no titles over them, whose first frames start on one line. Left, the task list (ticks, drag or Alt+↑↓: the run
 // order; a task listed again, or an extra entry removed, #811) beside the picked task's options, then the global options
 // (folded) and the scheduled runs (Schedules.tsx). Right, held in view as the page scrolls, the run console: Start, Stop and
 // the run's status, the emulator with the device scan, and the live log, in that order idle and running. A narrow window
@@ -148,10 +148,10 @@ export function RunTab() {
         <div className="run-main">
           {/* no titles over the columns: the list, the options and the console start on one line */}
           <div className="split">
-            <aside className="task-list" data-path="tasks" aria-label={t("tasks.title")}>
+            <aside className="task-list" data-path="tasks">
               {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
               <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
-                badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
+                label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
                 onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
                 render={(x, j) => (
                   <span className="task-row">
