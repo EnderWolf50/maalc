@@ -1,5 +1,5 @@
 // The team queue (#501, #803): team_queue in settings.json is the queue the Agent rotates, and after a claim the Agent moves
-// that team to its end. The team list is the user's to arrange: its drag and its ↑↓ leave the queue alone. A team added goes
+// that team to its end. The team list is the user's to arrange: its drag and its Alt moves leave the queue alone. A team added goes
 // last in both, a team deleted leaves both. The editor takes the queue on disk, keeps the user's unsaved edits on top of it,
 // and never saves its own stale queue over the Agent's.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
@@ -11,7 +11,7 @@ import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from
 import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
-import { cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
+import { altMove, cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
 const file = vi.hoisted(() => ({ text: "" as string | null, saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
@@ -115,11 +115,11 @@ describe("the team list and the queue in the teams tab", () => {
   const apart = () => ({ ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] });
   const rows = () => sideList().getAllByRole("listitem");
 
-  test("the list's ↑↓ move a team in the list, not in the queue", async () => {
+  test("Alt with an arrow in the list moves a team in the list, not in the queue", async () => {
     const r = renderEditor(<TeamsTab />, apart());
-    await r.user.click(within(rows()[2]).getByRole("button", { name: zh.up }));
+    await altMove(r.user, rows()[2], "ArrowUp");
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "c", "b"], ["c", "a", "b"]]);
-    await r.user.click(within(rows()[0]).getByRole("button", { name: zh.down }));
+    await altMove(r.user, rows()[0], "ArrowDown");
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["c", "a", "b"], ["c", "a", "b"]]);
   });
 
@@ -215,11 +215,12 @@ describe("the team queue block above the list and the editor (#804)", () => {
     expect(note).not.toMatch(/MXU|MFAAvalonia/);
   });
 
-  test("its ↑↓ move a team in the queue, not in the list", async () => {
+  test("Alt with an arrow in it moves a team in the queue, not in the list", async () => {
     const r = renderEditor(<TeamsTab />, queue("a", "b", "c"));
-    await r.user.click(within(rows()[2]).getByRole("button", { name: zh.up }));
+    expect(screen.getByRole("list", { name: zh["queue.title"] })).toBe(rows()[0].parentElement);
+    await altMove(r.user, rows()[2], "ArrowUp");
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c"], ["a", "c", "b"]]);
-    await r.user.click(within(rows()[0]).getByRole("button", { name: zh.down }));
+    await altMove(r.user, rows()[0], "ArrowDown");
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c"], ["c", "a", "b"]]);
     expect(shown()).toEqual([expect.stringMatching(/^1\. Tc/), expect.stringMatching(/^2\. Ta/), expect.stringMatching(/^3\. Tb/)]);
   });
@@ -253,13 +254,13 @@ describe("in the editor", () => {
     const rows = queueRows;
     const inBlock = () => rows().map((li) => li.textContent!.match(/T\w/)![0]);
 
-    test("a drag and an ↑ in it save the queue in their order, and the team list as it was", async () => {
+    test("a drag and an Alt+↑ in it save the queue in their order, and the team list as it was", async () => {
       const user = userEvent.setup();
       render(<App start="teams" />);
       await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
       dragOnto(rows()[2], rows()[0]);
       expect(inBlock()).toEqual(["Tc", "Ta", "Tb"]);
-      await user.click(within(rows()[2]).getByRole("button", { name: zh.up }));
+      await altMove(user, rows()[2], "ArrowUp");
       expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]);
       await user.click(screen.getByRole("button", { name: zh.save }));
       await waitFor(() => expect(file.saved).toHaveLength(1));
@@ -284,7 +285,7 @@ describe("in the editor", () => {
       const user = userEvent.setup();
       render(<App start="teams" />);
       await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
-      await user.click(within(rows()[2]).getByRole("button", { name: zh.up })); // a, c, b
+      await altMove(user, rows()[2], "ArrowUp"); // a, c, b
       agentClaims("a");
       act(() => { window.dispatchEvent(new Event("focus")); });
       await waitFor(() => expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]));
@@ -341,7 +342,7 @@ describe("in the editor", () => {
     const user = userEvent.setup();
     render(<App start="teams" />);
     await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
-    await user.click(within(sideList().getAllByRole("listitem")[2]).getByRole("button", { name: zh.up }));
+    await altMove(user, sideList().getAllByRole("listitem")[2], "ArrowUp");
     agentClaims("a");
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));

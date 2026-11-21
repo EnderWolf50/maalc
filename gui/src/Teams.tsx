@@ -44,7 +44,7 @@ export function TeamsTab() {
         <aside className="team-list">
           {s.teams.length ? (
             <ReorderList items={s.teams} keyOf={(x) => x.id} selected={i} onSelect={(j, teams) => setSel(teams[j].id)}
-              badAt={(j) => bad(`teams/${j}`)}
+              label={t("teams.list")} badAt={(j) => bad(`teams/${j}`)}
               onChange={(teams) => update((d) => { d.teams = teams; })}
               render={(x) => <span className={x.enabled ? "" : "muted"}><TeamTags team={x} /></span>} />
           ) : <p className={"muted" + (bad("teams") ? " bad" : "")}>{t("noTeams")}</p>}
@@ -63,7 +63,7 @@ export function TeamsTab() {
 }
 
 /** The team queue (#804, ADR 0014): team_queue in its order, each team with its place, name, slot and usage, a team that is
- * off dimmed in its place. Its drag and ↑↓ change team_queue only; the Agent's moves show once the editor reads them. */
+ * off dimmed in its place. Its drag and Alt moves change team_queue only; the Agent's moves show once the editor reads them. */
 function QueueBlock() {
   const { s, update, t, bad } = useEditor();
   const byId = new Map(s.teams.map((x) => [x.id, x]));
@@ -80,6 +80,7 @@ function QueueBlock() {
       <div className="queue-body">
         {rows.length > 0 && (
           <ReorderList items={rows} keyOf={(x) => (x.repeat ? `${x.id}#${x.repeat}` : x.id)} badAt={(j) => bad(`team_queue/${j}`)}
+            label={t("queue.title")}
             onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
             render={(x, j) => {
               const team = byId.get(x.id), mark = markAt(j);
@@ -339,7 +340,7 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <div className={"rewards" + (bad(`${path}/reward_cards`) ? " bad" : "")} data-path={`${path}/reward_cards`}>
           <h3>{t("team.reward_cards")}</h3>
           <ReorderList items={team.reward_cards} keyOf={(x) => x} onChange={(reward_cards) => set({ reward_cards })}
-            render={(x, j) => <>{j + 1}. {x}</>} />
+            label={t("team.reward_cards")} render={(x, j) => <>{j + 1}. {x}</>} />
         </div>
       </details>
     </div>
@@ -485,6 +486,7 @@ function GiftSearchPanel({ i }: { i: number }) {
         {full && <p className="muted">{t("gift.full")}</p>}
         {search.gifts.length ? (
           <ReorderList items={search.gifts} keyOf={(g) => `${g.keyword}|${g.tier}|${g.name}`} onChange={(gifts) => set({ gifts })}
+            label={t("gift.order")}
             render={(g, j) => (
               <>
                 {j + 1}. {refName(g, zh)} <small className="muted">{t(kwText(g.keyword))} {TIERS[g.tier]}</small>{" "}

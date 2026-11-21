@@ -1,5 +1,8 @@
-// Shared controls: the editor context, labelled fields, and a drag-or-button reorder list.
-import { Fragment, createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
+// Shared controls: the editor context, labelled fields, and a reorder list whose rows drag and move from the keyboard.
+import {
+  Fragment, createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState,
+  type ComponentProps, type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
+} from "react";
 import { TEXT, fill, type Key } from "./i18n";
 import type { Settings } from "./model";
 
@@ -276,15 +279,68 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
   );
 }
 
-/** Native HTML drag and drop, plus up/down buttons for the keyboard. Needs "dragDropEnabled": false on the Tauri
- * window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt }: {
+/** The place a row moves to on a key: Alt+↑ one up, Alt+↓ one down, Alt+Home first, Alt+End last; undefined for any other key
+ * and for a move past either end. */
+function moveKey(e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean }, i: number, n: number) {
+  if (!e.altKey || e.ctrlKey || e.metaKey) return undefined;
+  const to = ({ ArrowUp: i - 1, ArrowDown: i + 1, Home: 0, End: n - 1 } as Record<string, number>)[e.key];
+  return to === undefined || to < 0 || to >= n || to === i ? undefined : to;
+}
+
+/** The keyboard's way to reorder a sortable list whose rows have no move buttons (ReorderList, the skill rows; #873): each row
+ * takes the focus with Tab, says how it moves, and moves on Alt with an arrow, Home or End (moveKey). The moved row keeps the
+ * focus, given back after the render: WebView2 moves the focus to <body> when React moves a focused row to reorder the list
+ * (seen 2026-11-22; jsdom keeps it there, so the tests cannot show it). Its new place is read out (「移到第 2 位，共
+ * 3 位」) by aria-live, not role="status", which the Undo note under a list is; the words come in anew each move, as a
+ * screen reader reads only what the region gains, so a second move to the same place is read too. Locked (LockContext), no
+ * key moves a row. `list` goes on the <ol>, `row` on each row with `onKey` from its onKeyDown (true: the key moved it),
+ * `readOut` after the list. */
+export function useKeyMoves(n: number, move: (from: number, to: number) => void) {
+  const { t } = useEditor();
+  const locked = useContext(LockContext);
+  const list = useRef<HTMLOListElement>(null);
+  const follow = useRef<number | null>(null);
+  const [said, setSaid] = useState({ words: "", n: 0 });
+  const hint = useId();
+  useLayoutEffect(() => {
+    if (follow.current === null) return;
+    (list.current?.children[follow.current] as HTMLElement | undefined)?.focus();
+    follow.current = null;
+  });
+  return {
+    list,
+    row: { tabIndex: 0, "aria-describedby": locked ? undefined : hint },
+    onKey(e: ReactKeyboardEvent, i: number) {
+      const to = locked || e.target !== e.currentTarget ? undefined : moveKey(e, i, n);
+      if (to === undefined) return false;
+      e.preventDefault();
+      follow.current = to;
+      move(i, to);
+      setSaid((x) => ({ words: fill(t("movedTo"), { n: to + 1, of: n }), n: x.n + 1 }));
+      return true;
+    },
+    readOut: (
+      <>
+        <span id={hint} className="sr-only">{t("moveHint")}</span>
+        <span className="sr-only" aria-live="polite">{said.words && <span key={said.n}>{said.words}</span>}</span>
+      </>
+    ),
+  };
+}
+
+/** A sortable list: the whole row drags (no handle, no move buttons), the dragged row dimmed and a line where it lands; from the
+ * keyboard a row moves with Alt and an arrow (useKeyMoves). Native HTML drag and drop, which needs "dragDropEnabled": false on
+ * the Tauri window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, label }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
+  /** the list's name, which a screen reader reads before its rows */
+  label?: string;
 }) {
   const { t } = useEditor();
   const locked = useContext(LockContext); // the rows still select: the Run tab shows a task's options during a run
   const [dragging, setDragging] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
   const move = (from: number, to: number) => {
     if (locked || to < 0 || to >= items.length || from === to) return;
     const next = [...items];
@@ -292,29 +348,34 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
     onChange(next);
     if (selected === from) onSelect?.(to, next);
   };
+  const moves = useKeyMoves(items.length, move);
+  // a row dropped lands where the row under it was: after it when dragged down, before it when dragged up
+  const dropAt = (i: number) => dragging !== null && over === i && dragging !== i && (dragging < i ? "drop-after" : "drop-before");
   return (
-    <ol className="reorder" title={t("dragHint")}>
-      {items.map((item, i) => (
-        <li key={keyOf(item)} draggable={!locked}
-          className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad"].filter(Boolean).join(" ")}
-          // A list that selects (teams, plans) is reached by Tab and picked with Enter or Space, as by a click.
-          tabIndex={onSelect ? 0 : undefined} aria-current={onSelect && selected === i ? true : undefined}
-          onKeyDown={(e) => { if (onSelect && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(i, items); } }}
-          onClick={() => onSelect?.(i, items)}
-          onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
-          onDragEnd={() => setDragging(null)}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); }}>
-          <span className="grip" aria-hidden>⋮⋮</span>
-          {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
-          {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
-          <span className="item">{render(item, i)}</span>
-          <button type="button" className="icon" aria-label={t("up")} title={t("up")} disabled={locked || i === 0}
-            onClick={(e) => { e.stopPropagation(); move(i, i - 1); }}>↑</button>
-          <button type="button" className="icon" aria-label={t("down")} title={t("down")} disabled={locked || i === items.length - 1}
-            onClick={(e) => { e.stopPropagation(); move(i, i + 1); }}>↓</button>
-        </li>
-      ))}
-    </ol>
+    <>
+      <ol ref={moves.list} className={"reorder" + (locked ? " locked" : "")} aria-label={label} title={locked ? undefined : t("dragHint")}>
+        {items.map((item, i) => (
+          <li key={keyOf(item)} draggable={!locked} {...moves.row}
+            className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad", dropAt(i)].filter(Boolean).join(" ")}
+            // a list that selects (teams, plans) picks with Enter or Space, as by a click
+            aria-current={onSelect && selected === i ? true : undefined}
+            onKeyDown={(e) => {
+              if (moves.onKey(e, i)) return;
+              if (onSelect && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(i, items); }
+            }}
+            onClick={() => onSelect?.(i, items)}
+            onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
+            onDragEnd={() => { setDragging(null); setOver(null); }}
+            onDragOver={(e) => { e.preventDefault(); setOver(i); }}
+            onDragLeave={() => setOver((o) => (o === i ? null : o))}
+            onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); setOver(null); }}>
+            {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
+            {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
+            <span className="item">{render(item, i)}</span>
+          </li>
+        ))}
+      </ol>
+      {moves.readOut}
+    </>
   );
 }
