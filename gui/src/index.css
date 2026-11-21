@@ -502,7 +502,11 @@ fieldset.queue { align-items: stretch; }
 .task-row[data-state="running"] .tr-state, .task-row[data-state="stopped"] .tr-state { color: var(--accent-ink); }
 .task-row[data-state="succeeded"] .tr-state { color: var(--keep); }
 .task-row[data-state="failed"] .tr-state { color: var(--bad); }
-.task-row .tr-reason { padding-bottom: 3px; font: 400 12.5px/1.4 var(--font-ui); color: var(--fg-2); overflow-wrap: anywhere; text-wrap: pretty; }
+/* .task-list first: it outranks ol.reorder .item small, the rows' condensed small numerals, which a sentence reads poorly in */
+.task-list .task-row .tr-reason {
+  padding-bottom: 3px; font: 400 12.5px/1.4 var(--font-ui); letter-spacing: 0; color: var(--fg-2); overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
 .task-list ol.reorder > li:has(.task-row[data-state="off"]) { opacity: 0.55; }
 /* 「＋ 加入任務」 under the list; its menu opens over what is below and takes no room (#871, round 4 item 13). The list above the
  * options, so the menu covers them where it reaches past the list */
@@ -523,7 +527,8 @@ fieldset.queue { align-items: stretch; }
   border-color: transparent; background: none;
 }
 .add-menu button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.add-menu button:hover:not(:disabled) { background: var(--hov); border-color: transparent; }
+/* the item under the pointer, and the one with the focus however the menu opened: the arrows move it */
+.add-menu button:hover:not(:disabled), .add-menu button:focus { background: var(--hov); border-color: transparent; }
 .add-menu button:focus-visible { outline-offset: -2px; }
 /* the Mirror Dungeon task's options in groups, two side by side where they fit */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }

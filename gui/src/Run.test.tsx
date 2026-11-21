@@ -308,6 +308,9 @@ describe("the task list", () => {
     expect(cssValueOf(css, menu, "position")).toBe("absolute");
     const items = within(menu).getAllByRole("menuitem");
     expect(items[0]).toHaveFocus();
+    // the focused item shows, whether the menu opened from the pointer or the keyboard
+    expect(cssValueOf(css, items[0], "background")).toBe("var(--hov)");
+    expect(cssValueOf(css, items[1], "background")).toBe("none");
     await r.user.keyboard("{ArrowDown}");
     expect(items[1]).toHaveFocus();
     await r.user.keyboard("{End}");

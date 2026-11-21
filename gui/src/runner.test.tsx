@@ -229,6 +229,8 @@ describe("what the run shows", () => {
     // the ticked rows: 領信, 鏡牢, then 經驗本 and 紐本 after the two unticked ones
     expect([0, 1, 4, 5].map((j) => why(rows[j]))).toEqual(["the mailbox did not open", null,
       "MaintenanceNotice: maintenance before the 紐本 task", "MaintenanceNotice: maintenance"]);
+    // in the body's face, not the rows' condensed numerals (ol.reorder .item small): it is a sentence to read
+    expect(cssValueOf(css, rows[0].querySelector(".tr-reason")!, "font")).toBe("400 12.5px/1.4 var(--font-ui)");
     // under the name, in the row
     const name = within(rows[0]).getByText("領信");
     expect(name.compareDocumentPosition(within(rows[0]).getByText("the mailbox did not open")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
