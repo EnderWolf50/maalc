@@ -176,10 +176,12 @@ def test_a_check_card_alone_is_tapped_to_open_its_prompt(context, monkeypatch):
     assert taps == [event_actions.EVENT_CARD] and "settings" not in actions.RUN
 
 
-def run_set_consecutive(context, monkeypatch, reads, target, enter=None):
-    """lux_actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats); the taps made."""
+def run_set_consecutive(context, monkeypatch, reads, target, enter=None, shown=True):
+    """lux_actions.set_consecutive on the exp page with the title reading `reads` in turn (the last repeats) and the box's
+    label on show or not (`shown`); the taps made."""
     taps, reads = [], list(reads)
     patch_all(monkeypatch, "consecutive_now", lambda context, image, box, enter=None: reads.pop(0) if len(reads) > 1 else reads[0])
+    patch_all(monkeypatch, "consecutive_shown", lambda context, image, box, enter=None: shown)
     patch_all(monkeypatch, "tap", lambda context, x, y, wait=1.0: taps.append((x, y)))
     actions.LOG.clear()
     return lux_actions.set_consecutive(context, "exp", target, enter), taps
@@ -215,6 +217,16 @@ def test_the_consecutive_battle_that_does_not_read_or_set_logs_it(context, monke
     assert got is None and [ln.split(" ", 1)[1] for ln in actions.LOG] == ["Consecutive Battle (exp): does not read, wants x4"]
     got, _ = run_set_consecutive(context, monkeypatch, [1, 2], 4)
     assert got == 2 and actions.LOG[-1].endswith("Consecutive Battle (exp): shows x2 after closing the row, wanted x4")
+
+
+def test_a_card_with_no_consecutive_battle_box_is_told_from_a_box_that_does_not_read(context, monkeypatch):
+    # #886: a stage never cleared has no box (game text: "Clear Stage once to unlock Consecutive Battle"). Its label not on
+    # show and nothing read: NO_BOX, nothing tapped. The label on show and nothing read: None, as before (#375).
+    got, taps = run_set_consecutive(context, monkeypatch, [None], 4, shown=False)
+    assert got == lux_actions.NO_BOX and taps == []
+    assert [ln.split(" ", 1)[1] for ln in actions.LOG] == ["Consecutive Battle (exp): no box on this card, wants x4: one battle"]
+    got, taps = run_set_consecutive(context, monkeypatch, [None], 4, shown=True)
+    assert got is None and taps == [] and actions.LOG[-1].endswith("Consecutive Battle (exp): does not read, wants x4")
 
 
 # The task's steps in lux_actions.py, in process (#641): the branches the integration scenarios of test_exp_luxcavation.py
@@ -428,3 +440,12 @@ def test_a_consecutive_battle_that_does_not_read_or_set_stops_the_task_before_th
     ok, taps, stops, ends, _ = enter_card(context, monkeypatch, box_shows=box_shows, mode="count", target=3, fights=3, consecutive=True)
     assert ok is False and taps == [] and ends == []
     assert stops == [f"Thread Luxcavation: Consecutive Battle {why}, wanted x3"]
+
+
+@pytest.mark.parametrize("mode, target, fights", [("daily", 1, 1), ("count", 3, 3)])
+def test_a_card_with_no_consecutive_battle_box_fights_one_battle(context, monkeypatch, mode, target, fights):
+    # #886: EXP stage 10 newly open, never cleared, has no box. Daily mode's one battle and count mode's first both start
+    # as one battle (the size a win counts); the next Enter looks for the box again.
+    ok, taps, stops, ends, _ = enter_card(context, monkeypatch, box_shows=lux_actions.NO_BOX, mode=mode, target=target,
+                                          fights=fights, consecutive=True)
+    assert ok is True and taps == [CARD_TAP] and stops == ends == [] and actions.RUN["lux"]["size"] == 1

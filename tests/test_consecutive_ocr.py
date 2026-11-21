@@ -1,5 +1,6 @@
-"""The Consecutive Battle box's N (#375), read by lux_actions.consecutive_now on the captures of tests/screens, and the team page
-that says Chain To Battle! after a x N battle, which LuxTeamSelect must still know.
+"""The Consecutive Battle box's N (#375), read by lux_actions.consecutive_now on the captures of tests/screens, whether the card
+has the box at all (#886, lux_actions.consecutive_shown), and the team page that says Chain To Battle! after a x N battle,
+which LuxTeamSelect must still know.
 
 Real MaaFramework and its OCR, in a child process (this file run as a script), as test_module_count.py does.
 """
@@ -23,6 +24,8 @@ ENTER = {"exp": "LuxExpEnter", "thread": "LuxThreadEnter"}  # the node whose box
 # A page with no such box: the Drive page, the team page, a box of another page.
 NONE = {"Drive.png": "exp", "LuxTeamSelect.png": "thread", "MainWindow.png": "level", "LuxConsecThread1.png": "level",
         "LuxConsecExp1.png": "level"}
+# #886 (live 2026-11-22): stage 10 newly open at the right, never cleared: its card has no box where stages 8 and 9 have one.
+NO_BOX = {"LuxExpStage10.png": "exp"}
 TEAM_PAGES = ["LuxTeamSelect.png", "LuxTeamSelectChain.png"]
 NOT_TEAM_PAGES = ["LuxConsecExp1.png", "LuxThreadLevels.png", "TeamSelect.png"]
 
@@ -36,13 +39,20 @@ def enter_of(context, actions, name, box):
 def child():
     def body(context, actions, out):
         import lux_actions
-        out.update(read={}, none={}, team={}, enters={})
+        out.update(read={}, none={}, team={}, enters={}, shown={}, unshown={})
         for name, (box, _) in READS.items():
             enter = enter_of(context, actions, name, box)
             out["enters"][name] = enter
             out["read"][name] = lux_actions.consecutive_now(context, screen(name), box, enter)
+            out["shown"][name] = lux_actions.consecutive_shown(context, screen(name), box, enter)
         for name, box in NONE.items():
             out["none"][f"{name}/{box}"] = lux_actions.consecutive_now(context, screen(name), box)
+            out["unshown"][f"{name}/{box}"] = lux_actions.consecutive_shown(context, screen(name), box)
+        for name, box in NO_BOX.items():
+            enter = enter_of(context, actions, name, box)
+            out["enters"][name] = enter
+            out["none"][f"{name}/{box}"] = lux_actions.consecutive_now(context, screen(name), box, enter)
+            out["unshown"][f"{name}/{box}"] = lux_actions.consecutive_shown(context, screen(name), box, enter)
         for name in [*TEAM_PAGES, *NOT_TEAM_PAGES]:
             out["team"][name] = actions.seen(context, screen(name), "LuxTeamSelect") is not None
 
@@ -58,14 +68,25 @@ def test_the_title_reads_as_its_count(name, n):
     assert read()["read"][name] == n
 
 
-@pytest.mark.parametrize("name", [k for k, v in READS.items() if v[0] in ENTER])
+@pytest.mark.parametrize("name", [*(k for k, v in READS.items() if v[0] in ENTER), *NO_BOX])
 def test_a_card_page_is_read_from_the_enter_the_bot_taps(name):
     assert read()["enters"][name] is not None
 
 
-@pytest.mark.parametrize("key", [f"{n}/{b}" for n, b in NONE.items()])
+@pytest.mark.parametrize("key", [f"{n}/{b}" for n, b in {**NONE, **NO_BOX}.items()])
 def test_a_page_without_that_box_reads_none(key):
     assert read()["none"][key] is None
+
+
+@pytest.mark.parametrize("name", READS)
+def test_every_box_that_reads_is_shown(name):
+    assert read()["shown"][name] is True
+
+
+@pytest.mark.parametrize("key", [f"{n}/{b}" for n, b in {**NONE, **NO_BOX}.items()])
+def test_a_page_or_card_without_that_box_shows_none(key):
+    # #886: the stage 10 card, its Enter the rightmost, is told from a box that does not read
+    assert read()["unshown"][key] is False
 
 
 @pytest.mark.parametrize("name", TEAM_PAGES)

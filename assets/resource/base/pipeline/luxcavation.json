@@ -300,8 +300,25 @@
         },
         "post_delay": 0
     },
+    // The words "Consecutive Battle" of a Consecutive Battle box (#886), one template per box: the EXP card's
+    // (LuxExp.png), the Thread card's (LuxConsecThread1.png) and the Level Select's (LuxConsecLevel3.png), the last two a
+    // larger font. lux_actions.consecutive_shown runs it on the title's roi of the card in use, to tell a card with no box
+    // (a stage never cleared: LuxExpStage10.png's 10th, 0.29 there) from a box whose N does not read. Over the 243
+    // 1280x720 captures in tests/screens: in this roi 0.93 or more on the 18 that show a box, 0.61 at most on the other
+    // 225; on the title's roi of the card in use (test_consecutive_ocr.py), 0.92 or more on all 16 boxes read there.
+    "LuxConsecLabel": {
+        "recognition": "TemplateMatch",
+        "roi": [250, 150, 1000, 140],
+        "template": [
+            "Luxcavation/LuxConsecLabelExp.png",
+            "Luxcavation/LuxConsecLabelThread.png",
+            "Luxcavation/LuxConsecLabelLevel.png"
+        ],
+        "threshold": 0.8
+    },
     // The EXP tab as it opens shows its three hardest stages (2026-10-26: 7-9 of 10, the 10th locked, KEEP OUT, with no
     // Enter): the rightmost Enter is the hardest open stage. The box is that Enter's (index -1: the last, left to right).
+    // Stage 10 open (2026-11-22, LuxExpStage10.png) is the rightmost, its card with no Consecutive Battle box till cleared.
     "LuxExpEnter": {
         "recognition": "And",
         "all_of": [
