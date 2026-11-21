@@ -21,7 +21,7 @@ INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層
 第 11–15 層在 Adversity 頁（標題 `Set Adversities`）自己選的負面效果，每層 6 個可選、最多選 5 個，每個有分數（1–5）；選了的層通過後才多拿星光與 Mirror of Sisyphe Pass 的 Projection。bot 一個都不選，直接按 `Challenge`（使用者 2026-11-20 定案，#851）；選 N 個留在 #388。和 Boss 後選的 Mounting Trials（試煉）不同。
 
 **Hidden Battle（隱藏戰鬥）**：
-第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `HIDDEN_BATTLE`；機率是 `hiddenBattleInfo` 的 `probInfo`）。它不在地圖上：地圖上看起來就是一般戰鬥節點，點了之後才轉變成 Hidden Battle，跳出確認視窗（使用者 2026-11-22，#868）。視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850）。按 Skip 之後是進原本的戰鬥還是回到地圖，待探路局確認（#855）。
+第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `HIDDEN_BATTLE`；機率是 `hiddenBattleInfo` 的 `probInfo`）。它不在地圖上：地圖上看起來就是一般事件節點，點了事件節點（不是戰鬥節點）之後才跳出確認視窗（使用者 2026-11-22，#868）。視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850）。按 Skip 之後是進原本的節點還是回到地圖，待探路局確認（#855）。
 _Avoid_: 隱藏戰、隱藏關、Hidden Battle 節點
 
 **可領（`claim_ok`）**：
