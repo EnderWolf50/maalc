@@ -26,7 +26,8 @@ EXP_TAB = (68, 234, 154, 60)
 THREAD_TAB = (68, 304, 154, 60)
 CARD_ENTER = (293, 462, 157, 36)  # the open card's Enter (LuxThread.png: Wrath's, at the left)
 LEVEL_ENTERS = [(780, 243 + 101 * i, 100, 40) for i in range(3)]  # Lv40, Lv50, Lv60 of the Level Select; the last is the hardest
-ENTERS = {"exp": (1000, 455, 240, 50), "locked": (660, 455, 240, 50)}  # stage 9's Enter: the rightmost, the middle card
+ENTERS = {"exp": (1000, 455, 240, 50), "locked": (660, 455, 240, 50),  # stage 9's Enter: the rightmost, the middle card
+          "stage10": (1000, 455, 240, 50)}  # stage 10's, the rightmost (#886)
 TEAM_ROW = (75, 365, 110, 36)  # the TEAMS #3 row of the team page's list (LuxTeamSelect.png), lit and on the title
 TO_BATTLE = (1070, 560, 150, 55)
 RESULT_CONFIRM = (1045, 540, 165, 60)  # the results page's Confirm (live 2026-10-27: (1125, 570))
@@ -46,7 +47,7 @@ BOX = {"exp": ((1110, 254), 286, {"one": 1008, "minus": 1038, "plus": 1179, "ten
        "level": ((640, 183), 217, {"one": 530, "minus": 563, "plus": 716, "ten": 749})}
 # The box moves with its card: the centre of the Enter under it on each page (LuxExp.png, LuxExpLocked.png, LuxThread.png), where
 # BOX's numbers hold for stage 9 at the right and the Thread tab's card.
-CARD = {"exp": (1079, 479), "locked": (738, 479), "thread": (372, 481)}
+CARD = {"exp": (1079, 479), "locked": (738, 479), "thread": (372, 481), "stage10": (1079, 479)}
 FIGHT_SHOTS = 4  # screenshots the battle takes before its results page: the first of them gray, the rest VICTORY on a win
 # The pass page (#429, test_pass_task.py's): the main window's banner, the Pass Missions tab, the Daily tab.
 BANNER = (940, 190, 270, 90)
@@ -56,6 +57,7 @@ DAILY_TAB = (256, 210, 30, 100)
 PASS = {"underway": "PassMissionsDailyUnderway.png", "done": "PassMissionsDaily.png", "weekly": "PassMissionsWeekly.png"}
 
 SCREENS = {"main": "MainWindow.png", "title": "Title.png", "drive": "Drive.png", "exp": "LuxExp.png", "locked": "LuxExpLocked.png",
+           "stage10": "LuxExpStage10.png",
            "thread": "LuxThread.png", "team": "LuxTeamSelect.png", "scrolled": "LuxThreadScrolled.png", "levels": "LuxThreadLevels.png", "fight": None,
            "victory": "Victory.png", "win": "LuxResultVictory.png", "thread_win": "LuxResultThread.png", "lose": "LuxResultDefeat.png",
            "ev_story": "LuxEventStory.png", "ev_card": "LuxEventCard.png", "ev_check": "LuxEventCheck.png",
@@ -75,14 +77,18 @@ EVENT_STEPS = {"ev_story": (EVENT_BUTTON, "ev_card"), "ev_card": (EVENT_CARD, "e
 # settings file's luxcavation.<task> (#813).
 WIN, LOSE = ["win"], ["lose"]
 SCENARIOS = {"drive": ("drive", "b", 1, 0, WIN), "lose_retry": ("locked", "b", 1, 1, LOSE + WIN),
-             "x12": ("drive", "b", 12, 0, WIN), "done_today": ("drive", "b", 2, 0, WIN), "no_pass": ("drive", "b", 1, 0, WIN)}
-CONSECUTIVE = {"x12"}
-DAILY = {"drive", "done_today", "no_pass"}
+             "x12": ("drive", "b", 12, 0, WIN), "done_today": ("drive", "b", 2, 0, WIN), "no_pass": ("drive", "b", 1, 0, WIN),
+             "stage10": ("drive", "b", 1, 0, WIN), "stage10_x3": ("drive", "b", 3, 0, WIN)}
+CONSECUTIVE = {"x12", "stage10", "stage10_x3"}
+DAILY = {"drive", "done_today", "no_pass", "stage10"}
 # #429: the pass page opening on its Weekly tab, the pass's Clear EXP Luxcavation row done (one won today: in daily
 # mode nothing to fight, count 2 unused; count mode fights all the same, #431), no pass page (its hub's 60 s cut to 5;
 # the main window live, as a still one that takes no tap is a frozen game, #440).
+# #886: the EXP tab's rightmost open stage is the 10th, never cleared (LuxExpStage10.png): its card has no Consecutive
+# Battle box until a battle on it is won.
 STATES = {"drive": {"pass_tab": "weekly"}, "done_today": {"pass_row": "done"}, "lose_retry": {"pass_row": "done"},
-          "no_pass": {"pass_row": None, "live": True, "override": {"ExpPassHub": {"timeout": 5000}}}}
+          "no_pass": {"pass_row": None, "live": True, "override": {"ExpPassHub": {"timeout": 5000}}},
+          "stage10": {"stage": "stage10"}, "stage10_x3": {"stage": "stage10"}}
 
 
 def bonuses(png, n):
@@ -122,6 +128,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             self.pass_tab = "daily"  # the tab the pass page's Pass Missions opens on: "daily", "weekly"
             self.bonuses = 3  # the Thread tab's Daily Bonuses n/3 (n left)
             self.stage = "exp" if start != "locked" else "locked"
+            self.unboxed = {"stage10"}  # the cards with no Consecutive Battle box: a stage never cleared (#886)
             self.outcomes = []  # each battle's end, in order: "win", "lose", or None (no results page: straight back to the tab)
             self.outcome = None
             self.lux_tab = lux_tab  # the tab Luxcavation opens on
@@ -151,7 +158,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
 
         def box(self):
             """The Consecutive Battle box the page on show has: its key in BOX, None where there is none."""
-            return {"exp": "exp", "locked": "exp", "thread": "thread", "levels": "level"}.get(self.screen)
+            return {"exp": "exp", "locked": "exp", "stage10": "exp", "thread": "thread", "levels": "level"}.get(self.screen)
 
         def shift(self):
             """How far the box on show lies from BOX's numbers: the card it is on is in the middle where stage 10 is locked."""
@@ -160,12 +167,14 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
 
         def read(self, box, enter=None):
             """What the title reads at the roi LuxEnter hands over: nothing where the box is not, as on the real captures."""
-            if self.box() != box:
-                return None
+            return self.n[box] if self.shown(box, enter) else None
+
+        def shown(self, box, enter=None):
+            """Whether the box's label is on show at the roi LuxEnter hands over (lux_actions.consecutive_shown)."""
+            if self.box() != box or self.screen in self.unboxed:
+                return False
             card = CARD.get(self.screen)
-            if card and (enter is None or abs(enter[0] - card[0]) > 20 or abs(enter[1] - card[1]) > 20):
-                return None
-            return self.n[box]
+            return not (card and (enter is None or abs(enter[0] - card[0]) > 20 or abs(enter[1] - card[1]) > 20))
 
         def screencap(self):
             if self.screen == "fight":
@@ -175,6 +184,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
                     return self.images["ev_story"]
                 if self.shots > FIGHT_SHOTS:
                     self.screen = self.stage if self.outcome is None else "result"
+                    if self.outcome == "win":
+                        self.unboxed.discard(self.stage)  # cleared once: the box shows from now on
                 elif self.shots > 1 and self.outcome == "win":
                     return self.images["victory"]
             if self.screen == "team" and self.n[self.fight_box] > 1:
@@ -238,7 +249,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
                 self.screen = self.lux_tab  # the tab last left open
             elif s in ("thread", "scrolled") and inside(EXP_TAB, x, y):
                 self.screen = self.stage
-            elif s in ("exp", "locked") and inside(THREAD_TAB, x, y):
+            elif s in ("exp", "locked", "stage10") and inside(THREAD_TAB, x, y):
                 self.screen = "thread"
             elif s == "thread" and inside(CARD_ENTER, x, y):
                 self.screen = "levels"
@@ -273,7 +284,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             return True
 
         def key(self, keycode):
-            if keycode == 4 and self.screen in ("exp", "locked", "thread"):
+            if keycode == 4 and self.screen in ("exp", "locked", "stage10", "thread"):
                 self.screen = "drive"
             elif keycode == 4 and self.screen == "levels":  # live 2026-10-26: back closes the Level Select
                 self.screen = "thread"
@@ -286,6 +297,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
     game = Game()
     game.set("main")
     rebind("consecutive_now", lambda context, image, box, enter=None: game.read(box, enter))
+    rebind("consecutive_shown", lambda context, image, box, enter=None: game.shown(box, enter))
     tasker = bind(resource, game)
     out = {"error": None}
     for scenario, (start, team, count, retries, outcomes, *rest) in scenarios.items():
@@ -385,6 +397,23 @@ def test_count_mode_fights_the_count_the_settings_file_holds():
     o = run_child(__file__)["x12"]
     assert o["options"] == [f"options: {GLOBAL_DEFAULTS}, mode=count, count=12, team=b, retries=0, consecutive=true"]
     assert o["succeeded"] and o["fights"] == [10, 2] and o["done"] == "EXP Luxcavation: 12 won"
+
+
+def test_a_stage_with_no_consecutive_battle_box_is_fought_one_battle_in_daily_mode():
+    # #886 (live 2026-11-22): stage 10 newly open at the right, its card with no box; the day's one battle is fought there
+    # as one battle, not stopped for a box that does not read.
+    o = run_child(__file__)["stage10"]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [1] and o["presses"] == [] and title_taps(o, "exp") == [] and len(enters(o, "stage10")) == 1
+    assert o["done"] == "EXP Luxcavation: 1 won"
+
+
+def test_count_mode_fights_one_battle_where_the_box_is_missing_then_the_rest_as_one_once_it_shows():
+    # #886: count 3 on stage 10 never cleared: one battle; the win clears the stage and its box shows (the game's "Clear
+    # Stage once to unlock Consecutive Battle"), so the next Enter sets x2 for the two left.
+    o = run_child(__file__)["stage10_x3"]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [1, 2] and o["presses"] == ["plus"] and o["done"] == "EXP Luxcavation: 3 won"
 
 
 def test_exp_luxcavation_is_a_task_of_the_interface():

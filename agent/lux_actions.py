@@ -213,6 +213,21 @@ def consecutive_box(box, enter=None):
             row_y + dy, {name: x + dx for name, x in buttons.items()})
 
 
+# What set_consecutive returns for a card with no Consecutive Battle box: a stage never cleared (#886, the game's "Clear Stage
+# once to unlock Consecutive Battle", EN_MainUIText mainui_cont_mine_invalid_text). It fights one battle.
+NO_BOX = "no box"
+LABEL_PAD = (10, 8)  # LuxConsecLabel looks this far around the title's roi (x, y), for a card a few px off
+
+
+def consecutive_shown(context, image, box, enter=None):
+    """Whether `box`'s page shows its Consecutive Battle box on the card of the Enter at `enter` (consecutive_box): the
+    words "Consecutive Battle" (LuxConsecLabel, a template, no OCR) in the title's roi. Tells a card with no box from a box
+    whose N does not read (#886)."""
+    x, y, w, h = consecutive_box(box, enter)[0]
+    px, py = LABEL_PAD
+    return seen(context, image, "LuxConsecLabel", [x - px, y - py, w + 2 * px, h + 2 * py]) is not None
+
+
 def consecutive_now(context, image, box, enter=None):
     """The N of the Consecutive Battle title on `box`'s page (1-10), None when it does not read: the narrow roi on its "x N"
     first, which reads the yellow 4 the whole title's detection misses (Level Select, live 2026-10-27), then the title.
@@ -224,11 +239,21 @@ def consecutive_now(context, image, box, enter=None):
 
 def set_consecutive(context, box, target, enter=None):
     """Set the Consecutive Battle of `box`'s page (the card of the Enter at `enter`) to `target` and read it back: the N it
-    shows at the end, None when it never read. The game resets it to 1 on leaving Luxcavation and after a result, so each
-    entry sets it (live 2026-10-28)."""
+    shows at the end, None when it never read, NO_BOX when the card has no box (its label never on show while nothing
+    read, #886). The game resets it to 1 on leaving Luxcavation and after a result, so each entry sets it (live
+    2026-10-28)."""
     _, _, (title_x, title_y), row_y, buttons = consecutive_box(box, enter)
-    shown = []
-    until(context, lambda im: shown.append(consecutive_now(context, im, box, enter)) or shown[-1] is not None, timeout=3)
+    shown, labelled = [], []
+
+    def look(image):
+        shown.append(consecutive_now(context, image, box, enter))
+        labelled.append(shown[-1] is not None or consecutive_shown(context, image, box, enter))
+        return shown[-1] is not None
+
+    until(context, look, timeout=3)
+    if shown[-1] is None and not any(labelled):
+        log(f"Consecutive Battle ({box}): no box on this card, wants x{target}: one battle")
+        return NO_BOX
     if shown[-1] is None:
         log(f"Consecutive Battle ({box}): does not read, wants x{target}")
         return None
@@ -255,7 +280,8 @@ class LuxEnter(CustomAction):
     it until the page goes. The param {"opens_battle": false} marks the card's Enter, which opens the Level Select, not
     the battle (#368). Back on the page a battle started from: the battle is over (battle_over). Where the task fights
     consecutively, the param's "box" names the page's Consecutive Battle (CONSECUTIVE): it is set to the wins left, up
-    to 10, before the tap (#375); one that will not read or set stops the task, so no battle starts at the wrong count.
+    to 10, before the tap (#375); one that will not read or set stops the task, so no battle starts at the wrong count. A
+    card with no box (a stage never cleared, #886) fights one battle; the next Enter looks for the box again.
     A task not planned yet (Thread's first look at its card, in daily mode) reads the tab's Daily Bonuses and plans first
     (#429): n left of 3 is 3 - n won today."""
 
@@ -276,7 +302,9 @@ class LuxEnter(CustomAction):
         if lux["consecutive"]:
             want = lux["size"] = luxcavation.batch(lux["fights"], lux["won"], True)
             got = set_consecutive(context, opts["box"], want, (cx, cy))
-            if got != want:
+            if got == NO_BOX:
+                lux["size"] = 1
+            elif got != want:
                 return stop(context, f"{lux['name']}: Consecutive Battle {'did not read' if got is None else f'shows x{got}'}, wanted x{want}")
         if tap_then(context, cx, cy, lambda im: seen(context, im, argv.node_name) is None, timeout=3) is not None:
             RUN["entered"] = opts.get("opens_battle", True)

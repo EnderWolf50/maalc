@@ -627,7 +627,7 @@ Cost 表是 wiki 與簡中客戶端的表，實機 log 的節點面板 Cost 沒�
 - **開始時檢查一次**：主畫面讀到的腦啡肽模組數 m（`LuxHome`）；m < 最難關每場消耗 × 這次要打的場數（經驗本每場 3 個，紐本每場 2 個）就在 log 記 `Modules m < n needed for k, skipped`，回主畫面、以成功結束（`finish()`），清單繼續。面板讀不出來：停止程序，不花任何腦啡肽模組。之後不再檢查。
 - **打贏才算一次**：戰後的結算頁（`LuxResult`，[01](01-architecture.md) 經驗本）右上的 `Victory`／`Defeat` 記下這場的結果，按 Confirm 回到 EXP（或 Thread）分頁；`LuxEnter` 照 `decide` 走：贏了而未滿這次要打的場數（`RUN["lux"]["fights"]`）就再點 Enter，滿了就 `go_home()` 後 `done()`。每場只記一次（結算頁會停留好幾次 hub）。戰場上的 VICTORY 字樣不再當訊號（live-1 F2）。
 - **戰敗**：不算次數，不扣腦啡肽模組；`retries` 內重打同一關（再點 Enter），用完就停止程序（任務失敗，清單繼續）。`retries` 是每一場各自的次數，打贏就重算（同鏡牢的全滅重打）：`retries` 1、這次要打 3 場時，每一場都可以輸一次再打。`lose` 的訊號是結算頁的紅字 `Defeat`（實機 2026-10-27：手動 Give Up，沒有確認框；戰敗不扣腦啡肽模組、不吃紐本的 Daily Bonuses，verified）。回到分頁卻沒看到結算頁，也走停止程序，不算一次。（live-1 F2、F3）
-- **連戰**（任務選項 `luxcavation.<task>.consecutive`，預設開，#375、#813）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。
+- **連戰**（任務選項 `luxcavation.<task>.consecutive`，預設開，#375、#813）：`luxcavation.batch` 給下一場的 N = min(10, 這次要打的場數 − 這次已贏)（關：1）；`decide` 的 `size` 是這場的 N：贏了 `won` 加 N，`won` + N ≥ 這次要打的場數結束。戰敗不算，重打用同一個 N。`LuxEnter` 的設定與讀回見 [01](01-architecture.md) 經驗本，N 讀不到或調不到就停止程序，不照錯的次數開戰。卡片上根本沒有連戰框（沒通關過的關，#886）就打一場、算一場（`size` 1），不停止：每日模式本來就一天 1 場；自訂次數模式這一場贏了就通關，下一次進場框出現，剩下的再照 `batch` 一次打完（例：要打 3 場，先 ×1，再 ×2）。自訂次數模式這樣做是暫定（#886）：另一個做法是改選有連戰框的最難關，一次連戰打完，等使用者決定。
 - 計數存在記憶體（`RUN["lux"]`：`mode` 模式、`target` 目標（自訂次數是 `count`，每日模式是 `DAILY` 的當天場數）、`today` 讀到的今天已贏、`fights` 這次要打的場數，`plan` 之前是 None），每個任務開始時由 `TaskStart` 清掉（ADR 0003：不存檔；今天已做的次數每次從畫面讀，不記憶）。
 
 ## 16. 狂氣換腦啡肽的價格核對
