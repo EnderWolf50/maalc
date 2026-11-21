@@ -492,22 +492,39 @@ def held_want_page(context, monkeypatch):
 
 
 @pytest.mark.parametrize("kind, held, got", [("pack-want", True, "owned"), ("want", True, "owned"), ("material", True, "owned"),
-                                             ("want", False, "want"), ("material", False, "material"), (None, True, None)])
-def test_a_want_class_gift_the_run_holds_is_owned(monkeypatch, kind, held, got):
-    # #623: a gift held again only turns into an afterimage, a material too (a recipe that needs two of one); a gift the
-    # list drops (want_kind None) stays None, held or not: 「不要」 moves no card back (#416)
+                                             ("want", False, "want"), ("material", False, "material"), (None, True, "owned"),
+                                             (None, False, None)])
+def test_a_gift_the_run_holds_is_owned(monkeypatch, kind, held, got):
+    # #623: a gift held again only turns into an afterimage, a material too (a recipe that needs two of one); #869: a gift
+    # off the list (want_kind None) too
     patch_all(monkeypatch, "want_kind", lambda gift_list, i, packs, owned: kind)
     actions.RUN["owned"] = [9089] if held else []
     assert actions.want_of({"team": {"list": wants()}})(9089) == got
 
 
-def test_a_dropped_gift_the_run_holds_still_scores_as_its_keyword(context, monkeypatch):
-    # 「不要」 under #623: Rusted Muzzle, held and dropped by the list, is the main card it is, level with Wound Clerid
+@pytest.mark.parametrize("gift_list", [wants(), None])
+def test_a_gift_off_the_list_the_run_holds_scores_owned_0(context, monkeypatch, gift_list):
+    # #869 (the user, 2026-11-21): Rusted Muzzle, held, not wanted (or no list at all) and no Owned on its card, scores 0,
+    # under Wound Clerid (main, 3), though it is leftmost
     taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
-    actions.RUN["team"]["list"] = wants()
+    actions.RUN["team"]["list"] = gift_list
     actions.RUN["owned"] = [9089]
     event_actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
+
+
+def test_a_gift_off_the_list_the_run_does_not_hold_still_scores_as_its_keyword(context, monkeypatch):
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
+    actions.RUN["team"]["list"] = wants()
+    event_actions.PickGift().run(context, None)
     assert picked(taps) == [236]
+
+
+def test_no_list_asks_no_want_kind(monkeypatch):
+    patch_all(monkeypatch, "want_kind", lambda *a: pytest.fail("asked"))
+    actions.RUN["owned"] = [9089]
+    want = actions.want_of({"team": {}})
+    assert (want(9089), want(9001)) == ("owned", None)
 
 
 @pytest.mark.parametrize("visit, before, held", [({"owned": [9249]}, [9001], [9249]), ({"bought": [9249]}, [9001], [9001, 9249]), (None, [9001], [9001]),

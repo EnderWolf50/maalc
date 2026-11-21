@@ -228,6 +228,16 @@ def test_a_plate_that_named_no_gift_is_read_again_on_the_next_screenshot(context
     assert actions.RUN["owned"] == [9089] and lines == ["GET!: 'Rusted' names no gift: not held", "GET!: Rusted Muzzle held"]
 
 
+def test_a_plate_read_with_a_slip_names_its_gift_and_what_was_read(context, monkeypatch):
+    # #869: every held gift scores 0, so a misread plate's gift is in the log beside the text read, to check afterwards
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    event_text(context, choices_from=7)
+    get_window(context, {4: "Rusted Muzzie"})
+    event_actions.Event().run(context, None)
+    assert actions.RUN["owned"] == [9089] and lines == ["GET!: Rusted Muzzle held (read 'Rusted Muzzie')"]
+
+
 def test_a_still_screen_costs_no_gift_window_read(context):
     # #623 under #511: the map an event ends on is looked at until it holds still; a read there would slow that look
     reads = event_text(context, choices_from=7)
