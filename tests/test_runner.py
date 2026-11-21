@@ -382,9 +382,27 @@ def test_a_halt_line_that_comes_after_the_tasker_stopped_still_fails_the_task(tm
                   halt_when=lambda: any(line.startswith("[maalc] stop") for line in run.lines("agent")))
     run = Run(tmp_path, world, "[maalc] stop: maintenance", "[maalc] account-level stop: the rest of the task list is cancelled")
     take = run.session.agent_line
-    run.session.agent_line = lambda text: (time.sleep(0.2) if "account-level" in text else None, take(text))
+
+    def late(text):  # the account-level stop line read 0.2 s after the tasker stopped
+        if "account-level" in text:
+            time.sleep(0.2)
+        take(text)
+    run.session.agent_line = late
     assert run.start(TWO) == "failed"
     assert run.states()[-2:] == [(0, "failed", "maintenance"), (1, "cancelled", "maintenance")]
+
+
+def test_a_halt_in_the_next_task_leaves_the_task_before_it_as_maaframework_says(tmp_path):
+    # the runner looks at a task every 0.5 s: the next one may start and stop the whole list before it saw this one end
+    run = Run(tmp_path, World({}))
+    s = run.session
+    s.tasks, s.states = list(TWO), ["running", "pending"]
+    s.last_stop = s.halt = "ClientOutdated: the game client is out of date"
+    first, second = Job("MirrorDungeon"), Job("ExpLuxcavation")
+    first.state = second.state = "succeeded"
+    s.finish(0, first.get(), 3.0, second)
+    s.finish(1, second.get(), 1.0, None)
+    assert run.states() == [(0, "succeeded"), (1, "failed", "ClientOutdated: the game client is out of date")]
 
 
 def test_a_tasker_that_stops_with_no_reason_from_the_bot_waits_for_one_once(tmp_path):
