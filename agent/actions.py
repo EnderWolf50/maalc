@@ -1198,15 +1198,16 @@ def hold(ids):
 
 def note_got(context, image, last=""):
     """The run holds the gift of the GET! window over image from now on (hold, #623), and the log says so once: an
-    event's, the starting gift's, an observed gift's, a reward card's. (plate as read, its gift's id or None); `last`, the
-    plate read on this window before: the same plate again is no second line. A plate read empty keeps `last`."""
+    event's, the starting gift's, an observed gift's, a reward card's. The line adds the plate as read when it is not the
+    gift's name (#869: a misread can hold a gift the run never got). `last`, the plate read on this window before: the
+    same plate again is no second line. A plate read empty keeps `last`. Returns (plate as read, its gift's id or None)."""
     name = get_plate(context, image) or last
     gift_id = gift_cells.name_id(name, GIFT_IDS)
     if name != last:
         if gift_id is None:
             log(f"GET!: {name!r} names no gift: not held")
         elif hold([gift_id]):
-            log(f"GET!: {GIFT_NAMES[gift_id]} held")
+            log(f"GET!: {GIFT_NAMES[gift_id]} held" + ("" if name == GIFT_NAMES[gift_id] else f" (read {name!r})"))
     return name, gift_id
 
 
@@ -1297,13 +1298,14 @@ def leave_shop():
 def want_of(run):
     """`want(gift_id)` -> "pack-want" | "want" | "material" | "owned" | None for the team's list (gifts.want_kind), the run's
     packs and the gifts the run holds (RUN["owned"]: the last shop visit's, plus the cards taken on gift pages and the gifts
-    of the GET! windows since, note_got). Always None for a team with no list. A wanted gift the run holds is "owned" (0):
-    taken again it only turns into an afterimage (the user, 2026-11-20, #623)."""
+    of the GET! windows since, note_got). Every gift the run holds is "owned" (0), on the list or not and with no list too:
+    taken again it only turns into an afterimage (the user, 2026-11-21, #869). Else None for a team with no list."""
     gift_list, held = run["team"].get("list"), RUN.get("owned", [])
 
     def want(gift_id):
-        kind = want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
-        return "owned" if kind and gift_id in held else kind
+        if gift_id in held:
+            return "owned"
+        return want_kind(gift_list, gift_id, run_packs(), held) if gift_list else None
     return want
 
 

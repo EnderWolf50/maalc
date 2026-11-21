@@ -77,6 +77,12 @@ def test_a_tier_iv_gift_the_shop_sells_is_bought_when_wanted():
     assert (9070, None) in gifts.purchases(plain_list(want=[9070]), hard=False)
 
 
+def test_a_gift_off_the_list_the_run_holds_is_never_bought():
+    # #869: the shop scores no gift: it buys the list's wants and a wanted fusion's materials only, so a held gift off the
+    # list (owned, 0, on a reward card or an event option) is not bought, as one not held is not.
+    assert gifts.purchases(plain_list(), owned=[9070]) == gifts.purchases(plain_list()) == []
+
+
 def test_a_gift_the_normal_floors_never_sell_is_bought_on_hard_only():
     # 9156 Decamillennial Hearthflame is in the drop pool's excludeEgoGifts: no NORMAL floor's shop shows it.
     wanted = plain_list(want=[9156])

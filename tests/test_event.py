@@ -357,7 +357,7 @@ def test_an_event_option_giving_a_wanted_gift_is_taken_before_the_hint_levels(co
     assert page.tapped == ["Reach out."]
 
 
-@pytest.mark.parametrize("held, owned", [([9001, 9002], [9001, 9002]), (None, [])])
+@pytest.mark.parametrize("held, owned", [([9002, 9003], [9002, 9003]), (None, [])])  # 9001 held is "owned", not asked (#869)
 def test_the_want_is_asked_with_the_gifts_the_run_holds(context, monkeypatch, held, owned):
     want_team(9001)
     if held is not None:
@@ -380,13 +380,15 @@ def test_a_wanted_gift_the_run_already_holds_does_not_jump_the_hint_levels(conte
     assert page.tapped == ["Gamble."]
 
 
-def test_an_option_whose_only_gift_the_run_holds_comes_after_one_giving_a_gift_it_does_not(context, monkeypatch):
+@pytest.mark.parametrize("held, other", [(9001, 9100), (9100, 9200)])
+def test_an_option_whose_only_gift_the_run_holds_comes_after_one_giving_a_gift_it_does_not(context, monkeypatch, held, other):
     # #623: 9001 is wanted and held, owned (0): its direct gain gives nothing new, so it ranks with the rest (level 4) and
-    # the check for 9100 (level 2) goes first, though the direct gain (level 1) is first on screen.
+    # the check for the other gift (level 2) goes first, though the direct gain (level 1) is first on screen. #869: 9100,
+    # held and off the list, alike.
     want_team(9001)
-    actions.RUN["owned"] = [9001]
-    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]),
-                            ("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9100, "check_pass")]))
+    actions.RUN["owned"] = [held]
+    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(held, "direct")]),
+                            ("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(other, "check_pass")]))
     page = Choices(context, monkeypatch, options, test_actions.DOLL)
     event_actions.Event().run(context, None)
     assert page.tapped == ["Look closer."]
