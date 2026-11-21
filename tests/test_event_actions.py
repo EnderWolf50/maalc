@@ -275,6 +275,24 @@ def test_a_wanted_gift_the_run_holds_scores_owned_0_under_a_card_it_does_not_hol
     assert "Rusted Muzzle/owned gift 0 total 0, Wound Clerid/main gift 3 total 3" in lines[0]
 
 
+@pytest.mark.parametrize("gift_list", [wants(), None])
+def test_a_gift_off_the_list_the_run_holds_scores_owned_0(context, monkeypatch, gift_list):
+    # #869 (the user, 2026-11-21): Rusted Muzzle, held, not wanted (or no list at all) and no Owned on its card, scores 0,
+    # under Wound Clerid (main, 3), though it is leftmost
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
+    actions.RUN["team"]["list"] = gift_list
+    actions.RUN["owned"] = [9089]
+    event_actions.PickGift().run(context, None)
+    assert picked(taps) == [536]
+
+
+def test_a_gift_off_the_list_the_run_does_not_hold_still_scores_as_its_keyword(context, monkeypatch):
+    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
+    actions.RUN["team"]["list"] = wants()
+    event_actions.PickGift().run(context, None)
+    assert picked(taps) == [236]
+
+
 def test_a_held_wanted_gift_still_goes_ahead_of_white_gossypium(context, monkeypatch):
     # #90 under #623: an avoided gift stays last, after an owned (0) one, both wanted and held
     taps = gift_page(context, monkeypatch, [GOSSYPIUM, "Rusted Muzzle"])

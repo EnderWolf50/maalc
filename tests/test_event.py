@@ -380,25 +380,15 @@ def test_a_wanted_gift_the_run_already_holds_does_not_jump_the_hint_levels(conte
     assert page.tapped == ["Gamble."]
 
 
-def test_an_option_whose_only_gift_the_run_holds_comes_after_one_giving_a_gift_it_does_not(context, monkeypatch):
+@pytest.mark.parametrize("held, other", [(9001, 9100), (9100, 9200)])
+def test_an_option_whose_only_gift_the_run_holds_comes_after_one_giving_a_gift_it_does_not(context, monkeypatch, held, other):
     # #623: 9001 is wanted and held, owned (0): its direct gain gives nothing new, so it ranks with the rest (level 4) and
-    # the check for 9100 (level 2) goes first, though the direct gain (level 1) is first on screen.
+    # the check for the other gift (level 2) goes first, though the direct gain (level 1) is first on screen. #869: 9100,
+    # held and off the list, alike.
     want_team(9001)
-    actions.RUN["owned"] = [9001]
-    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9001, "direct")]),
-                            ("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9100, "check_pass")]))
-    page = Choices(context, monkeypatch, options, test_actions.DOLL)
-    event_actions.Event().run(context, None)
-    assert page.tapped == ["Look closer."]
-
-
-def test_an_option_whose_only_gift_off_the_list_the_run_holds_ranks_with_the_rest(context, monkeypatch):
-    # #869: 9100 is not on the list but held, owned (0): its direct gain (level 1, first on screen) ranks as the rest
-    # (level 4), so the check for 9200 (level 2) goes first
-    want_team(9001)
-    actions.RUN["owned"] = [9100]
-    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(9100, "direct")]),
-                            ("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(9200, "check_pass")]))
+    actions.RUN["owned"] = [held]
+    options = wanting_table(monkeypatch, ("Reach out.", "Select to gain a Burn E.G.O Gift", "direct", [(held, "direct")]),
+                            ("Look closer.", "Wrath check. Pass to gain a Burn E.G.O Gift", "check", [(other, "check_pass")]))
     page = Choices(context, monkeypatch, options, test_actions.DOLL)
     event_actions.Event().run(context, None)
     assert page.tapped == ["Look closer."]

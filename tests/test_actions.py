@@ -502,24 +502,6 @@ def test_a_gift_the_run_holds_is_owned(monkeypatch, kind, held, got):
     assert actions.want_of({"team": {"list": wants()}})(9089) == got
 
 
-@pytest.mark.parametrize("gift_list", [wants(), None])
-def test_a_gift_off_the_list_the_run_holds_scores_owned_0(context, monkeypatch, gift_list):
-    # #869 (the user, 2026-11-21): Rusted Muzzle, held, not wanted (or no list at all) and no Owned on its card, scores 0,
-    # under Wound Clerid (main, 3), though it is leftmost
-    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
-    actions.RUN["team"]["list"] = gift_list
-    actions.RUN["owned"] = [9089]
-    event_actions.PickGift().run(context, None)
-    assert picked(taps) == [536]
-
-
-def test_a_gift_off_the_list_the_run_does_not_hold_still_scores_as_its_keyword(context, monkeypatch):
-    taps = gift_page(context, monkeypatch, ["Rusted Muzzle", "Wound Clerid"])
-    actions.RUN["team"]["list"] = wants()
-    event_actions.PickGift().run(context, None)
-    assert picked(taps) == [236]
-
-
 def test_no_list_asks_no_want_kind(monkeypatch):
     patch_all(monkeypatch, "want_kind", lambda *a: pytest.fail("asked"))
     actions.RUN["owned"] = [9089]

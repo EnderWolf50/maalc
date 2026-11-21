@@ -1198,9 +1198,9 @@ def hold(ids):
 
 def note_got(context, image, last=""):
     """The run holds the gift of the GET! window over image from now on (hold, #623), and the log says so once: an
-    event's, the starting gift's, an observed gift's, a reward card's, with the plate as read when it is not the gift's name
-    (#869: a misread can hold a gift the run never got). (plate as read, its gift's id or None); `last`, the
-    plate read on this window before: the same plate again is no second line. A plate read empty keeps `last`."""
+    event's, the starting gift's, an observed gift's, a reward card's. The line adds the plate as read when it is not the
+    gift's name (#869: a misread can hold a gift the run never got). `last`, the plate read on this window before: the
+    same plate again is no second line. A plate read empty keeps `last`. Returns (plate as read, its gift's id or None)."""
     name = get_plate(context, image) or last
     gift_id = gift_cells.name_id(name, GIFT_IDS)
     if name != last:
