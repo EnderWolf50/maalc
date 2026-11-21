@@ -119,9 +119,25 @@ test("a problem in a task's option opens the Run tab with that task picked, its 
   const problems = await screen.findByRole("alert");
   expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveClass("bad");
   await user.click(within(problems).getByRole("button"));
-  expect(screen.getByRole("heading", { name: /紐本.*ThreadLuxcavation/ })).toBeVisible();
+  expect(screen.getByRole("group", { name: "紐本" })).toBeVisible();
   await waitFor(() => expect(screen.getByRole("spinbutton", { name: new RegExp(zh["lux.retries"]) })).toHaveFocus());
   expect(document.querySelector(".task-list li.selected")).toHaveClass("bad");
+});
+
+test("a problem in a global option marks their folded panel, and its jump opens it, the field focused (#875)", async () => {
+  const s = newSettings();
+  (s.run as { auto_download: unknown }).auto_download = "yes"; // broken by hand
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App start="teams" />);
+  const problems = await screen.findByRole("alert");
+  await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
+  const panel = screen.getByText(zh["globals.title"]).closest("details")!;
+  expect(panel).not.toHaveAttribute("open");
+  expect(panel).toHaveClass("bad");
+  await user.click(within(problems).getByRole("button"));
+  expect(panel).toHaveAttribute("open");
+  await waitFor(() => expect(screen.getByRole("checkbox", { name: new RegExp(`^${zh["run.auto_download"]}`) })).toHaveFocus());
 });
 
 test("a problem in a task list entry picks that entry, the second of a task listed twice too (#811)", async () => {

@@ -1,19 +1,24 @@
-// The Run tab (#814, #815, #816, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device
-// scan; the task list on the left (ticks, drag or Alt+↑↓: the run order; a task listed again, or an extra entry removed, #811)
-// and the picked task's options on the right; the global options in a frame of their own; the scheduled runs
-// (Schedules.tsx); the runner's Start and Stop, each posted task's state and the live log at the bottom. Each control
-// writes the settings key the runner or the agent reads at a task's start, and shows that key after its label while the pointer
-// is over the field or the field draws a focus ring: the agent's stop lines name an option by it ("run/start_team: team 'x' was
-// deleted ..."). A team pick lists the settings' teams as they are now. During a run the settings it reads are locked
-// (LockContext): a task still shows its options when clicked.
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+// The Run tab (#814, #815, #816, #875, spec #811 「設定視窗」, spec #871 「版面（L1 B）」, spec 04 sections 5, 12 and 14), in two
+// columns with no titles over them, whose first frames start on one line. Left, the task list (ticks, drag or Alt+↑↓: the run
+// order; a task listed again, or an extra entry removed, #811) beside the picked task's options, then the global options
+// (folded) and the scheduled runs (Schedules.tsx). Right, held in view as the page scrolls, the run console: Start, Stop and
+// the run's status, the emulator with the device scan, and the live log, in that order idle and running. A narrow window
+// (NARROW) puts the console's Start line on top and its emulator and log under the options. Each control writes the settings
+// key the runner or the agent reads at a task's start, and shows that key after its label while the pointer is over the field
+// or the field draws a focus ring: the agent's stop lines name an option by it ("run/start_team: team 'x' was deleted ...").
+// A team pick lists the settings' teams as they are now. During a run the settings it reads are locked (LockContext): a task
+// still shows its options when clicked.
+import {
+  memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode,
+} from "react";
 import { fill, type Key } from "./i18n";
 import { schema, type LuxOptions, type Settings } from "./model";
 import { LOG_LINES, crashed, isRunning, sameAddress, useRunner, type Device, type LogLine, type RunView } from "./runner";
 import * as api from "./api";
 import { SchedulesSection } from "./Schedules";
 import {
-  Choice, DescribeContext, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, useEditor, usePick, withBreaks,
+  Choice, DescribeContext, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, translate, useEditor, usePick,
+  withBreaks,
 } from "./ui";
 
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
@@ -49,12 +54,17 @@ export const optionLabel = (path: string): Key => {
  * tab shows each key once. */
 const keyId = (path: string) => `key:${path}`;
 /** A field's label with its settings key after it, small: the key a stop line names. The key shows while the pointer is over
- * the field or the field draws a focus ring, and keeps its room while hidden, so nothing moves when it shows (index.css). One
- * inline span, so a switch's flex row (.check) keeps the label and its key as one item. `text` is the label, by default the
- * task option's (optionLabel). */
+ * the field or the field draws a focus ring, and keeps its room while hidden, so nothing moves when it shows (index.css). It
+ * stays on the label's line: in a narrow column it is cut short rather than take a second line, which put the field below
+ * its neighbour's; its tooltip and a screen reader still give it whole. One span, so a switch's flex row (.check) keeps the
+ * label and its key as one item. `text` is the label, by default the task option's (optionLabel). */
 function KeyLabel({ path, text }: { path: string; text?: string }) {
   const { t } = useEditor();
-  return <span className="keyed">{text ?? t(optionLabel(path))}<code className="key" id={keyId(path)} aria-hidden>{path}</code></span>;
+  return (
+    <span className="keyed">
+      <span className="kl">{text ?? t(optionLabel(path))}</span><code className="key" id={keyId(path)} aria-hidden title={path}>{path}</code>
+    </span>
+  );
 }
 /** The controls inside take settings key `path` as their description, so a screen reader reads the field's label as its name and
  * the key after it, whether or not the key shows. Every field of the tab that shows a key is one of the three below. */
@@ -97,7 +107,20 @@ export function RunTab() {
   }));
   const [i, setSel] = usePick("tasks", rows.map((x) => ({ id: x.key })));
   const picked = rows[i];
-  const locked = isRunning(useRunner().view);
+  const { view, reveal, revealed } = useRunner();
+  const locked = isRunning(view);
+  const narrow = useNarrow();
+  // MaaFramework's own output in the log: held here, so the log keeps it when the window crosses NARROW and moves the log
+  const raw = useState(false);
+  // a scheduled run's window shows its log and Stop (spec #811 「定時執行」): the console, held in view beside the list; a
+  // narrow window's log, under the list and the options (Stop stays on the line held at the page's top)
+  const shown = useRef<HTMLElement | null>(null);
+  const keep = useCallback((el: HTMLElement | null) => { shown.current = el; }, []);
+  useEffect(() => {
+    if (!reveal) return;
+    shown.current?.scrollIntoView?.({ block: "start" });
+    revealed?.();
+  }, [reveal]);
   // the picked task once more, unticked, right after the picked entry, and picked: a new entry runs only once ticked
   const again = () => {
     const tasks = [...s.tasks.slice(0, i + 1), { id: picked.id, enabled: false }, ...s.tasks.slice(i + 1)];
@@ -110,151 +133,309 @@ export function RunTab() {
     setSel(picked.id);
   };
   return (
-    <div className="run-page">
-      <LockContext.Provider value={locked}>
-      {locked && <p className="notice" role="status">{t("runner.locked")}</p>}
-      <EmulatorFields />
-      <div className="split">
-        <aside className="task-list" data-path="tasks">
-          <h3>{t("tasks.title")}</h3>
-          <p className="muted">{withBreaks(t("tasks.note"))}</p>
-          {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
-          <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
-            label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
-            onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
-            render={(x, j) => (
-              <span className="task-row">
-                {/* the tick's own hit area, larger than the bare box; a click there ticks and leaves the picked task as it is */}
-                <label className="tick" onClick={(e) => e.stopPropagation()}>
-                  <Input type="checkbox" checked={x.enabled}
-                    aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name: taskName(t, x.id), n: x.nth + 1 })}
-                    onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
-                </label>
-                <span className={x.enabled ? "" : "muted"}>{taskName(t, x.id)}</span>
-              </span>
-            )} />
-          {picked && (
-            <div className="task-actions">
-              <button type="button" disabled={locked} onClick={again}>
-                <span aria-hidden>+ </span>{fill(t("tasks.again"), { name: taskName(t, picked.id) })}
-              </button>
-              {picked.of > 1 && <button type="button" className="danger" disabled={locked} onClick={remove}>{t("tasks.remove")}</button>}
-            </div>
-          )}
-        </aside>
-        <section className="task-options">
-          {picked && <>
-            {/* the task's id beside its name: the agent's stop lines name a task by it ("the MirrorDungeon task") */}
-            <h3>{taskName(t, picked.id)} <code>{picked.id}</code></h3>
-            {picked.of > 1 && <p className="muted">{fill(t("tasks.entries"), { n: picked.of })}</p>}
-            <TaskOptions id={picked.id} />
-          </>}
-        </section>
+    <div className="run-page"><LockContext.Provider value={locked}>
+      <div className={"run-grid" + (narrow ? " narrow" : "")}>
+        {/* The run console first in the page's order, so the first Tab reaches Start. Wide, the grid draws it in the right
+            column, in one order idle and running: Start, the emulator, the log, which takes the column's remaining height.
+            Narrow, Start, Stop and the status are one line held at the page's top, the emulator and the log under the options. */}
+        {narrow ? <RunControls /> : (
+          <div className="run-console" ref={keep}>
+            <RunControls />
+            <EmulatorFields />
+            <RunLog raw={raw} />
+          </div>
+        )}
+        <div className="run-main">
+          {/* no titles over the columns: the list, the options and the console start on one line */}
+          <div className="split">
+            <aside className="task-list" data-path="tasks">
+              {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
+              <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
+                label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
+                onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
+                render={(x, j) => (
+                  <span className="task-row">
+                    {/* the tick's own hit area, larger than the bare box; a click there ticks and leaves the picked task as it is */}
+                    <label className="tick" onClick={(e) => e.stopPropagation()}>
+                      <Input type="checkbox" checked={x.enabled}
+                        aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name: taskName(t, x.id), n: x.nth + 1 })}
+                        onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
+                    </label>
+                    <span className={x.enabled ? "" : "muted"}>{taskName(t, x.id)}</span>
+                  </span>
+                )} />
+              {picked && (
+                <div className="task-actions">
+                  <button type="button" disabled={locked} onClick={again}>
+                    <span aria-hidden>+ </span>{fill(t("tasks.again"), { name: taskName(t, picked.id) })}
+                  </button>
+                  {picked.of > 1 && <button type="button" className="danger" disabled={locked} onClick={remove}>{t("tasks.remove")}</button>}
+                </div>
+              )}
+              {/* under the list, not over the options: the options' frame stays level with the list and the console */}
+              {picked && picked.of > 1 && <p className="muted">{fill(t("tasks.entries"), { n: picked.of })}</p>}
+              {/* under the list, not over the page: a run moves nothing in the console or the columns' tops */}
+              {locked && <p className="run-locked" role="status">{t("runner.locked")}</p>}
+            </aside>
+            <section className="task-options">{picked && <TaskOptions id={picked.id} />}</section>
+          </div>
+          {narrow && <><EmulatorFields /><RunLog folded raw={raw} boxRef={keep} /></>}
+          <GlobalOptions />
+          {/* the run reads no schedule: they stay open to edits during a run (#816) */}
+          <LockContext.Provider value={false}><SchedulesSection /></LockContext.Provider>
+        </div>
       </div>
-      <GlobalOptions />
-      </LockContext.Provider>
-      {/* the run reads no schedule: they stay open to edits during a run (#816) */}
-      <SchedulesSection />
-      <RunnerSection />
-    </div>
+    </LockContext.Provider></div>
   );
 }
 
-/** What the status line says of the run: the phase, then where it got to (the connection, the resource) or how it ended. */
+/** Below this width the tab is one column (index.css .run-grid.narrow): the console's column no longer fits beside the
+ * options. */
+const NARROW = "(max-width: 1180px)";
+/** Whether the window is narrower than NARROW, followed as it is resized; false where nothing is laid out (the tests). */
+function useNarrow() {
+  const query = typeof matchMedia === "function" ? matchMedia(NARROW) : null;
+  const [narrow, setNarrow] = useState(query?.matches ?? false);
+  useEffect(() => {
+    if (!query) return;
+    const on = () => setNarrow(query.matches);
+    query.addEventListener("change", on);
+    return () => query.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
+
+/** Where the run got to: the running task's place among the tasks it posted, or how many ended while none runs; "" before
+ * the first task starts. */
+function progressOf(v: RunView) {
+  const at = v.tasks.findIndex((x) => x.state === "running");
+  const ended = v.tasks.filter((x) => x.state !== "pending" && x.state !== "running").length;
+  return at < 0 && !ended ? "" : `${at >= 0 ? at + 1 : ended}/${v.tasks.length}`;
+}
+
+/** What the status line says of the run: nothing while idle (the buttons say it); before the first task, the connection and
+ * the resource; then the task it is on, of how many; how it ended. The time it took follows outside the line (useTook). */
 function statusOf(t: (k: Key) => string, v: RunView) {
-  if (v.phase === "idle") return t("runner.status_idle");
-  // ended before its end event: the window ended its tree after a stop, or it crashed and the run failed (spec #811)
+  if (v.phase === "idle") return "";
+  // ended before its end event: the window ended its tree after a stop, or it crashed and the run failed (spec #811). The
+  // result as a phrase, its full stop left out: the time it took follows it (「已停止 · 01:29」)
   if (v.phase === "ended") return t(crashed(v) ? "runner.result.crashed" : v.exit && !v.exit.ended ? "runner.result.stopped"
-    : `runner.result.${v.result ?? "failed"}`);
+    : `runner.result.${v.result ?? "failed"}`).replace(/[。.]$/, "");
+  const progress = progressOf(v);
   const parts = [
     v.phase === "stopping" && t("runner.stopping"),
-    v.link ? fill(t(`runner.link.${v.link.state}`), { address: v.link.address }) : t("runner.status_starting"),
-    v.resource && t(`runner.resource.${v.resource}`),
+    ...(progress ? [progress] : [
+      v.link ? fill(t(`runner.link.${v.link.state}`), { address: v.link.address }) : t("runner.status_starting"),
+      v.resource && t(`runner.resource.${v.resource}`),
+    ]),
   ];
   return parts.filter(Boolean).join(" · ");
 }
 
-/** One line of the live log: its time, where it came from (a class, so the bot's own lines read apart) and its text. */
-const LogRow = memo(function LogRow({ line }: { line: LogLine }) {
-  return <li className={`src-${line.source}`}><time>{line.t}</time><span>{line.line}</span></li>;
+/** A span of time as the status line shows it: 03:42, or 1:03:42 from an hour on. */
+const clock = (ms: number) => {
+  const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  const mmss = `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  return h ? `${h}:${mmss}` : mmss;
+};
+
+/** A log time (HH:MM:SS.mmm, the runner's clock, runner/runlog.py) as a moment: today, or yesterday when today's is still
+ * more than a minute ahead of now (a run that went past midnight). Null for a time that does not read. */
+function fromClock(text: string) {
+  const [h, m, s] = text.split(":").map(Number);
+  if (![h, m, s].every(Number.isFinite)) return null;
+  const d = new Date();
+  d.setHours(h, m, Math.floor(s), Math.round((s % 1) * 1000));
+  return d.getTime() > Date.now() + 60_000 ? d.getTime() - 86_400_000 : d.getTime();
+}
+
+/** How long the run has run, or ran: from its first log line (the run's line 1, while the window still keeps it), else from
+ * when the window saw it start, to now; once it ended, to its last log line (the runner's `end` line), else to when the
+ * window saw it end, so a page loaded again later still says how long it ran. It ticks each second while the run runs. ""
+ * while idle. */
+function useTook(view: RunView) {
+  const running = isRunning(view);
+  const was = useRef(view.phase);
+  const [seen, setSeen] = useState<number | null>(() => (view.phase === "idle" ? null : Date.now()));
+  const [ended, setEnded] = useState<number | null>(() => (view.phase === "ended" ? Date.now() : null));
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const before = was.current;
+    was.current = view.phase;
+    if (running && !isRunning({ ...view, phase: before })) { setSeen(Date.now()); setEnded(null); }
+    if (view.phase === "ended" && before !== "ended") setEnded(Date.now());
+  }, [view.phase]);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  const first = view.log[0]?.n === 1 ? fromClock(view.log[0].t) : null;
+  const last = view.phase === "ended" && first !== null && view.log.length ? fromClock(view.log[view.log.length - 1].t) : null;
+  const from = first ?? seen;
+  return view.phase === "idle" || from === null ? "" : clock((last ?? ended ?? Date.now()) - from);
+}
+
+/** The bot's English names of its tasks, as its lines write them (agent/lux_actions.py LUX), by task id. */
+const BOT_NAMES: Record<string, string> = { "EXP Luxcavation": "ExpLuxcavation", "Thread Luxcavation": "ThreadLuxcavation" };
+/** A task a line of the runner or the bot names, by its id or the bot's English name, longest first; not the pass page's
+ * 「Clear EXP Luxcavation」 row, the game's own label the bot quotes (agent/lux_actions.py). */
+const NAMED = new RegExp(`(?<!Clear )\\b(${[...Object.keys(BOT_NAMES), ...TASKS].sort((a, b) => b.length - a.length).join("|")})\\b`, "g");
+/** A line with each task it names written as the list names it: 「[run] 紐本 status=failed」 for "[run] ThreadLuxcavation
+ * status=failed". The runner's log file keeps the line as it came. */
+const namesInList = (t: (k: Key) => string, text: string) => text.replace(NAMED, (m) => taskName(t, BOT_NAMES[m] ?? m));
+/** A line that says a task failed or was stopped, or the run did (runner/session.py finish, error and end; agent/actions.py
+ * stop): drawn in the failed state's colour. */
+const FAILED_LINE = /\bstatus=(failed|stopped)\b|^\[run\] (error |end (failed|stopped)\b)|^\[maalc\] stop: /;
+
+/** One line of the live log: its time, where it came from (a class, so the bot's own lines read apart) and its text, the tasks
+ * a line of the runner or the bot names as the list names them (`rename`, one function a language, so the rows already
+ * drawn are not drawn again at each new line), the line as it came its tooltip; a failure's line in the failed state's
+ * colour. */
+const LogRow = memo(function LogRow({ line, rename }: { line: LogLine; rename: (text: string) => string }) {
+  const ours = line.source === "runner" || line.source === "agent";
+  const text = ours ? rename(line.line) : line.line;
+  return (
+    <li className={`src-${line.source}` + (ours && FAILED_LINE.test(line.line) ? " failed" : "")} title={text !== line.line ? line.line : undefined}>
+      <time>{line.t}</time><span>{text}</span>
+    </li>
+  );
 });
 
-/** The runner (#815): Start (it saves first) and Stop, what the run is doing, each posted task's state, the live log (the last
- * LOG_LINES lines, MaaFramework's own output hidden unless asked for), and how a run that went wrong ended. */
-function RunnerSection() {
+/** Start (it saves first), Stop and what the run is doing, on the page itself with no frame of their own. Idle, the status
+ * says nothing: the buttons say it. A save under way says so in the status, not on a line of its own under the buttons,
+ * which would move the console down as Start is pressed. Why Start is off, and how a start or a run went wrong, show under
+ * the line in a block of their own, which a narrow window does not hold at the page's top with the line. */
+function RunControls() {
   const { t } = useEditor();
-  const { view, start, stop, blocked, reveal, revealed } = useRunner();
+  const { view, start, stop, blocked } = useRunner();
   const running = isRunning(view);
-  const [showConsole, setShowConsole] = useState(false);
-  // a scheduled run's window shows its log and Stop (spec #811 「定時執行」): they sit at the tab's bottom
-  const box = useRef<HTMLFieldSetElement>(null);
-  useEffect(() => {
-    if (!reveal) return;
-    box.current?.scrollIntoView?.({ block: "start" });
-    revealed?.();
-  }, [reveal]);
+  const took = useTook(view);
+  const saving = blocked === "saving" && !running;
+  const notes = [
+    blocked && !saving && !running && <p key="blocked" className="caution">{t(`runner.blocked_${blocked}`)}</p>,
+    view.refused && <p key="refused" className="caution" role="alert">{fill(t("runner.refused"), { error: view.refused })}</p>,
+    view.killed && <p key="killed" className="caution" role="alert">{fill(t("runner.killed"), { reason: view.killed })}</p>,
+  ].filter(Boolean);
+  return (<>
+    <div className="runner run-controls">
+      <div className="runner-bar">
+        {/* how Start works is its tooltip */}
+        <button type="button" className="primary" title={t("runner.start_note")} disabled={running || blocked !== null} onClick={start}>
+          {t("runner.start")}
+        </button>
+        <button type="button" disabled={view.phase !== "running"} onClick={stop}>
+          {view.phase === "stopping" ? t("runner.stopping") : t("runner.stop")}
+        </button>
+        {/* the clock after the status, outside its live region: a screen reader reads the state as it changes, not each second */}
+        <span className="runner-state">
+          <span className="runner-status" role="status" data-phase={view.phase}>{saving ? t("runner.blocked_saving") : statusOf(t, view)}</span>
+          {took && <span className="runner-took"> · {took}</span>}
+        </span>
+      </div>
+    </div>
+    {notes.length > 0 && <div className="runner run-notes">{notes}</div>}
+  </>);
+}
+
+/** Each posted task's state, while a run shows (#877 writes them on the task list's rows instead): in the log's frame, above
+ * the log, so nothing in the console moves as a run starts. */
+function RunTasks({ view }: { view: RunView }) {
+  const { t } = useEditor();
+  if (!view.tasks.length) return null;
+  return (
+    <div className="run-tasks">
+      <h3>{t("runner.tasks")}</h3>
+      <ol aria-label={t("runner.tasks")}>
+        {view.tasks.map((x, j) => (
+          <li key={j} data-state={x.state}>
+            <span>{taskName(t, x.entry)}</span>
+            <span className="state">{t(`runner.state.${x.state}`)}</span>
+            {x.reason && <small>{x.reason}</small>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/** The live log (the last LOG_LINES lines, MaaFramework's own output hidden unless `raw` asks for it), how a run that crashed
+ * ended and the run's tasks. In the console's column it takes the column's remaining height, empty but for one faint line
+ * until a run logs. `folded` (a narrow window, under the list and the options) it is a panel, folded until a run starts. How
+ * much the window keeps and where the whole log is: its title's tooltip. `boxRef` takes its frame. */
+function RunLog({ folded = false, raw: [showConsole, setShowConsole], boxRef }: {
+  folded?: boolean; raw: [boolean, (on: boolean) => void]; boxRef?: (el: HTMLElement | null) => void;
+}) {
+  const { t, s } = useEditor();
+  const { view } = useRunner();
+  const running = isRunning(view);
+  const rename = useMemo(() => {
+    const { t: inLanguage } = translate(s.language);
+    return (text: string) => namesInList(inLanguage, text);
+  }, [s.language]);
+  // the frame's name is its title alone, not the switch beside it
+  const title = useId();
+  const [open, setOpen] = useState(running || view.log.length > 0);
+  useEffect(() => { if (running) setOpen(true); }, [running]);
   const shown = showConsole ? view.log : view.log.filter((l) => l.source !== "console");
   // the log follows its newest line while the user has not scrolled up from the bottom
   const pane = useRef<HTMLOListElement>(null);
   const follow = useRef(true);
-  useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole]);
+  useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole, open]);
+  const note = fill(t("runner.log_note"), { n: LOG_LINES });
+  // the title, then the raw-output switch at its right: a click on the switch ticks it, and folds no panel
+  const head = (<>
+    <span className="lg-title" id={title} title={note}>{t("runner.log")}</span>
+    <label className="check" title={t("runner.console_note")}>
+      <input type="checkbox" checked={showConsole} onChange={(e) => setShowConsole(e.target.checked)} />{t("runner.console")}
+    </label>
+  </>);
+  const body = (<>
+    {crashed(view) && (
+      <div className="crash" role="alert">
+        <p>{fill(t("runner.crash"), { code: view.exit!.code ?? "—" })}</p>
+        <pre>{view.exit!.tail.join("\n")}</pre>
+      </div>
+    )}
+    <RunTasks view={view} />
+    <div className="log-well">
+      <ol className={"run-log" + (shown.length ? "" : " empty")} ref={pane} aria-label={t("runner.log")} tabIndex={0}
+        onScroll={(e) => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+        {shown.map((l) => <LogRow key={l.n} line={l} rename={rename} />)}
+      </ol>
+      {!shown.length && <small className="log-empty">{t("runner.log_empty")}</small>}
+    </div>
+  </>);
+  if (folded) return (
+    <details className="panel runner run-log-box" ref={boxRef} aria-labelledby={title} open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>{head}</summary>
+      {body}
+    </details>
+  );
   return (
-    <fieldset className="runner" ref={box}>
-      <legend>{t("runner.title")}</legend>
-      <div className="runner-bar">
-        <button type="button" className="primary" disabled={running || blocked !== null} onClick={start}>{t("runner.start")}</button>
-        <button type="button" disabled={view.phase !== "running"} onClick={stop}>
-          {view.phase === "stopping" ? t("runner.stopping") : t("runner.stop")}
-        </button>
-        <span className="runner-status" role="status" data-phase={view.phase}>{statusOf(t, view)}</span>
-      </div>
-      {blocked && !running ? <p className="caution">{t(`runner.blocked_${blocked}`)}</p> : <p className="muted">{t("runner.start_note")}</p>}
-      {view.refused && <p className="caution" role="alert">{fill(t("runner.refused"), { error: view.refused })}</p>}
-      {view.killed && <p className="caution" role="alert">{fill(t("runner.killed"), { reason: view.killed })}</p>}
-      {crashed(view) && (
-        <div className="crash" role="alert">
-          <p>{fill(t("runner.crash"), { code: view.exit!.code ?? "—" })}</p>
-          <pre>{view.exit!.tail.join("\n")}</pre>
-        </div>
-      )}
-      <div className="runner-body">
-        <div className="run-tasks">
-          <h3>{t("runner.tasks")}</h3>
-          {view.tasks.length ? (
-            <ol aria-label={t("runner.tasks")}>
-              {view.tasks.map((x, j) => (
-                <li key={j} data-state={x.state}>
-                  <span>{taskName(t, x.entry)}</span>
-                  <span className="state">{t(`runner.state.${x.state}`)}</span>
-                  {x.reason && <small>{x.reason}</small>}
-                </li>
-              ))}
-            </ol>
-          ) : <p className="muted">{t("runner.tasks_none")}</p>}
-        </div>
-        <div className="run-log-pane">
-          <h3>{t("runner.log")}</h3>
-          <p className="muted">{fill(t("runner.log_note"), { n: LOG_LINES })}</p>
-          <label className="check">
-            <input type="checkbox" checked={showConsole} onChange={(e) => setShowConsole(e.target.checked)} />{t("runner.console")}
-          </label>
-          <ol className="run-log" ref={pane} aria-label={t("runner.log")} tabIndex={0}
-            onScroll={(e) => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-            {shown.map((l) => <LogRow key={l.n} line={l} />)}
-          </ol>
-        </div>
-      </div>
+    <fieldset className="runner run-log-box" ref={boxRef} aria-labelledby={title}>
+      <legend>{head}</legend>
+      {body}
     </fieldset>
   );
 }
 
+/** The picked task's options, under no title of their own: the Mirror Dungeon task's groups carry their own titles, and another
+ * task's options sit in one frame titled with its name. Its id (the agent's stop lines name a task by it, "the
+ * ExpLuxcavation task") is not on the page. */
 function TaskOptions({ id }: { id: string }) {
   const { t } = useEditor();
   if (id === "MirrorDungeon") return <MirrorOptions />;
-  if (id === "ExpLuxcavation") return <LuxFields task="exp" />;
-  if (id === "ThreadLuxcavation") return <LuxFields task="thread" />;
-  if (id === "ChargeEnkephalin") return <ChargeFields />;
-  return <p className="muted">{t("tasks.none")}</p>;
+  const fields: Record<string, ReactNode> = {
+    ExpLuxcavation: <LuxFields task="exp" />, ThreadLuxcavation: <LuxFields task="thread" />, ChargeEnkephalin: <ChargeFields />,
+  };
+  return (
+    <fieldset className="task-opts">
+      <legend>{taskName(t, id)}</legend>
+      {fields[id] ?? <p className="muted">{t("tasks.none")}</p>}
+    </fieldset>
+  );
 }
 
 /** The Mirror Dungeon task's options (spec 04 section 5) in three groups by what they decide: the run itself, the weekly
@@ -379,13 +560,15 @@ function ChargeFields() {
   );
 }
 
-/** The four options every task reads (spec 04 section 5): the webhook and three switches, each with its note. */
+/** The four options every task reads (spec 04 section 5): the webhook and three switches, each with its note, in a panel
+ * folded at first (the user's call, 2026-11-20). Folded, its title turns red when one of them has a problem; a problem's
+ * jump opens it (ui.tsx focusPath). */
 function GlobalOptions() {
-  const { s, update, t } = useEditor();
+  const { s, update, t, bad } = useEditor();
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
   return (
-    <fieldset className="globals">
-      <legend>{t("globals.title")}</legend>
+    <details className={"panel globals" + (GLOBAL_KEYS.some((k) => bad(`run/${k}`)) ? " bad" : "")}>
+      <summary>{t("globals.title")}</summary>
       <p className="muted">{t("globals.note")}</p>
       <div className="grid">
         <KeyField path="run/webhook_url" note={t("run.webhook_url_note")}>
@@ -395,7 +578,7 @@ function GlobalOptions() {
           <Switch key={k} path={`run/${k}`} checked={s.run[k]} note={t(`run.${k}_note`)} onChange={(on) => set({ [k]: on })} />
         ))}
       </div>
-    </fieldset>
+    </details>
   );
 }
 

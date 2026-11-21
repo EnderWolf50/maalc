@@ -36,6 +36,42 @@ test("the global options the tab shows are the run keys every task reads in the 
   expect(agent).toEqual([...GLOBAL_KEYS]);
 });
 
+describe("the page's layout (#875)", () => {
+  test("the run console comes first in the page's order: the first Tab reaches Start", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await r.user.tab();
+    expect(screen.getByRole("button", { name: zh["runner.start"] })).toHaveFocus();
+  });
+
+  test("no title over the columns: neither the task list's title and note nor a heading over the options", () => {
+    renderEditor(<RunTab />, newSettings());
+    expect(screen.queryByRole("heading", { name: zh["tasks.title"] })).toBeNull();
+    expect(screen.queryByText("勾選的任務由上往下依序執行", { exact: false })).toBeNull(); // the note the list had
+    expect(screen.queryByRole("heading", { name: /經驗本/ })).toBeNull(); // the task picked at the start
+  });
+
+  test("a task's options sit in a frame titled with its name, no id; the Mirror Dungeon's groups carry their own titles", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    // the first task shows at the start
+    expect(within(screen.getByRole("group", { name: "經驗本" })).getByRole("combobox", { name: zh["lux.mode"] })).toBeVisible();
+    expect(screen.queryByText("ExpLuxcavation")).toBeNull();
+    await show(r, "領信");
+    expect(within(screen.getByRole("group", { name: "領信" })).getByText(zh["tasks.none"])).toBeVisible();
+    expect(screen.queryByText("ClaimMail")).toBeNull();
+    await show(r, "鏡牢");
+    expect(screen.queryByRole("group", { name: "鏡牢" })).toBeNull();
+    expect(screen.getByRole("group", { name: zh["run.group_run"] })).toBeVisible();
+  });
+
+  test("the global options are a panel, folded at first", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    const webhook = screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) });
+    expect(webhook).not.toBeVisible();
+    await r.user.click(screen.getByText(zh["globals.title"]));
+    expect(webhook).toBeVisible();
+  });
+});
+
 describe("the task list", () => {
   test("a new file lists every task once, all ticked, in the user's order (#874)", () => {
     renderEditor(<RunTab />, newSettings());
@@ -78,7 +114,7 @@ describe("the task list", () => {
     expect(area).toHaveClass("tick");
     await r.user.click(area); // beside the box, inside its area
     expect(r.settings().tasks.find((x) => x.id === "ClaimMail")!.enabled).toBe(true);
-    expect(screen.getByRole("heading", { name: /狂氣換腦啡肽.*ChargeEnkephalin/ })).toBeVisible();
+    expect(screen.getByRole("group", { name: "狂氣換腦啡肽" })).toBeVisible();
     await r.user.click(tick("領信"));
     expect(r.settings().tasks.find((x) => x.id === "ClaimMail")!.enabled).toBe(false);
     expect(rows()[0]).toHaveAttribute("aria-current", "true");
@@ -101,12 +137,12 @@ describe("the task list", () => {
     ]);
   });
 
-  test("a click on a task shows its options with its task id; a task without options says so", async () => {
+  test("a click on a task shows its options; a task without options says so", async () => {
     const r = renderEditor(<RunTab />, assembleTwice());
-    // the first task shows at the start: the agent's stop lines name a task by its id ("the MirrorDungeon task")
-    expect(screen.getByRole("heading", { name: /狂氣換腦啡肽.*ChargeEnkephalin/ })).toBeVisible();
+    // the first task shows at the start
+    expect(screen.getByRole("group", { name: "狂氣換腦啡肽" })).toBeVisible();
     await r.user.click(within(rows()[6]).getByText("領信"));
-    expect(screen.getByRole("heading", { name: /領信.*ClaimMail/ })).toBeVisible();
+    expect(screen.getByRole("group", { name: "領信" })).toBeVisible();
     expect(screen.getByText(zh["tasks.none"])).toBeVisible();
     expect(rows()[6]).toHaveAttribute("aria-current", "true");
   });
@@ -118,7 +154,7 @@ describe("the task list", () => {
     await r.user.click(within(rows()[8]).getByText("鏡牢"));
     expect(rows()[8]).toHaveAttribute("aria-current", "true");
     expect(rows()[7]).not.toHaveAttribute("aria-current");
-    expect(screen.getByRole("heading", { name: /鏡牢.*MirrorDungeon/ })).toBeVisible();
+    expect(screen.getByRole("group", { name: zh["run.group_run"] })).toBeVisible();
     expect(screen.getByText(fill(zh["tasks.entries"], { n: 2 }))).toBeVisible();
     // both entries read the task's one set of options
     await r.user.selectOptions(screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "hard");
@@ -283,6 +319,7 @@ describe("the global options and the emulator", () => {
   test("show whichever task is picked, and write their keys", async () => {
     const r = renderEditor(<RunTab />, newSettings());
     await show(r, "領信");
+    await r.user.click(screen.getByText(zh["globals.title"])); // the panel is folded at first
     await r.user.type(screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) }), "https://hook.invalid/a");
     for (const key of ["auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const) {
       await r.user.click(screen.getByRole("checkbox", { name: zh[`run.${key}`] }));
@@ -304,7 +341,7 @@ describe("the global options and the emulator", () => {
 
   test("the tab's long notes show one topic to a line", async () => {
     await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
-    for (const key of ["tasks.note", "run.start_team_note", "emu.note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);
+    for (const key of ["run.start_team_note", "emu.note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);
   });
 });
 
@@ -360,6 +397,19 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
     expect(shown("run/auto_download", { focus: download })).toBe(true);
     expect(shown("run/auto_accept_terms", { focus: download })).toBe(false);
     expect(shown("emulator/address", { focus: screen.getByRole("textbox", { name: zh["emu.address"] }) })).toBe(true);
+  });
+
+  test("where it does not fit, it is cut short and its label stays whole on one line; its tooltip gives it whole (#875)", async () => {
+    await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
+    for (const path of ["run/stop_when_weekly_bonus_out", "run/difficulty", "emulator/mumu_manager"]) {
+      const key = keyOf(path);
+      expect(key).toHaveAttribute("title", path);
+      expect(["text-overflow", "white-space", "overflow"].map((p) => cssValueOf(css, key, p))).toEqual(["ellipsis", "nowrap", "hidden"]);
+      // the label beside it never shrinks: a fraction of a pixel less wrapped its last character to a second line
+      const label = [...key.parentElement!.children].find((x) => x !== key)!;
+      expect(label.textContent).not.toBe("");
+      expect(cssValueOf(css, label, "flex")).toBe("none");
+    }
   });
 
   test("shown, it moves nothing: hidden, it keeps its room, and showing it changes its visibility alone", () => {

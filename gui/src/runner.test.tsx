@@ -5,14 +5,18 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import libRs from "../src-tauri/src/lib.rs?raw";
+import actionsPy from "../../agent/actions.py?raw";
+import luxActionsPy from "../../agent/lux_actions.py?raw";
+import sessionPy from "../../runner/session.py?raw";
 import cases from "../../tests/runner_cases.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import { IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message } from "./runner";
-import { altMove, dragOnto, queuedTeams } from "./testing";
+import css from "./index.css?raw";
+import { altMove, cssValueOf, dragOnto, queuedTeams } from "./testing";
 
 const zh = TEXT.zh_tw;
 // text: the settings file; saved: each text written; starts: each start the page asked for; send: the last run's channel;
@@ -135,7 +139,7 @@ describe("Start and Stop", () => {
     send({ type: "event", event: "end", result: "stopped" }, exit(1, true));
     expect(startButton()).toBeEnabled();
     expect(stopButton()).toBeDisabled();
-    expect(screen.getByText(zh["runner.result.stopped"])).toBeVisible();
+    expect(screen.getByText("已停止")).toBeVisible();
   });
 
   test("Start is off with no task ticked, and while the settings have problems, saying why", async () => {
@@ -207,6 +211,35 @@ describe("what the run shows", () => {
     expect(screen.getByText(`${fill(zh["runner.link.connected"], { address: "127.0.0.1:16416" })} · ${zh["runner.resource.loaded"]}`)).toBeVisible();
   });
 
+  test("idle, the status line says nothing, its live region there for a screen reader", async () => {
+    await open();
+    expect(screen.getByRole("status", { name: "" }).closest(".runner-bar")).not.toBeNull();
+    expect(document.querySelector(".runner-bar [role=status]")).toHaveTextContent(/^$/);
+  });
+
+  test("once a task runs, the status says which of how many, then how long the run has run, outside its live region", async () => {
+    const user = await open();
+    await started(user);
+    // the run's first log line came 65 s ago: the clock counts from it (the runner's clock, HH:MM:SS.mmm)
+    const d = new Date(Date.now() - 65_000);
+    const t = d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+    send({ type: "event", event: "log", t, source: "runner", line: "[run] connected MuMu 127.0.0.1:16416" }, task(0, "ClaimMail", "running"));
+    const status = document.querySelector(".runner-bar [role=status]")!;
+    expect(status).toHaveTextContent(/^1\/2$/);
+    const took = screen.getByText(/^· 01:0[56]$/);
+    expect(status.contains(took)).toBe(false);
+    expect(took.closest("[role=status], [aria-live]")).toBeNull();
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"));
+    expect(status).toHaveTextContent(/^2\/2$/);
+    const now = new Date();
+    const end = now.toTimeString().slice(0, 8) + "." + String(now.getMilliseconds()).padStart(3, "0");
+    send(task(1, "MirrorDungeon", "failed"), { type: "event", event: "log", t: end, source: "runner", line: "[run] end failed" },
+      { type: "event", event: "end", result: "failed" }, exit(0, true));
+    // the result as a phrase, its full stop left out before the clock: 「跑完了，有任務沒成功 · 01:05」
+    expect(status).toHaveTextContent(/^跑完了，有任務沒成功$/);
+    expect(screen.getByText(/^· 01:0[56]$/)).toBeVisible(); // how long it ran, held after the end
+  });
+
   test(`the live log keeps the last ${LOG_LINES} lines; MaaFramework's own output shows only when asked for`, async () => {
     const user = await open();
     await started(user);
@@ -227,6 +260,75 @@ describe("what the run shows", () => {
     expect(lines[0]).toHaveTextContent("[maalc] line 7"); // two more lines in: the two oldest went
   });
 
+  test("empty, the log says so in one faint line, gone with the first line; how much it keeps is its title's tooltip", async () => {
+    const user = await open();
+    expect(screen.getByText(zh["runner.log_empty"])).toBeVisible();
+    expect(screen.queryByText(fill(zh["runner.log_note"], { n: LOG_LINES }))).toBeNull();
+    expect(screen.getByText(zh["runner.log"], { selector: "[title]" })).toHaveAttribute("title", fill(zh["runner.log_note"], { n: LOG_LINES }));
+    expect(screen.getByLabelText(zh["runner.console"]).closest("[title]")).toHaveAttribute("title", zh["runner.console_note"]);
+    // the frame is named by its title alone, not by the switch on the title's line
+    expect(screen.getByRole("group", { name: zh["runner.log"] })).toContainElement(screen.getByRole("list", { name: zh["runner.log"] }));
+    await started(user);
+    send(log("[maalc] task ClaimMail started"));
+    expect(screen.queryByText(zh["runner.log_empty"])).toBeNull();
+  });
+
+  test("a line that says a task or the run failed or stopped is in the failed colour; a task it names reads as the list names it", async () => {
+    const user = await open();
+    await started(user);
+    const failed = [
+      log("[run] ThreadLuxcavation status=failed t=94s", "runner"), log("[run] ClaimMail status=stopped t=3s", "runner"),
+      log("[maalc] stop: Thread Luxcavation: defeated with the 2 retries used up"), log("[run] error stop_timeout: no stop in 60 s", "runner"),
+      log("[run] end failed", "runner"), log("[run] end stopped", "runner"),
+    ];
+    const fine = [log("[run] ClaimMail status=succeeded t=10s", "runner"), log("[maalc] task EXP Luxcavation: 3 battles"), log("[run] end succeeded", "runner")];
+    send(...failed, ...fine);
+    const lines = logLines();
+    const ink = (li: Element) => cssValueOf(css, li.querySelector("span")!, "color");
+    expect(lines.slice(0, failed.length).map(ink)).toEqual(failed.map(() => "var(--bad)"));
+    for (const li of lines.slice(failed.length)) expect(ink(li)).not.toBe("var(--bad)");
+    // the list's names, the line as it came on hover; the run's log file keeps it as it came (the runner writes it)
+    expect(lines.map((li) => li.querySelector("span")!.textContent)).toEqual([
+      "[run] 紐本 status=failed t=94s", "[run] 領信 status=stopped t=3s", "[maalc] stop: 紐本: defeated with the 2 retries used up",
+      "[run] error stop_timeout: no stop in 60 s", "[run] end failed", "[run] end stopped",
+      "[run] 領信 status=succeeded t=10s", "[maalc] task 經驗本: 3 battles", "[run] end succeeded",
+    ]);
+    expect(lines[0]).toHaveAttribute("title", "[run] ThreadLuxcavation status=failed t=94s");
+    expect(lines[3]).not.toHaveAttribute("title"); // nothing renamed: nothing to show
+  });
+
+  test("the lines the log reds and renames are written as the runner and the bot write them", () => {
+    // runner/session.py say, error, finish and the run's end; agent/actions.py log and stop
+    for (const line of ['self.out.log("runner", f"[run] {text}")', 'self.say(f"error {kind}: {message}")',
+      'self.say(f"end {result}")', "status={self.states[i]}"]) expect(sessionPy).toContain(line);
+    for (const line of ['print(f"[maalc] {msg}", flush=True)', 'log(f"stop: {reason}")']) expect(actionsPy).toContain(line);
+  });
+
+  test("the bot's English task names, as agent/lux_actions.py writes them, read as the list names them; the game's own label stays", async () => {
+    const names = /^LUX = \{"exp": \("([^"]+)",.*"thread": \("([^"]+)",/m.exec(luxActionsPy);
+    expect(names).not.toBeNull();
+    const [, exp, thread] = names!;
+    const user = await open();
+    await started(user);
+    send(log(`[maalc] stop: ${exp}: no team picked`), log(`[maalc] ${thread}: battle 2 of 3`),
+      log(`[maalc] the pass's Clear ${exp} row done`));
+    expect(logLines().map((li) => li.querySelector("span")!.textContent)).toEqual([
+      "[maalc] stop: 經驗本: no team picked", "[maalc] 紐本: battle 2 of 3", `[maalc] the pass's Clear ${exp} row done`,
+    ]);
+  });
+
+  test("an ended run's time is from its first log line to its last, also when the page loads it again later", async () => {
+    const at = (ago: number) => {
+      const d = new Date(Date.now() - ago);
+      return d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+    };
+    const line = (ago: number, text: string): Message => ({ type: "event", event: "log", t: at(ago), source: "runner", line: text });
+    back.history = { messages: [line(300_000, "[run] connected MuMu 127.0.0.1:16416"), task(0, "ClaimMail", "succeeded"),
+      line(240_000, "[run] end succeeded"), { type: "event", event: "end", result: "succeeded" }, exit(0, true)], active: false };
+    await open();
+    expect(await screen.findByText(/^· 01:00$/)).toBeVisible(); // 5 min ago to 4 min ago, not to now
+  });
+
   test("a new run starts a new log", async () => {
     const user = await open();
     await started(user);
@@ -244,7 +346,7 @@ describe("what the run shows", () => {
     expect(alert).toHaveTextContent(fill(zh["runner.crash"], { code: 3 }));
     expect(alert).toHaveTextContent("Fatal Python error: access violation");
     expect(startButton()).toBeEnabled();
-    expect(screen.getByText(zh["runner.result.crashed"])).toBeVisible(); // the run failed (spec #811)
+    expect(screen.getByText("執行器意外結束，這次執行失敗")).toBeVisible(); // the run failed (spec #811)
   });
 
   test("a run that ends without its end event fails the running task and cancels the rest; after a stop, stops it", async () => {
@@ -273,7 +375,7 @@ describe("what the run shows", () => {
     send({ type: "stopping" }, { type: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
     expect(screen.getByRole("alert")).toHaveTextContent(fill(zh["runner.killed"], { reason: "the runner cannot stop MaaFramework" }));
     expect(screen.queryByText(fill(zh["runner.crash"], { code: 1 }), { exact: false })).toBeNull();
-    expect(screen.getByText(zh["runner.result.stopped"])).toBeVisible();
+    expect(screen.getByText("已停止")).toBeVisible();
   });
 
   test("a page taken up once in the development build's double start shows the run once", async () => {
@@ -292,6 +394,49 @@ describe("what the run shows", () => {
     expect(runTasks()[0]).toHaveAttribute("data-state", "running");
     expect(stopButton()).toBeEnabled();
     expect(startButton()).toBeDisabled();
+  });
+});
+
+describe("a narrow window (1180 px wide and less)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("matchMedia", (media: string) => ({
+      media, matches: media.includes("max-width: 1180px"), addEventListener() {}, removeEventListener() {},
+    }));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  test("Start, Stop and the status come first, then the list and the options, then the emulator and the log", async () => {
+    await open();
+    const order = [startButton(), stopButton(), document.querySelector(".runner-bar [role=status]")!, tick("領信"),
+      screen.getByRole("group", { name: zh["task.ClaimMail"] }), screen.getByRole("textbox", { name: zh["emu.address"] }),
+      screen.getByRole("list", { name: zh["runner.log"] })];
+    for (let k = 1; k < order.length; k++) {
+      expect(order[k - 1].compareDocumentPosition(order[k]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
+  test("the line held at the top holds Start, Stop and the status alone: why Start is off shows under it, and scrolls away", async () => {
+    const s = settings();
+    s.tasks = s.tasks.map((x) => ({ ...x, enabled: false }));
+    back.text = fileOf(s);
+    await open();
+    const why = screen.getByText(zh["runner.blocked_no_task"]);
+    expect(startButton().closest(".run-controls")!.contains(why)).toBe(false);
+  });
+
+  test("the log is a panel folded until a run starts; its raw-output switch on the title's line ticks and folds nothing", async () => {
+    const user = await open();
+    const lines = screen.getByRole("list", { name: zh["runner.log"] });
+    expect(lines).not.toBeVisible();
+    await user.click(screen.getByLabelText(zh["runner.console"]));
+    expect(screen.getByLabelText(zh["runner.console"])).toBeChecked();
+    expect(lines).not.toBeVisible();
+    await user.click(screen.getByText(zh["runner.log"]));
+    expect(lines).toBeVisible();
+    await user.click(screen.getByText(zh["runner.log"]));
+    expect(lines).not.toBeVisible();
+    await started(user);
+    expect(lines).toBeVisible();
   });
 });
 
@@ -400,7 +545,7 @@ describe("during a run", () => {
     await user.click(list.getByText(zh["task.MirrorDungeon"]));
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) })).toBeDisabled();
     await user.click(list.getByText(zh["task.ExpLuxcavation"]));
-    expect(screen.getByRole("heading", { name: /經驗本.*ExpLuxcavation/ })).toBeVisible();
+    expect(screen.getByRole("group", { name: "經驗本" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.mode"]}`) })).toBeDisabled();
     // no entry added or removed (#811)
     await user.click(list.getAllByText(zh["task.AssembleModules"])[1]);
