@@ -43,7 +43,7 @@ export interface Report {
   same: number;
   /** The files of READ_BACK_FILES that are not there, by name. */
   absent: string[];
-  /** The task list as MXU had it, each MXU entry with its own tick; null when it stayed at a new file's (none ticked). */
+  /** The task list as MXU had it, each MXU entry with its own tick; null when it stayed at a new file's (every task once, all ticked). */
   tasks: Settings["tasks"] | null;
   /** MXU's last device address; null when none came back. */
   address: string | null;
