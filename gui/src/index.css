@@ -421,8 +421,9 @@ ol.reorder .badmark { color: var(--bad); font-weight: 700; font-size: 12px; }
 /* the whole row drags (#873): no handle and no move buttons; the dragged row dimmed, and a line in the gap where it lands,
  * after the row under it when dragged down, before it when dragged up; locked (a run), the row only picks */
 ol.reorder li.dragging { opacity: 0.4; }
-ol.reorder li.drop-after { box-shadow: 0 3px 0 -1px var(--accent-line); }
-ol.reorder li.drop-before { box-shadow: 0 -3px 0 -1px var(--accent-line); }
+/* the skill rows' drag (useDragSort) marks only the two rows, so their order tells the way it was dragged */
+ol.reorder li.drop-after, ol.skill-sinners > li[data-dragging] ~ li[data-over] { box-shadow: 0 3px 0 -1px var(--accent-line); }
+ol.reorder li.drop-before, ol.skill-sinners > li[data-over]:has(~ li[data-dragging]) { box-shadow: 0 -3px 0 -1px var(--accent-line); }
 ol.reorder.locked li { cursor: default; }
 ol.reorder li:focus-visible, ol.skill-sinners > li:focus-visible { outline-offset: 1px; } /* inside the 4 px gap to the next row */
 ol.reorder .item { flex: 1; min-width: 0; }
@@ -790,11 +791,7 @@ ol.skill-sinners > li {
   border-radius: 4px; corner-shape: bevel; cursor: grab; user-select: none;
 }
 ol.skill-sinners > li.faulty { border-color: var(--bad); outline: 1px solid var(--bad); }
-/* as a sortable list's rows (ol.reorder): the dragged row dimmed, a line where it lands (useDragSort marks only the two rows,
- * so their order tells the way it was dragged) */
-ol.skill-sinners > li[data-dragging] { opacity: 0.4; }
-ol.skill-sinners > li[data-dragging] ~ li[data-over] { box-shadow: 0 3px 0 -1px var(--accent-line); }
-ol.skill-sinners > li[data-over]:has(~ li[data-dragging]) { box-shadow: 0 -3px 0 -1px var(--accent-line); }
+ol.skill-sinners > li[data-dragging] { opacity: 0.4; } /* and the line where it lands with ol.reorder's */
 .skill-rank { min-width: 1.5em; text-align: right; color: var(--accent-ink); font: 700 16px/1 var(--font-display); }
 .skill-name {
   flex: 0 1 6.5em; min-width: 3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

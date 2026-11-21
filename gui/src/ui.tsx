@@ -281,7 +281,7 @@ export function ToggleNum({ label, path, value, on, min, max, note, onChange }: 
 
 /** The place a row moves to on a key: Alt+↑ one up, Alt+↓ one down, Alt+Home first, Alt+End last; undefined for any other key
  * and for a move past either end. */
-export function moveKey(e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean }, i: number, n: number) {
+function moveKey(e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean }, i: number, n: number) {
   if (!e.altKey || e.ctrlKey || e.metaKey) return undefined;
   const to = ({ ArrowUp: i - 1, ArrowDown: i + 1, Home: 0, End: n - 1 } as Record<string, number>)[e.key];
   return to === undefined || to < 0 || to >= n || to === i ? undefined : to;
@@ -291,14 +291,16 @@ export function moveKey(e: { key: string; altKey: boolean; ctrlKey: boolean; met
  * takes the focus with Tab, says how it moves, and moves on Alt with an arrow, Home or End (moveKey). The moved row keeps the
  * focus, given back after the render: WebView2 moves the focus to <body> when React moves a focused row to reorder the list
  * (seen 2026-11-22; jsdom keeps it there, so the tests cannot show it). Its new place is read out (「移到第 2 位，共
- * 3 位」) by aria-live, not role="status", which the Undo note under a list is. Locked (LockContext), no key moves a row.
- * `list` goes on the <ol>, `row` on each row with `onKey` from its onKeyDown (true: the key moved it), `notes` after the list. */
+ * 3 位」) by aria-live, not role="status", which the Undo note under a list is; the words come in anew each move, as a
+ * screen reader reads only what the region gains, so a second move to the same place is read too. Locked (LockContext), no
+ * key moves a row. `list` goes on the <ol>, `row` on each row with `onKey` from its onKeyDown (true: the key moved it),
+ * `readOut` after the list. */
 export function useKeyMoves(n: number, move: (from: number, to: number) => void) {
   const { t } = useEditor();
   const locked = useContext(LockContext);
   const list = useRef<HTMLOListElement>(null);
   const follow = useRef<number | null>(null);
-  const [said, setSaid] = useState("");
+  const [said, setSaid] = useState({ words: "", n: 0 });
   const hint = useId();
   useLayoutEffect(() => {
     if (follow.current === null) return;
@@ -314,10 +316,15 @@ export function useKeyMoves(n: number, move: (from: number, to: number) => void)
       e.preventDefault();
       follow.current = to;
       move(i, to);
-      setSaid(fill(t("movedTo"), { n: to + 1, of: n }));
+      setSaid((x) => ({ words: fill(t("movedTo"), { n: to + 1, of: n }), n: x.n + 1 }));
       return true;
     },
-    notes: <><span id={hint} className="sr-only">{t("moveHint")}</span><span className="sr-only" aria-live="polite">{said}</span></>,
+    readOut: (
+      <>
+        <span id={hint} className="sr-only">{t("moveHint")}</span>
+        <span className="sr-only" aria-live="polite">{said.words && <span key={said.n}>{said.words}</span>}</span>
+      </>
+    ),
   };
 }
 
@@ -341,25 +348,26 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
     onChange(next);
     if (selected === from) onSelect?.(to, next);
   };
-  const keys = useKeyMoves(items.length, move);
+  const moves = useKeyMoves(items.length, move);
   // a row dropped lands where the row under it was: after it when dragged down, before it when dragged up
   const dropAt = (i: number) => dragging !== null && over === i && dragging !== i && (dragging < i ? "drop-after" : "drop-before");
   return (
     <>
-      <ol ref={keys.list} className={"reorder" + (locked ? " locked" : "")} aria-label={label} title={locked ? undefined : t("dragHint")}>
+      <ol ref={moves.list} className={"reorder" + (locked ? " locked" : "")} aria-label={label} title={locked ? undefined : t("dragHint")}>
         {items.map((item, i) => (
-          <li key={keyOf(item)} draggable={!locked} {...keys.row}
+          <li key={keyOf(item)} draggable={!locked} {...moves.row}
             className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad", dropAt(i)].filter(Boolean).join(" ")}
             // a list that selects (teams, plans) picks with Enter or Space, as by a click
             aria-current={onSelect && selected === i ? true : undefined}
             onKeyDown={(e) => {
-              if (keys.onKey(e, i)) return;
+              if (moves.onKey(e, i)) return;
               if (onSelect && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSelect(i, items); }
             }}
             onClick={() => onSelect?.(i, items)}
             onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = "move"; }}
             onDragEnd={() => { setDragging(null); setOver(null); }}
             onDragOver={(e) => { e.preventDefault(); setOver(i); }}
+            onDragLeave={() => setOver((o) => (o === i ? null : o))}
             onDrop={(e) => { e.preventDefault(); if (dragging !== null) move(dragging, i); setDragging(null); setOver(null); }}>
             {/* a wrong row says so besides its red frame: a cross, and words for a screen reader */}
             {badAt?.(i) && <span className="badmark"><span aria-hidden>✕</span><span className="sr-only">{t("hasProblem")}</span></span>}
@@ -367,7 +375,7 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
           </li>
         ))}
       </ol>
-      {keys.notes}
+      {moves.readOut}
     </>
   );
 }

@@ -1,12 +1,12 @@
 // The shared controls of ui.tsx. ReorderList: the whole row drags, Alt with an arrow moves a row from the keyboard, and a list
 // that selects (teams, plans) is picked from the keyboard too. Choice and Select: every dropdown draws the same chevron.
-import { fireEvent, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { expect, test } from "vitest";
 import giftListsCss from "./giftlists.css?raw";
 import { TEXT } from "./i18n";
 import indexCss from "./index.css?raw";
-import { altMove, cssRules, cssValueOf, dragOnto, renderEditor } from "./testing";
+import { altMove, cssRules, cssValueOf, dragHeld, dragOnto, renderEditor } from "./testing";
 import { LockContext, ReorderList } from "./ui";
 
 test("no rule but the base one gives a select the background shorthand, which would clear its drawn chevron (#734)", () => {
@@ -80,8 +80,19 @@ test("a move is read out as the row's new place, in a live region that is not a 
   const { user } = renderEditor(<Picker />);
   await altMove(user, row("Tc"), "Home");
   const said = screen.getByText("移到第 1 位，共 3 位");
-  expect(said).toHaveAttribute("aria-live", "polite");
+  expect(said.closest("[aria-live]")).toHaveAttribute("aria-live", "polite");
   expect(said.closest("[role=status]")).toBeNull();
+});
+
+test("a second move to the same place is read out again: its words come into the live region anew", async () => {
+  const { user } = renderEditor(<Picker />);
+  await altMove(user, row("Tc"), "Home");
+  const first = screen.getByText("移到第 1 位，共 3 位");
+  await altMove(user, row("Tb"), "Home"); // the same words: a screen reader reads only what the region gains
+  const second = screen.getByText("移到第 1 位，共 3 位");
+  expect(second).not.toBe(first);
+  expect(first).not.toBeInTheDocument();
+  expect(second.closest("[aria-live]")).toHaveAttribute("aria-live", "polite");
 });
 
 test("every row takes the focus and says how it moves; the list has the name it is given", () => {
@@ -94,22 +105,20 @@ test("every row takes the focus and says how it moves; the list has the name it 
 });
 
 test("a row shows the grabbing hand; while dragged it is dimmed, and a line marks where it lands, past the row under it", () => {
-  const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
   const look = (name: string, prop: string) => cssValueOf(indexCss, row(name), prop);
   renderEditor(<Picker />);
   expect(look("Ta", "cursor")).toBe("grab");
   expect(look("Tb", "box-shadow")).toBeUndefined();
-  fireEvent.dragStart(row("Ta"), { dataTransfer: dt() });
-  fireEvent.dragOver(row("Tc"), { dataTransfer: dt() });
+  let drag = dragHeld(row("Ta"), row("Tc"));
   expect(Number(look("Ta", "opacity"))).toBeLessThan(1);
-  const below = look("Tc", "box-shadow"); // dragged down: it lands after Tc, so the line is under Tc
-  expect(below).toMatch(/^0 \dpx /);
+  expect(look("Tc", "box-shadow")).toMatch(/^0 \dpx /); // dragged down: it lands after Tc, so the line is under Tc
   expect(look("Tb", "box-shadow")).toBeUndefined();
-  fireEvent.dragEnd(row("Ta"), { dataTransfer: dt() });
-  fireEvent.dragStart(row("Tc"), { dataTransfer: dt() });
-  fireEvent.dragOver(row("Ta"), { dataTransfer: dt() });
+  drag.end();
+  drag = dragHeld(row("Tc"), row("Ta"));
   expect(look("Ta", "box-shadow")).toMatch(/^0 -\dpx /); // dragged up: before Ta, the line over it
-  fireEvent.dragEnd(row("Tc"), { dataTransfer: dt() });
+  drag.leave(); // out of the list: no drop place left
+  expect(look("Ta", "box-shadow")).toBeUndefined();
+  drag.end();
   expect(look("Ta", "box-shadow")).toBeUndefined();
 });
 

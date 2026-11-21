@@ -1,16 +1,15 @@
 // Component tests of the teams tab's skill replacement panel (#454, spec 04 section 9; the layout the user adopted on 2026-11-06):
 // collapsed by default; only the sinners to change are listed, in priority order (a row drags, or moves with Alt and an arrow),
-// each with S1 worked out from
-// the S2 and S3 steppers, the swaps the target needs and, when it needs two kinds, which to try first; ID Skill Search's switch
-// and payment below.
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+// each with S1 worked out from the S2 and S3 steppers, the swaps the target needs and, when it needs two kinds, which to try
+// first; ID Skill Search's switch and payment below.
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
 import { SINNERS, addTeam, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
 import css from "./index.css?raw";
-import { altMove, cssValueOf, pickInList, queuedTeams, renderEditor } from "./testing";
+import { altMove, cssValueOf, dragHeld, dragOnto, pickInList, queuedTeams, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
@@ -40,13 +39,6 @@ const s1 = (name: string) => within(row(name)).getByLabelText(`${name} S1`);
 const pill = (name: string) => row(name).querySelector<HTMLElement>(".skill-pill")!;
 const order = (name: string) => within(row(name)).getByRole<HTMLSelectElement>("combobox", { name: `${name} ${zh["skill.order"]}` });
 const rest = () => panel().querySelector<HTMLElement>(".skill-rest")!;
-const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
-function drag(from: Element, to: Element) {
-  fireEvent.dragStart(from, { dataTransfer: dt() });
-  fireEvent.dragOver(to, { dataTransfer: dt() });
-  fireEvent.drop(to, { dataTransfer: dt() });
-  fireEvent.dragEnd(from, { dataTransfer: dt() });
-}
 
 describe("the list", () => {
   test("is collapsed until opened; with nobody listed it says every deck stays 3/2/1 and names all 12 as unchanged", async () => {
@@ -203,7 +195,7 @@ describe("priority order", () => {
     expect(stored(r).map((x) => x.sinner)).toEqual(["Faust", "Yi Sang", "Gregor"]);
     expect(listed()).toEqual(["Faust", "Yi Sang", "Gregor"]);
     expect(row("Yi Sang")).toHaveFocus();
-    expect(within(panel()).getByText("移到第 2 位，共 3 位")).toHaveAttribute("aria-live", "polite");
+    expect(within(panel()).getByText("移到第 2 位，共 3 位").closest("[aria-live]")).toHaveAttribute("aria-live", "polite");
     await r.user.keyboard("{Alt>}{ArrowUp}{/Alt}");
     expect(listed()).toEqual(["Yi Sang", "Faust", "Gregor"]);
     await r.user.keyboard("{Alt>}{End}{/Alt}");
@@ -229,23 +221,22 @@ describe("priority order", () => {
     await expand(r);
     const look = (name: string, prop: string) => cssValueOf(css, row(name), prop);
     expect(look("Faust", "cursor")).toBe("grab");
-    fireEvent.dragStart(row("Yi Sang"), { dataTransfer: dt() });
-    fireEvent.dragOver(row("Gregor"), { dataTransfer: dt() });
+    let held = dragHeld(row("Yi Sang"), row("Gregor"));
     expect(Number(look("Yi Sang", "opacity"))).toBeLessThan(1);
     expect(look("Gregor", "box-shadow")).toMatch(/^0 \dpx /); // dragged down: it lands after Gregor, the line under it
     expect(look("Faust", "box-shadow")).toBeUndefined();
-    fireEvent.dragEnd(row("Yi Sang"), { dataTransfer: dt() });
-    fireEvent.dragStart(row("Gregor"), { dataTransfer: dt() });
-    fireEvent.dragOver(row("Faust"), { dataTransfer: dt() });
+    held.end();
+    held = dragHeld(row("Gregor"), row("Faust"));
     expect(look("Faust", "box-shadow")).toMatch(/^0 -\dpx /); // dragged up: before Faust, the line over it
-    fireEvent.dragEnd(row("Gregor"), { dataTransfer: dt() });
+    held.leave(); // out of the list: no drop place left
     expect(look("Faust", "box-shadow")).toBeUndefined();
+    held.end();
   });
 
   test("dragging a sinner onto another moves it there, with its target and order", async () => {
     const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1), entry("Gregor", 1, 3, 2, false)]));
     await expand(r);
-    drag(row("Gregor"), row("Yi Sang"));
+    dragOnto(row("Gregor"), row("Yi Sang"));
     expect(listed()).toEqual(["Gregor", "Yi Sang", "Faust"]);
     expect(stored(r)).toEqual([entry("Gregor", 1, 3, 2, false), entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1)]);
     expect(row("Gregor").querySelector(".skill-rank")).toHaveTextContent(/^1$/);

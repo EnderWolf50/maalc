@@ -28,7 +28,7 @@ export function SkillPanel({ i }: { i: number }) {
   const rest = SINNERS.filter((n) => !sr.sinners.some((x) => x.sinner === n));
   const reorder = (from: number, to: number) => edit((d) => { d.sinners = move(d.sinners, from, to); });
   const dragItem = useDragSort((from, to) => reorder(Number(from), Number(to)), () => true);
-  const keys = useKeyMoves(sr.sinners.length, reorder);
+  const moves = useKeyMoves(sr.sinners.length, reorder);
 
   const [undoNote, removeRow] = useUndoRow<SkillReplacement["sinners"][number]>((fn) => edit((d) => fn(d.sinners)), s.teams[i].id);
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
@@ -43,7 +43,7 @@ export function SkillPanel({ i }: { i: number }) {
       </select>
       {undoNote}
       {!sr.sinners.length && <p className="muted">{t("skill.empty")}</p>}
-      <ol ref={keys.list} className="skill-sinners" aria-label={t("skill.title")} title={t("dragHint")}>
+      <ol ref={moves.list} className="skill-sinners" aria-label={t("skill.title")} title={t("dragHint")}>
         {sr.sinners.map((x, j) => {
           const plan = skillPlan(x.target), target = x.target, faulty = plan.faults.length > 0;
           const needsTwo = plan.need.length > 1;
@@ -54,8 +54,8 @@ export function SkillPanel({ i }: { i: number }) {
           // a step moves one card between S1 and `k`, so the deck stays 6
           const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const goal = draft.sinners[j].target; goal.s1 -= d; goal[k] += d; });
           return (
-            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} {...keys.row}
-              className={bad(rowPath) || faulty ? "faulty" : ""} onKeyDown={(e) => keys.onKey(e, j)} {...dragItem(String(j), "sinners")}>
+            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} {...moves.row}
+              className={bad(rowPath) || faulty ? "faulty" : ""} onKeyDown={(e) => moves.onKey(e, j)} {...dragItem(String(j), "sinners")}>
               <b className="skill-rank">{j + 1}</b>
               <span className="skill-name" title={x.sinner}>{x.sinner}</span>
               <span className="skill-count">
@@ -97,7 +97,7 @@ export function SkillPanel({ i }: { i: number }) {
           );
         })}
       </ol>
-      {keys.notes}
+      {moves.readOut}
       <p className="muted skill-rest">{t("skill.rest")}{rest.join(t("skill.sep")) || t("skill.rest_none")}</p>
       <p className="muted">{t("skill.uptie")}</p>
       <Mark className="toggle" path={`${path}/id_skill_search`}>

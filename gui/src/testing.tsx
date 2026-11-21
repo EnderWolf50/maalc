@@ -42,12 +42,20 @@ export async function altMove(user: UserEvent, row: HTMLElement, key: "ArrowUp" 
   await user.keyboard(`{Alt>}{${key}}{/Alt}`);
 }
 
+const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
+
+/** Pick up row `from` of a sortable list and hold it over row `to`, not dropped: what the rows show during a drag. Returns
+ * the pointer leaving `to` and the drag's end (cancelled). */
+export function dragHeld(from: Element, to: Element) {
+  fireEvent.dragStart(from, { dataTransfer: dt() });
+  fireEvent.dragOver(to, { dataTransfer: dt() });
+  return { leave: () => fireEvent.dragLeave(to, { dataTransfer: dt() }), end: () => fireEvent.dragEnd(from, { dataTransfer: dt() }) };
+}
+
 /** Drag row `from` of a sortable list (ui.tsx ReorderList) onto row `to` and drop it: the HTML5 events the list handles. The
  * real window takes a drag only in the foreground or over DevTools (docs/agents/gui-driving.md). */
 export function dragOnto(from: Element, to: Element) {
-  const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
-  fireEvent.dragStart(from, { dataTransfer: dt() });
-  fireEvent.dragOver(to, { dataTransfer: dt() });
+  dragHeld(from, to);
   fireEvent.drop(to, { dataTransfer: dt() });
   fireEvent.dragEnd(from, { dataTransfer: dt() });
 }
