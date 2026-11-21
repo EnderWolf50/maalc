@@ -105,7 +105,7 @@ const screens: [image: string, hits: string[]][] = [
   ['EnkephalinBoxes.png', ['EnkephalinWindow', 'AssemblePanel', 'ChargePanel', 'EnkephalinBar', 'AssembleBefore', 'AssembleAfter', 'ChargePrompt', 'ModuleIcon']],
   ['SinnersTab.png', ['GoToMirrorEntry', 'NavMainTabs', 'HomeWindowTab', 'EnkephalinBar', 'ModuleIcon']],
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
-  // Client 1.119.1 (2026-11-21, Walpurgis Night): the Drive buttons redrawn smaller and higher, an event card on the left.
+  // Live 2026-11-22, client 1.119.1 (#884): Walpurgis Night redrew the Drive buttons smaller and higher.
   ['DriveWalpurgis.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
   // #496: a frame of a daily task's recording, the Drive page just after the Window tab's tap: the tab glows and the
   // page has not changed yet (0.23 and 0.37 s on the recording's 2 taps). Neither Window template reads this frame.

@@ -40,7 +40,7 @@
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
 |---|---|---|---|---|---|
-| Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png` |
+| Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`；客戶端 1.119.1 的活動外觀另有一張模板，#884） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png`、`DriveWalpurgis.png` |
 | Luxcavation：Thread 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：Thread 分頁的橘色邊框（`LuxExpTab`） | 點 EXP 分頁 | EXP 分頁 | #366 | `tests/screens/LuxThread.png` |
 | Luxcavation：EXP 分頁 | ColorMatch：EXP 分頁的橘色邊框；模板：卡片上的 Enter，取最右邊的一個（`LuxExpEnter`） | 點最右邊的 Enter；打完一場回到這頁就結束 | 選隊頁（`LuxTeamSelect`） | #366 | `tests/screens/LuxExp.png`、`LuxExpLocked.png`（最右邊是上鎖的第 10 關） |
 | 選隊頁 | OCR：`TEAMS` 標題（80,272）和 `To Battle!` 按鈕（`LuxTeamSelect`）；和鏡牢 `TeamSelect` 同一頁，按鈕是 To Battle!（連戰 ×2 以上是 Chain To Battle!）不是 Confirm | 選任務選項 `luxcavation.exp.team`（紐本 `luxcavation.thread.team`）選的隊伍的遊戲內隊伍欄位（`TEAMS #N`，必要時捲動清單），按 To Battle!（1145,588） | 隊伍等級警告或開戰確認（未截圖）、戰鬥 | #366 | `tests/screens/LuxTeamSelect.png`（選了 TEAMS #3） |
