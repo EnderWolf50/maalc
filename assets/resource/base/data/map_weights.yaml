@@ -5,18 +5,18 @@
 # so it ranks after every fight it can recognise and before unknown, on both difficulties.
 # The game's names (EN_BattleUIText): battle Regular, focused Focused (AB_BATTLE), risky Risky (HARD_BATTLE),
 # abno Abnormality (HARD_AB_BATTLE).
-# hidden is Hidden Battle (floors 11-15, HIDDEN_BATTLE): always skipped (user, 2026-11-20), so walking to it gains
-# nothing; it ranks after unknown, and map_route.rank takes it only when it is the only linked node, as the boss (#849).
+# hidden (#849) is read by nothing now: Hidden Battle never shows on the map, a battle node turns into it once tapped
+# (#868). The key stays: dropping it changes the field structure, which takes a new data format (FORMAT in
+# agent/resource_package.py, ADR 0012), and the fix keeps format 2.
 # A node's kind by the number by its Cost coin, per difficulty (#91; spec 05 section 6): unique within one,
 # from the wiki and the CN client's table; the live node panels' Costs agree.
 # The boss' Cost grows by floor: mirror-dungeon-common-data's BOSS cost (normal 200, hard 250) times
 # battleCostWeightsByFloor (1, 1.2, 1.5, 2, 2). The live node panels showed 200/240/300 and 250/300/375/500.
-# Hidden Battle: HIDDEN_BATTLE's cost (normal 400, hard 500) times 2, its weight on every floor's row (#849).
-# battleCostWeightsByFloor has rows for floors 1-5 only: floors 6 on taking floor 5's row (boss 400 / 500, Hidden Battle
-# 800 / 1000) is inferred, to be checked on the live scouting runs (#854, #856). Floors 6 on are always HARD (inferred).
+# battleCostWeightsByFloor has rows for floors 1-5 only: floors 6 on taking floor 5's row (boss 400 / 500) is inferred,
+# to be checked on the live scouting runs (#854, #856). Floors 6 on are always HARD (inferred).
 node_costs:
-  normal: {75: battle, 100: focused, 120: risky, 150: abno, 200: boss, 240: boss, 300: boss, 400: boss, 800: hidden}
-  hard: {85: battle, 120: focused, 150: risky, 180: abno, 250: boss, 300: boss, 375: boss, 500: boss, 1000: hidden}
+  normal: {75: battle, 100: focused, 120: risky, 150: abno, 200: boss, 240: boss, 300: boss, 400: boss}
+  hard: {85: battle, 120: focused, 150: risky, 180: abno, 250: boss, 300: boss, 375: boss, 500: boss}
 normal:
   event: 1
   battle: 2
