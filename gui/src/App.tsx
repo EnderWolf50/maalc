@@ -435,7 +435,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       const { s: now } = latest.current;
       const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
       if (!entries.length) return "no_task";
-      const begin = { type: "begin", entries } as const;
+      // the whole list it starts from: the Run tab writes the run's states on its rows while the list is still this one
+      const begin = { type: "begin", entries, list: now!.tasks } as const;
       runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
       dispatch(begin);
       return await api.startRun(entries, now!.emulator, dispatch).then(() => null, (e: unknown) => {

@@ -86,12 +86,16 @@ export function useUndo() {
 /** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
  * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
  * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
- * note, so an Undo never puts a row into the next team picked. The teams and plans use useUndo. */
-export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "") {
+ * note, so an Undo never puts a row into the next team picked. `undone` hears the row an Undo put back and the place it had
+ * (the Run tab picks a task list entry it brought back). The teams and plans use useUndo. */
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "", undone?: (row: T, at: number) => void) {
   const [last, setLast] = useScopedState<{ row: T; at: number; name: string } | null>(scope, null);
   const note = last && (
-    <UndoNote name={last.name}
-      onUndo={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }} />
+    <UndoNote name={last.name} onUndo={() => {
+      edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); });
+      setLast(null);
+      undone?.(last.row, last.at);
+    }} />
   );
   const remove = (rows: T[], i: number, name: string) => {
     setLast({ row: rows[i], at: i, name: name || "—" });
@@ -331,11 +335,13 @@ export function useKeyMoves(n: number, move: (from: number, to: number) => void)
 /** A sortable list: the whole row drags (no handle, no move buttons), the dragged row dimmed and a line where it lands; from the
  * keyboard a row moves with Alt and an arrow (useKeyMoves). Native HTML drag and drop, which needs "dragDropEnabled": false on
  * the Tauri window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, label }: {
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, label, rowClass }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
   /** the list's name, which a screen reader reads before its rows */
   label?: string;
+  /** more classes of row i (the Run tab's task rows: a row a run left out, during and after it) */
+  rowClass?: (i: number) => string | undefined;
 }) {
   const { t } = useEditor();
   const locked = useContext(LockContext); // the rows still select: the Run tab shows a task's options during a run
@@ -356,7 +362,8 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
       <ol ref={moves.list} className={"reorder" + (locked ? " locked" : "")} aria-label={label} title={locked ? undefined : t("dragHint")}>
         {items.map((item, i) => (
           <li key={keyOf(item)} draggable={!locked} {...moves.row}
-            className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad", dropAt(i)].filter(Boolean).join(" ")}
+            className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad", dropAt(i), rowClass?.(i)]
+              .filter(Boolean).join(" ")}
             // a list that selects (teams, plans) picks with Enter or Space, as by a click
             aria-current={onSelect && selected === i ? true : undefined}
             onKeyDown={(e) => {

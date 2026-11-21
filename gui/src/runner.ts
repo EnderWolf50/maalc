@@ -48,7 +48,8 @@ export type Message =
 
 /** What the page itself adds: a start it asked for (the entries it posts), a start the backend refused, and a line of its
  * own for the live log (what came of a scheduled run's start, #816). */
-export type Action = Message | { type: "begin"; entries: string[] } | { type: "refused"; error: string } | { type: "note"; line: string };
+export type Action = Message | { type: "begin"; entries: string[]; list?: RunView["list"] } | { type: "refused"; error: string }
+  | { type: "note"; line: string };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
  * protocol), `window` one of the window's own. `n` numbers the lines of a run. */
@@ -70,9 +71,20 @@ export interface RunView {
   killed?: string;
   /** why the backend did not start the run */
   refused?: string;
+  /** The tasks the bot started, as its own lines say (`[maalc] task <id> started`, agent/actions.py TaskStart), each with
+   * the last stop line it logged since (`[maalc] stop: <reason>`, agent/actions.py stop): a failed task's reason when the
+   * runner sends none (it sends one only when the bot stopped the whole list, runner/session.py finish). */
+  bot?: { entry: string; stop?: string }[];
+  /** the task list the window started the run from (Start, a scheduled start), its unticked entries too: the Run tab writes
+   * the run's states on its rows while the list is still this one. None for a run a page loaded again took up. */
+  list?: { id: string; enabled: boolean }[];
 }
 
 export const IDLE: RunView = { phase: "idle", tasks: [], log: [] };
+
+/** The bot's lines that tell the reason a task failed (agent/actions.py TaskStart and stop). */
+const BOT_START = /^\[maalc\] task (\S+) started$/;
+export const STOP_LINE = "[maalc] stop: ";
 
 /** HH:MM:SS.mmm now, the runner's log time (runner/runlog.py clock). */
 const now = (d = new Date()) => d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
@@ -87,7 +99,9 @@ const addLine = (v: RunView, source: LogLine["source"], line: string, t = now())
 /** The view after one more action. A message with no start before it (a page that attached to a run under way) starts the
  * view as running. */
 export function reduce(v: RunView, a: Action): RunView {
-  if (a.type === "begin") return { phase: "running", tasks: a.entries.map((entry) => ({ entry, state: "pending" })), log: [] };
+  if (a.type === "begin") {
+    return { phase: "running", tasks: a.entries.map((entry) => ({ entry, state: "pending" })), log: [], ...(a.list ? { list: a.list } : {}) };
+  }
   if (a.type === "refused") return { ...IDLE, refused: a.error };
   if (a.type === "note") return addLine(v, "window", a.line); // the run, or no run, as it was
   if (v.phase === "idle" || (v.phase === "ended" && a.type !== "exit")) v = { ...IDLE, phase: "running" };
@@ -109,13 +123,34 @@ const unfinished = (v: RunView) => v.tasks.map((x) =>
   x.state === "running" ? { ...x, state: v.phase === "stopping" ? "stopped" as const : "failed" as const }
     : x.state === "pending" ? { ...x, state: "cancelled" as const } : x);
 
+/** The bot's tasks after one more line of its own: a start adds one, a stop line goes to the last one. */
+function botLine(bot: RunView["bot"] = [], line: string): RunView["bot"] {
+  const started = BOT_START.exec(line);
+  if (started) return [...bot, { entry: started[1] }];
+  if (!line.startsWith(STOP_LINE) || !bot.length) return bot;
+  return [...bot.slice(0, -1), { ...bot[bot.length - 1], stop: line.slice(STOP_LINE.length) }];
+}
+
+/** Why task `index` failed when the runner sends no reason: the last stop line the bot logged in it. The bot's nth start of a
+ * task is the run's nth entry of it, so the line stays with its task when the bot started the next one before the runner,
+ * which looks every half second, ended this one, and the task before's line never becomes this one's. */
+function stopLineOf(v: RunView, index: number, entry: string) {
+  const nth = v.tasks.slice(0, index).filter((x) => x.entry === entry).length;
+  return v.bot?.filter((x) => x.entry === entry)[nth]?.stop;
+}
+
 function event(v: RunView, e: RunnerEvent): RunView {
   switch (e.event) {
-    case "log": return addLine(v, e.source, e.line, e.t);
+    case "log": {
+      const next = addLine(v, e.source, e.line, e.t);
+      return e.source === "agent" ? { ...next, bot: botLine(v.bot, e.line) } : next;
+    }
     case "task": {
       const tasks = v.tasks.slice();
       while (tasks.length <= e.index) tasks.push({ entry: e.entry, state: "pending" });
-      tasks[e.index] = { entry: e.entry, state: e.state, reason: e.reason };
+      // a cancelled task never ran in the bot, and a stopped one was the user's stop: only a failed one takes the bot's line
+      const reason = e.reason ?? (e.state === "failed" ? stopLineOf(v, e.index, e.entry) : undefined);
+      tasks[e.index] = { entry: e.entry, state: e.state, reason };
       return { ...v, tasks };
     }
     case "connection": return { ...v, link: { state: e.state, address: e.address } };

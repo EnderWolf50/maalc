@@ -463,11 +463,68 @@ fieldset.queue { align-items: stretch; }
 .run-page :is(.field, .toggle):hover code.key, .run-page :is(.field, .toggle):has(:focus-visible) code.key { visibility: visible; }
 /* the task's options: a select's longest choice (每日模式（打今天還沒打的）) fits its column */
 .task-options .grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
-.task-row { display: flex; align-items: center; gap: 8px; }
-/* the picked entry's 再加一次 and 移除這一項 under the list, side by side where both fit */
-.task-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-/* the tick's hit area: 27 px around the 15 px box, the row's height, and the row's own click (it picks the task) kept off it */
-.task-row .tick { display: inline-flex; flex: none; padding: 6px; margin: -6px -2px -6px -6px; cursor: pointer; }
+/* A task row (spec #871 「任務清單（3B）」): the tick, the name and its #n on a first line of one height (--task-line-h), the
+ * tick's and the name's middles on its middle (round 4, item 11); during and after a run its state at the right, a failure's
+ * reason under the name. The copy and the remove show over the first line's end, on the row's own fill with a fade over the
+ * name's end, under the pointer or while the keyboard's focus is on the row or on them: they take no room (round 4, item 10),
+ * and no click lands on them unseen. */
+.task-list ol.reorder > li { --row-bg: var(--raise); }
+.task-list ol.reorder > li.selected { --row-bg: var(--sel); }
+.task-row { position: relative; display: flex; align-items: flex-start; gap: 6px; }
+.task-row .tr-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.task-row .tr-line { display: flex; align-items: center; gap: 2px; min-width: 0; height: var(--task-line-h); }
+.task-row .tr-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the tick's hit area: 27 px wide, the row's height (the first line and the row's padding), and the row's own click (it picks
+ * the task) kept off it */
+.task-row .tick {
+  display: inline-flex; align-items: center; flex: none; height: calc(var(--task-line-h) + 8px); padding: 0 6px;
+  margin: -4px -2px -4px -6px; cursor: pointer;
+}
+.task-row .tr-acts {
+  position: absolute; top: -1px; right: 0; height: calc(var(--task-line-h) + 2px); display: flex; align-items: center;
+  padding-left: 18px; background: linear-gradient(to right, transparent, var(--row-bg) 14px); opacity: 0; pointer-events: none;
+  transition: opacity 0.12s ease-out;
+}
+.task-list ol.reorder > li:hover .tr-acts { opacity: 1; pointer-events: auto; }
+.task-list ol.reorder > li:focus-visible .tr-acts, .task-list ol.reorder > li:has(:focus-visible) .tr-acts { opacity: 1; pointer-events: auto; }
+/* 24 px each, the least a pointer's target takes (WCAG 2.2, 2.5.8) */
+.task-row .tr-acts button.icon { padding: 5px; line-height: 0; }
+.task-row .tr-acts button.icon:hover:not(:disabled) { color: var(--fg); }
+.task-row .tr-acts button.remove:hover:not(:disabled) { color: var(--bad); }
+@media (prefers-reduced-motion: reduce) { .task-row .tr-acts { transition: none; } }
+/* a run's state on its row, in words at the right and their colour alone (round 4, item 5): the running one amber, a failed
+ * one red, no row's frame or fill changed; a row the run left out faded. A failure's reason under the name, in the body's
+ * face, wrapped where it is long */
+.task-row .tr-state {
+  flex: none; height: var(--task-line-h); display: inline-flex; align-items: center; padding-right: 4px;
+  font: 700 13px/1 var(--font-display); letter-spacing: 0.04em; color: var(--muted);
+}
+.task-row[data-state="running"] .tr-state, .task-row[data-state="stopped"] .tr-state { color: var(--accent-ink); }
+.task-row[data-state="succeeded"] .tr-state { color: var(--keep); }
+.task-row[data-state="failed"] .tr-state { color: var(--bad); }
+.task-row .tr-reason { padding-bottom: 3px; font: 400 12.5px/1.4 var(--font-ui); color: var(--fg-2); overflow-wrap: anywhere; text-wrap: pretty; }
+.task-list ol.reorder > li.left-out { opacity: 0.55; }
+/* 「＋ 加入任務」 under the list; its menu opens over what is below and takes no room (round 4, item 13). The list above the
+ * options, so the menu covers them where it reaches past the list */
+.split > aside.task-list { z-index: 2; }
+.add-task { position: relative; display: flex; flex-direction: column; }
+.add-task > button {
+  display: flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 12px; color: var(--fg-2); background: none;
+  border-style: dashed;
+}
+.add-task > button[aria-expanded="true"] { color: var(--fg); border-style: solid; border-color: var(--accent-line); }
+.add-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; display: flex; flex-direction: column; gap: 1px;
+  padding: 5px; background: var(--raise); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel;
+  box-shadow: 0 8px 24px #0005;
+}
+.add-menu button {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 5px 9px; text-align: left;
+  border-color: transparent; background: none;
+}
+.add-menu button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.add-menu button:hover:not(:disabled) { background: var(--hov); border-color: transparent; }
+.add-menu button:focus-visible { outline-offset: -2px; }
 /* the Mirror Dungeon task's options in groups, two side by side where they fit */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
 .groups .grid, .globals .grid { width: 100%; }
@@ -483,23 +540,6 @@ fieldset.queue { align-items: stretch; }
 .runner-bar button.primary:disabled { background: none; border-color: var(--line-2); color: var(--fg); }
 .runner-state { color: var(--fg-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .runner-status[data-phase="stopping"] { color: var(--accent-ink); }
-.run-tasks h3 { margin: 0 0 6px; font: 700 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
-/* in the log's frame, above the log: four rows and a part, the rest scrolled, so a long list leaves the log its room */
-.run-log-box .run-tasks { flex: none; }
-.run-log-box .run-tasks ol { max-height: 146px; overflow-y: auto; }
-.run-tasks ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.run-tasks li {
-  display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 5px 10px;
-  border: 1px solid var(--line); border-radius: 2px; corner-shape: bevel; background: var(--raise);
-}
-.run-tasks li small { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
-.run-tasks .state { font: 700 13px/1.2 var(--font-display); letter-spacing: 0.04em; color: var(--muted); }
-.run-tasks li[data-state="running"] { border-color: var(--accent-line); background: var(--sel); }
-.run-tasks li[data-state="running"] .state, .run-tasks li[data-state="stopped"] .state { color: var(--accent-ink); }
-.run-tasks li[data-state="succeeded"] .state { color: var(--keep); }
-.run-tasks li[data-state="failed"] { border-color: var(--bad); }
-.run-tasks li[data-state="failed"] .state { color: var(--bad); }
-.run-tasks li[data-state="cancelled"] { border-style: dashed; background: none; }
 .run-log {
   list-style: none; margin: 0; padding: 6px 10px; overflow: auto; background: var(--field);
   border: 1px solid var(--line-2); border-radius: 2px; font: 12.5px/1.45 Consolas, "Microsoft JhengHei UI", monospace;
@@ -971,8 +1011,9 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
  * or not. The log takes what Start and the emulator leave, so Start, the emulator and the log stand where they are whether
  * a run is under way or not. */
 /* one height for a task row and for Start and Stop, so the button and the list's first row start and end on one line: a row
- * is at least this tall (its own tick and name make 30.33 px at 150 %), and Start and Stop are this tall */
-.run-page { --task-row-h: 32px; }
+ * is at least this tall, its first line this less the row's padding and border (--task-line-h), and Start and Stop are this
+ * tall */
+.run-page { --task-row-h: 32px; --task-line-h: calc(var(--task-row-h) - 10px); }
 .task-list ol.reorder > li { min-height: var(--task-row-h); }
 .run-grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 20px; align-items: start; }
 .run-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
@@ -984,8 +1025,9 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
 /* the console first in the page's order (Tab reaches Start first), drawn in the right column */
 .run-grid:not(.narrow) > .run-console { grid-column: 2; grid-row: 1; }
 .run-grid:not(.narrow) > .run-main { grid-column: 1; grid-row: 1; }
-/* the run's lock, under the list: plain words, no frame (the list's undo notes are the framed ones) */
-.split aside p.run-locked { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--fg-2); }
+/* the run's lock, where 加入任務 is idle: plain words after a padlock, no frame (the list's undo notes are the framed ones) */
+.split aside p.run-locked { display: flex; align-items: center; gap: 6px; margin: 0 0 0 2px; font-size: 12.5px; line-height: 1.5; color: var(--fg-2); }
+.split aside p.run-locked svg.lock { flex: none; width: 13px; height: 13px; }
 /* a task's options with no groups: one frame, titled with its name */
 .task-opts > .stack { display: flex; flex-direction: column; gap: 10px; }
 /* the page's scrollbar keeps its room: picking a task whose options are shorter than the window moved every column 15 px */
