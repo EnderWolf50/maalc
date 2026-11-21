@@ -209,8 +209,9 @@ describe("a scheduled run's start (--run <id>)", () => {
       back.scheduled = [{ id: "s1", opened: true }];
       const user = await open();
       await waitFor(() => expect(seen).toHaveLength(1));
-      expect(seen[0]).toHaveClass("runner");
+      // the run console: Stop and the live log
       expect(within(seen[0] as HTMLElement).getByRole("button", { name: zh["runner.stop"] })).toBeEnabled();
+      expect(within(seen[0] as HTMLElement).getByRole("list", { name: zh["runner.log"] })).toBeInTheDocument();
       await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
       await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
       expect(seen).toHaveLength(1); // back on the Run tab later, the page stays where the user is

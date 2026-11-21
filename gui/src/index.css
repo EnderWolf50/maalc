@@ -430,22 +430,27 @@ fieldset.queue { align-items: stretch; }
 .queue-body ol.reorder { flex: 0 1 480px; }
 .queue-body > p.muted { flex: 1 1 260px; font-size: 12.5px; }
 .qtag.next { color: var(--accent-ink); border-color: var(--accent-line); background: var(--sel); }
-/* The Run tab (#814, #815): the emulator on top, the task list beside the picked task's options, the global options, then
- * the runner: Start and Stop with the run's status, the posted tasks' states beside the live log. */
-.run-page { display: flex; flex-direction: column; gap: 18px; }
-.run-page fieldset.emulator, .run-page fieldset.globals, .run-page fieldset.runner { align-items: stretch; }
-.run-page .emulator .row .field { min-width: 15em; }
+/* The Run tab (#814, #815, #875): its fields and the run console's parts; the two columns are the section at the end. */
+.run-page fieldset.emulator, .run-page details.globals, .run-page .run-log-box, .run-page .task-opts { align-items: stretch; }
+/* the emulator's fields in the console's column (400 px inside its frame): the address and the instance side by side, the
+ * MuMuManager path the frame's width, the scan's pick list under 偵測模擬器 */
+.run-page .emulator .row .field { flex: 1 1 11em; min-width: 0; }
+.run-page .emulator .row .field:has(input.wide) { flex-basis: 100%; }
+.run-page .emulator input.wide { width: 100%; }
 .run-page .emulator .row.scan { align-items: flex-start; }
 .run-page .emulator .row.scan > button { margin-top: 2px; }
-.run-page .emulator .row.scan .field { min-width: 22em; }
-.run-page .emulator input.wide { min-width: 26em; }
-.task-list h3, .task-options h3 { margin: 0; font: 700 15px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
-.task-options h3 code { margin-left: 8px; font: 500 12.5px/1 Consolas, monospace; letter-spacing: 0; color: var(--muted); }
+.run-page .emulator .row.scan .field { flex-basis: 100%; }
 /* a field's settings key after its label, as the agent's stop lines name it (run/start_team): shown while the pointer is over
  * the field, its label included, or the field draws a focus ring (:focus-visible: the keyboard moved the focus in, or a text
  * or number box has it, clicked or not; a click on a switch or a choice leaves it to the pointer). Hidden, it keeps its room,
  * so nothing moves when it shows; a screen reader reads it either way, as the field's description (Run.tsx DescribedByKey). */
 .run-page code.key { margin-left: 8px; font: 400 11.5px/1 Consolas, monospace; color: var(--muted); visibility: hidden; }
+/* the label and its key on one line (spec #871, round 4 item 12): where both do not fit, the key gives way and is cut short,
+ * so the label never takes a second line and the field stays level with its neighbour's; the key's tooltip and a screen
+ * reader still give it whole */
+.run-page .keyed { display: inline-flex; align-items: baseline; max-width: 100%; min-width: 0; vertical-align: top; }
+.run-page .keyed > .kl { flex: none; max-width: 100%; } /* not shrunk at all: a fraction of a pixel less wraps its last character */
+.run-page .keyed > code.key { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .run-page :is(.field, .toggle):hover code.key, .run-page :is(.field, .toggle):has(:focus-visible) code.key { visibility: visible; }
 /* the task's options: a select's longest choice (每日模式（打今天還沒打的）) fits its column */
 .task-options .grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
@@ -456,16 +461,23 @@ fieldset.queue { align-items: stretch; }
 .task-row .tick { display: inline-flex; flex: none; padding: 6px; margin: -6px -2px -6px -6px; cursor: pointer; }
 /* the Mirror Dungeon task's options in groups, two side by side where they fit */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
-.groups .grid, fieldset.globals .grid { width: 100%; }
+.groups .grid, .globals .grid { width: 100%; }
 .groups .grid > .check.wide { grid-column: 1 / -1; }
 .field small.caution { color: var(--fg); }
+/* Start, Stop and the status on the page itself, no frame of their own; Start the task rows' height, so it and the list's
+ * first row start and end on one line. The status in tabular numerals, so its clock does not jitter. */
+.run-controls { display: flex; flex-direction: column; gap: 6px; }
+.run-controls p { margin: 0; }
 .runner-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
-.runner-bar button { font-size: 15px; padding: 6px 26px; }
-.runner-status { color: var(--fg-2); font-weight: 600; }
-.runner-status[data-phase="idle"] { color: var(--muted); font-weight: 400; }
+.runner-bar button { height: var(--task-row-h); font-size: 15px; line-height: 1; padding: 0 26px; }
+/* Start while it cannot start: a plain plate, so the amber of the one main action is not on a button that does nothing */
+.runner-bar button.primary:disabled { background: none; border-color: var(--line-2); color: var(--fg); }
+.runner-state { color: var(--fg-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .runner-status[data-phase="stopping"] { color: var(--accent-ink); }
-.runner h3 { margin: 0 0 6px; font: 700 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
-.runner-body { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.run-tasks h3 { margin: 0 0 6px; font: 700 14px/1.3 var(--font-display); letter-spacing: 0.02em; color: var(--fg); }
+/* in the log's frame, above the log: four rows and a part, the rest scrolled, so a long list leaves the log its room */
+.run-log-box .run-tasks { flex: none; }
+.run-log-box .run-tasks ol { max-height: 146px; overflow-y: auto; }
 .run-tasks ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .run-tasks li {
   display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 5px 10px;
@@ -479,9 +491,8 @@ fieldset.queue { align-items: stretch; }
 .run-tasks li[data-state="failed"] { border-color: var(--bad); }
 .run-tasks li[data-state="failed"] .state { color: var(--bad); }
 .run-tasks li[data-state="cancelled"] { border-style: dashed; background: none; }
-.run-log-pane { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .run-log {
-  list-style: none; margin: 0; padding: 6px 10px; height: 340px; overflow: auto; background: var(--field);
+  list-style: none; margin: 0; padding: 6px 10px; overflow: auto; background: var(--field);
   border: 1px solid var(--line-2); border-radius: 2px; font: 12.5px/1.45 Consolas, "Microsoft JhengHei UI", monospace;
 }
 .run-log li { display: flex; gap: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -489,6 +500,17 @@ fieldset.queue { align-items: stretch; }
 .run-log .src-runner span { color: var(--accent-ink); } /* the runner's own [run] lines: the run's steps */
 .run-log .src-console span, .run-log .src-raw span { color: var(--muted); }
 .run-log .src-window span { color: var(--fg-2); font-style: italic; } /* the window's own lines: a scheduled run's start (#816) */
+/* a line that says a task or the run failed or stopped (its status, the bot's stop line, an error): the failed state's colour */
+.run-log li.failed span { color: var(--bad); }
+/* the log's frame: its title, and the raw-output switch at the title's right; its well fills the frame. Empty, the well is
+ * drawn lighter (no fill, the quiet rule) with one faint line where the first will come. */
+.run-log-box .lg-title { flex: none; white-space: nowrap; }
+.run-log-box .check { margin-left: auto; min-width: 0; font: 400 12px/1.35 var(--font-ui); letter-spacing: 0; color: var(--fg-2); }
+.run-log-box .check > input[type="checkbox"] { margin-top: 1px; }
+.log-well { position: relative; flex: 1 1 0; min-height: 0; display: flex; }
+.log-well > .run-log { flex: 1; min-height: 0; }
+.run-log.empty { background: none; border-color: var(--line); }
+.log-empty { position: absolute; top: 7px; left: 11px; font-size: 12.5px; color: var(--muted); pointer-events: none; }
 /* the scheduled runs (#816): one row a schedule, its weekdays, time, wake switch and delete, its task's name under them */
 .run-page fieldset.schedules { align-items: stretch; }
 .schedule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -921,7 +943,6 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
   .skill-pillcell { flex: 1 1 auto; width: auto; }
   .sinners { gap: 6px; }
   .groups { grid-template-columns: 1fr; }
-  .runner-body { grid-template-columns: 1fr; }
 }
 
 /* A short window: the side column scrolls with the page, so its last buttons are never cut off below the fold. */
@@ -933,3 +954,52 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
 .start-error { max-width: 720px; margin: 10vh auto; padding: 0 24px; line-height: 1.6; }
 .start-error h1 { font-size: 20px; }
 .start-error pre { white-space: pre-wrap; word-break: break-all; padding: 12px; border: 1px solid currentColor; border-radius: 6px; }
+
+/* ======== The Run tab's two columns (#875, spec #871 「版面（L1 B）」) ======== */
+/* The task list and the picked task's options left, the run console right, three columns whose first frames start on one
+ * line, 20 px apart. The console holds still as the page scrolls, at the task list's inset (both sticky at top 0, 16 px below
+ * the page's top), and is the window's height less the header and the tabs (95.17 px), main's 16 px above and 28 below,
+ * and 1 px more: the page's scroll stops on a whole pixel, and a column that ended exactly 28 px off the page's end was
+ * pushed up by the fraction at the scroll's end. So it never scrolls on its own and never moves against the list, scrolled
+ * or not. The log takes what Start and the emulator leave, so Start, the emulator and the log stand where they are whether
+ * a run is under way or not. */
+/* one height for a task row and for Start and Stop, so the button and the list's first row start and end on one line: a row
+ * is at least this tall, and a row's content (its tick, its name and the move buttons) is 31.67 px at 150 % */
+.run-page { --task-row-h: 32px; }
+.task-list ol.reorder > li { min-height: var(--task-row-h); }
+.run-grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 20px; align-items: start; }
+.run-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.run-main > .split > aside { width: 284px; }
+.run-console {
+  position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; min-width: 0; height: calc(100vh - 95.17px - 45px);
+}
+.run-console > .run-log-box { flex: 1 1 0; min-height: 160px; }
+/* the console first in the page's order (Tab reaches Start first), drawn in the right column */
+.run-grid:not(.narrow) > .run-console { grid-column: 2; grid-row: 1; }
+.run-grid:not(.narrow) > .run-main { grid-column: 1; grid-row: 1; }
+/* the run's lock, under the list: plain words, no frame (the list's undo notes are the framed ones) */
+.split aside p.run-locked { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--fg-2); }
+/* a task's options with no groups: one frame, titled with its name */
+.task-opts > .stack { display: flex; flex-direction: column; gap: 10px; }
+/* the page's scrollbar keeps its room: picking a task whose options are shorter than the window moved every column 15 px */
+main:has(.run-page) { scrollbar-gutter: stable; }
+/* A narrow window (Run.tsx NARROW): one column. Start, Stop and the status are one line held at the page's top on the page's
+ * own ground, a rule under it as the team page's section index, so Stop and the run's state stay in view as the page scrolls;
+ * then the list and the options, the emulator and the log, a panel folded until a run starts. The list scrolls with the page,
+ * under that line. */
+.run-grid.narrow { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.run-grid.narrow > .run-controls {
+  position: sticky; top: -16px; z-index: 6; margin-top: -16px; padding: 16px 0 10px; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.run-grid.narrow .split > aside { position: static; }
+.run-grid.narrow .log-well { flex: none; height: 280px; }
+/* a scheduled run brings the log into view: below the line held at the top, not under it */
+.run-grid.narrow .run-log-box { scroll-margin-top: 72px; }
+@media (max-width: 1000px) { .run-grid.narrow > .run-controls { top: -14px; margin-top: -14px; padding-top: 14px; } }
+/* a short window: the console scrolls with the page, as the task list does, its log a fixed height */
+@media (max-height: 640px) {
+  .run-console { position: static; height: auto; }
+  .run-console > .run-log-box { flex: none; }
+  .run-console .log-well { flex: none; height: 280px; }
+}
