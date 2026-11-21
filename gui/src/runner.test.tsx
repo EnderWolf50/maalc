@@ -234,7 +234,7 @@ describe("what the run shows", () => {
     expect(name.compareDocumentPosition(within(rows[0]).getByText("the mailbox did not open")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  test.each([["a tick"], ["a move"], ["a copy"], ["a remove"], ["an add"]])("after the run the states stay until the list changes: %s clears them (#877)", async (edit) => {
+  test.each([["a tick"], ["a move"], ["a copy"], ["a remove"], ["an add"], ["a tick undone"], ["a remove undone"]])("after the run the states stay until the list changes: %s clears them for good (#877)", async (edit) => {
     const user = await open();
     await started(user);
     send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true));
@@ -249,20 +249,26 @@ describe("what the run shows", () => {
     if (edit === "a tick") await user.click(tick("領通行證任務"));
     if (edit === "a move") await altMove(user, pass, "ArrowUp");
     if (edit === "a copy") await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.copy"], { name: "領通行證任務" }) }));
-    if (edit === "a remove") await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.delete"], { name: "領通行證任務" }) }));
+    if (edit === "a remove") await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.remove"], { name: "領通行證任務" }) }));
     if (edit === "an add") {
       await user.click(taskList().getByRole("button", { name: zh["tasks.add"] }));
       await user.click(screen.getByRole("menuitem", { name: new RegExp(`^${zh["task.ClaimPassMissions"]}`) }));
     }
+    // the list as the run's again: the states stay gone
+    if (edit === "a tick undone") { await user.click(tick("領通行證任務")); await user.click(tick("領通行證任務")); }
+    if (edit === "a remove undone") {
+      await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.remove"], { name: "領通行證任務" }) }));
+      await user.click(taskList().getByRole("button", { name: zh.undo }));
+    }
     expect(rowStates().every((x) => x === null)).toBe(true);
   });
 
-  test("a page loaded again after a run, which has not the list the run started from, shows its states while the ticked rows are its tasks", async () => {
+  test("a page loaded again after a run takes the list as it reads it for the run's: its states show, and go at the list's first edit", async () => {
     back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "succeeded"),
       task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true)], active: false };
     const user = await open();
     await waitFor(() => expect(rowStates().slice(0, 2)).toEqual(["succeeded", "failed"]));
-    await user.click(tick("經驗本"));
+    await altMove(user, taskRows()[7], "ArrowUp"); // an unticked row: the ticked ones are the run's still
     expect(rowStates().every((x) => x === null)).toBe(true);
   });
 
@@ -605,7 +611,7 @@ describe("during a run", () => {
   test("the task list, the task options, the global options and the emulator are locked; a task still shows its options", async () => {
     const user = await open();
     // a delete before the run: its Undo would change the list the run reads
-    await user.click(taskList().getByRole("button", { name: fill(zh["tasks.delete"], { name: zh["task.ClaimPassMissions"] }) }));
+    await user.click(taskList().getByRole("button", { name: fill(zh["tasks.remove"], { name: zh["task.ClaimPassMissions"] }) }));
     expect(taskList().getByRole("button", { name: zh.undo })).toBeVisible();
     await started(user);
     // one line says so, where 加入任務 was: the page's one note of the lock
@@ -718,6 +724,23 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
     expect(values("resource", "state")).toEqual(new Set(RESOURCE_STATES));
     expect(values("task", "state")).toEqual(new Set(TASK_STATES));
     expect(values("end", "result")).toEqual(new Set(RESULTS));
+  });
+
+  test("the run's list: the one it started from; a run taken up takes the settings' first; another list drops it for good (#877)", () => {
+    const one = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: false }];
+    const other = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true }];
+    const begun = reduce(IDLE, { type: "begin", entries: ["ClaimMail"], list: one });
+    expect(reduce(begun, { type: "list", list: one })).toBe(begun);
+    const edited = reduce(begun, { type: "list", list: other });
+    expect([edited.list, edited.unlisted]).toEqual([undefined, true]);
+    expect(reduce(edited, { type: "list", list: one }).list).toBeUndefined(); // the list as it was again: still gone
+    // a page that took the run up: nothing before the run's tasks are known, then the settings' list as they read
+    const taken = reduce(IDLE, task(0, "ClaimMail", "succeeded"));
+    expect(reduce(IDLE, { type: "list", list: one })).toBe(IDLE);
+    expect(reduce(taken, { type: "list", list: one }).list).toEqual(one);
+    // a new run starts on its own list
+    expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other })).toMatchObject({ list: other });
+    expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other }).unlisted).toBeUndefined();
   });
 
   describe("a failed task's reason (#877): the runner's, else the bot's last stop line in that task", () => {

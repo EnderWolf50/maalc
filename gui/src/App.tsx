@@ -146,6 +146,11 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
     return () => { live = false; };
   }, []);
+  // the run's list follows the settings' task list (runner.ts listed): a run a page took up takes it, and after a run an
+  // edit to it takes the run's states off the Run tab's rows for good
+  const tasksNow = s ? JSON.stringify(s.tasks) : null;
+  const runHasTasks = run.tasks.length > 0;
+  useEffect(() => { if (s) dispatch({ type: "list", list: s.tasks }); }, [tasksNow, runHasTasks]);
   // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
   // its last step failed and how the last apply went (read at the window's start), each above every tab until dismissed.
   const [update, setUpdate] = useState<Update | null>(null);

@@ -464,9 +464,9 @@ fieldset.queue { align-items: stretch; }
 /* the task's options: a select's longest choice (每日模式（打今天還沒打的）) fits its column */
 .task-options .grid { grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
 /* A task row (spec #871 「任務清單（3B）」): the tick, the name and its #n on a first line of one height (--task-line-h), the
- * tick's and the name's middles on its middle (round 4, item 11); during and after a run its state at the right, a failure's
+ * tick's and the name's middles on its middle (#871, round 4 item 11); during and after a run its state at the right, a failure's
  * reason under the name. The copy and the remove show over the first line's end, on the row's own fill with a fade over the
- * name's end, under the pointer or while the keyboard's focus is on the row or on them: they take no room (round 4, item 10),
+ * name's end, under the pointer or while the keyboard's focus is on the row or on them: they take no room (#871, round 4 item 10),
  * and no click lands on them unseen. */
 .task-list ol.reorder > li { --row-bg: var(--raise); }
 .task-list ol.reorder > li.selected { --row-bg: var(--sel); }
@@ -492,7 +492,7 @@ fieldset.queue { align-items: stretch; }
 .task-row .tr-acts button.icon:hover:not(:disabled) { color: var(--fg); }
 .task-row .tr-acts button.remove:hover:not(:disabled) { color: var(--bad); }
 @media (prefers-reduced-motion: reduce) { .task-row .tr-acts { transition: none; } }
-/* a run's state on its row, in words at the right and their colour alone (round 4, item 5): the running one amber, a failed
+/* a run's state on its row, in words at the right and their colour alone (#871, round 4 item 5): the running one amber, a failed
  * one red, no row's frame or fill changed; a row the run left out faded. A failure's reason under the name, in the body's
  * face, wrapped where it is long */
 .task-row .tr-state {
@@ -503,8 +503,8 @@ fieldset.queue { align-items: stretch; }
 .task-row[data-state="succeeded"] .tr-state { color: var(--keep); }
 .task-row[data-state="failed"] .tr-state { color: var(--bad); }
 .task-row .tr-reason { padding-bottom: 3px; font: 400 12.5px/1.4 var(--font-ui); color: var(--fg-2); overflow-wrap: anywhere; text-wrap: pretty; }
-.task-list ol.reorder > li.left-out { opacity: 0.55; }
-/* 「＋ 加入任務」 under the list; its menu opens over what is below and takes no room (round 4, item 13). The list above the
+.task-list ol.reorder > li:has(.task-row[data-state="off"]) { opacity: 0.55; }
+/* 「＋ 加入任務」 under the list; its menu opens over what is below and takes no room (#871, round 4 item 13). The list above the
  * options, so the menu covers them where it reaches past the list */
 .split > aside.task-list { z-index: 2; }
 .add-task { position: relative; display: flex; flex-direction: column; }

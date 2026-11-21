@@ -21,7 +21,7 @@ const tick = (name: string) => screen.getByRole("checkbox", { name: fill(zh["tas
 const nthTick = (name: string, n: number) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick_nth"], { name, n }) });
 /** The copy and the ✕ of the row of a task listed once. */
 const copy = (name: string) => list().getByRole("button", { name: fill(zh["tasks.copy"], { name }) });
-const remove = (name: string) => list().getByRole("button", { name: fill(zh["tasks.delete"], { name }) });
+const remove = (name: string) => list().getByRole("button", { name: fill(zh["tasks.remove"], { name }) });
 const addButton = () => list().getByRole("button", { name: zh["tasks.add"] });
 /** Settings whose task list has Assemble Modules before and after the Luxcavations, a task listed twice, none ticked. */
 function assembleTwice() {
@@ -222,7 +222,7 @@ describe("the task list", () => {
     const r = renderEditor(<RunTab />, assembleTwice());
     // the second entry of a task listed twice: the first one's removal leaves the pick on it, its tag gone
     await r.user.click(within(rows()[4]).getByText("換腦啡肽模組"));
-    await r.user.click(within(rows()[1]).getByRole("button", { name: fill(zh["tasks.delete"], { name: "換腦啡肽模組" }) }));
+    await r.user.click(within(rows()[1]).getByRole("button", { name: fill(zh["tasks.remove"], { name: "換腦啡肽模組" }) }));
     expect(rows()[3]).toHaveAttribute("aria-current", "true");
     expect(rows()[3]).toHaveTextContent("換腦啡肽模組");
     expect(list().queryByText(/^#\d$/)).toBeNull();
@@ -233,6 +233,26 @@ describe("the task list", () => {
     await r.user.click(remove("鏡牢"));
     expect(rows()[rows().length - 1]).toHaveAttribute("aria-current", "true");
     expect(rows()[rows().length - 1]).toHaveTextContent("領信");
+  });
+
+  test("the focus stays in the list: after a ✕ on the row that took its place, after an Undo on the row put back, in an empty list on 加入任務", async () => {
+    const s = newSettings();
+    s.tasks = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true }];
+    const r = renderEditor(<RunTab />, s);
+    remove("領信").focus();
+    await r.user.keyboard("{Enter}");
+    expect(rows()[0]).toHaveTextContent("鏡牢");
+    expect(rows()[0]).toHaveFocus();
+    list().getByRole("button", { name: zh.undo }).focus();
+    await r.user.keyboard("{Enter}");
+    expect(rows()[0]).toHaveTextContent("領信");
+    expect(rows()[0]).toHaveFocus();
+    remove("鏡牢").focus();
+    await r.user.keyboard("{Enter}");
+    expect(rows()[0]).toHaveFocus(); // the last row went: the one before it
+    remove("領信").focus();
+    await r.user.keyboard("{Enter}");
+    expect(addButton()).toHaveFocus();
   });
 
   test("an empty list says how to add a task, and no options show", async () => {

@@ -335,13 +335,11 @@ export function useKeyMoves(n: number, move: (from: number, to: number) => void)
 /** A sortable list: the whole row drags (no handle, no move buttons), the dragged row dimmed and a line where it lands; from the
  * keyboard a row moves with Alt and an arrow (useKeyMoves). Native HTML drag and drop, which needs "dragDropEnabled": false on
  * the Tauri window (tauri.conf.json): on Windows Tauri otherwise replaces WebView2's drop handler and no HTML5 drop fires (#64). */
-export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, label, rowClass }: {
+export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSelect, badAt, label }: {
   items: T[]; onChange: (items: T[]) => void; render: (item: T, i: number) => ReactNode; keyOf: (item: T) => string;
   selected?: number; onSelect?: (i: number, items: T[]) => void; badAt?: (i: number) => boolean;
   /** the list's name, which a screen reader reads before its rows */
   label?: string;
-  /** more classes of row i (the Run tab's task rows: a row a run left out, during and after it) */
-  rowClass?: (i: number) => string | undefined;
 }) {
   const { t } = useEditor();
   const locked = useContext(LockContext); // the rows still select: the Run tab shows a task's options during a run
@@ -362,8 +360,7 @@ export function ReorderList<T>({ items, onChange, render, keyOf, selected, onSel
       <ol ref={moves.list} className={"reorder" + (locked ? " locked" : "")} aria-label={label} title={locked ? undefined : t("dragHint")}>
         {items.map((item, i) => (
           <li key={keyOf(item)} draggable={!locked} {...moves.row}
-            className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad", dropAt(i), rowClass?.(i)]
-              .filter(Boolean).join(" ")}
+            className={[selected === i && "selected", dragging === i && "dragging", badAt?.(i) && "bad", dropAt(i)].filter(Boolean).join(" ")}
             // a list that selects (teams, plans) picks with Enter or Space, as by a click
             aria-current={onSelect && selected === i ? true : undefined}
             onKeyDown={(e) => {

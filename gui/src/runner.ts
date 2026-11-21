@@ -46,10 +46,14 @@ export type Message =
   | { type: "killed"; reason: string }
   | { type: "exit"; code: number | null; ended: boolean; tail: string[] };
 
-/** What the page itself adds: a start it asked for (the entries it posts), a start the backend refused, and a line of its
- * own for the live log (what came of a scheduled run's start, #816). */
-export type Action = Message | { type: "begin"; entries: string[]; list?: RunView["list"] } | { type: "refused"; error: string }
-  | { type: "note"; line: string };
+/** A task list as the settings hold it: each entry's task and tick, in run order. */
+export type TaskList = { id: string; enabled: boolean }[];
+
+/** What the page itself adds: a start it asked for (the entries it posts, and the whole list it starts from), a start the
+ * backend refused, a line of its own for the live log (what came of a scheduled run's start, #816), and the settings' task
+ * list each time it changes (App: the run's `list`). */
+export type Action = Message | { type: "begin"; entries: string[]; list?: TaskList } | { type: "refused"; error: string }
+  | { type: "note"; line: string } | { type: "list"; list: TaskList };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
  * protocol), `window` one of the window's own. `n` numbers the lines of a run. */
@@ -75,16 +79,31 @@ export interface RunView {
    * the last stop line it logged since (`[maalc] stop: <reason>`, agent/actions.py stop): a failed task's reason when the
    * runner sends none (it sends one only when the bot stopped the whole list, runner/session.py finish). */
   bot?: { entry: string; stop?: string }[];
-  /** the task list the window started the run from (Start, a scheduled start), its unticked entries too: the Run tab writes
-   * the run's states on its rows while the list is still this one. None for a run a page loaded again took up. */
-  list?: { id: string; enabled: boolean }[];
+  /** The task list the run's states are written on (the Run tab's rows), its unticked entries too: the one the window
+   * started the run from (Start, a scheduled start), or, for a run a page loaded again took up, the settings' list as the
+   * page first saw it with the run. Dropped for good once the settings' list is another (`unlisted`): the list was edited,
+   * and its rows no longer read with the run. */
+  list?: TaskList;
+  unlisted?: boolean;
 }
 
 export const IDLE: RunView = { phase: "idle", tasks: [], log: [] };
 
 /** The bot's lines that tell the reason a task failed (agent/actions.py TaskStart and stop). */
 const BOT_START = /^\[maalc\] task (\S+) started$/;
-export const STOP_LINE = "[maalc] stop: ";
+const STOP_LINE = "[maalc] stop: ";
+
+/** Whether two task lists are one: the same entries, ticked the same, in one order. */
+export const sameList = (a: TaskList, b: TaskList) =>
+  a.length === b.length && a.every((x, j) => x.id === b[j].id && x.enabled === b[j].enabled);
+
+/** The run's list after the settings' list changed to `list`: a run with none takes it, the same list keeps it, and another
+ * drops it for good. Nothing before a run's tasks are known. */
+function listed(v: RunView, list: TaskList): RunView {
+  if (!v.tasks.length || v.unlisted) return v;
+  if (!v.list) return { ...v, list };
+  return sameList(v.list, list) ? v : { ...v, list: undefined, unlisted: true };
+}
 
 /** HH:MM:SS.mmm now, the runner's log time (runner/runlog.py clock). */
 const now = (d = new Date()) => d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
@@ -104,6 +123,7 @@ export function reduce(v: RunView, a: Action): RunView {
   }
   if (a.type === "refused") return { ...IDLE, refused: a.error };
   if (a.type === "note") return addLine(v, "window", a.line); // the run, or no run, as it was
+  if (a.type === "list") return listed(v, a.list);
   if (v.phase === "idle" || (v.phase === "ended" && a.type !== "exit")) v = { ...IDLE, phase: "running" };
   switch (a.type) {
     case "invalid": return addLine(v, "raw", a.line);

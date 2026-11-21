@@ -16,7 +16,9 @@ import {
 import { fill, type Key } from "./i18n";
 import { LockIcon } from "./KeywordGrid";
 import { TASK_ORDER, schema, type LuxOptions, type Settings } from "./model";
-import { LOG_LINES, crashed, isRunning, sameAddress, useRunner, type Device, type LogLine, type RunView } from "./runner";
+import {
+  LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
+} from "./runner";
 import * as api from "./api";
 import { SchedulesSection } from "./Schedules";
 import {
@@ -143,7 +145,7 @@ export function RunTab() {
         <div className="run-main">
           {/* no titles over the columns: the list, the options and the console start on one line */}
           <div className="split">
-            <TaskList rows={rows} i={i} setSel={setSel} />
+            <TaskList rows={rows} pickedAt={i} setSel={setSel} />
             <section className="task-options">{picked && <TaskOptions id={picked.id} />}</section>
           </div>
           {narrow && <><EmulatorFields /><RunLog folded raw={raw} boxRef={keep} /></>}
@@ -163,17 +165,12 @@ const Glyph = ({ d }: { d: string }) => (
 );
 const COPY = "M5.5 5.5h7v7h-7z M3.5 10.5v-7h7", CROSS = "M4.5 4.5l7 7 M11.5 4.5l-7 7", PLUS = "M8 3.5v9 M3.5 8h9";
 
-/** Whether two task lists are one: the same entries, ticked the same, in one order. */
-const sameList = (a: Settings["tasks"], b: Settings["tasks"]) =>
-  a.length === b.length && a.every((x, j) => x.id === b[j].id && x.enabled === b[j].enabled);
-
 /** Each row's state in the run the window shows, by row (spec #871 「執行中的任務清單」): the runner posts the ticked entries in
- * the list's order, so the k-th ticked row is the run's k-th task. Held while the list is the one the run started from: the
- * lock keeps it so during the run, and after it a tick, a move, a copy, a remove or an add ends them, as the list and the run
- * no longer read together. A run a page loaded again took up has no such list: its states hold while the ticked rows are
- * still its tasks in order. Null when they do not hold, and before a run. */
+ * the list's order, so the k-th ticked row is the run's k-th task. Held while the list is the run's (runner.ts RunView list):
+ * the lock keeps it so during the run, and after it the first tick, move, copy, remove or add ends them for good, as the list
+ * and the run no longer read together. Null then, before a run, and when the ticked rows are not the run's tasks. */
 function rowStates(tasks: Settings["tasks"], view: RunView) {
-  if (!view.tasks.length || (view.list && !sameList(view.list, tasks))) return null;
+  if (!view.tasks.length || !view.list || !sameList(view.list, tasks)) return null;
   const ticked = tasks.flatMap((x, j) => (x.enabled ? [j] : []));
   if (ticked.length !== view.tasks.length || ticked.some((j, k) => tasks[j].id !== view.tasks[k].entry)) return null;
   return new Map(ticked.map((j, k) => [j, view.tasks[k]]));
@@ -183,21 +180,34 @@ function rowStates(tasks: Settings["tasks"], view: RunView) {
  * once), dragged or moved with Alt to set the run order (ReorderList). A row's copy and remove show over its end under the
  * pointer or the keyboard's focus and take no room (index.css .tr-acts); 「加入任務」 under the list adds any task. During a
  * run the list cannot change, and the line where 加入任務 was says so: the one note of the lock on the page. */
-function TaskList({ rows, i, setSel }: { rows: Row[]; i: number; setSel: (key: string) => void }) {
+function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; setSel: (key: string) => void }) {
   const { s, update, t, bad } = useEditor();
   const locked = useContext(LockContext);
   const states = rowStates(s.tasks, useRunner().view);
+  // the row the focus goes to after the render: a removed row's button, or the Undo note's, leaves with what it removed or
+  // put back, and the focus would drop to the page's top; it goes to the row that took the removed one's place, or to the
+  // row put back (加入任務 when the list is empty)
+  const list = useRef<HTMLElement>(null);
+  const focusAt = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (focusAt.current === null) return;
+    const rowEls = list.current?.querySelectorAll<HTMLElement>("ol.reorder > li");
+    (rowEls?.[Math.min(focusAt.current, rowEls.length - 1)] ?? list.current?.querySelector<HTMLElement>(".add-task > button"))?.focus();
+    focusAt.current = null;
+  });
   // an Undo puts the entry back where it was and picks it, as the team list's does
   const [undoNote, removeRow] = useUndoRow<Settings["tasks"][number]>((fn) => update((d) => fn(d.tasks)), "", (row, at) => {
     const tasks = [...s.tasks];
     tasks.splice(Math.min(at, tasks.length), 0, row);
     setSel(entryKey(tasks, Math.min(at, s.tasks.length)));
+    focusAt.current = Math.min(at, s.tasks.length);
   });
-  // the copy goes right under the row it copies, unticked, and is picked: a new entry runs only once ticked
-  const copyAt = (j: number) => {
-    const tasks = [...s.tasks.slice(0, j + 1), { id: s.tasks[j].id, enabled: false }, ...s.tasks.slice(j + 1)];
+  // a new entry of task `id` at place `at`, unticked (it runs only once ticked), and picked: a copy right under the row it
+  // copies, an add at the end
+  const insertAt = (at: number, id: string) => {
+    const tasks = [...s.tasks.slice(0, at), { id, enabled: false }, ...s.tasks.slice(at)];
     update((d) => { d.tasks = tasks; });
-    setSel(entryKey(tasks, j + 1));
+    setSel(entryKey(tasks, at));
   };
   // any row goes, a task's only one too (加入任務 lists it again); the pick stays on its entry, and moves to the row that takes
   // the removed one's place when it was the one removed (the row before, when it was the last). A pick key counts its task's
@@ -205,31 +215,27 @@ function TaskList({ rows, i, setSel }: { rows: Row[]; i: number; setSel: (key: s
   const removeAt = (j: number) => {
     const tasks = s.tasks.filter((_, k) => k !== j);
     removeRow(s.tasks, j, taskName(t, s.tasks[j].id));
-    if (tasks.length) setSel(entryKey(tasks, j === i ? Math.min(j, tasks.length - 1) : i > j ? i - 1 : i));
-  };
-  const append = (id: string) => {
-    const tasks = [...s.tasks, { id, enabled: false }];
-    update((d) => { d.tasks = tasks; });
-    setSel(entryKey(tasks, tasks.length - 1));
+    if (tasks.length) setSel(entryKey(tasks, j === pickedAt ? Math.min(j, tasks.length - 1) : pickedAt > j ? pickedAt - 1 : pickedAt));
+    focusAt.current = j;
   };
   return (
-    <aside className="task-list" data-path="tasks">
+    <aside className="task-list" data-path="tasks" ref={list}>
       {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
-      <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
+      <ReorderList items={rows} keyOf={(x) => x.key} selected={pickedAt} onSelect={(j, l) => setSel(entryKey(l, j))}
         label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
-        rowClass={(j) => (states && !states.has(j) ? "left-out" : undefined)}
         onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
         render={(x, j) => {
           const name = taskName(t, x.id);
-          const copyName = fill(t("tasks.copy"), { name }), removeName = fill(t("tasks.delete"), { name });
-          const run = states?.get(j);
+          const copyName = fill(t("tasks.copy"), { name }), removeName = fill(t("tasks.remove"), { name });
+          const task = states?.get(j); // the run's task on this row
           return (
             // its id only here, in its tooltip: the agent's stop lines name a task by it ("the ExpLuxcavation task"). Its state
-            // in a run (data-state: "off" for a row the run left out) in words, their colour alone: the row itself stays as
-            // it was (round 4, item 5), so a running row does not read as the picked one, nor a failed one as a wrong one
+            // in a run (data-state: "off" for a row the run left out, which fades) in words, their colour alone: the row itself
+            // stays as it was (#871, round 4 item 5), so a running row does not read as the picked one, nor a failed one as a
+            // wrong one
             <span className="task-row" title={fill(t("tasks.row_tip"), { name, id: x.id })}
-              data-state={states ? run?.state ?? "off" : undefined}>
-              {/* the tick's own hit area, the first line's height; a click there ticks and leaves the picked task as it is */}
+              data-state={states ? task?.state ?? "off" : undefined}>
+              {/* the tick's own hit area, the row's height; a click there ticks and leaves the picked task as it is */}
               <label className="tick" onClick={(e) => e.stopPropagation()}>
                 <Input type="checkbox" checked={x.enabled} aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name, n: x.nth + 1 })}
                   onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
@@ -241,13 +247,13 @@ function TaskList({ rows, i, setSel }: { rows: Row[]; i: number; setSel: (key: s
                 </span>
                 {/* why it failed or was cancelled (runner.ts: the runner's reason, else the bot's stop line), in English
                     until #881 */}
-                {run?.reason && <small className="tr-reason">{reasonText(t, run.reason, name)}</small>}
+                {task?.reason && <small className="tr-reason">{reasonText(t, task.reason, name)}</small>}
               </span>
-              {run && <span className="tr-state">{t(`runner.state.${run.state}`)}</span>}
+              {task && <span className="tr-state">{t(`runner.state.${task.state}`)}</span>}
               {!locked && (
                 <span className="tr-acts">
                   <button type="button" className="icon" title={copyName} aria-label={copyName}
-                    onClick={(e) => { e.stopPropagation(); copyAt(j); }}><Glyph d={COPY} /></button>
+                    onClick={(e) => { e.stopPropagation(); insertAt(j + 1, x.id); }}><Glyph d={COPY} /></button>
                   <button type="button" className="icon remove" title={removeName} aria-label={removeName}
                     onClick={(e) => { e.stopPropagation(); removeAt(j); }}><Glyph d={CROSS} /></button>
                 </span>
@@ -259,7 +265,7 @@ function TaskList({ rows, i, setSel }: { rows: Row[]; i: number; setSel: (key: s
       {/* an Undo during a run would change the list it reads: it waits for the run's end */}
       {!locked && undoNote}
       {/* under the list, not over the page: a run moves nothing in the console or the columns' tops */}
-      {locked ? <p className="run-locked" role="status"><LockIcon className="lock" />{t("runner.locked")}</p> : <AddTask onPick={append} />}
+      {locked ? <p className="run-locked" role="status"><LockIcon className="lock" />{t("runner.locked")}</p> : <AddTask onPick={(id) => insertAt(s.tasks.length, id)} />}
     </aside>
   );
 }
