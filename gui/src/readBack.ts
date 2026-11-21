@@ -262,6 +262,8 @@ export function readBack(data: Settings, version: number, files: ReadBackFiles):
       entries.push({ id: name, task: t });
     }
     tasks = entries.map(({ id, task }) => ({ id, enabled: ticked(task) }));
+    // a task v1's list did not have goes last, unticked, once each in a new file's order: this one-time import puts it back,
+    // a load does not (#874)
     tasks.push(...TASK_ORDER.filter((id) => !entries.some((e) => e.id === id)).map((id) => ({ id, enabled: false })));
     out.tasks = structuredClone(tasks);
     const device = isObject(instance.savedDevice) ? instance.savedDevice.adbDeviceAddress : undefined;

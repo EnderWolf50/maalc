@@ -54,8 +54,8 @@ const EVERY_DAY = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 function settings(schedules: Settings["schedules"] = [{ id: "s1", days: ["mon", "fri"], time: "05:10", wake: true }]) {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "T1")]));
-  s.tasks = [{ id: "ClaimMail", enabled: true }, ...s.tasks.filter((x) => x.id !== "ClaimMail")];
-  s.tasks.find((x) => x.id === "MirrorDungeon")!.enabled = true;
+  s.tasks = [{ id: "ClaimMail", enabled: true },
+    ...s.tasks.filter((x) => x.id !== "ClaimMail").map((x) => ({ ...x, enabled: x.id === "MirrorDungeon" }))];
   s.schedules = schedules;
   return s;
 }

@@ -105,6 +105,12 @@ test("a new file is valid without a team (#364: only MirrorDungeon asks for one)
   expect(s.teams.map((x) => x.game_team)).toEqual([1, 2]);
 });
 
+test("a new file lists every task once, all ticked, in the user's order (#874)", () => {
+  expect(newSettings().tasks).toEqual([
+    "ExpLuxcavation", "ThreadLuxcavation", "ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions", "MirrorDungeon",
+  ].map((id) => ({ id, enabled: true })));
+});
+
 test("parseSettings refuses a newer version", () => {
   expect(() => parseSettings(JSON.stringify({ version: VERSION + 1 }))).toThrow("newer");
 });
@@ -237,15 +243,11 @@ test("parseThemePacks reads the season's data file", () => {
   expect(parseThemePacks("")).toEqual({ packs: {}, pack_ids: {}, default_plan: { weights: {}, threshold: 0, unlisted: 0, event_packs: "weight" } });
 });
 
-test("loading puts each task the task list leaves out last, unticked, once each in a new file's order, so the Run tab can tick it (#814)", () => {
-  const file = applyEdits(cases.valid, [{ set: "tasks", value: [{ id: "ClaimMail", enabled: true }, { id: "Gone", enabled: true }] }]);
-  const { data, old } = parseSettings(JSON.stringify(file));
+test("loading keeps the task list as the file has it: a task it leaves out stays out (#874)", () => {
+  const tasks = [{ id: "MirrorDungeon", enabled: false }, { id: "ClaimMail", enabled: true }, { id: "Gone", enabled: true }];
+  const { data, old } = parseSettings(JSON.stringify(applyEdits(cases.valid, [{ set: "tasks", value: tasks }])));
   expect(old).toBeNull();
-  expect(data.tasks).toEqual([
-    { id: "ClaimMail", enabled: true }, { id: "Gone", enabled: true }, // the schema check names the one it does not know
-    ...["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "ClaimPassMissions", "MirrorDungeon"]
-      .map((id) => ({ id, enabled: false })),
-  ]);
+  expect(data.tasks).toEqual(tasks); // the schema check names the one it does not know
   // a task list broken by hand stays, for the check to name it
   expect(parseSettings(JSON.stringify(applyEdits(cases.valid, [{ set: "tasks", value: "x" }]))).data.tasks).toBe("x");
 });
