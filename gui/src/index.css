@@ -971,7 +971,7 @@ small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0
  * or not. The log takes what Start and the emulator leave, so Start, the emulator and the log stand where they are whether
  * a run is under way or not. */
 /* one height for a task row and for Start and Stop, so the button and the list's first row start and end on one line: a row
- * is at least this tall, and a row's content (its tick, its name and the move buttons) is 31.67 px at 150 % */
+ * is at least this tall (its own tick and name make 30.33 px at 150 %), and Start and Stop are this tall */
 .run-page { --task-row-h: 32px; }
 .task-list ol.reorder > li { min-height: var(--task-row-h); }
 .run-grid { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 20px; align-items: start; }
