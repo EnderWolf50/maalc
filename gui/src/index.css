@@ -466,8 +466,8 @@ fieldset.queue { align-items: stretch; }
 .field small.caution { color: var(--fg); }
 /* Start, Stop and the status on the page itself, no frame of their own; Start the task rows' height, so it and the list's
  * first row start and end on one line. The status in tabular numerals, so its clock does not jitter. */
-.run-controls { display: flex; flex-direction: column; gap: 6px; }
-.run-controls p { margin: 0; }
+.run-notes { display: flex; flex-direction: column; gap: 6px; }
+.run-notes p { margin: 0; }
 .runner-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 .runner-bar button { height: var(--task-row-h); font-size: 15px; line-height: 1; padding: 0 26px; }
 /* Start while it cannot start: a plain plate, so the amber of the one main action is not on a button that does nothing */

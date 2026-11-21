@@ -250,7 +250,9 @@ function fromClock(text: string) {
 }
 
 /** How long the run has run, or ran: from its first log line (the run's line 1, while the window still keeps it), else from
- * when the window saw it start, to now or to its end; it ticks each second while the run runs. "" while idle. */
+ * when the window saw it start, to now; once it ended, to its last log line (the runner's `end` line), else to when the
+ * window saw it end, so a page loaded again later still says how long it ran. It ticks each second while the run runs. ""
+ * while idle. */
 function useTook(view: RunView) {
   const running = isRunning(view);
   const was = useRef(view.phase);
@@ -269,14 +271,16 @@ function useTook(view: RunView) {
     return () => clearInterval(id);
   }, [running]);
   const first = view.log[0]?.n === 1 ? fromClock(view.log[0].t) : null;
+  const last = view.phase === "ended" && first !== null && view.log.length ? fromClock(view.log[view.log.length - 1].t) : null;
   const from = first ?? seen;
-  return view.phase === "idle" || from === null ? "" : clock((ended ?? Date.now()) - from);
+  return view.phase === "idle" || from === null ? "" : clock((last ?? ended ?? Date.now()) - from);
 }
 
 /** The bot's English names of its tasks, as its lines write them (agent/lux_actions.py LUX), by task id. */
 const BOT_NAMES: Record<string, string> = { "EXP Luxcavation": "ExpLuxcavation", "Thread Luxcavation": "ThreadLuxcavation" };
-/** A task a line of the runner or the bot names, by its id or the bot's English name, longest first. */
-const NAMED = new RegExp(`\\b(${[...Object.keys(BOT_NAMES), ...TASKS].sort((a, b) => b.length - a.length).join("|")})\\b`, "g");
+/** A task a line of the runner or the bot names, by its id or the bot's English name, longest first; not the pass page's
+ * 「Clear EXP Luxcavation」 row, the game's own label the bot quotes (agent/lux_actions.py). */
+const NAMED = new RegExp(`(?<!Clear )\\b(${[...Object.keys(BOT_NAMES), ...TASKS].sort((a, b) => b.length - a.length).join("|")})\\b`, "g");
 /** A line with each task it names written as the list names it: 「[run] 紐本 status=failed」 for "[run] ThreadLuxcavation
  * status=failed". The runner's log file keeps the line as it came. */
 const namesInList = (t: (k: Key) => string, text: string) => text.replace(NAMED, (m) => taskName(t, BOT_NAMES[m] ?? m));
@@ -301,14 +305,19 @@ const LogRow = memo(function LogRow({ line, rename }: { line: LogLine; rename: (
 /** Start (it saves first), Stop and what the run is doing, on the page itself with no frame of their own. Idle, the status
  * says nothing: the buttons say it. A save under way says so in the status, not on a line of its own under the buttons,
  * which would move the console down as Start is pressed. Why Start is off, and how a start or a run went wrong, show under
- * the line. */
+ * the line in a block of their own, which a narrow window does not hold at the page's top with the line. */
 function RunControls() {
   const { t } = useEditor();
   const { view, start, stop, blocked } = useRunner();
   const running = isRunning(view);
   const took = useTook(view);
   const saving = blocked === "saving" && !running;
-  return (
+  const notes = [
+    blocked && !saving && !running && <p key="blocked" className="caution">{t(`runner.blocked_${blocked}`)}</p>,
+    view.refused && <p key="refused" className="caution" role="alert">{fill(t("runner.refused"), { error: view.refused })}</p>,
+    view.killed && <p key="killed" className="caution" role="alert">{fill(t("runner.killed"), { reason: view.killed })}</p>,
+  ].filter(Boolean);
+  return (<>
     <div className="runner run-controls">
       <div className="runner-bar">
         {/* how Start works is its tooltip */}
@@ -324,11 +333,9 @@ function RunControls() {
           {took && <span className="runner-took"> · {took}</span>}
         </span>
       </div>
-      {blocked && !saving && !running && <p className="caution">{t(`runner.blocked_${blocked}`)}</p>}
-      {view.refused && <p className="caution" role="alert">{fill(t("runner.refused"), { error: view.refused })}</p>}
-      {view.killed && <p className="caution" role="alert">{fill(t("runner.killed"), { reason: view.killed })}</p>}
     </div>
-  );
+    {notes.length > 0 && <div className="runner run-notes">{notes}</div>}
+  </>);
 }
 
 /** Each posted task's state, while a run shows (#877 writes them on the task list's rows instead): in the log's frame, above
@@ -376,12 +383,13 @@ function RunLog({ folded = false, raw: [showConsole, setShowConsole], boxRef }: 
   const follow = useRef(true);
   useLayoutEffect(() => { if (follow.current && pane.current) pane.current.scrollTop = pane.current.scrollHeight; }, [view.log, showConsole, open]);
   const note = fill(t("runner.log_note"), { n: LOG_LINES });
-  // on the title's line, at its right: a click on it ticks it, and folds no panel
-  const rawSwitch = (
+  // the title, then the raw-output switch at its right: a click on the switch ticks it, and folds no panel
+  const head = (<>
+    <span className="lg-title" id={title} title={note}>{t("runner.log")}</span>
     <label className="check" title={t("runner.console_note")}>
       <input type="checkbox" checked={showConsole} onChange={(e) => setShowConsole(e.target.checked)} />{t("runner.console")}
     </label>
-  );
+  </>);
   const body = (<>
     {crashed(view) && (
       <div className="crash" role="alert">
@@ -401,13 +409,13 @@ function RunLog({ folded = false, raw: [showConsole, setShowConsole], boxRef }: 
   if (folded) return (
     <details className="panel runner run-log-box" ref={boxRef} aria-labelledby={title} open={open}
       onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary><span className="lg-title" id={title} title={note}>{t("runner.log")}</span>{rawSwitch}</summary>
+      <summary>{head}</summary>
       {body}
     </details>
   );
   return (
     <fieldset className="runner run-log-box" ref={boxRef} aria-labelledby={title}>
-      <legend><span className="lg-title" id={title} title={note}>{t("runner.log")}</span>{rawSwitch}</legend>
+      <legend>{head}</legend>
       {body}
     </fieldset>
   );
@@ -419,12 +427,13 @@ function RunLog({ folded = false, raw: [showConsole, setShowConsole], boxRef }: 
 function TaskOptions({ id }: { id: string }) {
   const { t } = useEditor();
   if (id === "MirrorDungeon") return <MirrorOptions />;
-  const body = id === "ExpLuxcavation" ? <LuxFields task="exp" /> : id === "ThreadLuxcavation" ? <LuxFields task="thread" />
-    : id === "ChargeEnkephalin" ? <ChargeFields /> : <p className="muted">{t("tasks.none")}</p>;
+  const fields: Record<string, ReactNode> = {
+    ExpLuxcavation: <LuxFields task="exp" />, ThreadLuxcavation: <LuxFields task="thread" />, ChargeEnkephalin: <ChargeFields />,
+  };
   return (
     <fieldset className="task-opts">
       <legend>{taskName(t, id)}</legend>
-      {body}
+      {fields[id] ?? <p className="muted">{t("tasks.none")}</p>}
     </fieldset>
   );
 }

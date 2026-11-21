@@ -7,6 +7,9 @@ import { StrictMode } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import libRs from "../src-tauri/src/lib.rs?raw";
+import actionsPy from "../../agent/actions.py?raw";
+import luxActionsPy from "../../agent/lux_actions.py?raw";
+import sessionPy from "../../runner/session.py?raw";
 import cases from "../../tests/runner_cases.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
@@ -226,7 +229,10 @@ describe("what the run shows", () => {
     expect(took.closest("[role=status], [aria-live]")).toBeNull();
     send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"));
     expect(status).toHaveTextContent(/^2\/2$/);
-    send(task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true));
+    const now = new Date();
+    const end = now.toTimeString().slice(0, 8) + "." + String(now.getMilliseconds()).padStart(3, "0");
+    send(task(1, "MirrorDungeon", "failed"), { type: "event", event: "log", t: end, source: "runner", line: "[run] end failed" },
+      { type: "event", event: "end", result: "failed" }, exit(0, true));
     // the result as a phrase, its full stop left out before the clock: 「跑完了，有任務沒成功 · 01:05」
     expect(status).toHaveTextContent(/^跑完了，有任務沒成功$/);
     expect(screen.getByText(/^· 01:0[56]$/)).toBeVisible(); // how long it ran, held after the end
@@ -287,6 +293,38 @@ describe("what the run shows", () => {
     ]);
     expect(lines[0]).toHaveAttribute("title", "[run] ThreadLuxcavation status=failed t=94s");
     expect(lines[3]).not.toHaveAttribute("title"); // nothing renamed: nothing to show
+  });
+
+  test("the lines the log reds and renames are written as the runner and the bot write them", () => {
+    // runner/session.py say, error, finish and the run's end; agent/actions.py log and stop
+    for (const line of ['self.out.log("runner", f"[run] {text}")', 'self.say(f"error {kind}: {message}")',
+      'self.say(f"end {result}")', "status={self.states[i]}"]) expect(sessionPy).toContain(line);
+    for (const line of ['print(f"[maalc] {msg}", flush=True)', 'log(f"stop: {reason}")']) expect(actionsPy).toContain(line);
+  });
+
+  test("the bot's English task names, as agent/lux_actions.py writes them, read as the list names them; the game's own label stays", async () => {
+    const names = /^LUX = \{"exp": \("([^"]+)",.*"thread": \("([^"]+)",/m.exec(luxActionsPy);
+    expect(names).not.toBeNull();
+    const [, exp, thread] = names!;
+    const user = await open();
+    await started(user);
+    send(log(`[maalc] stop: ${exp}: no team picked`), log(`[maalc] ${thread}: battle 2 of 3`),
+      log(`[maalc] the pass's Clear ${exp} row done`));
+    expect(logLines().map((li) => li.querySelector("span")!.textContent)).toEqual([
+      "[maalc] stop: 經驗本: no team picked", "[maalc] 紐本: battle 2 of 3", `[maalc] the pass's Clear ${exp} row done`,
+    ]);
+  });
+
+  test("an ended run's time is from its first log line to its last, also when the page loads it again later", async () => {
+    const at = (ago: number) => {
+      const d = new Date(Date.now() - ago);
+      return d.toTimeString().slice(0, 8) + "." + String(d.getMilliseconds()).padStart(3, "0");
+    };
+    const line = (ago: number, text: string): Message => ({ type: "event", event: "log", t: at(ago), source: "runner", line: text });
+    back.history = { messages: [line(300_000, "[run] connected MuMu 127.0.0.1:16416"), task(0, "ClaimMail", "succeeded"),
+      line(240_000, "[run] end succeeded"), { type: "event", event: "end", result: "succeeded" }, exit(0, true)], active: false };
+    await open();
+    expect(await screen.findByText(/^· 01:00$/)).toBeVisible(); // 5 min ago to 4 min ago, not to now
   });
 
   test("a new run starts a new log", async () => {
@@ -373,6 +411,15 @@ describe("a narrow window (1180 px wide and less)", () => {
     for (let k = 1; k < order.length; k++) {
       expect(order[k - 1].compareDocumentPosition(order[k]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+  });
+
+  test("the line held at the top holds Start, Stop and the status alone: why Start is off shows under it, and scrolls away", async () => {
+    const s = settings();
+    s.tasks = s.tasks.map((x) => ({ ...x, enabled: false }));
+    back.text = fileOf(s);
+    await open();
+    const why = screen.getByText(zh["runner.blocked_no_task"]);
+    expect(startButton().closest(".run-controls")!.contains(why)).toBe(false);
   });
 
   test("the log is a panel folded until a run starts; its raw-output switch on the title's line ticks and folds nothing", async () => {
