@@ -891,9 +891,9 @@ def screens_1280():
 
 def test_the_lit_price_sweep_over_tests_screens():
     # CODING_STANDARDS' sweep: option_lit is asked only on the dialog's first layer, after its title named the slot's sinner.
-    # Over every 1280x720 screen of tests/screens (230 of them), a price box reads lit on the dialogs and on 9 other screens,
-    # none a shop page: orange art where a box sits (a battle's skill card, a map node, a gift). The second layer (Confirm,
-    # Connecting) reads none: its skill cards cover the prices. #456's ID Skill Search dialogs (live 2026-11-07, the same
+    # Over every 1280x720 screen of tests/screens (230 of them), a price box reads lit on the dialogs and on 10 other screens,
+    # none a shop page: orange art where a box sits (a battle's skill card, a map node, a gift, #884's Drive event card).
+    # The second layer (Confirm, Connecting) reads none: its skill cards cover the prices. #456's ID Skill Search dialogs (live 2026-11-07, the same
     # dialog with prices 90/150/240 in Cost or 25/50/75 in Starlight) are dialogs too and read as the captures show:
     # Gregor's skill 3 is locked, so only s1_s2 is lit; Ryōshū's three are. #658's Ryōshū has no skill 1: only s2_s3 is lit.
     id_dialogs = {"ShopIdSkillSearchAll": ["s1_s2", "s2_s3", "s1_s3"], "ShopIdSkillSearchDimmed": ["s2_s3"],
@@ -901,7 +901,7 @@ def test_the_lit_price_sweep_over_tests_screens():
     hits = {stem: [k for k, box in shop_actions.REPLACE_PRICES.items() if shop.option_lit(image, box)] for stem, image in screens_1280()}
     assert {k: hits[k] for k in id_dialogs} == id_dialogs
     assert {k: v for k, v in hits.items() if v and k not in DIALOGS and k not in id_dialogs} == {
-        "BattleTurnFocused": ["s1_s2"], "BossGiftTrialsHard": ["s2_s3"], "FormationDetails": ["s2_s3"],
+        "BattleTurnFocused": ["s1_s2"], "BossGiftTrialsHard": ["s2_s3"], "DriveWalpurgis": ["s1_s2"], "FormationDetails": ["s2_s3"],
         "LuxConsecThread10Open": ["s1_s2"], "LuxConsecThread2Open": ["s1_s2"], "LuxTeamSelect": ["s1_s2"],
         "LuxTeamSelectChain": ["s1_s2"], "MapZoomed": ["s2_s3"], "StartingGiftPicked": ["s1_s2", "s2_s3", "s1_s3"]}
 
