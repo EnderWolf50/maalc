@@ -10,7 +10,6 @@ import threading
 
 from daily_child import bind, game_class, inside, load, result, run_child, run_task, screen
 
-CARD = (340, 240, 240, 140)  # NavDrive's roi: the card is tapped at the middle of the box found in it
 SCREENS = {"drive": "Drive.png", "entry": "EntryNewRun.png"}
 LIMIT = 8  # s: a scenario still going by then is stopped (each JumpBack gives the hub a new timeout)
 
@@ -33,10 +32,13 @@ def child():
             return self.images[self.screen]
 
         def on_tap(self, x, y):
-            if self.screen == "drive" and self.taken and inside(CARD, x, y) and self.left is None:
+            if self.screen == "drive" and self.taken and inside(card, x, y) and self.left is None:
                 self.left = self.lag
             return True
 
+    from test_pipeline import load_nodes
+
+    card = tuple(load_nodes("navigation.json")["NavDrive"]["roi"])  # the card is tapped at the middle of the box found
     game = Game()
     tasker = bind(resource, game)
     entry = load_entry()

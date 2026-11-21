@@ -11,7 +11,7 @@ from daily_child import probe_child, run_child, screen
 
 # Labelled by eye (2026-10-26 live; the panel moves between the main window's x 393 and the Luxcavation pages' x 242).
 MODULES = {
-    "MainWindow.png": 182, "MainWindowFadeIn.png": 182, "MainWindowLater.png": 104, "Drive.png": 182,
+    "MainWindow.png": 182, "MainWindowFadeIn.png": 182, "MainWindowLater.png": 104, "Drive.png": 182, "DriveWalpurgis.png": 327,
     "LuxExp.png": 104, "LuxExpLocked.png": 104, "LuxThread.png": 104,
 }
 # No panel, or none this function can read: the title screen, the Mirror Dungeon map, a shop, the Mirror Dungeon entry page (#369: PlanRun's read gives None there).

@@ -255,10 +255,15 @@
     // Mirror Dungeons' way in only (GoToMirrorEntry): tapped until the entry page's text shows (the MirrorEntry nodes'
     // roi), at most the 3 s post_delay it had (#58). The #34 recording of 2026-11-10: the entry page was up and still
     // within 0.1-0.2 s of each of 4 taps, so the 3 s were about 2.8 s of nothing.
+    // Client 1.119.1 (2026-11-21, Walpurgis Night) redrew the card smaller and up at y 186 (DriveWalpurgis.png, #884):
+    // the second template, 1.0 there and at most 0.52 in this roi on the other 241 screens; the roi takes both places.
     "NavDrive": {
         "recognition": "TemplateMatch",
-        "roi": [340, 240, 240, 140],
-        "template": "Navigation/NavDrive.png",
+        "roi": [340, 170, 240, 210],
+        "template": [
+            "Navigation/NavDrive.png",
+            "Navigation/NavDriveWalpurgis.png"
+        ],
         "threshold": 0.8,
         "action": "Custom",
         "custom_action": "OpenDrive",
