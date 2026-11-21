@@ -2,6 +2,7 @@
 // (src-tauri/src/runner.rs Message, runner/protocol.py events) folded into one view: the phase, each posted task's state, the
 // connection, the live log (the last LOG_LINES lines) and how the run ended.
 import { createContext, useContext } from "react";
+import type { Settings } from "./model";
 
 /** The lines of the live log the window keeps (lib.rs LOG_KEEP keeps as many for a page that attaches later). */
 export const LOG_LINES = 2000;
@@ -46,14 +47,12 @@ export type Message =
   | { type: "killed"; reason: string }
   | { type: "exit"; code: number | null; ended: boolean; tail: string[] };
 
-/** A task list as the settings hold it: each entry's task and tick, in run order. */
-export type TaskEntries = { id: string; enabled: boolean }[];
-
 /** What the page itself adds: a start it asked for (the entries it posts, and the whole list it starts from), a start the
  * backend refused, a line of its own for the live log (what came of a scheduled run's start, #816), and the settings' task
- * list each time it changes (App: the run's `list`). */
-export type Action = Message | { type: "begin"; entries: string[]; list?: TaskEntries } | { type: "refused"; error: string }
-  | { type: "note"; line: string } | { type: "list"; list: TaskEntries };
+ * list each time it changes (App: the run's `list`), with whether a run with none may take it (`adopt`: the backend said
+ * the run a page took up is under way). */
+export type Action = Message | { type: "begin"; entries: string[]; list?: Settings["tasks"] } | { type: "refused"; error: string }
+  | { type: "note"; line: string } | { type: "list"; list: Settings["tasks"]; adopt: boolean };
 
 /** A line of the live log: `raw` is a line the window got outside the runner's log (its stderr, a line that is not the
  * protocol), `window` one of the window's own. `n` numbers the lines of a run. */
@@ -83,7 +82,7 @@ export interface RunView {
    * started the run from (Start, a scheduled start), or, for a run under way a page loaded again took up, the settings' list
    * as the page first saw it with the run (none for an ended one). Dropped for good once the settings' list is another
    * (`unlisted`): the list was edited, and its rows no longer read with the run. */
-  list?: TaskEntries;
+  list?: Settings["tasks"];
   unlisted?: boolean;
 }
 
@@ -94,15 +93,19 @@ const BOT_START = /^\[maalc\] task (\S+) started$/;
 const STOP_LINE = "[maalc] stop: ";
 
 /** Whether two task lists are one: the same entries, ticked the same, in one order. */
-export const sameList = (a: TaskEntries, b: TaskEntries) =>
+export const sameList = (a: Settings["tasks"], b: Settings["tasks"]) =>
   a.length === b.length && a.every((x, j) => x.id === b[j].id && x.enabled === b[j].enabled);
 
-/** The run's list after the settings' list changed to `list`: a run with none takes it while it runs (the lock keeps the
- * list then as the run read it), the same list keeps it, and another drops it for good. Nothing before a run's tasks are
- * known; an ended run a page took up takes none, as the list may have changed since it ran. */
-function listed(v: RunView, list: TaskEntries): RunView {
+/** Whether the run has its tasks and still waits for a list (App hands it the settings' list again when this changes). */
+export const wantsList = (v: RunView) => v.tasks.length > 0 && !v.list && !v.unlisted;
+
+/** The run's list after the settings' list changed to `list`: a run with none takes it when `adopt` says it may (a run under
+ * way a page took up: the lock keeps the list then as the run read it), the same list keeps it, and another drops it for
+ * good. Nothing before a run's tasks are known; an ended run a page took up takes none, as the list may have changed since
+ * it ran. */
+function listed(v: RunView, list: Settings["tasks"], adopt: boolean): RunView {
   if (!v.tasks.length || v.unlisted) return v;
-  if (!v.list) return isRunning(v) ? { ...v, list } : v;
+  if (!v.list) return adopt && isRunning(v) ? { ...v, list } : v;
   return sameList(v.list, list) ? v : { ...v, list: undefined, unlisted: true };
 }
 
@@ -124,7 +127,7 @@ export function reduce(v: RunView, a: Action): RunView {
   }
   if (a.type === "refused") return { ...IDLE, refused: a.error };
   if (a.type === "note") return addLine(v, "window", a.line); // the run, or no run, as it was
-  if (a.type === "list") return listed(v, a.list);
+  if (a.type === "list") return listed(v, a.list, a.adopt);
   if (v.phase === "idle" || (v.phase === "ended" && a.type !== "exit")) v = { ...IDLE, phase: "running" };
   switch (a.type) {
     case "invalid": return addLine(v, "raw", a.line);

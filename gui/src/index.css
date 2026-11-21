@@ -527,8 +527,10 @@ fieldset.queue { align-items: stretch; }
   border-color: transparent; background: none;
 }
 .add-menu button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-/* the item with the focus, however the menu opened: the arrows move it, and so does the pointer (AddTask), so one is lit */
-.add-menu button:hover:not(:disabled), .add-menu button:focus { background: var(--hov); border-color: transparent; }
+/* the item with the focus, however the menu opened: the arrows move it, and so does the pointer (AddTask), so one is lit;
+ * the pointer's own :hover lights none, or an item it left on would stay lit as the arrows go on */
+.add-menu button:hover:not(:disabled) { background: none; border-color: transparent; }
+.add-menu button:focus, .add-menu button:focus:hover:not(:disabled) { background: var(--hov); }
 .add-menu button:focus-visible { outline-offset: -2px; }
 /* the Mirror Dungeon task's options in groups, two side by side where they fit */
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }

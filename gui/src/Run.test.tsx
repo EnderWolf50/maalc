@@ -326,6 +326,9 @@ describe("the task list", () => {
     expect(items[3]).toHaveFocus();
     await r.user.keyboard("{Home}");
     expect(items[0]).toHaveFocus();
+    // the pointer still on the 4th, the focus on the 1st: the 1st alone is lit
+    expect(cssValueOf(css, items[3], "background", items[3])).toBe("none");
+    expect(cssValueOf(css, items[0], "background", items[3])).toBe("var(--hov)");
     await r.user.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).toBeNull();
     expect(addButton()).toHaveFocus();

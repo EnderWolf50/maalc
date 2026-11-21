@@ -276,6 +276,16 @@ describe("what the run shows", () => {
     expect(rowStates().every((x) => x === null)).toBe(true);
   });
 
+  test("an ended run's messages coming one by one, a render between each, still write no states: the backend's word decides", async () => {
+    back.history = { messages: [], active: false };
+    await open();
+    await waitFor(() => expect(back.send).toBeDefined());
+    for (const m of [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "succeeded"),
+      task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" } as Message, exit(0, true)]) send(m);
+    expect(screen.getByText(/^跑完了，有任務沒成功$/)).toBeVisible();
+    expect(rowStates().every((x) => x === null)).toBe(true);
+  });
+
   test("a page loaded again after a run ended writes no states on the rows: the list may have changed since the run", async () => {
     back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "succeeded"),
       task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true)], active: false };
@@ -742,17 +752,19 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
     const one = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: false }];
     const other = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true }];
     const begun = reduce(IDLE, { type: "begin", entries: ["ClaimMail"], list: one });
-    expect(reduce(begun, { type: "list", list: one })).toBe(begun);
-    const edited = reduce(begun, { type: "list", list: other });
+    expect(reduce(begun, { type: "list", list: one, adopt: false })).toBe(begun);
+    const edited = reduce(begun, { type: "list", list: other, adopt: false });
     expect([edited.list, edited.unlisted]).toEqual([undefined, true]);
-    expect(reduce(edited, { type: "list", list: one }).list).toBeUndefined(); // the list as it was again: still gone
-    // a page that took the run up: nothing before the run's tasks are known, then the settings' list as they read while it
-    // runs; an ended one takes none
-    const taken = reduce(IDLE, task(0, "ClaimMail", "succeeded"));
-    expect(reduce(IDLE, { type: "list", list: one })).toBe(IDLE);
-    expect(reduce(taken, { type: "list", list: one }).list).toEqual(one);
+    // the list as it was again: still gone, also where it may take one
+    expect(reduce(edited, { type: "list", list: one, adopt: true }).list).toBeUndefined();
+    // a page that took the run up: nothing before the run's tasks are known, then the settings' list as they read when the
+    // backend said the run is under way, and while it runs; an ended one takes none
+    const taken = reduce(IDLE, task(0, "ClaimMail", "running"));
+    expect(reduce(IDLE, { type: "list", list: one, adopt: true })).toBe(IDLE);
+    expect(reduce(taken, { type: "list", list: one, adopt: false }).list).toBeUndefined();
+    expect(reduce(taken, { type: "list", list: one, adopt: true }).list).toEqual(one);
     const ended = reduce(taken, exit(0, true));
-    expect(reduce(ended, { type: "list", list: one }).list).toBeUndefined();
+    expect(reduce(ended, { type: "list", list: one, adopt: true }).list).toBeUndefined();
     // a new run starts on its own list
     expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other })).toMatchObject({ list: other });
     expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other }).unlisted).toBeUndefined();

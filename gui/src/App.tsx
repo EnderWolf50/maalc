@@ -12,7 +12,7 @@ import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, entryKey, taskOfPath } from "./Run";
-import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
+import { IDLE, RunnerContext, crashed, isRunning, reduce, wantsList, type Runner } from "./runner";
 import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
@@ -141,16 +141,18 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setLastScheduled({ id, at, outcome });
     return api.logSchedule(`${at} ${line}`).catch(() => {});
   };
+  // a run under way that this page took up (the backend's word, not the phase of the moment: its messages come one by one)
+  const [takenUp, setTakenUp] = useState(false);
   useEffect(() => {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
-    api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
+    api.attachRun((m) => { if (live) dispatch(m); }).then((active) => { if (live && active) setTakenUp(true); }, () => {});
     return () => { live = false; };
   }, []);
-  // the run's list follows the settings' task list (runner.ts listed): a run a page took up takes it, and after a run an
-  // edit to it takes the run's states off the Run tab's rows for good
+  // the run's list follows the settings' task list (runner.ts listed): a run under way a page took up takes it, and after a
+  // run an edit to it takes the run's states off the Run tab's rows for good
   const tasksNow = s ? JSON.stringify(s.tasks) : null;
-  const runNeedsList = run.tasks.length > 0 && !run.list && !run.unlisted;
-  useEffect(() => { if (s) dispatch({ type: "list", list: s.tasks }); }, [tasksNow, runNeedsList]);
+  const runWantsList = wantsList(run);
+  useEffect(() => { if (s) dispatch({ type: "list", list: s.tasks, adopt: takenUp }); }, [tasksNow, runWantsList, takenUp]);
   // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
   // its last step failed and how the last apply went (read at the window's start), each above every tab until dismissed.
   const [update, setUpdate] = useState<Update | null>(null);
