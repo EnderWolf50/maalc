@@ -1,5 +1,5 @@
 // The Run tab (#814, #815, #816, spec #811 「設定視窗」, spec 04 sections 5, 12 and 14): the emulator on top, with the device
-// scan; the task list on the left (ticks, drag or ↑↓: the run order; a task listed again, or an extra entry removed, #811)
+// scan; the task list on the left (ticks, drag or Alt+↑↓: the run order; a task listed again, or an extra entry removed, #811)
 // and the picked task's options on the right; the global options in a frame of their own; the scheduled runs
 // (Schedules.tsx); the runner's Start and Stop, each posted task's state and the live log at the bottom. Each control
 // writes the settings key the runner or the agent reads at a task's start, and shows that key after its label while the pointer
@@ -120,7 +120,7 @@ export function RunTab() {
           <p className="muted">{withBreaks(t("tasks.note"))}</p>
           {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
           <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
-            badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
+            label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
             onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
             render={(x, j) => (
               <span className="task-row">

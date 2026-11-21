@@ -6,7 +6,7 @@ import { fill } from "./i18n";
 import {
   GAME_DECK, SINNERS, SKILL_PAYMENTS, SKILL_SWAPS, skillPlan, type SkillPay, type SkillReplacement, type SkillSwapKey, type SkillTarget,
 } from "./model";
-import { Choice, Input, Mark, useEditor, useUndoRow, withBreaks } from "./ui";
+import { Choice, Input, Mark, useEditor, useKeyMoves, useUndoRow, withBreaks } from "./ui";
 
 const move = <T,>(list: T[], from: number, to: number) => {
   const next = [...list];
@@ -26,7 +26,9 @@ export function SkillPanel({ i }: { i: number }) {
   const search = sr.id_skill_search;
   const changed = sr.sinners.filter((x) => !skillPlan(x.target).untouched).length;
   const rest = SINNERS.filter((n) => !sr.sinners.some((x) => x.sinner === n));
-  const dragItem = useDragSort((from, to) => edit((d) => { d.sinners = move(d.sinners, Number(from), Number(to)); }), () => true);
+  const reorder = (from: number, to: number) => edit((d) => { d.sinners = move(d.sinners, from, to); });
+  const dragItem = useDragSort((from, to) => reorder(Number(from), Number(to)), () => true);
+  const keys = useKeyMoves(sr.sinners.length, reorder);
 
   const [undoNote, removeRow] = useUndoRow<SkillReplacement["sinners"][number]>((fn) => edit((d) => fn(d.sinners)), s.teams[i].id);
   const seen = new Map<string, number>(); // a hand-edited file can list a sinner twice (validate names it): keys stay unique
@@ -41,7 +43,7 @@ export function SkillPanel({ i }: { i: number }) {
       </select>
       {undoNote}
       {!sr.sinners.length && <p className="muted">{t("skill.empty")}</p>}
-      <ol className="skill-sinners">
+      <ol ref={keys.list} className="skill-sinners" aria-label={t("skill.title")} title={t("dragHint")}>
         {sr.sinners.map((x, j) => {
           const plan = skillPlan(x.target), target = x.target, faulty = plan.faults.length > 0;
           const needsTwo = plan.need.length > 1;
@@ -52,9 +54,8 @@ export function SkillPanel({ i }: { i: number }) {
           // a step moves one card between S1 and `k`, so the deck stays 6
           const shift = (k: Stepped, d: 1 | -1) => edit((draft) => { const goal = draft.sinners[j].target; goal.s1 -= d; goal[k] += d; });
           return (
-            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} tabIndex={-1} className={bad(rowPath) || faulty ? "faulty" : ""}
-              {...dragItem(String(j), "sinners")}>
-              <span className="grip" aria-hidden>⋮⋮</span>
+            <li key={n ? `${x.sinner}#${n}` : x.sinner} data-sinner={x.sinner} data-path={rowPath} {...keys.row}
+              className={bad(rowPath) || faulty ? "faulty" : ""} onKeyDown={(e) => keys.onKey(e, j)} {...dragItem(String(j), "sinners")}>
               <b className="skill-rank">{j + 1}</b>
               <span className="skill-name" title={x.sinner}>{x.sinner}</span>
               <span className="skill-count">
@@ -90,18 +91,13 @@ export function SkillPanel({ i }: { i: number }) {
                   ? (["s1_s3", otherSwap] as const).map((k) => <option key={k} value={k}>{fill(t("skill.first"), { swap: swapName(k) })}</option>)
                   : <option value="">—</option>}
               </select>
-              <span className="skill-arrows">
-                <button type="button" className="icon" aria-label={`${t("up")} ${x.sinner}`} title={t("up")} disabled={j === 0}
-                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j - 1); })}>↑</button>
-                <button type="button" className="icon" aria-label={`${t("down")} ${x.sinner}`} title={t("down")} disabled={j === sr.sinners.length - 1}
-                  onClick={() => edit((d) => { d.sinners = move(d.sinners, j, j + 1); })}>↓</button>
-                <button type="button" className="icon" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
-                  onClick={() => removeRow(sr.sinners, j, x.sinner)}>✕</button>
-              </span>
+              <button type="button" className="icon skill-remove" aria-label={`${t("skill.remove")} ${x.sinner}`} title={t("skill.remove")}
+                onClick={() => removeRow(sr.sinners, j, x.sinner)}>✕</button>
             </li>
           );
         })}
       </ol>
+      {keys.notes}
       <p className="muted skill-rest">{t("skill.rest")}{rest.join(t("skill.sep")) || t("skill.rest_none")}</p>
       <p className="muted">{t("skill.uptie")}</p>
       <Mark className="toggle" path={`${path}/id_skill_search`}>

@@ -36,6 +36,12 @@ export const sideList = () => within(document.querySelector("aside")!);
 /** Pick the team or plan named `name` in the side list, as the user clicks it. */
 export const pickInList = (user: UserEvent, name: string) => user.click(sideList().getByText(name));
 
+/** Move `row` of a sortable list from the keyboard, as the user does: the focus on the row, then Alt with `key`. */
+export async function altMove(user: UserEvent, row: HTMLElement, key: "ArrowUp" | "ArrowDown" | "Home" | "End") {
+  row.focus();
+  await user.keyboard(`{Alt>}{${key}}{/Alt}`);
+}
+
 /** Drag row `from` of a sortable list (ui.tsx ReorderList) onto row `to` and drop it: the HTML5 events the list handles. The
  * real window takes a drag only in the foreground or over DevTools (docs/agents/gui-driving.md). */
 export function dragOnto(from: Element, to: Element) {

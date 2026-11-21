@@ -42,7 +42,7 @@ export function PlanTab<P extends { id: string; name: string }>({ planKey, tab, 
         {lead && <button type="button" className={"lead" + (i === -1 ? " selected" : "")} onClick={() => setSel(lead.id)}>{lead.label}</button>}
         {plans.length || lead ? (
           <ReorderList items={plans} keyOf={(p) => p.id} selected={i} onSelect={(j, list) => setSel(list[j].id)}
-            badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
+            label={t(tab)} badAt={(j) => bad(`${planKey}/${j}`)} onChange={(list) => set((l) => l.splice(0, l.length, ...list))}
             render={(p) => p.name || "—"} />
         ) : <p className="muted">{t("noPlans")}</p>}
         {undoNote}
