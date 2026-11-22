@@ -36,10 +36,11 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
                                      drawn black (the header's "header .path" shows a local path). The page only: the
                                      window with its frame is cua's get_window_state
   scheme <light|dark>                emulates prefers-color-scheme, kept until stopped (or --keep S)
-  press <target> [--hold MS] [--move DX,DY] [--steps N] [--button left|right|middle] [--with Ctrl|Shift|Ctrl+Shift]
+  press <target> [--hold MS] [--move DX,DY] [--steps N] [--button left|right|middle] [--with MODS]
                                      presses the mouse at the target, holds it MS (100; 600 with --move), moving by DX,DY
                                      while held, and releases; a drag the page starts is reported and cancelled; --with
-                                     holds those modifiers through it (a Ctrl click, which cua cannot send in the background)
+                                     holds modifiers through it, Ctrl, Shift, Alt or Meta joined by + (Ctrl+Shift): a Ctrl
+                                     click, which cua cannot send in the background. A negative move takes =: --move=-40,0
   hover <target> [--force]           the pointer on the target (--force: the CSS :hover state only), kept until stopped
                                      (or --keep S)
   key <combo>... [--ime] [--delay MS]
@@ -277,10 +278,12 @@ function keyOf(name, bits) {
   return NAMED[name.toLowerCase()] ?? null;
 }
 
+/** The modifier `name` names (Ctrl, Shift, Alt, Meta, any case); `where` heads the usage error for any other. */
+const modifierOf = (name, where) => MODIFIERS[name.toLowerCase()] ?? usage(`${where}: unknown modifier ${name} (Ctrl, Shift, Alt, Meta)`);
+
 /** The Input.dispatch*Event modifiers bits of "Ctrl", "Shift+Ctrl" ...: what a press --with holds during its mouse events. */
 export function modifierBits(text) {
-  return text.split("+").map((p) => p.trim()).reduce((bits, p) =>
-    bits | (MODIFIERS[p.toLowerCase()] ?? usage(`--with ${text}: unknown modifier ${p} (Ctrl, Shift, Alt, Meta)`)).bit, 0);
+  return text.split("+").reduce((bits, p) => bits | modifierOf(p.trim(), `--with ${text}`).bit, 0);
 }
 
 /** The Input.dispatchKeyEvent params for a key combo ("Shift+Tab"): each modifier down, the key down and up, the modifiers
@@ -289,7 +292,7 @@ export function modifierBits(text) {
 export function keyEvents(combo, ime = false) {
   const parts = combo.split("+").map((p) => p.trim());
   const name = parts.pop();
-  const mods = parts.map((p) => MODIFIERS[p.toLowerCase()] ?? usage(`${combo}: unknown modifier ${p} (Ctrl, Shift, Alt, Meta)`));
+  const mods = parts.map((p) => modifierOf(p, combo));
   if (MODIFIERS[name.toLowerCase()]) usage(`${combo}: a modifier needs a key after it, as Shift+Tab`);
   const bits = mods.reduce((b, m) => b | m.bit, 0);
   const k = keyOf(name, bits) ?? usage(`${combo}: unknown key ${name}`);

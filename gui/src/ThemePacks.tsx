@@ -123,8 +123,11 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const activate = (what: string, e: MouseEvent) => {
     if (e.ctrlKey) picks.toggle(what);
     else if (e.shiftKey) { window.getSelection()?.removeAllRanges(); picks.extend(what); } // a Shift click selects text
-    else if (picks.carried(what).length > 1) ask(PICKS, null, what);
-    else { picks.clear(); ask(what); }
+    else {
+      picks.anchorAt(what);
+      if (picks.carried(what).length > 1) ask(PICKS, null, what);
+      else { picks.clear(); ask(what); }
+    }
   };
   // Alt+↑ / Alt+↓ on a pack (#743): it and every pick with it go to the lane above or below its own, or past the first or the
   // last lane to a new weight there, the one a + lane offers (nextScore). The focus stays on the pack.
@@ -136,20 +139,21 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     weighAll(picks.carried(what), w);
   };
   const carrying = drag && drag !== LINE ? picks.carried(drag) : []; // what the drag moves
+  const several = carrying.length > 1;
   const [over, setOver] = useState<number | null>(null); // the lane under a drag of several packs
   const dropOn = (w: number | AddAt) => (e: DragEvent) => {
     e.preventDefault();
     if (drag === LINE && typeof w === "number") set({ threshold: w });
     else if (drag && drag !== LINE) {
-      if (typeof w !== "number") ask(carrying.length > 1 ? PICKS : drag, w);
-      else if (carrying.length > 1) weighAll(carrying, w);
+      if (typeof w !== "number") ask(several ? PICKS : drag, w);
+      else if (several) weighAll(carrying, w);
       else weigh(drag, w);
     }
     setDrag(null); setOver(null);
   };
   const target = (accepts: boolean, w: number | AddAt) => (onChange && accepts
     ? { onDragOver: (e: DragEvent) => e.preventDefault(), onDrop: dropOn(w) } : {});
-  const hover = (w: number) => (carrying.length > 1 ? {
+  const dropHover = (w: number) => (several ? {
     onDragOver: (e: DragEvent) => { e.preventDefault(); if (over !== w) setOver(w); },
     onDragLeave: (e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver((o) => (o === w ? null : o)); },
   } : {});
@@ -171,14 +175,14 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     onKeyDown: (e: KeyboardEvent) => {
       if (e.key === " ") { e.preventDefault(); picks.toggle(what); } // Enter opens the box
       else if (e.key === "Enter") { e.preventDefault(); if (picks.carried(what).length > 1) ask(PICKS, null, what); else ask(what); }
-      else if (e.altKey && !e.ctrlKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); step(what, e.key === "ArrowUp" ? -1 : 1); }
+      else if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); step(what, e.key === "ArrowUp" ? -1 : 1); }
     },
   });
   /** A pack's marks: picked; dimmed while a drag of several packs takes it, but for the pack held, which shows their count. */
-  const marked = (what: string) => (picks.has(what) ? " picked" : "") + (carrying.length > 1 && carrying.includes(what) && what !== drag ? " lifted" : "");
-  const marks = (what: string) => <>
+  const pickClass = (what: string) => (picks.has(what) ? " picked" : "") + (several && carrying.includes(what) && what !== drag ? " lifted" : "");
+  const pickMarks = (what: string) => <>
     {picks.has(what) && <span className="tick" aria-hidden>✓</span>}
-    {drag === what && carrying.length > 1 && <span className="count" aria-hidden>{carrying.length}</span>}
+    {drag === what && several && <span className="count" aria-hidden>{carrying.length}</span>}
   </>;
   // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its
   // threshold is that lane's weight.
@@ -187,9 +191,9 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
     return (
-      <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "") + marked(name)} data-path={path && `${path}/weights/${name}`}
+      <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "") + pickClass(name)} data-path={path && `${path}/weights/${name}`}
         data-pk={name} {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
-        {marks(name)}
+        {pickMarks(name)}
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
         {!cover && <span className="nm">{name}</span>}
         {floors
@@ -261,28 +265,28 @@ function PackPlanEditor({ data, plan, path, onChange }: {
     )}
     <div ref={lanesBox} className={"lanes" + (images ? " images" : "") + (drag === LINE ? " moving" : drag ? " carrying" : "") + (picks.drawing ? " boxing" : "")}
       onMouseDownCapture={(e) => { pressed.current = typing && e.button === 0 ? "" : null; }}
-      onClick={(e) => { const p = pressed.current; pressed.current = null; if (p) activate(p, e); }} {...(onChange ? picks.boxing : {})}>
+      onClick={(e) => { const p = pressed.current; pressed.current = null; if (p) activate(p, e); }} {...(onChange ? picks.onLanes : {})}>
       {picks.marquee}
       {addLane("top")}
       {line === 0 && lineBar}
       {lanes.map((w, i) => (
         <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
-          <div className={"lane" + (over === w && carrying.length > 1 ? " lit" : "")} {...target(drag !== LINE, w)} {...hover(w)}>
-            <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
+          <div className={"lane" + (over === w && several ? " lit" : "")} {...target(drag !== LINE, w)} {...dropHover(w)}>
+            <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{signed(w)}</span>
             <div className="packs">
               {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
               {w === plan.unlisted && !query.trim() && (
-                <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "") + marked(UNLISTED)} data-path={path && `${path}/unlisted`}
+                <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "") + pickClass(UNLISTED)} data-path={path && `${path}/unlisted`}
                   data-pk={UNLISTED} {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
-                  {marks(UNLISTED)}
+                  {pickMarks(UNLISTED)}
                   {images && <span className="img" aria-hidden />}
                   <span className="nm">{t("packs.unlisted")}</span>
                   {typingOn(UNLISTED) && box(typing!.what, plan.unlisted)}
                 </span>
               )}
             </div>
-            {over === w && carrying.length > 1 && <span className="droplabel">{fill(t("packs.drop"), { n: carrying.length, w: signed(w) })}</span>}
+            {over === w && several && <span className="droplabel">{fill(t("packs.drop"), { n: carrying.length, w: signed(w) })}</span>}
           </div>
         </Fragment>
       ))}

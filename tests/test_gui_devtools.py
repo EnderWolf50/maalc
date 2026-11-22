@@ -127,9 +127,10 @@ def test_shift_tab_holds_shift_around_the_tab():
     assert "text" not in tab
 
 
-def test_a_press_with_ctrl_or_shift_carries_their_bits_on_its_mouse_events():
-    # Input.dispatchMouseEvent's modifiers: the page reads them as the click's ctrlKey and shiftKey (a Ctrl click picks a
-    # theme pack, #743), which cua's background delivery cannot send on Windows.
+def test_press_with_reads_ctrl_or_shift_as_the_modifier_bits_of_input_dispatch():
+    # The bits press puts on each Input.dispatchMouseEvent, which the page reads as the click's ctrlKey and shiftKey (a Ctrl
+    # click picks a theme pack, #743; cua's background delivery cannot send one on Windows). That the page reads them is
+    # the real window's (docs/agents/gui-driving.md, the #743 run).
     assert call("modifierBits", "Ctrl") == 2
     assert call("modifierBits", "shift") == 8
     assert call("modifierBits", "Ctrl+Shift") == 10

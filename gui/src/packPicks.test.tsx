@@ -53,7 +53,7 @@ describe("picking packs with the mouse", () => {
     expect(chipOf("The Forgotten")).not.toHaveClass("picked");
   });
 
-  test("Shift and a click pick the run of a lane between the last pack picked and this one, in the order the lane shows", async () => {
+  test("Shift and a click pick the range of a lane between the last pack clicked and this one, in the order the lane shows", async () => {
     const r = await open();
     await ctrlClick(r.user, FIRST[1]);
     await r.user.keyboard("{Shift>}");
@@ -65,6 +65,28 @@ describe("picking packs with the mouse", () => {
     await r.user.click(chipOf("The Outcast"));
     await r.user.keyboard("{/Shift}");
     expect(picked()).toEqual([...FIRST.slice(1, 5), "The Outcast"]);
+  });
+
+  test("a plain click starts a Shift click's range too: its box closes and the range from it is picked", async () => {
+    const r = await open();
+    await r.user.click(chipOf(FIRST[1]));
+    expect(chipOf(FIRST[1])).toContainElement(box());
+    await r.user.keyboard("{Shift>}");
+    await r.user.click(chipOf(FIRST[3]));
+    await r.user.keyboard("{/Shift}");
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(picked()).toEqual(FIRST.slice(1, 4));
+    expect(r.weights()).toEqual({ "The Outcast": -1 });
+  });
+
+  test("a range starts only from a pack of this plan: in another plan Shift and a click pick the pack alone", async () => {
+    const r = await open([planOf(), planOf({}, "p2", "Yours")]);
+    await ctrlClick(r.user, FIRST[1]);
+    await pickInList(r.user, "Yours");
+    await r.user.keyboard("{Shift>}");
+    await r.user.click(chipOf(FIRST[4]));
+    await r.user.keyboard("{/Shift}");
+    expect(picked()).toEqual([FIRST[4]]);
   });
 
   test("a plain click on a pack not picked drops the picks and types that pack's weight alone, as before", async () => {
