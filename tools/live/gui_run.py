@@ -38,7 +38,8 @@ options go to screen-record as they are; `--height` defaults to 720 (the maalc-l
 `DIR/logs/runner/` (the newest log when a run is under way, else the next new one), then --delay seconds (default 0);
 a run that ends first, or a --limit (default 600 s) that passes, is exit 1. **state** prints the status line, the phase
 (idle, running, stopping, ended), the run's tasks (id, name, reason and state: pending, running, succeeded, failed,
-stopped, cancelled) read from the task list's rows, and the page's alerts as JSON; `--until` waits for one of those phases (--timeout, default 600 s; exit 1 when it passes).
+stopped, cancelled) read from the task list's rows, and the page's alerts as JSON; `--until` waits for one of those
+phases (--timeout, default 600 s; exit 1 when it passes).
 The page commands go through `tools/gui_devtools.mjs` on the port open printed. Windows only.
 """
 from __future__ import annotations
@@ -80,7 +81,7 @@ STATE_JS = """(() => { const s = document.querySelector(".runner-status");
     rows: [...document.querySelectorAll(".task-list .task-row")].map((row) => ({ id: row.dataset.task, state: row.dataset.state ?? null,
       name: text(row.querySelector(".tr-name")), reason: text(row.querySelector(".tr-reason")) })),
     start: !document.querySelector(".runner-bar button.primary")?.disabled,
-    alerts: [...document.querySelectorAll(".run-notes p, .crash[role=alert] p")].map(text) }; })()"""
+    alerts: [...document.querySelectorAll(".run-notes p, .crash[role=alert]")].map(text) }; })()"""
 RENDERED_JS = """(() => { const main = document.querySelector("main");
   if (!main) return null;
   if (main.classList.contains("load-error")) return { loadError: main.innerText.slice(0, 300) };
@@ -327,8 +328,7 @@ def run_tasks(rows: list[dict]) -> list[dict]:
     """The run's tasks from the task list's rows, in the list's order, which is the run's: the page writes a state on each
     row while it shows a run, "off" on a row the run left out (unticked), and none before a run or once an edit ended the
     list's reading with the run."""
-    return [{"id": r["id"], "name": r["name"], "state": r["state"], "reason": r["reason"]}
-            for r in rows if r["state"] not in (None, "off")]
+    return [r for r in rows if r["state"] not in (None, "off")]
 
 
 def run_state(port: int) -> dict:

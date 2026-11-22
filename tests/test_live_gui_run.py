@@ -365,6 +365,15 @@ def test_run_tasks_lists_only_the_rows_the_run_took_in_the_lists_order():
         {"id": "ClaimPassMissions", "name": "ClaimPassMissions", "state": "pending", "reason": None}]
 
 
+def test_run_tasks_over_the_rows_of_the_pages_list_with_unticked_ones_between():
+    # the page's list of runner.test.tsx "gui_run.py reads this page": two of eight rows ticked at first, one more ticked
+    ids = ["ClaimMail", "MirrorDungeon", "ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules",
+           "ClaimPassMissions"]
+    states = ["succeeded", "failed", "off", "off", "running", "off", "off", "off"]
+    assert [(t["id"], t["state"]) for t in gr.run_tasks([row(i, s) for i, s in zip(ids, states)])] == [
+        ("ClaimMail", "succeeded"), ("MirrorDungeon", "failed"), ("ExpLuxcavation", "running")]
+
+
 def test_run_tasks_is_empty_before_a_run_and_after_an_edit_ended_the_lists_reading_with_it():
     assert gr.run_tasks([row("ClaimMail", None), row("MirrorDungeon", None)]) == []
     assert gr.run_tasks([]) == []

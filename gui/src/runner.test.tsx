@@ -980,12 +980,12 @@ test("the window keeps as many log lines of a run for a page that attaches later
 // script it holds, on the markup this build draws, wide and narrow, so a class or attribute a redesign moves fails here
 // and not in a live run.
 describe("tools/live/gui_run.py reads this page (#880)", () => {
-  const pyString = (name: string) => new RegExp(`^${name} = (?:"""|")(.*?)(?:"""|")$`, "ms").exec(guiRunPy)![1];
+  const pyString = (name: string) => (([, triple, single]) => triple ?? single)(new RegExp(`^${name} = (?:"""(.*?)"""|"(.*?)")$`, "ms").exec(guiRunPy)!);
   const read = () => new Function(`return ${pyString("STATE_JS")}`)() as {
     phase: string; status: string; start: boolean; alerts: string[];
     rows: { id: string; state: string | null; name: string; reason: string | null }[];
   };
-  const press = (selector: string) => {
+  const target = (selector: string) => {
     const js = selector.startsWith("js:") ? selector.slice(3) : `document.querySelector(${JSON.stringify(selector)})`;
     return new Function(`return ${js}`)() as HTMLButtonElement;
   };
@@ -998,8 +998,8 @@ describe("tools/live/gui_run.py reads this page (#880)", () => {
       expect(read().rows.map((r) => [r.id, r.state])).toEqual(
         ["ClaimMail", "MirrorDungeon", "ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions"]
           .map((id) => [id, null]));
-      expect(press(pyString("START"))).toBe(startButton());
-      expect(press(pyString("STOP"))).toBe(stopButton());
+      expect(target(pyString("START"))).toBe(startButton());
+      expect(target(pyString("STOP"))).toBe(stopButton());
       await user.click(tick("經驗本"));
       await started(user);
       send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "failed", "no emulator"), task(2, "ExpLuxcavation", "running"));
@@ -1031,10 +1031,12 @@ describe("tools/live/gui_run.py reads this page (#880)", () => {
     expect(read().alerts).toEqual([fill(zh["runner.killed"], { reason: "the runner cannot stop MaaFramework" })]);
   });
 
-  test("a runner that ended unexpectedly is an alert, its last lines left out", async () => {
+  test("a runner that ended unexpectedly is an alert, its last lines with it", async () => {
     const user = await open();
     await started(user);
     send(exit(3, false, ["Fatal Python error: access violation"]));
-    expect(read().alerts).toEqual([fill(zh["runner.crash"], { code: 3 })]);
+    expect(read().alerts).toHaveLength(1);
+    expect(read().alerts[0]).toContain(fill(zh["runner.crash"], { code: 3 }));
+    expect(read().alerts[0]).toContain("Fatal Python error: access violation");
   });
 });
