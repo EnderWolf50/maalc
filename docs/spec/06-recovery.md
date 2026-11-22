@@ -118,7 +118,7 @@
 
 ### 停止程序
 
-停止程序先在 log 記 `stop: <原因>`（英文）。原因有代碼時，下一行記 `stop code: <代碼>`，有參數時接著寫參數的 JSON，例如 `stop code: LuxDefeated {"retries":2}`。代碼與兩種語言的句子在 `agent/stop_reasons.json`：設定視窗照介面語言顯示那一句（[04](04-settings.md)「狀態」）。webhook 與 `logs/` 的記錄只有英文原因，沒有代碼（#881）。有代碼的：`Halt` 與 `StopTask` 的節點（代碼就是節點名稱）、`auto_download` 或 `auto_accept_terms` 關閉、遊戲一直要求更新、恢復用完（`Stuck`）、鏡牢的重試用完、連續放棄、買不起計畫中的加成、Luxcavation 的重試用完；其餘照舊只有英文。
+停止程序先在 log 記 `stop: <原因>`（英文）。原因有代碼時，下一行記 `stop code: <代碼>`，有參數時接著寫參數的 JSON，例如 `stop code: LuxDefeated {"retries":2}`。代碼與兩種語言的句子在 `agent/stop_reasons.json`，有哪些代碼看那個檔：設定視窗照介面語言顯示那一句（[04](04-settings.md)「狀態」）。英文原因照舊：webhook 只送英文原因，`logs/` 的記錄在停止行下一行多一行代碼行（#881）。`Halt` 與 `StopTask` 節點的代碼就是節點名稱；沒有代碼的原因照舊只有英文。
 
 1. 保存最近 20 張畫面作為證據，放在 `<root>/logs/evidence/<時間>/`（`<root>` 是 Agent 的根目錄）。（#14、#19）實作：`<時間>` 是 UTC ISO 時間、冒號換成 `-`；`00.png` 起依序是 hub 最近分派的畫面，最後一張是停止當下的畫面；另有 `agent.log`，是 Agent 最近 500 行記錄。（#31）
 2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是執行任務那一方的選項（執行器與 `tools/live/bot.py` 用 `Tasker.set_save_on_error`；v1.0.0 的 MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）

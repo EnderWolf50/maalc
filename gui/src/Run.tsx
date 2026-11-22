@@ -264,7 +264,7 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
                 {/* why it failed or was cancelled (runner.ts: the runner's reason, else the bot's stop line): its code's
                     sentence in the window's language, the English text its tooltip; the English text when it has no code the
                     window knows (#881) */}
-                {task?.reason && <ReasonLine reason={task.reason} coded={sayReason(s.language, task.code)} name={name} />}
+                {task?.reason && <ReasonLine reason={task.reason} sentence={sayReason(s.language, task.code, (id) => teamName(s, id))} name={name} />}
               </span>
               {task && <span className="tr-state">{t(`runner.state.${task.state}`)}</span>}
               {!locked && (
@@ -439,11 +439,13 @@ function reasonText(t: (k: Key) => string, reason: string, name: string) {
   const text = namesInList(t, reason);
   return text.startsWith(`${name}: `) ? text.slice(name.length + 2) : text;
 }
-/** A task's reason line: `coded`, its code's sentence (reasons.ts sayReason), with the English text as it came its tooltip;
- * with none, the English text (reasonText). */
-function ReasonLine({ reason, coded, name }: { reason: string; coded: string | undefined; name: string }) {
+/** The settings' name of the team with that id; the id for one the settings do not have (deleted since). */
+const teamName = (s: Settings, id: string) => s.teams.find((x) => x.id === id)?.name ?? id;
+/** A task's reason line: `sentence`, its code's sentence (reasons.ts sayReason), with the English text as it came its
+ * tooltip; with none, the English text (reasonText). */
+function ReasonLine({ reason, sentence, name }: { reason: string; sentence: string | undefined; name: string }) {
   const { t } = useEditor();
-  return coded !== undefined ? <small className="tr-reason" title={reason}>{coded}</small>
+  return sentence !== undefined ? <small className="tr-reason" title={reason}>{sentence}</small>
     : <small className="tr-reason">{reasonText(t, reason, name)}</small>;
 }
 /** A line that says a task failed or was stopped, or the run did (runner/session.py finish, error and end; agent/actions.py

@@ -11,11 +11,15 @@ export interface ReasonCode { code: string; params: ReasonParams }
 
 export const REASONS: Record<string, Record<Settings["language"], string>> = file.codes;
 
-/** The code's sentence in lang with its params filled in; undefined for a code the file does not have, or params that do not
- * fill each of its placeholders (the English text then shows). */
-export function sayReason(lang: Settings["language"], coded: ReasonCode | undefined): string | undefined {
+/** The code's sentence in lang with its params filled in, a `team` param (a team's id) as `team` names it (the settings'
+ * name for it); undefined for a code the file does not have, or params that do not fill each of its placeholders (the
+ * English text then shows). */
+export function sayReason(lang: Settings["language"], coded: ReasonCode | undefined,
+  team: (id: string) => string = (id) => id): string | undefined {
   const sentence = coded && Object.prototype.hasOwnProperty.call(REASONS, coded.code) ? REASONS[coded.code][lang] : undefined;
   if (sentence === undefined) return undefined;
   const wanted = [...sentence.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
-  return wanted.every((k) => Object.prototype.hasOwnProperty.call(coded!.params, k)) ? fill(sentence, coded!.params) : undefined;
+  if (!wanted.every((k) => Object.prototype.hasOwnProperty.call(coded!.params, k))) return undefined;
+  const params = coded!.params;
+  return fill(sentence, "team" in params ? { ...params, team: team(String(params.team)) } : params);
 }

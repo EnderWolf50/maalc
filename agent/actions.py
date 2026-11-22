@@ -30,7 +30,7 @@ import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
 from ocrtext import has, normalize
-from reasons import Reason, code_line, of_node
+from reasons import Reason, carried, code_line, of_node
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
 
@@ -600,7 +600,7 @@ class TaskStart(CustomAction):
             return False
         start = TASK["options"]["start_team"]
         if errors := task_options.start_team_errors(start, settings["teams"]):
-            return stop(context, str(task_options.OptionsError(errors)))
+            return stop(context, carried(str(task_options.OptionsError(errors)), errors))
         if start:
             TASK["start_team"] = start
         return True

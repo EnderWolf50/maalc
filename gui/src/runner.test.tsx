@@ -911,7 +911,11 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
     for (const m of valid) {
       const v = reduce(running, m);
       if (m.event === "log") expect(v.log[v.log.length - 1]).toMatchObject({ t: m.t, source: m.source, line: m.line });
-      else if (m.event === "task") expect(v.tasks[m.index]).toMatchObject({ entry: m.entry, state: m.state });
+      else if (m.event === "task") {
+        expect(v.tasks[m.index]).toMatchObject({ entry: m.entry, state: m.state });
+        // a reason's code (#881) goes with the reason
+        expect(v.tasks[m.index].code).toEqual(m.reason && m.reason_code ? { code: m.reason_code, params: m.reason_params ?? {} } : undefined);
+      }
       else if (m.event === "connection") expect(v.link).toEqual({ state: m.state, address: m.address });
       else if (m.event === "resource") expect(v.resource).toBe(m.state);
       else if (m.event === "end") expect(v.result).toBe(m.result);
@@ -1011,7 +1015,6 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
 
     test("the code line as agent/reasons.py writes it", () => {
       expect(reasonsPy).toContain('CODE_LINE = "stop code: "');
-      expect(actionsPy).toContain("if coded := code_line(reason):");
     });
 
     test("only the bot's own lines count: not the runner's, not MaaFramework's output", () => {

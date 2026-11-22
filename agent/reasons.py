@@ -35,6 +35,11 @@ def code_line(reason) -> str | None:
     return CODE_LINE + code + (" " + json.dumps(params, ensure_ascii=False, separators=(",", ":")) if params else "")
 
 
+def carried(text: str, parts: list):
+    """text, a reason made of parts (an OptionsError's errors), with the code of its one part when that part has one."""
+    return Reason(text, parts[0].code, **parts[0].params) if len(parts) == 1 and getattr(parts[0], "code", None) else text
+
+
 def of_node(node: str, text: str):
     """A pipeline node's stop (StopTask, Halt): coded by the node's name when stop_reasons.json has it."""
     return Reason(text, node) if node in CODES else text

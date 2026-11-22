@@ -35,7 +35,7 @@ def test_a_missed_victory_does_not_carry_the_battle_clock_into_the_next_battle(c
 
 def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
     # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
-    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={})
+    actions.RUN.update(team={"min_alive": 5, "name": "t", "id": "t"}, settings={})
     monkeypatch.setitem(actions.TASK, "options", {"after_retries": "stop"})
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: False)
     patch_all(monkeypatch, "tap_shown", lambda *a, **k: None)
@@ -54,7 +54,7 @@ def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monk
 
 def few_alive(context, monkeypatch, after_retries, min_alive):
     """A formation page with 4 of 12 alive; the stops and taps it leads to."""
-    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={})
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t", "id": "t"}, settings={})
     monkeypatch.setitem(actions.TASK, "options", {"after_retries": after_retries})
     stops, taps = [], []
     patch_all(monkeypatch, "stop", lambda context, reason, line=None: stops.append(reason) or False)

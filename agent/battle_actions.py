@@ -97,7 +97,8 @@ class Formation(CustomAction):
         log(f"formation: {len(order)} of the deployment order alive, {alive} alive on screen, team needs {need}")
         if len(order) < need:  # need 0: no check; only the deployment order's sinners count (#616)
             # Like used-up wipe retries (#137): stop, or back out to the map, where RouteMap forfeits.
-            reason = f"{len(order)} sinners of the deployment order alive, team {run['team']['name']!r} needs {need}"
+            reason = Reason(f"{len(order)} sinners of the deployment order alive, team {run['team']['name']!r} needs {need}",
+                            "SinnersShort", team=run["team"]["id"], alive=len(order), need=need)
             if options()["after_retries"] == "stop":
                 return stop(context, reason)
             log(f"{reason}: forfeit the run")
@@ -106,7 +107,8 @@ class Formation(CustomAction):
             tap_then(context, *FORMATION_BACK, lambda im: seen(context, im, "Formation") is None, timeout=2)
             return True
         if not order:  # a short order (sinners left out) with all its sinners dead
-            return stop(context, f"no sinner in team {run['team']['name']!r}'s deployment order is alive")
+            return stop(context, Reason(f"no sinner in team {run['team']['name']!r}'s deployment order is alive", "NoSinnerAlive",
+                                        team=run["team"]["id"]))
         if battle.formation_matches(order_marks(context, image), order):
             log(f"formation as planned, {alive} alive")
         elif not self.pick(context, order):

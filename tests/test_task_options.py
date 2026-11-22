@@ -379,16 +379,18 @@ def test_the_real_exp_luxcavation_plays_the_team_of_the_settings_file():
     assert "EXP Luxcavation: team 'Team b' (TEAMS #2), 3 guard turns, mode daily, 0 retries, consecutive on" in o["said"], o["said"]
 
 
-@pytest.mark.parametrize("name, error", [
+@pytest.mark.parametrize("name, error, code", [
     ("exp_team_gone", "luxcavation/exp/team: team 'gone' was deleted in the settings GUI; pick another in "
-                      + WHERE.format("ExpLuxcavation")),
-    ("exp_team_none", "luxcavation/exp/team: no team picked; pick one in " + WHERE.format("ExpLuxcavation")),
+                      + WHERE.format("ExpLuxcavation"), 'stop code: TeamDeleted {"team":"gone"}'),
+    ("exp_team_none", "luxcavation/exp/team: no team picked; pick one in " + WHERE.format("ExpLuxcavation"),
+     "stop code: NoTeamPicked"),
 ])
-def test_the_real_exp_luxcavation_ends_at_its_entry_node_on_a_team_it_cannot_play(name, error):
+def test_the_real_exp_luxcavation_ends_at_its_entry_node_on_a_team_it_cannot_play(name, error, code):
     # The stop procedure (its evidence) before any tap.
     o = run_child(__file__)[name]
     assert (o["succeeded"], o["nodes"], o["clicks"], o["keys"]) == (False, ["ExpLuxcavation"], [], []), o
     assert o["stops"] == [f"stop: {invalid([error])}"], o
+    assert o["said"][o["said"].index(o["stops"][0]) + 1] == code, o  # #881
     assert o["evidence"] == 1
 
 

@@ -14,7 +14,7 @@ import task_options
 from actions import (RUN, TASK, TaskStart, box_centre, end_battle, finish, go_home, log, log_change, ocr_texts, param,
                      screen, seen, shows, stop, tap, tap_then, text, until)
 from ocrtext import digits
-from reasons import Reason
+from reasons import Reason, carried
 
 
 def module_count(context, image):
@@ -50,7 +50,7 @@ class LuxStart(TaskStart):
         name, cost = LUX[key]
         opts = TASK["options"]
         if errors := task_options.team_errors(argv.node_name, opts["team"], settings["teams"]):
-            return stop(context, str(task_options.OptionsError(errors)))
+            return stop(context, carried(str(task_options.OptionsError(errors)), errors))
         team = next(t for t in settings["teams"] if t["id"] == opts["team"])
         # Not RUN["settings"]: that is a Mirror Dungeon run, which the stop procedure writes to runs.jsonl.
         # lux: this task's battles (spec 03 section 15): mode, daily or count (#431); target, count's wins this run or the
