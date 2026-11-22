@@ -618,8 +618,9 @@ def test_a_gift_window_that_comes_up_after_the_last_tap_is_not_taken_for_a_map_w
     patch_all(monkeypatch, "page_guard", test_actions.REAL_GUARD)
     patch_all(monkeypatch, "map_weights", lambda context: AB_WEIGHTS)
     actions.RUN.update(map_entered=True, floor=3)
-    # Missed by RouteMap's first look, the looks for a slot, search_bus's 5 drags and the 4 fallback taps' guards.
-    gift_window_after(context, 1 + map_actions.MAP_LOOKS + 5 + 4 + 1)
+    # Missed by RouteMap's first look, the looks for a slot and their guards (#907), search_bus's 5 drags (the screen
+    # never changes: one each way past its 3 down and up) and the 4 fallback taps' guards.
+    gift_window_after(context, 1 + 2 * map_actions.MAP_LOOKS + 5 + 4 + 1)
     map_actions.RouteMap().run(context, None)
     assert context.tasker.controller.post_click.call_count == 4
     assert actions.STUCK["flag"] is None
