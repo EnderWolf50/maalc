@@ -75,15 +75,15 @@ def target_floor_errors(options, teams):
 
 
 def start_team_errors(team, teams):
-    """MirrorDungeon's start team (#805): run.start_team, None for 「照隊伍佇列」, names an enabled team of teams. An id not
+    """MirrorDungeon's start team (#805): run.start_team, None for no flag in the team queue (#878), names an enabled team of teams. An id not
     in teams is a team deleted in the settings GUI; a disabled team is one no run of the queue picks. Either stops the
     task before any tap."""
     if team is None:
         return []
-    instead = f"pick another team, or 「照隊伍佇列」 (follow the team queue), in {where('MirrorDungeon')}"
+    instead = f"clear its flag, or flag another team, in the team queue in {where('MirrorDungeon')}"
     found = next((t for t in teams if t["id"] == team), None)
     if found is None:
-        return [Reason(f"run/start_team: team {team!r} was deleted in the settings GUI; {instead}", "TeamDeleted", team=team)]
+        return [Reason(f"run/start_team: team {team!r} was deleted in the settings GUI; {instead}", "StartTeamDeleted", team=team)]
     if not found["enabled"]:
         return [Reason(f"run/start_team: team {found['name']!r} (id {team!r}) is disabled; enable it in the settings GUI, or "
                        f"{instead}", "StartTeamDisabled", team=team)]

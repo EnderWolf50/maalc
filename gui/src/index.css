@@ -430,15 +430,10 @@ ol.reorder .item { flex: 1; min-width: 0; }
 ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--muted); letter-spacing: 0.03em; }
 .qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
   border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
-.qtag.off { color: var(--muted); border-style: dashed; }
-/* The team queue block (#804): above the team list and the editor, the queue and beside it what it does. Its gap to them
- * holds the section index's pull into main's top padding (16 px, 14 at 1000 px wide and less), so the index covers none of it. */
-.teams-page { display: flex; flex-direction: column; gap: 18px; }
-fieldset.queue { align-items: stretch; }
-.queue-body { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: flex-start; }
-.queue-body ol.reorder { flex: 0 1 480px; }
-.queue-body > p.muted { flex: 1 1 260px; font-size: 12.5px; }
-.qtag.next { color: var(--accent-ink); border-color: var(--accent-line); background: var(--sel); }
+.teams-page { display: flex; flex-direction: column; } /* one child since the queue left (#878): kept a flex box, as measured */
+/* a disabled team, in the team list and in the team queue (#878, the user's call of 2026-11-22): its name struck through in the
+ * muted ink, in its place, no tag and the row not faded, so its words keep their contrast */
+.team-list .team-off, .mt-row.off .mt-name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 /* The Run tab (#814, #815, #875): its fields and the run console's parts; the two columns are the section at the end. */
 .run-page fieldset.emulator, .run-page details.globals, .run-page .run-log-box, .run-page .task-opts { align-items: stretch; }
 /* The emulator (#876, spec #871 「模擬器（4A）」), in the console's column (400 px inside its frame): the pick list the
@@ -482,7 +477,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .task-list ol.reorder > li { --row-bg: var(--raise); }
 .task-list ol.reorder > li.selected { --row-bg: var(--sel); }
 .task-row { position: relative; display: flex; align-items: flex-start; gap: 6px; }
-.task-row .tr-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.task-row .tr-main { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .task-row .tr-line { display: flex; align-items: center; gap: 2px; min-width: 0; height: var(--task-line-h); }
 .task-row .tr-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* the tick's hit area: 27 px wide, the row's height (the first line and the row's padding), and the row's own click (it picks
@@ -547,6 +542,80 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
 .groups .grid, .globals .grid { width: 100%; }
 .groups .grid > .check.wide { grid-column: 1 / -1; }
+/* the run limit as the fields beside it (#878): the label on top, the switch and the number on one line under it */
+.toggle-field .tf-line { display: flex; align-items: center; gap: 8px; }
+/* The team queue at the top of the Mirror Dungeon options (#878, spec #871 「隊伍佇列」), the box's whole width. Every row on
+ * the list's own columns (subgrid), so the slot, the usage, the next-run mark and the flag line up down the list whatever the
+ * names and the slots' digits: the place, the name (cut short with an ellipsis), the slot, the usage, the mark (pushed against
+ * the flag), the flag; the row's right edge the box's. A wrong row's cross sits in the place column's left margin. */
+.groups > .mirror-teams { grid-column: 1 / -1; align-items: stretch; }
+.mt-order { min-width: 0; }
+.mt-order ol.reorder {
+  display: grid; grid-template-columns: 1.3em minmax(0, max-content) max-content max-content minmax(max-content, 1fr) 28px;
+  gap: 4px 10px; min-width: 0;
+}
+.mt-order ol.reorder > li {
+  position: relative; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: 3px 4px 3px 10px;
+}
+.mt-order ol.reorder > li > .item, .mt-row { display: contents; }
+.mt-order ol.reorder > li > .badmark { position: absolute; left: 1px; top: 50%; translate: 0 -50%; font-size: 10px; }
+.mt-row .place { color: var(--muted); font: 600 14px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.mt-row .mt-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-row .mt-slot { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mt-row .mt-use .qtag { margin-left: 0; font-size: 12px; } /* the Run tab has no text under 12 px */
+.mt-row .mt-mark { justify-self: end; }
+/* the next run: amber words, then the difficulty's plate when the two difficulties play two teams */
+.mt-next { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
+.dchip {
+  display: inline-block; padding: 0 4px; font: 600 12px/1.45 var(--font-ui); color: var(--fg-2);
+  border: 1px solid var(--line-2); border-radius: 2px; white-space: nowrap;
+}
+.dchip[data-d="hard"] { color: var(--fg); background: var(--line); }
+.mirror-teams > p.mt-note { font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+.mirror-teams > p.mt-note button { margin-left: 4px; padding: 2px 10px; font-size: 12.5px; }
+/* a run locks the queue: the rows faded as a locked field is (input:disabled), the flags not faded twice */
+.mt-order ol.reorder.locked > li { opacity: 0.45; }
+.mt-order ol.reorder.locked .start-flag:disabled { opacity: 1; cursor: default; }
+/* The start team's flag (#878, spec #871 round 4 items 6 and 7): the icon alone, no frame or fill, faint until the pointer
+ * lights it; on the team it is set on, filled and amber; pressed, it shrinks a little. Its words float over it in the page's
+ * reverse colours, their right edge at the flag's, so they never reach past the page's edge (the flag is the box's last
+ * column); the pointer stays centred on the flag. */
+.start-flag {
+  position: relative; width: 28px; height: 26px; padding: 0; display: grid; place-items: center;
+  color: var(--muted); background: none; border-color: transparent;
+}
+.start-flag svg { transition: transform 0.1s ease-out; }
+.start-flag:hover:not(:disabled) { color: var(--fg); background: none; border-color: transparent; }
+.start-flag:active:not(:disabled) svg { transform: scale(0.86); }
+.start-flag.on { color: var(--accent); }
+.start-flag.on:hover:not(:disabled) { color: var(--accent-hi); }
+.start-flag:disabled { opacity: 0.3; cursor: not-allowed; }
+.start-flag::before, .start-flag::after {
+  position: absolute; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.12s ease-out, translate 0.12s ease-out;
+}
+/* its words for the eye only ("/ ''": no text for the accessibility tree, where the row's name took them in, seen 2026-11-22):
+ * a screen reader reads the flag's own name */
+.start-flag::after {
+  content: attr(data-tip) / ""; right: -4px; bottom: calc(100% + 7px); translate: 0 3px; padding: 4px 10px; font: 600 12.5px/1.45 var(--font-ui);
+  white-space: nowrap; color: var(--bg); background: var(--fg); border-radius: 3px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.4);
+}
+.start-flag::before {
+  content: ""; left: 50%; bottom: calc(100% + 2px); translate: -50% 3px; width: 10px; height: 5px; background: var(--fg);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.start-flag:hover:not(:disabled)::before, .start-flag:focus-visible::before { opacity: 1; translate: -50% 0; }
+.start-flag:hover:not(:disabled)::after, .start-flag:focus-visible::after { opacity: 1; translate: 0 0; }
+@media (prefers-reduced-motion: reduce) { .start-flag::before, .start-flag::after, .start-flag svg { transition: none; } }
+/* the next Mirror Dungeon run on the task's row: one line under the name; where it does not fit, out of the row's flow and
+ * hidden, at the same width (.tr-main holds it), so useFits measures it as it would show */
+.tr-next {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; height: 20px; margin-top: -1px; overflow: hidden;
+  white-space: nowrap; font-size: 12.5px; color: var(--fg-2);
+}
+.tr-next.clipped { position: absolute; inset: 0 0 auto; visibility: hidden; }
+.tr-next .lbl { color: var(--muted); }
+.tr-next .nt-team { display: inline-flex; align-items: center; gap: 4px; }
+.tr-next .flag-on { display: inline-flex; color: var(--accent-ink); }
 .field small.caution { color: var(--fg); }
 /* Start, Stop and the status on the page itself, no frame of their own; Start the task rows' height, so it and the list's
  * first row start and end on one line. The status in tabular numerals, so its clock does not jitter. */
@@ -596,10 +665,8 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .runner .crash { padding: 8px 12px; border: 1px solid var(--bad); border-radius: 2px; background: var(--bad-soft); }
 .runner .crash p { margin: 0 0 6px; color: var(--bad); font-weight: 600; }
 .runner .crash pre { margin: 0; max-height: 200px; overflow: auto; white-space: pre-wrap; font: 12.5px/1.45 Consolas, monospace; }
-/* a team's slot, as the game's TEAMS number plate shows it */
-.team-list ol.reorder .item small, .queue ol.reorder .item small {
-  margin-left: 4px; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 2px; corner-shape: bevel; color: var(--fg-2);
-}
+/* a team's slot in the team list, as the queue's: the muted condensed numerals, no frame (#878) */
+.team-list ol.reorder .item small { margin-left: 6px; font-variant-numeric: tabular-nums; }
 ol.preview { margin: 0; padding-left: 26px; columns: 2; column-gap: 40px; }
 
 table { border-collapse: collapse; background: var(--panel); }

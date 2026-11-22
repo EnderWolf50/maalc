@@ -1,5 +1,5 @@
 """MirrorDungeon's start team (#805, ADR 0014): run.start_team of the settings file (#813), the team this task starts
-from; null, 「照隊伍佇列」 (follow the team queue), the default. The task's start stops before any tap on a team deleted or
+from; null, no flag in the team queue (#878), the default. The task's start stops before any tap on a team deleted or
 disabled; its first new run picks its team with that team at the head of team_queue and writes it there once the run
 opens, as a claim moves one to the end; a run under way at the task's start plays the team of the queue as it was before
 the move.
@@ -28,7 +28,7 @@ from test_team_queue import on_disk as file_at  # file_at(root): the settings fi
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
 MIRROR_WHERE = "the options of the MirrorDungeon task in the settings GUI's task list"
-INSTEAD = f"pick another team, or 「照隊伍佇列」 (follow the team queue), in {MIRROR_WHERE}"
+INSTEAD = f"clear its flag, or flag another team, in the team queue in {MIRROR_WHERE}"
 
 
 def said():
@@ -87,7 +87,7 @@ def start(context, monkeypatch, settings=lambda data: None, **run):
 @pytest.mark.parametrize("team, edit, error, code", [
     # the settings GUI deleted the team since the start team was picked
     ("gone", lambda data: None, f"run/start_team: team 'gone' was deleted in the settings GUI; {INSTEAD}",
-     'stop code: TeamDeleted {"team":"gone"}'),
+     'stop code: StartTeamDeleted {"team":"gone"}'),
     ("b", lambda data: data["teams"][1].update(enabled=False),
      f"run/start_team: team 'Team b' (id 'b') is disabled; enable it in the settings GUI, or {INSTEAD}",
      'stop code: StartTeamDisabled {"team":"b"}'),
@@ -163,7 +163,7 @@ def test_the_start_team_moves_only_before_the_tasks_first_new_run(context, monke
 
 
 def test_follow_the_queue_plays_the_queue_as_before(context):
-    # null, 「照隊伍佇列」, the default
+    # null, no flag, the default
     entry_page(context, difficulty="hard", settings=lambda data: data.update(team_queue=["b", "a"]))
     assert actions.TASK["options"]["start_team"] is None and "start_team" not in actions.TASK
     path = actions.ROOT / "config" / "settings.json"

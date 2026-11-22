@@ -23,8 +23,9 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules"]],
-  ["teams", "tab.teams", TeamsTab, ["teams", "team_queue"]],
+  // the team queue is arranged in the Mirror Dungeon task's options (#878): a problem in it opens the Run tab on that task
+  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules", "team_queue"]],
+  ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
   ["starlight", "tab.starlight", StarlightTab, ["starlight_plans"]],

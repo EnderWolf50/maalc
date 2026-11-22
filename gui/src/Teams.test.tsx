@@ -265,15 +265,24 @@ describe("a team on a starlight plan", () => {
   });
 });
 
-test("the queue names a team that is off and a team kept to one difficulty", () => {
+test("the list names a team kept to one difficulty, and strikes a disabled one through as the queue does, with no 停用 tag (#878)", () => {
   const s = settings();
-  s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(2, "T2"), enabled: false, usage: "hard_only" }];
+  s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(12, "T2"), enabled: false, usage: "hard_only" }];
   renderEditor(<TeamsTab />, s);
   const [first, second] = sideList().getAllByRole("listitem");
-  expect(first).not.toHaveTextContent(zh["team.disabled"]);
+  expect(first).not.toHaveTextContent(zh["team.off_read"]);
   expect(first).not.toHaveTextContent(zh["usage.hard_only"]);
-  expect(second).toHaveTextContent(zh["team.disabled"]);
   expect(second).toHaveTextContent(zh["usage.hard_only"]);
+  // off: the name in the muted ink and struck through, 「（停用）」 for a screen reader only, no tag
+  const name = within(second).getByText("T2");
+  expect([cssValueOf(css, name, "color"), cssValueOf(css, name, "text-decoration")]).toEqual(["var(--muted)", "line-through"]);
+  expect(cssValueOf(css, within(first).getByText("T1"), "text-decoration")).toBeUndefined();
+  expect(within(second).getByText(zh["team.off_read"])).toHaveClass("sr-only");
+  expect(within(second).queryByText("停用")).toBeNull(); // the tag the list had
+  // the slot in the muted condensed numerals, no frame
+  const slot = within(second).getByText("TEAMS #12");
+  expect([cssValueOf(css, slot, "color"), cssValueOf(css, slot, "border"), cssValueOf(css, slot, "font-variant-numeric")])
+    .toEqual(["var(--muted)", undefined, "tabular-nums"]);
 });
 
 test("a team on a deployment order plan says where that plan is changed", () => {

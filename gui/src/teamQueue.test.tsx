@@ -1,11 +1,12 @@
 // The team queue (#501, #803): team_queue in settings.json is the queue the Agent rotates, and after a claim the Agent moves
 // that team to its end. The team list is the user's to arrange: its drag and its Alt moves leave the queue alone. A team added goes
 // last in both, a team deleted leaves both. The editor takes the queue on disk, keeps the user's unsaved edits on top of it,
-// and never saves its own stale queue over the Agent's.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+// and never saves its own stale queue over the Agent's. The queue is shown and arranged in the Mirror Dungeon task's options
+// on the Run tab, where each row's flag sets run.start_team (#878, spec #871 「隊伍佇列（只在鏡牢選項裡）」).
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import App from "./App";
+import App, { TABS } from "./App";
 import { TEXT, fill } from "./i18n";
 import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
 import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
@@ -52,8 +53,22 @@ const claimedOld = (s: Settings, id: string): Settings => {
   return { ...s, teams: [...s.teams.slice(0, at), ...s.teams.slice(at + 1), s.teams[at]] };
 };
 const text = (s: Settings) => JSON.stringify(s, null, 2) + "\n";
-/** The rows of the team queue block (#804). */
-const queueRows = () => within(screen.getByRole("group", { name: zh["queue.title"] })).getAllByRole("listitem");
+/** The team queue's frame, at the top of the Mirror Dungeon options (#878), and its rows. */
+const queueFrame = () => screen.getByRole("group", { name: zh["queue.title"] });
+const queueRows = () => within(queueFrame()).getAllByRole("listitem");
+const RunTab = TABS.find((tab) => tab[0] === "run")![2];
+/** Show the Mirror Dungeon task's options, as the user clicks its row in the task list. */
+const showMirror = (user: ReturnType<typeof userEvent.setup>) =>
+  user.click(within(document.querySelector(".task-list")!).getByText(zh["task.MirrorDungeon"]));
+/** The Run tab on these settings, the Mirror Dungeon task's options shown. */
+async function mirror(s: Settings) {
+  const r = renderEditor(<RunTab />, s);
+  await showMirror(r.user);
+  return r;
+}
+/** Team `name`'s start flag in the queue (its name says what a press does). */
+const flag = (name: string, on = false) =>
+  within(queueFrame()).getByRole("button", { name: fill(zh[on ? "queue.flag_clear" : "queue.flag_set"], { name }) });
 
 describe("movedToEnd: the teams another writer moved to the end of the queue", () => {
   test.each([
@@ -143,86 +158,289 @@ describe("the team list and the queue in the teams tab", () => {
     renderEditor(<TeamsTab />, apart());
     expect(document.body).not.toHaveTextContent("清單順序就是隊伍佇列");
   });
+
+  test("the tab has no queue; a line under the list says where the queue is arranged (#878)", () => {
+    renderEditor(<TeamsTab />, apart());
+    expect(screen.queryByRole("group", { name: zh["queue.title"] })).toBeNull();
+    expect(screen.queryByRole("list", { name: zh["queue.title"] })).toBeNull();
+    const note = sideList().getByText(zh["teams.order_note"]);
+    expect(note).toBeVisible();
+    expect(zh["teams.order_note"]).toBe("清單順序只是顯示用。哪一支先出戰，在「執行」分頁點鏡牢，用「隊伍佇列」排。新增的隊伍排在最後。");
+    expect(cssValueOf(css, note, "font-size")).toBe("12.5px");
+  });
 });
 
-describe("the team queue block above the list and the editor (#804)", () => {
+describe("the team queue at the top of the Mirror Dungeon options (#878)", () => {
   const rows = queueRows;
-  /** Each row's text, as the user reads it. */
-  const shown = () => rows().map((li) => li.querySelector(".item")!.textContent);
+  /** Each row's text, as the user reads it: place, name, slot, usage, the next-run mark. */
+  const shown = () => rows().map((li) => li.textContent!.replace(/\s+/g, " ").trim());
 
-  test("lists every team in the queue's order, each with its place, name, in-game slot and usage", () => {
-    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
-    s.teams[1].game_team = 7;
-    s.teams[1].usage = "normal_only";
-    renderEditor(<TeamsTab />, s);
-    expect(shown()).toEqual([
-      expect.stringMatching(/^1\. Tc TEAMS #3/), expect.stringMatching(/^2\. Ta TEAMS #1/), expect.stringMatching(/^3\. Tb TEAMS #7/),
-    ]);
-    expect(rows().map((li) => [zh["usage.any"], zh["usage.normal_only"]].filter((u) => within(li).queryByText(u))))
-      .toEqual([[zh["usage.any"]], [zh["usage.any"]], [zh["usage.normal_only"]]]); // 都可 too: the list shows only a kept one
+  test("is the options' first frame, the groups under it; the other tasks show none", async () => {
+    const r = await mirror(queue("a", "b", "c"));
+    const titles = [...document.querySelectorAll(".task-options fieldset > legend")].map((x) => x.textContent);
+    expect(titles).toEqual([zh["queue.title"], zh["run.group_run"], zh["run.group_weekly"], zh["run.group_failure"]]);
+    expect(cssValueOf(css, queueFrame(), "grid-column")).toBe("1 / -1"); // the box's whole width
+    await r.user.click(within(document.querySelector(".task-list")!).getByText("經驗本"));
+    expect(screen.queryByRole("group", { name: zh["queue.title"] })).toBeNull();
   });
 
-  test("a team that is off stays in its place, dimmed and tagged off", () => {
+  test("lists every team in the queue's order: its place, name and slot, and its usage only when kept to one difficulty", async () => {
+    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
+    s.teams[1].game_team = 17;
+    s.teams[1].usage = "normal_only";
+    s.teams[2].usage = "hard_only";
+    await mirror(s);
+    expect(screen.getByRole("list", { name: zh["queue.title"] })).toBe(rows()[0].parentElement);
+    expect(shown()).toEqual([
+      expect.stringMatching(/^1 Tc TEAMS #3 只跑困難/), expect.stringMatching(/^2 Ta TEAMS #1(?! 只跑| 都可)/), "3 Tb TEAMS #17 只跑普通",
+    ]);
+    expect(queueFrame()).not.toHaveTextContent(zh["usage.any"]);
+    // the slot, the usage, the mark and the flag in columns every row shares (subgrid), the slot's numerals of one width
+    expect(cssValueOf(css, rows()[0], "grid-template-columns")).toBe("subgrid");
+    expect(cssValueOf(css, within(rows()[2]).getByText("TEAMS #17"), "font-variant-numeric")).toBe("tabular-nums");
+  });
+
+  test("a long name is cut short with an ellipsis rather than move the columns", async () => {
+    const s = queue("a");
+    s.teams[0].name = "名字很長很長很長很長很長很長的隊伍";
+    await mirror(s);
+    const name = within(rows()[0]).getByText(s.teams[0].name);
+    expect(["text-overflow", "white-space", "overflow"].map((p) => cssValueOf(css, name, p))).toEqual(["ellipsis", "nowrap", "hidden"]);
+  });
+
+  test("a disabled team stays in its place, struck through in the muted ink, read as off, its tooltip saying it is passed over", async () => {
     const s = queue("a", "b", "c");
     s.teams[1].enabled = false;
-    renderEditor(<TeamsTab />, s);
+    await mirror(s);
     const [a, b] = rows();
-    expect(b).toHaveTextContent(`2. Tb`);
-    expect(b).toHaveTextContent(zh["team.disabled"]);
-    expect(a).not.toHaveTextContent(zh["team.disabled"]);
-    expect(cssValueOf(css, b.querySelector(".item > span")!, "color")).toBe("var(--muted)");
-    expect(cssValueOf(css, a.querySelector(".item > span")!, "color")).not.toBe("var(--muted)");
+    expect(b).toHaveTextContent(/^2\s*Tb/);
+    const name = within(b).getByText("Tb");
+    expect([cssValueOf(css, name, "color"), cssValueOf(css, name, "text-decoration")]).toEqual(["var(--muted)", "line-through"]);
+    expect(cssValueOf(css, within(a).getByText("Ta"), "text-decoration")).toBeUndefined();
+    expect(within(b).getByText(zh["team.off_read"])).toHaveClass("sr-only"); // （停用） for a screen reader, no tag on the page
+    expect(a).not.toHaveTextContent(zh["team.off_read"]);
+    expect(b.querySelector(".qtag")).toBeNull();
+    expect(b.querySelector("[title]")).toHaveAttribute("title", zh["queue.off_tip"]);
+    expect(cssValueOf(css, b, "opacity")).toBeUndefined(); // the row itself is not faded: its words keep their contrast
   });
 
-  // The next run of each difficulty is the first enabled team in the queue whose usage fits it (agent/team_queue.py pick_team).
-  /** The next-run marks, by row: "" for a row without one. */
-  const marks = () => rows().map((li) => [zh["queue.next"], zh["queue.next_hard"], zh["queue.next_normal"]]
-    .filter((m) => [...li.querySelectorAll("em")].some((em) => em.textContent === m)).join(" "));
+  // The next new run of each difficulty the task plays (run.difficulty; auto plays either) is the first enabled team in the
+  // queue whose usage fits it (agent/team_queue.py pick_team), counted from the start team when one is set (headed).
+  /** The next-run mark of each row: "" for none, 下一局 alone, or with the difficulty's plate. */
+  const marks = () => rows().map((li) => li.textContent!.match(new RegExp(`${zh["queue.next"]}(${zh["difficulty.normal"]}|${zh["difficulty.hard"]})?`))?.[0] ?? "");
+  const NEXT = zh["queue.next"], NORMAL = NEXT + zh["difficulty.normal"], HARD = NEXT + zh["difficulty.hard"];
   type Edit = Partial<Pick<Settings["teams"][number], "enabled" | "usage">>;
-  test.each<[string, Edit[], string[]]>([
-    ["one team plays both: one mark", [{ enabled: false }, {}, { usage: "hard_only" }], ["", zh["queue.next"], ""]],
-    ["hard and normal play different teams: a mark each",
-      [{ enabled: false, usage: "any" }, { usage: "hard_only" }, { usage: "any" }], ["", zh["queue.next_hard"], zh["queue.next_normal"]]],
-    ["a team kept to Normal first, then one for both", [{ usage: "normal_only" }, {}, {}], [zh["queue.next_normal"], zh["queue.next_hard"], ""]],
-    ["no team to play: no mark", [{ enabled: false }, { enabled: false }, { enabled: false }], ["", "", ""]],
-    ["only Hard has a team: its mark says Hard", [{ usage: "hard_only" }, { enabled: false }, { usage: "hard_only" }], [zh["queue.next_hard"], "", ""]],
-  ])("%s", (_, edits, expected) => {
+  test.each<[string, Edit[], Partial<Settings["run"]>, string[]]>([
+    ["one team plays both: 下一局 alone", [{ enabled: false }, {}, { usage: "hard_only" }], {}, ["", NEXT, ""]],
+    ["hard and normal play different teams: 下一局 with each one's plate",
+      [{ enabled: false, usage: "any" }, { usage: "hard_only" }, { usage: "any" }], {}, ["", HARD, NORMAL]],
+    ["a team kept to Normal first, then one for both", [{ usage: "normal_only" }, {}, {}], {}, [NORMAL, HARD, ""]],
+    ["no team to play: no mark", [{ enabled: false }, { enabled: false }, { enabled: false }], {}, ["", "", ""]],
+    ["only Hard has a team: its mark says Hard", [{ usage: "hard_only" }, { enabled: false }, { usage: "hard_only" }], {}, [HARD, "", ""]],
+    ["the task plays Hard only: Hard's team alone, no plate", [{ usage: "normal_only" }, {}, {}], { difficulty: "hard" }, ["", NEXT, ""]],
+    ["the task plays Normal only: Normal's team alone, no plate", [{ usage: "hard_only" }, {}, {}], { difficulty: "normal" }, ["", NEXT, ""]],
+    ["a start team: counted from it", [{}, {}, {}], { start_team: "b" }, ["", "", NEXT]],
+    ["a start team kept to Hard: Hard from it, Normal from the queue's head",
+      [{}, {}, { usage: "hard_only" }], { start_team: "b" }, [NORMAL, "", HARD]],
+  ])("%s", async (_, edits, run, expected) => {
     const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] }; // the list's order is not the queue's
     const inQueue = s.team_queue.map((id) => s.teams.find((x) => x.id === id)!);
     edits.forEach((e, j) => Object.assign(inQueue[j], e));
-    renderEditor(<TeamsTab />, s);
+    Object.assign(s.run, run);
+    await mirror(s);
     expect(marks()).toEqual(expected);
   });
 
-  // tests/settings_cases.json next_run: the agent's pick_team gives the same teams (tests/test_team_queue.py).
+  test("the mark is the amber words, its plate after them; Hard's plate filled, Normal's a frame, neither red", async () => {
+    const s = queue("a", "b");
+    s.teams[0].usage = "hard_only";
+    await mirror(s);
+    const [hard, normal] = rows().map((li) => within(li).getByText(new RegExp(`^${NEXT}`)));
+    expect(cssValueOf(css, hard, "color")).toBe("var(--accent-ink)");
+    const plate = (mark: HTMLElement, d: string) => within(mark).getByText(zh[`difficulty.${d}` as keyof typeof zh]);
+    expect(cssValueOf(css, plate(hard, "hard"), "background")).toBe("var(--line)");
+    expect(cssValueOf(css, plate(normal, "normal"), "background")).toBeUndefined();
+    expect(cssValueOf(css, plate(normal, "normal"), "border")).toMatch(/solid/);
+    for (const [mark, d] of [[hard, "hard"], [normal, "normal"]] as const) {
+      expect([cssValueOf(css, plate(mark, d), "color"), cssValueOf(css, plate(mark, d), "background")].join()).not.toMatch(/bad/);
+    }
+  });
+
+  // tests/settings_cases.json next_run: the agent's pick_team, headed by the start team, gives the same teams
+  // (tests/test_team_queue.py).
   test.each(cases.next_run as { name: string; edits: FileEdit[]; hard: string | null; normal: string | null }[])(
-    "the marks name the teams the agent picks: $name", ({ edits, hard, normal }) => {
+    "the marks name the teams the agent picks: $name", async ({ edits, hard, normal }) => {
       const s = applyEdits(cases.valid, edits) as unknown as Settings;
-      const mark = (id: string) => (hard === id && normal === id ? zh["queue.next"]
-        : hard === id ? zh["queue.next_hard"] : normal === id ? zh["queue.next_normal"] : "");
-      renderEditor(<TeamsTab />, s);
+      const mark = (id: string) => (hard === id && normal === id ? NEXT : hard === id ? HARD : normal === id ? NORMAL : "");
+      await mirror(s);
       expect(marks()).toEqual(s.team_queue.map(mark));
     });
 
-  // The note sends the user to the Mirror Dungeon task's start team option (run.start_team, #805), which the settings
-  // window's Run tab holds now, not a client's (#813, #814).
-  test.each([
-    ["zh_tw", "到「執行」分頁點鏡牢，用「這次從哪一支隊伍開始」"],
-    ["en_us", "click Mirror Dungeon in the Run tab and use \"Start this task from team\""],
-  ] as const)("its note in %s names the start team option of the Mirror Dungeon task in the Run tab", (lang, option) => {
-    const note = TEXT[lang]["queue.note"];
-    expect(note).toContain(option);
-    expect(note).not.toMatch(/MXU|MFAAvalonia/);
-  });
-
   test("Alt with an arrow in it moves a team in the queue, not in the list", async () => {
-    const r = renderEditor(<TeamsTab />, queue("a", "b", "c"));
-    expect(screen.getByRole("list", { name: zh["queue.title"] })).toBe(rows()[0].parentElement);
+    const r = await mirror(queue("a", "b", "c"));
     await altMove(r.user, rows()[2], "ArrowUp");
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c"], ["a", "c", "b"]]);
     await altMove(r.user, rows()[0], "ArrowDown");
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c"], ["c", "a", "b"]]);
-    expect(shown()).toEqual([expect.stringMatching(/^1\. Tc/), expect.stringMatching(/^2\. Ta/), expect.stringMatching(/^3\. Tb/)]);
+    expect(shown()).toEqual([expect.stringMatching(/^1 Tc/), expect.stringMatching(/^2 Ta/), expect.stringMatching(/^3 Tb/)]);
+  });
+
+  test("no 「這次從哪一支隊伍開始」 pick and no 照隊伍佇列 lines: the flags are the start team", async () => {
+    await mirror(queue("a", "b"));
+    expect(screen.queryByRole("combobox", { name: new RegExp(zh["run.start_team"]) })).toBeNull();
+    for (const gone of ["照隊伍佇列開始", "改回照隊伍佇列", zh["run.start_team"]]) expect(document.body).not.toHaveTextContent(gone);
+  });
+});
+
+describe("the start team's flag on each queue row (#878, run.start_team)", () => {
+  test("a press sets the start team, pressed and named to clear it; a second press clears it", async () => {
+    const r = await mirror(queue("a", "b"));
+    expect(flag("Ta")).toHaveAttribute("aria-pressed", "false");
+    await r.user.click(flag("Ta"));
+    expect(r.settings().run.start_team).toBe("a");
+    expect(flag("Ta", true)).toHaveAttribute("aria-pressed", "true");
+    expect(r.settings().team_queue).toEqual(["a", "b"]); // the queue itself is the Agent's to move (to_head)
+    await r.user.click(flag("Ta", true));
+    expect(r.settings().run.start_team).toBeNull();
+    expect(flag("Ta")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("one team at most: a press on another moves the flag there", async () => {
+    const r = await mirror(queue("a", "b"));
+    await r.user.click(flag("Ta"));
+    await r.user.click(flag("Tb"));
+    expect(r.settings().run.start_team).toBe("b");
+    expect(within(queueFrame()).getAllByRole("button", { pressed: true })).toEqual([flag("Tb", true)]);
+  });
+
+  test("a disabled team's flag cannot be pressed", async () => {
+    const s = queue("a", "b");
+    s.teams[1].enabled = false;
+    await mirror(s);
+    expect(flag("Tb")).toBeDisabled();
+    expect(flag("Ta")).toBeEnabled();
+    expect(cssValueOf(css, flag("Tb"), "cursor")).toBe("not-allowed");
+  });
+
+  test("its words float over it while the pointer or the keyboard's focus is on it; no native tooltip of the list's under them", async () => {
+    const r = await mirror(queue("a", "b"));
+    expect(flag("Ta")).toHaveAttribute("data-tip", zh["queue.flag_tip"]);
+    expect(flag("Ta")).toHaveAttribute("title", ""); // the list's 拖曳 tooltip would show over the words
+    expect(cssValueOf(css, flag("Ta"), "opacity", false, "::after")).toBe("0");
+    expect(cssValueOf(css, flag("Ta"), "opacity", flag("Ta"), "::after")).toBe("1");
+    expect(cssValueOf(css, flag("Ta"), "opacity", { focus: flag("Ta") }, "::after")).toBe("1");
+    // drawn words only: with no alternative text, the accessibility tree took them into the row's name (the real window, UIA)
+    expect(cssValueOf(css, flag("Ta"), "content", false, "::after")).toBe('attr(data-tip) / ""');
+    await r.user.click(flag("Ta"));
+    expect(flag("Ta", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_on"]);
+    expect(zh["queue.flag_tip"]).toBe("這次從這支開始");
+    expect(zh["queue.flag_tip_on"]).toBe("這次從這支開始（再按取消）");
+  });
+
+  test("lit, a line under the queue says the flag stays in the file; none while no flag is lit", async () => {
+    const r = await mirror(queue("a", "b"));
+    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull();
+    await r.user.click(flag("Tb"));
+    expect(within(queueFrame()).getByText(zh["queue.flag_kept"])).toBeVisible();
+    expect(zh["queue.flag_kept"]).toBe("旗子會存進設定檔，每次開始都會再排一次，用完記得改回。");
+  });
+
+  test("a lit flag on a team disabled since can still be pressed, to clear it; a line says the task stops at its start", async () => {
+    const s = queue("a", "b");
+    s.teams[1].enabled = false;
+    s.run.start_team = "b";
+    const r = await mirror(s);
+    expect(within(queueFrame()).getByText(zh["queue.flag_off_note"])).toBeVisible();
+    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull();
+    await r.user.click(flag("Tb", true));
+    expect(r.settings().run.start_team).toBeNull();
+    expect(screen.queryByText(zh["queue.flag_off_note"])).toBeNull();
+  });
+
+  test("a start team deleted since has no row: a line says the task stops at its start, and its button clears it", async () => {
+    const s = queue("a", "b");
+    s.run.start_team = "gone";
+    const r = await mirror(s);
+    expect(within(queueFrame()).getByText(fill(zh["queue.flag_gone_note"], { id: "gone" }))).toBeVisible();
+    expect(within(queueFrame()).queryAllByRole("button", { pressed: true })).toEqual([]);
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh["queue.flag_clear_gone"] }));
+    expect(r.settings().run.start_team).toBeNull();
+    expect(screen.queryByText(fill(zh["queue.flag_gone_note"], { id: "gone" }))).toBeNull();
+  });
+});
+// Locked during a run: runner.test.tsx 「during a run」 (a run of the real page's runner sets the lock).
+
+describe("the next run on the task list's Mirror Dungeon row (#878)", () => {
+  const taskRows = () => within(document.querySelector(".task-list")!).getAllByRole("listitem");
+  const mirrorRows = () => taskRows().filter((li) => within(li).queryByText(zh["task.MirrorDungeon"]));
+  /** The next-run line of a row, or null. */
+  const nextLine = (li: HTMLElement) => within(li).queryByText(zh["queue.next"])?.parentElement ?? null;
+
+  test("its second line names the next run's team; two teams, each after its plate, 普通 first", async () => {
+    const s = queue("a", "b");
+    s.teams[0].usage = "hard_only";
+    s.team_queue = ["a", "b"];
+    renderEditor(<RunTab />, s);
+    const line = nextLine(mirrorRows()[0])!;
+    expect(line).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*${zh["difficulty.normal"]}\\s*Tb\\s*${zh["difficulty.hard"]}\\s*Ta$`));
+    expect(line).not.toHaveAttribute("aria-hidden");
+  });
+
+  test("one team for every difficulty: its name alone; none: says so", async () => {
+    renderEditor(<RunTab />, queue("a", "b"));
+    expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Ta$`));
+    cleanup();
+    const s = queue("a");
+    s.teams[0].enabled = false;
+    renderEditor(<RunTab />, s);
+    expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*${zh["queue.no_team"]}$`));
+  });
+
+  test("a start team set: counted from it, and a lit flag after the names", async () => {
+    const s = queue("a", "b");
+    s.run.start_team = "b";
+    renderEditor(<RunTab />, s);
+    const line = nextLine(mirrorRows()[0])!;
+    expect(line).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Tb\\s*${zh["queue.flag_on"]}$`));
+  });
+
+  test.each([["disabled", "b"], ["deleted", "gone"]])("a start team %s since: no lit flag on the row, the task stops at its start", async (_, id) => {
+    const s = queue("a", "b");
+    s.teams[1].enabled = false;
+    s.run.start_team = id;
+    renderEditor(<RunTab />, s);
+    expect(nextLine(mirrorRows()[0])).not.toHaveTextContent(zh["queue.flag_on"]);
+  });
+
+  test("only on the first ticked Mirror Dungeon row; none while none is ticked", async () => {
+    const s = queue("a");
+    s.tasks = [{ id: "MirrorDungeon", enabled: false }, { id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true },
+      { id: "MirrorDungeon", enabled: true }];
+    const r = renderEditor(<RunTab />, s);
+    const nth = (n: number) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick_nth"], { name: zh["task.MirrorDungeon"], n }) });
+    expect(mirrorRows().map((li) => nextLine(li) !== null)).toEqual([false, true, false]);
+    await r.user.click(nth(2));
+    expect(mirrorRows().map((li) => nextLine(li) !== null)).toEqual([false, false, true]);
+    await r.user.click(nth(3));
+    expect(mirrorRows().map((li) => nextLine(li) !== null)).toEqual([false, false, false]);
+  });
+
+  test("one line: where the names do not fit it leaves the row, hidden from a screen reader too, and the row keeps one line's height", async () => {
+    // a layout where the line holds more than it shows: jsdom lays nothing out, so these two shadow Element's zeroes awhile
+    const isLine = (el: HTMLElement) => el.firstElementChild?.textContent === zh["queue.next"];
+    Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get() { return isLine(this) ? 300 : 0; } });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get() { return isLine(this) ? 200 : 0; } });
+    try {
+      renderEditor(<RunTab />, queue("a"));
+      const line = nextLine(mirrorRows()[0])!;
+      expect(line).toHaveAttribute("aria-hidden", "true");
+      expect(cssValueOf(css, line, "visibility")).toBe("hidden");
+      expect(cssValueOf(css, line, "position")).toBe("absolute"); // out of the row's flow: the row is one line high
+      expect(cssValueOf(css, line, "white-space")).toBe("nowrap");
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollWidth");
+      Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+    }
   });
 });
 
@@ -250,56 +468,82 @@ describe("in the editor", () => {
     expect([ids(saved), saved.team_queue]).toEqual([["c", "a", "b"], ["a", "b", "c"]]);
   });
 
-  describe("the queue block", () => {
+  describe("the queue in the Mirror Dungeon options", () => {
     const rows = queueRows;
-    const inBlock = () => rows().map((li) => li.textContent!.match(/T\w/)![0]);
+    const inQueue = () => rows().map((li) => li.textContent!.match(/T\w/)![0]);
+    /** The window on its Run tab, the Mirror Dungeon task's options shown once the settings are read. */
+    async function openMirror() {
+      const user = userEvent.setup();
+      render(<App />);
+      await screen.findByText(zh["task.MirrorDungeon"]);
+      await showMirror(user);
+      return user;
+    }
+    const toTeams = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
+      await waitFor(() => expect(shown()).toHaveLength(3));
+    };
 
     test("a drag and an Alt+↑ in it save the queue in their order, and the team list as it was", async () => {
-      const user = userEvent.setup();
-      render(<App start="teams" />);
-      await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
+      const user = await openMirror();
+      await waitFor(() => expect(inQueue()).toEqual(["Ta", "Tb", "Tc"]));
       dragOnto(rows()[2], rows()[0]);
-      expect(inBlock()).toEqual(["Tc", "Ta", "Tb"]);
+      expect(inQueue()).toEqual(["Tc", "Ta", "Tb"]);
       await altMove(user, rows()[2], "ArrowUp");
-      expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]);
+      expect(inQueue()).toEqual(["Tc", "Tb", "Ta"]);
       await user.click(screen.getByRole("button", { name: zh.save }));
       await waitFor(() => expect(file.saved).toHaveLength(1));
       const saved: Settings = JSON.parse(file.saved[0]);
       expect([saved.team_queue, ids(saved)]).toEqual([["c", "b", "a"], ["a", "b", "c"]]);
+      await toTeams(user);
       expect(shown()).toEqual(["Ta", "Tb", "Tc"]);
+    });
+
+    test("a flag pressed is saved as run.start_team, and the queue as it was", async () => {
+      const user = await openMirror();
+      await user.click(flag("Tb"));
+      await user.click(screen.getByRole("button", { name: zh.save }));
+      await waitFor(() => expect(file.saved).toHaveLength(1));
+      const saved: Settings = JSON.parse(file.saved[0]);
+      expect([saved.run.start_team, saved.team_queue]).toEqual(["b", ["a", "b", "c"]]);
     });
 
     test.each([
       ["the Agent moves a claimed team to the end", (s: Settings) => claimed(s, "a"), ["Tb", "Tc", "Ta"]],
       ["a task's start team is put first (#802)", (s: Settings) => ({ ...s, team_queue: ["c", "a", "b"] }), ["Tc", "Ta", "Tb"]],
     ])("shows the order the file has once the editor reads it again: %s", async (_, write, expected) => {
-      render(<App start="teams" />);
-      await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
+      const user = await openMirror();
+      await waitFor(() => expect(inQueue()).toEqual(["Ta", "Tb", "Tc"]));
       file.text = text(write(JSON.parse(file.text!)));
       act(() => { window.dispatchEvent(new Event("focus")); });
-      await waitFor(() => expect(inBlock()).toEqual(expected));
+      await waitFor(() => expect(inQueue()).toEqual(expected));
+      await toTeams(user);
       expect(shown()).toEqual(["Ta", "Tb", "Tc"]);
     });
 
     test("an unsaved move in it and the Agent's claim are both shown", async () => {
-      const user = userEvent.setup();
-      render(<App start="teams" />);
-      await waitFor(() => expect(inBlock()).toEqual(["Ta", "Tb", "Tc"]));
+      const user = await openMirror();
+      await waitFor(() => expect(inQueue()).toEqual(["Ta", "Tb", "Tc"]));
       await altMove(user, rows()[2], "ArrowUp"); // a, c, b
       agentClaims("a");
       act(() => { window.dispatchEvent(new Event("focus")); });
-      await waitFor(() => expect(inBlock()).toEqual(["Tc", "Tb", "Ta"]));
+      await waitFor(() => expect(inQueue()).toEqual(["Tc", "Tb", "Ta"]));
     });
 
-    test("an id of the queue that names no team is its own row, marked, and the problem's click focuses it", async () => {
+    test("an id of the queue that names no team is its own row, marked; the problem's click opens the Run tab on Mirror Dungeon and focuses it", async () => {
       file.text = text({ ...queue("a", "b", "c"), team_queue: ["a", "b", "c", "x"] });
       const user = userEvent.setup();
       render(<App start="teams" />);
       const extra = fill(zh["problem.queueExtra"], { name: "x" });
       await user.click(await within(await screen.findByRole("alert")).findByRole("button", { name: extra }));
-      expect(rows()[3].querySelector(".item")).toHaveTextContent(/^4\. \? x$/);
+      expect(screen.getByRole("tab", { name: new RegExp(`^${zh["tab.run"]}`) })).toHaveAttribute("aria-selected", "true");
+      expect(rows()[3]).toHaveTextContent(/4\s*\? x$/); // after the wrong row's cross
       expect(within(rows()[3]).getByText(zh.hasProblem)).toBeInTheDocument();
       expect(document.activeElement).toBe(rows()[3].querySelector("[data-path='team_queue/3']"));
+      // the task list's Mirror Dungeon row is the one picked, marked for the problem in its options
+      const mirrorRow = within(document.querySelector(".task-list")!).getByText(zh["task.MirrorDungeon"]).closest("li")!;
+      expect(mirrorRow).toHaveAttribute("aria-current", "true");
+      expect(mirrorRow).toHaveClass("bad");
     });
   });
 

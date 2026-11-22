@@ -479,14 +479,25 @@ export function rebase(base: Settings, draft: Settings, disk: Settings): Setting
  * both to the same picks). */
 const USAGE_FITS: Record<string, string[]> = { any: ["hard", "normal"], hard_only: ["hard"], normal_only: ["normal"] };
 
-/** Where in team_queue the team of the next hard and the next normal run is: the first enabled team whose usage fits that
- * difficulty (agent/team_queue.py pick_team); -1 when no team does. */
-export function nextRunPlaces(s: Settings): { hard: number; normal: number } {
-  const plays = (d: string) => s.team_queue.findIndex((id) => {
-    const team = s.teams.find((t) => t.id === id);
-    return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(d);
-  });
-  return { hard: plays("hard"), normal: plays("normal") };
+export type Difficulty = "normal" | "hard";
+
+/** The Mirror Dungeon task's next new run, for each difficulty it plays (run.difficulty: auto plays either), Normal first:
+ * the team that plays it, the first enabled team in team_queue whose usage fits that difficulty (agent/team_queue.py
+ * pick_team), the queue counted from run.start_team when the queue holds it (headed: the task picks its first new run with
+ * that team at the head). `team` null: no team plays it. */
+export type NextRun = { difficulty: Difficulty; team: string | null };
+export function nextRuns(s: Settings): NextRun[] {
+  const start = s.run.start_team;
+  const queue = start !== null && s.team_queue.includes(start) ? [start, ...s.team_queue.filter((id) => id !== start)] : s.team_queue;
+  const d = s.run.difficulty;
+  const played: Difficulty[] = d === "normal" || d === "hard" ? [d] : ["normal", "hard"];
+  return played.map((difficulty) => ({
+    difficulty,
+    team: queue.find((id) => {
+      const team = s.teams.find((t) => t.id === id);
+      return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(difficulty);
+    }) ?? null,
+  }));
 }
 
 /** The settings with team `team` added: last in the team list and last in the queue (#803). */

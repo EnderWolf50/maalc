@@ -852,6 +852,58 @@ describe("during a run", () => {
     expect(list.getByRole("button", { name: zh.undo })).toBeVisible(); // back with the run's end
   });
 
+  test("the team queue is locked too: no drag and no Alt move, every flag off, each row faded to 0.45 (#878)", async () => {
+    const s = settings();
+    Object.assign(s, queuedTeams([newTeam(1, "T1"), newTeam(2, "T2")]));
+    s.run.start_team = s.teams[0].id;
+    back.text = fileOf(s);
+    const user = await open();
+    await started(user);
+    await user.click(taskList().getByText(zh["task.MirrorDungeon"]));
+    const queue = () => within(screen.getByRole("list", { name: zh["queue.title"] }));
+    const order = () => queue().getAllByRole("listitem").map((li) => li.textContent!.match(/T\d/)![0]);
+    for (const row of queue().getAllByRole("listitem")) {
+      expect(row).toHaveAttribute("draggable", "false");
+      expect(cssValueOf(css, row, "opacity")).toBe("0.45");
+    }
+    const flags = queue().getAllByRole("button");
+    expect(flags).toHaveLength(2);
+    for (const flag of flags) expect(flag).toBeDisabled();
+    expect(cssValueOf(css, flags[1], "opacity")).toBe("1"); // the row's fade alone: a flag is not dimmed twice
+    const rows = queue().getAllByRole("listitem");
+    dragOnto(rows[1], rows[0]);
+    await altMove(user, rows[1], "ArrowUp");
+    expect(order()).toEqual(["T1", "T2"]);
+    send(exit(0, true));
+    for (const flag of queue().getAllByRole("button")) expect(flag).toBeEnabled();
+  });
+
+  /** The next-run line of the Mirror Dungeon row, or null. */
+  const nextLine = () => within(taskList().getByText(zh["task.MirrorDungeon"]).closest("li")!).queryByText(zh["queue.next"]);
+
+  test("the Mirror Dungeon row's next-run line folds away while the run plays that task, and is back once the run ends (#878)", async () => {
+    const user = await open();
+    expect(nextLine()).not.toBeNull();
+    await started(user);
+    send(task(0, "ClaimMail", "running"));
+    expect(nextLine()).not.toBeNull(); // its task still waits
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"));
+    expect(nextLine()).toBeNull(); // the queue's head is now the team playing
+    send(task(1, "MirrorDungeon", "succeeded"), { type: "event", event: "end", result: "succeeded" } as Message, exit(0, true));
+    expect(nextLine()).not.toBeNull(); // the next run is the next session's
+  });
+
+  test("a run that stops before the Mirror Dungeon task starts keeps its next-run line (#878)", async () => {
+    const user = await open();
+    await started(user);
+    send(task(0, "ClaimMail", "running"), { type: "stopping" });
+    expect(nextLine()).not.toBeNull();
+    send(task(0, "ClaimMail", "stopped"), task(1, "MirrorDungeon", "cancelled"));
+    expect(nextLine()).not.toBeNull(); // cancelled: it never played, the queue did not move
+    send({ type: "event", event: "end", result: "stopped" } as Message, exit(1, true));
+    expect(nextLine()).not.toBeNull();
+  });
+
   test("Undo of 放棄變更 is gone during a run: it would bring back edits the run reads", async () => {
     const user = await open();
     await user.click(tick("經驗本"));
