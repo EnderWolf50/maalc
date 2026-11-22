@@ -229,6 +229,11 @@ class Run:
     def states(self):
         return [(e["index"], e["state"], *([e["reason"]] if "reason" in e else [])) for e in self.of("task")]
 
+    def codes(self):
+        """(index, state, reason_code, reason_params) of each task event that carries a code (#881)."""
+        return [(e["index"], e["state"], e["reason_code"], e.get("reason_params", {})) for e in self.of("task")
+                if "reason_code" in e]
+
     def lines(self, source=None):
         return [e["line"] for e in self.of("log") if source in (None, e["source"])]
 
@@ -414,6 +419,73 @@ def test_a_tasker_that_stops_with_no_reason_from_the_bot_waits_for_one_once(tmp_
     assert time.monotonic() - began < session.HALT_WAIT * 2
     assert run.states()[-2:] == [(1, "cancelled", "MaaFramework stopped the task list"),
                                  (2, "cancelled", "MaaFramework stopped the task list")]
+
+
+HALT = "[maalc] account-level stop: the rest of the task list is cancelled"
+
+
+def halting(tmp_path, *lines):
+    """A run whose first task logs lines, then the account-level stop line, and stops the whole list there."""
+    run = None
+    world = World({"MirrorDungeon": (2, "halt"), "ExpLuxcavation": (2, "succeeded")},
+                  halt_when=lambda: any(line.startswith("[maalc] account-level stop") for line in run.lines("agent")))
+    run = Run(tmp_path, world, *lines, HALT)
+    assert run.start(TWO) == "failed"
+    return run
+
+
+def test_the_code_of_the_bots_stop_goes_with_its_reason_to_the_task_it_failed_and_the_ones_it_cancelled(tmp_path):
+    # #881: the bot logs its stop's code after the stop line; the window says the reason in its own language by it
+    run = halting(tmp_path, "[maalc] stop: ClientOutdated: the game client is out of date", "[maalc] stop code: ClientOutdated")
+    assert run.states()[-2:] == [(0, "failed", "ClientOutdated: the game client is out of date"),
+                                 (1, "cancelled", "ClientOutdated: the game client is out of date")]
+    assert run.codes() == [(0, "failed", "ClientOutdated", {}), (1, "cancelled", "ClientOutdated", {})]
+
+
+def test_a_code_with_params_comes_with_them(tmp_path):
+    run = halting(tmp_path, "[maalc] stop: the game asked for an update 3 times since the bot started",
+                  '[maalc] stop code: UpdateRepeats {"times":3}')
+    assert run.codes() == [(0, "failed", "UpdateRepeats", {"times": 3}), (1, "cancelled", "UpdateRepeats", {"times": 3})]
+
+
+@pytest.mark.parametrize("lines", [
+    ["[maalc] stop: maintenance"],  # an older bot: no code line
+    ["[maalc] stop: a", "[maalc] stop code: Stuck", "[maalc] stop: maintenance"],  # the code was the stop before's
+    ["[maalc] stop: maintenance", "[maalc] stop code: Stuck {not json"],  # a line the runner cannot read
+    ["[maalc] stop: maintenance", '[maalc] stop code: Stuck {"why":[1]}'],  # params the protocol does not carry
+], ids=["no code", "an earlier stop's", "not json", "a list param"])
+def test_a_stop_with_no_code_the_runner_can_read_sends_its_reason_alone(tmp_path, lines):
+    run = halting(tmp_path, *lines)
+    assert run.states()[-2:] == [(0, "failed", "maintenance"), (1, "cancelled", "maintenance")] and run.codes() == []
+
+
+def test_the_runners_own_reasons_have_codes(tmp_path):
+    world = World({"MirrorDungeon": (1, "succeeded")}, found=(MUMU1,))
+    run = Run(tmp_path / "a", world)
+    assert run.start(TWO[:1]) == "failed"
+    assert run.codes() == [(0, "cancelled", "NoEmulator", {})]
+
+    world = World({"MirrorDungeon": (1, "succeeded")}, connects=False)
+    run = Run(tmp_path / "b", world)
+    assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "failed"
+    assert run.codes() == [(0, "cancelled", "ConnectFailed", {"address": "127.0.0.1:16384"})]
+
+    world = World({"MirrorDungeon": (1000, "succeeded"), "ExpLuxcavation": (2, "succeeded")})
+    run = Run(tmp_path / "c", world, "[maalc] task MirrorDungeon started", code=3)
+    assert run.start(TWO) == "failed"
+    assert run.codes() == [(1, "cancelled", "BotExited", {"code": 3})]
+
+    world = World({"MirrorDungeon": (2, "halt"), "ExpLuxcavation": (2, "succeeded")})
+    run = Run(tmp_path / "d", world)
+    assert run.start(TWO) == "failed"
+    assert run.codes() == [(1, "cancelled", "ListStopped", {})]
+
+
+def test_each_code_the_runner_sends_has_its_sentences():
+    # agent/stop_reasons.json, which the window reads: the runner's own codes are there with the params it sends
+    import reasons
+    for code, params in session.OWN_CODES.items():
+        assert code in reasons.CODES and set(params) == set(reasons.CODES[code]["en_us"].replace("}", "{").split("{")[1::2])
 
 
 def test_nothing_follows_the_end_event_and_a_line_after_the_run_log_closed_goes_out_only(tmp_path):
@@ -712,6 +784,24 @@ def test_the_bots_account_level_stop_names_the_reason_the_runner_reads(tmp_path,
     for line in capsys.readouterr().out.splitlines():
         s.agent_line(line)
     assert s.halted.is_set() and s.halt == "the game is under maintenance"
+
+
+def test_the_code_of_the_bots_stop_reads_back_in_the_runner(tmp_path, monkeypatch, capsys):
+    # #881: the line agent/reasons.py code_line writes is the one the runner reads
+    import actions
+    from unittest.mock import MagicMock
+    from reasons import Reason
+
+    patch_all(monkeypatch, "ROOT", tmp_path)
+    patch_all(monkeypatch, "TASK", {"runs": 0, "done": None, "entry": "ExpLuxcavation"})
+    ctx = MagicMock()
+    ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
+    monkeypatch.setitem(actions.STUCK, "halted", None)
+    actions.stop(ctx, Reason("EXP: defeated with the 2 retries used up", "LuxDefeated", retries=2), whole_list=True)
+    s = Session(Out(lambda text: None), None, Commands())
+    for line in capsys.readouterr().out.splitlines():
+        s.agent_line(line)
+    assert s.halt == "EXP: defeated with the 2 retries used up" and s.halt_code == ("LuxDefeated", {"retries": 2})
 
 
 SCRIPT = """

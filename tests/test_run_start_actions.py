@@ -311,6 +311,7 @@ def test_graces_beyond_available_and_owned_follow_starlight_unaffordable_stop(co
     starlight_page(context, "5", "2")
     assert run_start_actions.BuyStarlight().run(context, argv()) is False
     assert stopped == ["a planned grace is unaffordable"] and taps(context) == []
+    assert (stopped[0].code, stopped[0].params) == ("GraceUnaffordable", {})  # #881
 
 
 def test_the_confirm_dialog_is_confirmed_when_the_graces_spent_owned_starlight(context, clock, monkeypatch):

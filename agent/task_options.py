@@ -8,6 +8,7 @@ a team deleted or disabled stops only the task that names it."""
 
 import json
 
+from reasons import Reason
 from settings import SCHEMA, SettingsError
 
 # The settings' run keys every task reads: the stop procedure's webhook, the title's two dialogs, the kept screens.
@@ -82,9 +83,10 @@ def start_team_errors(team, teams):
     instead = f"pick another team, or 「照隊伍佇列」 (follow the team queue), in {where('MirrorDungeon')}"
     found = next((t for t in teams if t["id"] == team), None)
     if found is None:
-        return [f"run/start_team: team {team!r} was deleted in the settings GUI; {instead}"]
+        return [Reason(f"run/start_team: team {team!r} was deleted in the settings GUI; {instead}", "StartTeamDeleted", team=team)]
     if not found["enabled"]:
-        return [f"run/start_team: team {found['name']!r} (id {team!r}) is disabled; enable it in the settings GUI, or {instead}"]
+        return [Reason(f"run/start_team: team {found['name']!r} (id {team!r}) is disabled; enable it in the settings GUI, or "
+                       f"{instead}", "StartTeamDisabled", team=team)]
     return []
 
 
@@ -93,7 +95,8 @@ def team_errors(task, team, teams):
     not. None: none picked yet. An id not in teams: a team deleted in the settings GUI."""
     path = f"luxcavation/{LUX_KEY[task]}/team"
     if team is None:
-        return [f"{path}: no team picked; pick one in {where(task)}"]
+        return [Reason(f"{path}: no team picked; pick one in {where(task)}", "NoTeamPicked")]
     if team not in {t["id"] for t in teams}:
-        return [f"{path}: team {team!r} was deleted in the settings GUI; pick another in {where(task)}"]
+        return [Reason(f"{path}: team {team!r} was deleted in the settings GUI; pick another in {where(task)}", "TeamDeleted",
+                       team=team)]
     return []

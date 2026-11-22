@@ -3,6 +3,7 @@
 // a word). A "\n" in a text starts a new paragraph (ui.tsx `lines`).
 import { describe, expect, test } from "vitest";
 import { TEXT } from "./i18n";
+import { REASONS } from "./reasons";
 
 type Lang = keyof typeof TEXT;
 const LIMIT: Record<Lang, number> = { en_us: 25, zh_tw: 40 };
@@ -22,10 +23,14 @@ const paragraphs = (text: string) => text.split("\n");
 const sentences = (lang: Lang, paragraph: string) =>
   (lang === "en_us" ? paragraph.split(/(?<=[.?!])\s+/) : paragraph.split(/(?<=[。？！?!])/)).filter((s) => s.trim());
 
+/** Each text of a language: TEXT's, and the stop reasons' (agent/stop_reasons.json, #881) as reason.<code>. */
+const texts = (lang: Lang): [string, string][] =>
+  [...Object.entries(TEXT[lang]), ...Object.entries(REASONS).map(([code, s]): [string, string] => [`reason.${code}`, s[lang]])];
+
 /** What `faults` finds in each text of both languages, as "<lang> <key>: <fault>"; empty when every text keeps the rule. */
 const offenders = (faults: (lang: Lang, text: string) => string[]) =>
   (Object.keys(TEXT) as Lang[]).flatMap((lang) =>
-    Object.entries(TEXT[lang]).flatMap(([key, text]) => faults(lang, text).map((fault) => `${lang} ${key}: ${fault}`)));
+    texts(lang).flatMap(([key, text]) => faults(lang, text).map((fault) => `${lang} ${key}: ${fault}`)));
 
 describe("the UI text keeps the STE rules a program can check", () => {
   test("no semicolon (R8.1)", () => {

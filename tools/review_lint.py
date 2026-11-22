@@ -26,7 +26,7 @@ import git_diff
 from git_diff import git
 
 ROOT = Path(__file__).resolve().parent.parent
-PROSE = re.compile(r"(?:.*\.md|assets/locales/.*\.json|gui/src/i18n\.ts)$")
+PROSE = re.compile(r"(?:.*\.md|assets/locales/.*\.json|gui/src/i18n\.ts|agent/stop_reasons\.json)$")
 DEF_TEST = re.compile(r"^\s*(?:async\s+)?def (test_\w+)")
 
 

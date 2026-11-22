@@ -10,7 +10,9 @@ Commands (one runner process takes one start or one scan, then ends):
 
 Events: ready, log (a line of the run log, `source` runner, agent or console), devices, connection, resource, task (a
 task's `state`: pending, running, succeeded, failed, stopped or cancelled, with the bot's `reason` for one it cancelled
-and for the one it failed by stopping the whole list), error (its `kind`), end (the run's `result`).
+and for the one it failed by stopping the whole list; a reason may come with its `reason_code` of agent/stop_reasons.json
+and that code's `reason_params`, text or whole numbers, which the window says the reason by in its language, #881),
+error (its `kind`), end (the run's `result`). A reason with no code, as an older bot's, comes alone.
 tests/runner_cases.json holds the shared cases.
 """
 from __future__ import annotations
@@ -61,6 +63,11 @@ def _obj(required, optional=None):
     return check
 
 
+def params_ok(v) -> bool:
+    """Whether v is a reason code's params as the protocol carries them: an object of text or whole numbers."""
+    return isinstance(v, dict) and all(_str(k) and (_str(x) or _int(x)) for k, x in v.items())
+
+
 DEVICE = _obj({"name": _str, "address": _str, "adb_path": _str,
                "mumu": _nullable(_obj({"index": _int, "manager": _str, "path": _str}))})
 # event: (required fields, optional fields), each with its check; "v" and "event" come on top
@@ -70,7 +77,8 @@ EVENTS = {
     "devices": ({"devices": _list(DEVICE)}, {}),
     "connection": ({"state": _one_of(*CONNECTION), "address": _str}, {}),
     "resource": ({"state": _one_of(*RESOURCE)}, {}),
-    "task": ({"index": _int, "entry": _str, "state": _one_of(*STATES)}, {"reason": _nullable(_str)}),
+    "task": ({"index": _int, "entry": _str, "state": _one_of(*STATES)},
+             {"reason": _nullable(_str), "reason_code": _str, "reason_params": params_ok}),
     "error": ({"kind": _one_of(*ERRORS), "message": _str}, {"code": _int, "tail": _list(_str)}),
     "end": ({"result": _one_of(*RESULTS)}, {}),
 }
