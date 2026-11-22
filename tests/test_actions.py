@@ -827,7 +827,8 @@ def test_the_guard_gives_the_page_up_after_a_second(context, clock, guarded):
 def test_a_window_the_map_reads_under_is_the_map_gone(context, clock, guarded, window):
     # #850: the map reads under the Hidden Battle window (HiddenBattleOverMap.synthetic.png); RouteMap tapping on would
     # tap through it, Enter included. MirrorHub answers it with Skip. #434: so does it under the floor 5 and 10 prompts
-    # (ParallelMode*OverMap.synthetic.png), whose Confirm would take the run on; MirrorHub answers them by the target.
+    # (ParallelModePromptOverMap.png, live #852; ParallelModeExtremeOverMap.synthetic.png), whose Confirm would take the
+    # run on; MirrorHub answers them by the target.
     context.run_recognition.side_effect = lambda name, image, override=None: \
         SimpleNamespace(hit=True) if name in ("MirrorMap", window) else None
     with pytest.raises(actions.PageGone):

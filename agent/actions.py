@@ -245,8 +245,9 @@ POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popup
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
 # #850: the Hidden Battle window may come after RouteMap tapped an event node; the map reads under it, and a tap
-# through it could land on its Enter. #434: the map reads under the floor 5 and 10 prompts too (ParallelMode*OverMap.synthetic.png),
-# and where they come after the boss is not known (#852): a tap through one could land on its Confirm.
+# through it could land on its Enter. #434: the map reads under the floor 5 and 10 prompts too
+# (ParallelModePromptOverMap.png, ParallelModeExtremeOverMap.synthetic.png): live (#852) the floor 5 one rose over the
+# map once the boss was beaten, before the run's Victory, and a tap through it could land on its Confirm.
 COVERS = {"MirrorMap": ("GiftGet", "HiddenBattle", "ParallelModePrompt", "ExtremeModePrompt")}
 # Windows that hide a page's anchor where the action's own taps close them anyway: they pass its guard as its page.
 # #309: an event's GET! windows, over its page or the map it ends on, close on any tap, the text taps on the dead corner too.
