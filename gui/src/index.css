@@ -1029,7 +1029,17 @@ ol.skill-sinners > li[data-dragging] { opacity: 0.4; } /* and the line where it 
 .lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
 .lane .w.pos { color: var(--accent-ink); }
 .lane .w.neg { color: var(--fg-2); }
-.lane .packs { display: flex; flex-wrap: wrap; gap: 8px 6px; flex: 1; }
+.lane .packs, .pgp { display: flex; flex-wrap: wrap; gap: 8px 6px; }
+.lane .packs { flex: 1; }
+/* A long lane's difficulty groups (#742): a small quiet title with its count over the group's packs, a hairline between groups;
+   the threshold's line stays the loudest text in the lanes. */
+.lane .packs.grouped { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.lane .packs.grouped > .pk.unlisted { align-self: flex-start; }
+.pg { display: flex; flex-direction: column; gap: 4px; }
+.pg + .pg { padding-top: 8px; border-top: 1px solid var(--line); }
+.pg h3 { display: flex; align-items: baseline; gap: 6px; margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--fg-2); }
+.pg h3 .n { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.pg h3 small { color: var(--muted); font-weight: 400; font-size: 11.5px; }
 .lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line-2); margin: 8px 0; }
 .lanes.carrying .lane.add { color: var(--fg); border-color: var(--accent-line); background: var(--accent-soft); }
 .lanes .gap { height: 12px; }

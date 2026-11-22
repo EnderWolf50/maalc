@@ -2,7 +2,7 @@
 import { expect, test } from "vitest";
 import {
   FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, addTeam, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
-  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, selectAll, starlightCost, toggleGift, toggleSinner,
+  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, packGroups, GROUP_MIN, THEME_PACKS, selectAll, starlightCost, toggleGift, toggleSinner,
   weightOf, type GiftList, type StarlightValues,
 } from "./model";
 import { validate } from "./validate";
@@ -17,6 +17,26 @@ test("a pack shows on the floors the data file gives it", () => {
   expect(onFloor({ H: [10, 11] }, "hard", 1)).toBe(false);
   expect(onFloor({ H: [10, 11] }, "hard", 11)).toBe(true);
   expect(onFloor({ H: [10, 11] }, "", 15)).toBe(false);
+});
+
+// #742: a lane of 20 packs or more splits by the data file's N, H and X keys; a shorter one, or one whose packs all fall in
+// one group, stays one run of packs.
+test("a long lane groups its packs by difficulty from the data file, in the lane's order; a short one stays flat", () => {
+  const packs = { a: { N: [1], H: [1] }, b: { H: [3] }, c: { X: true as const }, d: { N: [2], H: [2] }, e: { H: [4], I: true as const, X: true as const } };
+  const many = (n: string) => Array.from({ length: 4 }, () => n);
+  const lane = [...many("a"), ...many("b"), ...many("c"), ...many("d"), ...many("e"), "gone"];
+  expect(packGroups(lane, packs)?.map((g) => [g.group, g.names.length])).toEqual([["both", 8], ["hard", 8], ["extreme", 4], ["other", 1]]);
+  expect(packGroups(lane, packs)![0].names).toEqual([...many("a"), ...many("d")]);
+  expect(packGroups(lane.slice(0, GROUP_MIN - 1), packs)).toBeNull(); // under 20 packs
+  expect(packGroups(lane, packs, "extreme")).toBeNull(); // every pack shown is on EXTREME, e's HARD floors too
+  expect(packGroups(lane, packs, "hard")?.length).toBe(4); // the filter's packs come in already: grouping is the same
+  expect(packGroups([...many("a"), ...many("a"), ...many("a"), ...many("d"), ...many("d")], packs)).toBeNull(); // all in one group
+  expect(packGroups([...many("a"), ...many("a"), ...many("a"), ...many("d"), ...many("b")], packs)?.map((g) => g.group)).toEqual(["both", "hard"]);
+  // the bundled data file: every pack with NORMAL floors has HARD ones too, and the rest are HARD without NORMAL or EXTREME only
+  const all = packGroups(Object.keys(THEME_PACKS.packs), THEME_PACKS.packs)!;
+  expect(all.map((g) => g.group)).toEqual(["both", "hard", "extreme"]);
+  expect(all.find((g) => g.group === "both")!.names.every((n) => THEME_PACKS.packs[n].H?.length)).toBe(true);
+  expect(all.find((g) => g.group === "extreme")!.names.every((n) => THEME_PACKS.packs[n].X && !THEME_PACKS.packs[n].H)).toBe(true);
 });
 
 test("an INFINITY pack shows on floors 6-10 and an EXTREME one on 11-15, as the agent reads them", () => {
