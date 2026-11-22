@@ -1,8 +1,10 @@
 """MirrorDungeon's start team (#805, ADR 0014): run.start_team of the settings file (#813), the team this task starts
-from; null, no flag in the team queue (#878), the default. Its first new run picks its team with that team at the head of team_queue and writes it there once the run
-opens, as a claim moves one to the end; a run under way at the task's start plays the team of the queue as it was before
-the move. A flag on a team disabled or deleted has no effect (#878): the task follows the queue as with no flag, logs
-that it ignored the flag, and the flag stays in the file.
+from; null, no flag in the team queue (#878), the default. Its first new run picks its team with that team at the head
+of team_queue and writes it there once the run opens, as a claim moves one to the end; a run under way at the task's
+start plays the team of the queue as it was before the move. A flag on a team disabled or deleted has no effect (#878):
+the task follows the queue as with no flag, logs that it ignored the flag, and the flag stays in the file. The settings
+GUI leaves no such flag (it takes it off with the team it disables, its save drops one on a team deleted): a hand edit
+does, or a save while the task runs.
 
 Every task here starts on settings_cases' valid file: team a (any) then team b (hard_only), the list and the queue in
 that order; gone is a team since deleted.
@@ -84,7 +86,7 @@ def start(context, monkeypatch, settings=lambda data: None, **run):
 
 
 @pytest.mark.parametrize("team, edit, line", [
-    # the settings GUI deleted the team since its flag was set
+    # a hand edit: a flag on a team gone from teams, or on a disabled one
     ("gone", lambda data: None, f"run/start_team: team 'gone' is no longer listed, {IGNORED}"),
     ("b", lambda data: data["teams"][1].update(enabled=False), f"run/start_team: team 'Team b' (id 'b') is disabled, {IGNORED}"),
 ])
@@ -113,7 +115,8 @@ def test_a_start_team_disabled_by_a_save_since_the_tasks_start_is_ignored_at_its
     entry_page(context, difficulty="hard", start_team="b")
     path = actions.ROOT / "config" / "settings.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["teams"][1]["enabled"] = False  # the settings GUI saved while the task ran
+    data["teams"][1]["enabled"] = False  # the settings GUI saved while the task ran: b disabled, its flag off with it
+    data["run"]["start_team"] = None
     path.write_text(json.dumps(data), encoding="utf-8")
     before = path.read_bytes()
     actions.LOG.clear()

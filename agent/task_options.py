@@ -77,9 +77,11 @@ def target_floor_errors(options, teams):
 
 def start_team_ignored_line(team, teams):
     """MirrorDungeon's start team (#805): run.start_team, None for no flag in the team queue, names an enabled team of
-    teams. A flag on a disabled team, or on an id not in teams (a team deleted in the settings GUI), has no effect: the
-    task follows the queue as with no flag, and the flag stays in the file for the team enabled again (#878). The line
-    for the log that says so, None for a flag that counts or no flag."""
+    teams. A flag on a disabled team, or on an id not in teams (a deleted team), has no effect: the task follows the
+    queue as with no flag, and the flag stays in the file, counting again once the team is enabled (#878). The settings
+    GUI leaves no such flag (it takes the flag off with the team it disables, and its save drops one on a team deleted),
+    so it comes from a hand edit, or from a save made while a task ran. The line for the log that says so, None for a
+    flag that counts or no flag."""
     if team is None:
         return None
     found = next((t for t in teams if t["id"] == team), None)

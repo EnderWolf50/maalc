@@ -313,23 +313,24 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     expect(within(queueFrame()).getAllByRole("button", { pressed: true })).toEqual([flag("Tb", true)]);
   });
 
-  test("a disabled team's flag presses too, dimmed as its row, its words saying it has no effect, and no line under the queue", async () => {
+  test("a disabled team's flag sets nothing: unavailable, faint, the no-entry pointer, its words saying why", async () => {
     const s = queue("a", "b");
     s.teams[1].enabled = false;
     const r = await mirror(s);
-    expect(flag("Tb")).toBeEnabled();
-    expect(flag("Tb")).toHaveAttribute("data-tip", zh["queue.flag_tip_off"]);
-    expect(cssValueOf(css, flag("Tb"), "opacity")).toBe("0.5");
-    expect(cssValueOf(css, flag("Ta"), "opacity")).toBeUndefined(); // an enabled team's, undimmed
+    expect(flag("Tb")).toHaveAttribute("aria-disabled", "true");
+    expect(flag("Ta")).not.toHaveAttribute("aria-disabled");
     await r.user.click(flag("Tb"));
-    expect(r.settings().run.start_team).toBe("b");
-    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
-    expect(cssValueOf(css, flag("Tb", true), "color")).toBe("var(--muted)"); // filled, not amber
-    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull(); // the flag has no effect, so it costs nothing
-    await r.user.click(flag("Tb", true));
     expect(r.settings().run.start_team).toBeNull();
-    expect(zh["queue.flag_tip_off"]).toBe("隊伍停用中，旗子沒有作用");
-    expect(zh["queue.flag_tip_off_on"]).toBe("隊伍停用中，旗子沒有作用（再按取消）");
+    expect(flag("Tb")).toHaveAttribute("aria-pressed", "false");
+    expect([cssValueOf(css, flag("Tb"), "opacity"), cssValueOf(css, flag("Tb"), "cursor")]).toEqual(["0.3", "not-allowed"]);
+    expect(cssValueOf(css, flag("Ta"), "opacity")).toBeUndefined(); // an enabled team's, undimmed
+    expect(cssValueOf(css, flag("Tb"), "color", flag("Tb"))).toBe("var(--muted)"); // the pointer does not light it
+    // its words still float over it, under the pointer and under the keyboard's focus, which still reaches it
+    expect(flag("Tb")).toHaveAttribute("data-tip", zh["queue.flag_tip_off"]);
+    expect(cssValueOf(css, flag("Tb"), "opacity", flag("Tb"), "::after")).toBe("1");
+    expect(cssValueOf(css, flag("Tb"), "opacity", { focus: flag("Tb") }, "::after")).toBe("1");
+    expect(flag("Tb")).toBeEnabled();
+    expect(zh["queue.flag_tip_off"]).toBe("隊伍停用中，不能從這支開始");
   });
 
   test("its words float over it while the pointer or the keyboard's focus is on it; no native tooltip of the list's under them", async () => {
@@ -355,6 +356,24 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     expect(zh["queue.flag_kept"]).toBe("旗子會存進設定檔，每次開始都會再排一次，用完記得改回。");
   });
 
+  test("a flag already on a disabled team (a hand edit) has no effect, dimmed and muted; a press clears it, and then sets nothing", async () => {
+    const s = queue("a", "b");
+    s.teams[1].enabled = false;
+    s.run.start_team = "b";
+    const r = await mirror(s);
+    expect(flag("Tb", true)).not.toHaveAttribute("aria-disabled");
+    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
+    expect([cssValueOf(css, flag("Tb", true), "opacity"), cssValueOf(css, flag("Tb", true), "color")]).toEqual(["0.5", "var(--muted)"]);
+    expect(cssValueOf(css, flag("Tb", true), "opacity", flag("Tb", true))).toBe("1"); // lit under the pointer: a press does something
+    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull(); // the flag has no effect, so it costs nothing
+    await r.user.click(flag("Tb", true));
+    expect(r.settings().run.start_team).toBeNull();
+    expect(flag("Tb")).toHaveAttribute("aria-disabled", "true");
+    await r.user.click(flag("Tb"));
+    expect(r.settings().run.start_team).toBeNull();
+    expect(zh["queue.flag_tip_off_on"]).toBe("隊伍停用中，旗子沒有作用（再按取消）");
+  });
+
   test("a lit flag on a team enabled again counts again: amber, its usual words, and the line under the queue", async () => {
     const s = queue("a", "b");
     s.teams[1].enabled = false;
@@ -367,6 +386,21 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_on"]);
     expect(cssValueOf(css, flag("Tb", true), "color")).toBe("var(--accent)");
     expect(within(queueFrame()).getByText(zh["queue.flag_kept"])).toBeVisible();
+  });
+
+  test("disabling the start team in the Teams tab takes its flag off at once; enabling it again does not put it back", async () => {
+    const s = queue("a", "b");
+    s.run.start_team = "b";
+    const r = renderEditor(<TeamsTab />, s);
+    const enabled = () => screen.getByRole("checkbox", { name: zh["team.enabled"] });
+    await pickInList(r.user, "Ta");
+    await r.user.click(enabled()); // another team off: the flag stays
+    expect([r.settings().teams[0].enabled, r.settings().run.start_team]).toEqual([false, "b"]);
+    await pickInList(r.user, "Tb");
+    await r.user.click(enabled());
+    expect([r.settings().teams[1].enabled, r.settings().run.start_team]).toEqual([false, null]);
+    await r.user.click(enabled());
+    expect([r.settings().teams[1].enabled, r.settings().run.start_team]).toEqual([true, null]);
   });
 
   test("a start team deleted since has no row and no flag: nothing under the queue, no button but the rows' flags", async () => {
@@ -524,6 +558,25 @@ describe("in the editor", () => {
       const saved: Settings = JSON.parse(file.saved[0]);
       expect([ids(saved), saved.team_queue, saved.run.start_team]).toEqual([["a", "c"], ["a", "c"], null]);
       await waitFor(() => expect(document.querySelector(".status")).not.toHaveTextContent(zh.unsaved));
+    });
+
+    test("the start team disabled in the Teams tab is saved with no flag, and the Mirror Dungeon options show none lit (#878)", async () => {
+      const s = queue("a", "b", "c");
+      s.run.start_team = "b";
+      file.text = text(s);
+      const user = userEvent.setup();
+      render(<App start="teams" />);
+      await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
+      await pickInList(user, "Tb");
+      await user.click(screen.getByRole("checkbox", { name: zh["team.enabled"] }));
+      await user.click(screen.getByRole("button", { name: zh.save }));
+      await waitFor(() => expect(file.saved).toHaveLength(1));
+      const saved: Settings = JSON.parse(file.saved[0]);
+      expect([saved.teams[1].enabled, saved.run.start_team]).toEqual([false, null]);
+      await user.click(screen.getByRole("tab", { name: new RegExp(`^${zh["tab.run"]}`) }));
+      await showMirror(user);
+      expect(within(queueFrame()).queryAllByRole("button", { pressed: true })).toEqual([]);
+      expect(flag("Tb")).toHaveAttribute("aria-disabled", "true");
     });
 
     test("a flag pressed is saved as run.start_team, and the queue as it was", async () => {

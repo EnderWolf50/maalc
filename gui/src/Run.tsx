@@ -719,8 +719,9 @@ function MirrorOptions() {
  * them). Every row on the list's own columns (index.css): its place, the team's name (cut short), its slot, its usage when kept
  * to one difficulty, the next-run mark against the flag, and the flag. A disabled team is struck through in its place; an id
  * that names no team (a hand edit, which the check names) is a row of its own. The flag writes run.start_team: on, off, one
- * team at most. On a disabled team it has no effect, and is dimmed as the row is, its words saying so; it still presses.
- * How the queue turns is the list's tooltip; under it, while a flag that counts is set, what it costs. A run locks the
+ * team at most. A disabled team is never the start team (disabling one takes its flag off, model.ts setTeamEnabled): its
+ * flag sets nothing, its words saying why, and one already there (a hand edit) has no effect, dimmed as the row is, and
+ * only clears. How the queue turns is the list's tooltip; under it, while a flag that counts is set, what it costs. A run locks the
  * order and the flags (LockContext). */
 function MirrorTeams() {
   const { s, update, t, tv, bad } = useEditor();
@@ -743,6 +744,7 @@ function MirrorTeams() {
             render={(x, j) => {
               const team = byId.get(x.id), first = x.first;
               const on = first && start === x.id, off = team !== undefined && !team.enabled;
+              const noSet = off && !on; // a disabled team is never the start team: its flag only clears one already there
               const name = team ? team.name || "—" : `? ${x.id}`;
               // the runs this row's team plays next, on its first row
               const marks = first ? next.filter((p) => p.team === x.id) : [];
@@ -760,12 +762,13 @@ function MirrorTeams() {
                   </span>
                   {team ? (
                     // its words are drawn over it (index.css .start-flag::after). title="" keeps the list's own tooltip (how
-                    // the queue turns, and how to drag, over every row) from showing over them; the list keeps it
+                    // the queue turns, and how to drag, over every row) from showing over them; the list keeps it. One that
+                    // sets nothing is aria-disabled, not disabled: the keyboard's focus still reaches it, to show why.
                     <button type="button" className={"start-flag" + (on ? " on" : "")} aria-pressed={on}
                       aria-label={fill(t(on ? "queue.flag_clear" : "queue.flag_set"), { name })} title=""
                       data-tip={t(off ? (on ? "queue.flag_tip_off_on" : "queue.flag_tip_off") : on ? "queue.flag_tip_on" : "queue.flag_tip")}
-                      disabled={locked}
-                      onClick={(e) => { e.stopPropagation(); setStart(on ? null : x.id); }}>
+                      aria-disabled={noSet || undefined} disabled={locked}
+                      onClick={(e) => { e.stopPropagation(); if (!noSet) setStart(on ? null : x.id); }}>
                       <Glyph d={FLAG} filled={on} size={16} />
                     </button>
                   ) : <span />}
