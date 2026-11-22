@@ -2,9 +2,9 @@
 
 ParallelSwitch reads the paused run's floor in the entry page's Exploring field; ParallelPrompt finds Confirm or Cancel
 by their text: the floor 5 prompt on a live capture (#852), the floor 10 one only on the help sheet and a synthetic
-capture until #854. They run inside a real MaaFramework
-task (resource bundle loaded, a still controller); the pytest process holds MaaFramework in AgentServer mode, so the
-task runs in a child process: this file run as a script, as test_module_count.py does.
+capture until #854. They run inside a real MaaFramework task (resource bundle loaded, a still controller); the pytest
+process holds MaaFramework in AgentServer mode, so the task runs in a child process: this file run as a script, as
+test_module_count.py does.
 """
 
 import json
@@ -17,7 +17,7 @@ from daily_child import probe_child, run_child, screen
 # The entry page captures: a new run, and two runs paused at floor 1 (the switch OFF, ON).
 ENTRY = ["EntryNewRun.png", "EntryPaused.png", "EntryParallelOn.png"]
 # The prompt captures and the floor after which each comes; where Cancel and Confirm sit on each, as (x0, x1, y0, y1),
-# by eye on the help sheet, moved as the synthetic one moved its dialog (-64 / -10 px in x, +21 px in y), and on the
+# by eye on the help sheet, moved as the synthetic one moved its dialog (-10 px in x, +21 px in y), and on the
 # live floor 5 prompt over the map (#852: the bot tapped Cancel at 539, 469 there).
 PROMPTS = {"ParallelModePrompt.png": 5, "ParallelModeExtreme.png": 10,
            "ParallelModePromptOverMap.png": 5, "ParallelModeExtremeOverMap.synthetic.png": 10}

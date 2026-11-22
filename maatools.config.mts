@@ -49,9 +49,8 @@ const screens: [image: string, hits: string[]][] = [
   ['ParallelModePrompt.png', ['ParallelModePrompt', 'HelpPager']],
   ['ParallelModeExtreme.png', ['ExtremeModePrompt', 'HelpPager']],
   // Live 2026-11-22 (#852): the prompt after floor 5 over the floor-5 map, the boss beaten (TEAMS #3, HARD, the
-  // entry switch ON). The map's buttons read under it, its bus does not (dimmed darker than the synthetic one's 35%):
-  // live, RouteMap looked for the bus for 7.7 s under it before its guard gave the map up. The prompt comes first in
-  // the hub.
+  // entry switch ON). The map's buttons read under it, its bus does not: live, RouteMap looked for the bus for 7.7 s
+  // under it before its guard gave the map up. The prompt comes first in the hub.
   ['ParallelModePromptOverMap.png', ['ParallelModePrompt', 'MirrorMap']],
   // Synthetic (#434, until #854 brings a live one): the help-sheet dialog cut out and put at the screen's centre over
   // the floor-5 map dimmed to 35%.

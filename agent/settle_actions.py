@@ -47,8 +47,8 @@ def toggles(context, image):
 
 
 # The prompts after floors 5 and 10 (ParallelModePrompt, ExtremeModePrompt; the pipeline's roi of their buttons). Live
-# (#852) the floor 5 one's buttons sit at y 452-490; the floor 10 one is seen only on the help sheet (#854): wide enough
-# for the help sheet's picture of them (buttons at y 440-466) and for the game's other two-button dialogs
+# (#852) the floor 5 one's buttons sit at y 452-490; the floor 10 one is seen only on the help sheet (#854). Wide enough
+# for both, for the help sheet's picture of them (buttons at y 440-466) and for the game's other two-button dialogs
 # (DIALOG_CANCEL, DIALOG_CONFIRM at y 493).
 PROMPT_BUTTONS = [360, 420, 560, 100]
 
