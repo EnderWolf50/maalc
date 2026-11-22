@@ -59,6 +59,8 @@ def test_an_unknown_command_exits_2_and_names_it():
     (["press", "1,2", "--port", "9333", "--viewport", "800"], "--viewport"),
     (["still", "x.png", "--port", "9333", "--scale", "0.5x"], "--scale"),
     (["press", "1,2", "--port", "9333", "--colour", "red"], "--colour"),  # an option no command takes
+    (["press", "1,2", "--port", "9333", "--with", "Hyper"], "unknown modifier Hyper"),
+    (["press", "1,2", "--port", "9333", "--with", "Ctrl+"], "unknown modifier"),
     (["still", "x.png", "--element", "10,20", "--port", "9333"], "element"),
     (["still", "x.png", "--mask", "10,20", "--port", "9333"], "element"),
     (["open"], "--root"),
@@ -123,6 +125,15 @@ def test_shift_tab_holds_shift_around_the_tab():
     tab = ev[1]
     assert tab["code"] == "Tab" and tab["windowsVirtualKeyCode"] == 9 and tab["nativeVirtualKeyCode"] == 9
     assert "text" not in tab
+
+
+def test_a_press_with_ctrl_or_shift_carries_their_bits_on_its_mouse_events():
+    # Input.dispatchMouseEvent's modifiers: the page reads them as the click's ctrlKey and shiftKey (a Ctrl click picks a
+    # theme pack, #743), which cua's background delivery cannot send on Windows.
+    assert call("modifierBits", "Ctrl") == 2
+    assert call("modifierBits", "shift") == 8
+    assert call("modifierBits", "Ctrl+Shift") == 10
+    assert call("parseCommand", ["press", ".pk", "--port", "1", "--with", "Ctrl"])["options"]["with"] == "Ctrl"
 
 
 def test_ctrl_s_sends_the_letter_without_text_and_a_plain_letter_types_it():
