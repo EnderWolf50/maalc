@@ -73,7 +73,7 @@ class PlanRun(CustomAction):
     task's first new run picks from (team_queue.headed), and is written there once that run opens (team_queue.to_head):
     a task that ends here with nothing left to do, or backs out to read the Modules, leaves the file alone. A start
     team whose usage does not fit the run is passed over as the queue passes over any team, and the log says so; one a
-    save since TaskStart disabled or deleted is ignored, as TaskStart ignores it (task_options.start_team_ignored).
+    save since TaskStart disabled or deleted is ignored, as TaskStart ignores it (task_options.start_team_ignored_line).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -99,7 +99,7 @@ class PlanRun(CustomAction):
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
         start = TASK.get("start_team")
-        if start and (ignored := task_options.start_team_ignored(start, settings["teams"])):  # a save since TaskStart
+        if start and (ignored := task_options.start_team_ignored_line(start, settings["teams"])):  # a save since TaskStart
             log(ignored)
             del TASK["start_team"]
             start = None

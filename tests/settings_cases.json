@@ -292,7 +292,7 @@
     {"name": "no run cap and a start team pass", "edits": [{"set": "run/runs", "value": null}, {"set": "run/start_team", "value": "b"}],
      "cross": []},
     {"name": "a start team is a team id or null", "edits": [{"set": "run/start_team", "value": ""}], "schema": ["run/start_team"]},
-    {"name": "a start team or a Luxcavation team deleted since is the task's to stop on, not the file's",
+    {"name": "a start team or a Luxcavation team deleted since is no error of the file's (the task ignores the one, stops on the other)",
      "edits": [{"set": "run/start_team", "value": "gone"}, {"set": "luxcavation/exp/team", "value": "gone"}], "cross": []},
     {"name": "a Luxcavation count of 0", "edits": [{"set": "luxcavation/thread/count", "value": 0}], "schema": ["luxcavation/thread/count"]},
     {"name": "the game allows 10 charges a day", "edits": [{"set": "charge_enkephalin/count", "value": 11}], "schema": ["charge_enkephalin/count"]},

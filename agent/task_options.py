@@ -5,7 +5,7 @@ They come from the settings file: run (MirrorDungeon's own and the four every ta
 charge_enkephalin (ADR 0015). The settings' schema checks them when the file loads. The rules that cross them with the
 teams (MirrorDungeon's target floor, a Luxcavation task's team) are checked here, at the task's start, so a team
 deleted or disabled stops only the task that names it; MirrorDungeon's start team on such a team is ignored, not an
-error (start_team_ignored)."""
+error (start_team_ignored_line)."""
 
 import json
 
@@ -75,7 +75,7 @@ def target_floor_errors(options, teams):
     return errors
 
 
-def start_team_ignored(team, teams):
+def start_team_ignored_line(team, teams):
     """MirrorDungeon's start team (#805): run.start_team, None for no flag in the team queue, names an enabled team of
     teams. A flag on a disabled team, or on an id not in teams (a team deleted in the settings GUI), has no effect: the
     task follows the queue as with no flag, and the flag stays in the file for the team enabled again (#878). The line

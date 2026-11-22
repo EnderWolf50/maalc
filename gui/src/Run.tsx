@@ -7,7 +7,7 @@
 // and running. A narrow window
 // (NARROW) puts the console's Start line on top and its emulator and log under the options. Each control writes the settings
 // key the runner or the agent reads at a task's start, and shows that key after its label while the pointer is over the field
-// or the field draws a focus ring: the agent's stop lines name an option by it ("run/start_team: team 'x' was deleted ...").
+// or the field draws a focus ring: the agent's stop lines name an option by it ("luxcavation/exp/team: team 'x' was deleted ...").
 // A team pick lists the settings' teams as they are now. During a run the settings it reads are locked (LockContext): a task
 // still shows its options when clicked.
 import {
@@ -227,8 +227,8 @@ const splitRuns = (next: NextRun[]) => next.length === 2 && next[0].team !== nex
 
 /** Whether run.start_team counts: it names an enabled team, whose flag stays in the file. A flag on a disabled team, or on
  * a team deleted since (the next save drops it, App.tsx), has no effect: the task follows the queue as with no flag
- * (task_options.py start_team_ignored, #878). */
-const startTeamCounts = (s: Settings) => s.teams.some((x) => x.id === s.run.start_team && x.enabled);
+ * (task_options.py start_team_ignored_line, #878). */
+const startTeamApplies = (s: Settings) => s.teams.some((x) => x.id === s.run.start_team && x.enabled);
 
 /** The next Mirror Dungeon run on the task's row (spec #871 「隊伍佇列」): 「下一局」, then each difficulty's plate and its team,
  * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while an enabled
@@ -246,7 +246,7 @@ function NextTeams() {
       {splitRuns(next)
         ? next.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
         : <span className="nt-team">{name(next[0].team)}</span>}
-      {startTeamCounts(s) && (
+      {startTeamApplies(s) && (
         <span className="flag-on" title={t("queue.flag_on")}><Glyph d={FLAG} filled /><span className="sr-only">{t("queue.flag_on")}</span></span>
       )}
     </span>
@@ -774,7 +774,7 @@ function MirrorTeams() {
             }} />
         )}
       </div>
-      {startTeamCounts(s) && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
+      {startTeamApplies(s) && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
     </fieldset>
   );
 }

@@ -590,7 +590,7 @@ class TaskStart(CustomAction):
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
         play (task_options.target_floor_errors), as PlanRun fails it on bad settings. A start team deleted or disabled
-        is ignored, and the log says so (task_options.start_team_ignored, #878); one it can play waits in TASK for the
+        is ignored, and the log says so (task_options.start_team_ignored_line, #878); one it can play waits in TASK for the
         task's first new run (PlanRun): a run under way plays the team of the queue as it is."""
         if argv.node_name != "MirrorDungeon":
             return True
@@ -598,7 +598,7 @@ class TaskStart(CustomAction):
             log(f"stop: {task_options.OptionsError(errors)}")
             return False
         start = TASK["options"]["start_team"]
-        if ignored := task_options.start_team_ignored(start, settings["teams"]):
+        if ignored := task_options.start_team_ignored_line(start, settings["teams"]):
             log(ignored)
         elif start:
             TASK["start_team"] = start

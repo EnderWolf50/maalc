@@ -70,7 +70,7 @@
           "type": ["string", "null"],
           "minLength": 1,
           "default": null,
-          "description": "the team the Mirror Dungeon task starts from, moved to the head of team_queue before its first new run (#805); null: follow the team queue. A team deleted or disabled is ignored and logged, and the task follows the queue (task_options.start_team_ignored, #878)"
+          "description": "the team the Mirror Dungeon task starts from, moved to the head of team_queue before its first new run (#805); null: follow the team queue. A team deleted or disabled is ignored and logged, and the task follows the queue (task_options.start_team_ignored_line, #878)"
         }
       }
     },

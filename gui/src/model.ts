@@ -501,7 +501,7 @@ export function nextRuns(s: Settings): NextRun[] {
 }
 
 /** The settings with run.start_team null when it names no team (a team deleted since its flag was set): the flag has no
- * effect (agent task_options.start_team_ignored, #878), and a save drops it. The settings themselves when it names one. */
+ * effect (agent task_options.start_team_ignored_line, #878), and a save drops it. The settings themselves when it names one. */
 export function withoutGoneStart(s: Settings): Settings {
   const start = s.run.start_team;
   return start === null || s.teams.some((t) => t.id === start) ? s : { ...s, run: { ...s.run, start_team: null } };

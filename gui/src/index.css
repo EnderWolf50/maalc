@@ -598,6 +598,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .mt-row.off .start-flag { opacity: 0.5; }
 .mt-row.off .start-flag:hover:not(:disabled), .mt-row.off .start-flag:focus-visible { opacity: 1; }
 .mt-row.off .start-flag.on, .mt-row.off .start-flag.on:hover:not(:disabled) { color: var(--muted); }
+.mt-order ol.reorder.locked .mt-row.off .start-flag:disabled { opacity: 0.5; } /* locked too, under the row's fade */
 .start-flag::before, .start-flag::after {
   position: absolute; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.12s ease-out, translate 0.12s ease-out;
 }
