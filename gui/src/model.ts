@@ -485,10 +485,12 @@ export type Difficulty = "normal" | "hard";
  * the team that plays it, the first enabled team in team_queue whose usage fits that difficulty (agent/team_queue.py
  * pick_team), the queue counted from run.start_team when the queue holds it (headed: the task picks its first new run with
  * that team at the head). `team` null: no team plays it. */
-export function nextRuns(s: Settings): { difficulty: Difficulty; team: string | null }[] {
+export type NextRun = { difficulty: Difficulty; team: string | null };
+export function nextRuns(s: Settings): NextRun[] {
   const start = s.run.start_team;
   const queue = start !== null && s.team_queue.includes(start) ? [start, ...s.team_queue.filter((id) => id !== start)] : s.team_queue;
-  const played: Difficulty[] = s.run.difficulty === "auto" ? ["normal", "hard"] : [s.run.difficulty as Difficulty];
+  const d = s.run.difficulty;
+  const played: Difficulty[] = d === "normal" || d === "hard" ? [d] : ["normal", "hard"];
   return played.map((difficulty) => ({
     difficulty,
     team: queue.find((id) => {

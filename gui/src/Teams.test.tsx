@@ -278,7 +278,7 @@ test("the list names a team kept to one difficulty, and strikes a disabled one t
   expect([cssValueOf(css, name, "color"), cssValueOf(css, name, "text-decoration")]).toEqual(["var(--muted)", "line-through"]);
   expect(cssValueOf(css, within(first).getByText("T1"), "text-decoration")).toBeUndefined();
   expect(within(second).getByText(zh["team.off_read"])).toHaveClass("sr-only");
-  expect(within(second).queryByText(zh["team.disabled"])).toBeNull();
+  expect(within(second).queryByText("停用")).toBeNull(); // the tag the list had
   // the slot in the muted condensed numerals, no frame
   const slot = within(second).getByText("TEAMS #12");
   expect([cssValueOf(css, slot, "color"), cssValueOf(css, slot, "border"), cssValueOf(css, slot, "font-variant-numeric")])

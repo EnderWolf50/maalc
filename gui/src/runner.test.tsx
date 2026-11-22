@@ -846,17 +846,30 @@ describe("during a run", () => {
     for (const flag of queue().getAllByRole("button")) expect(flag).toBeEnabled();
   });
 
-  test("the Mirror Dungeon row's next-run line folds away once that task starts, and stays folded after the run (#878)", async () => {
+  /** The next-run line of the Mirror Dungeon row, or null. */
+  const nextLine = () => within(taskList().getByText(zh["task.MirrorDungeon"]).closest("li")!).queryByText(zh["queue.next"]);
+
+  test("the Mirror Dungeon row's next-run line folds away while the run plays that task, and is back once the run ends (#878)", async () => {
     const user = await open();
-    const next = () => within(taskList().getByText(zh["task.MirrorDungeon"]).closest("li")!).queryByText(zh["queue.next"]);
-    expect(next()).not.toBeNull();
+    expect(nextLine()).not.toBeNull();
     await started(user);
     send(task(0, "ClaimMail", "running"));
-    expect(next()).not.toBeNull(); // its task still waits
+    expect(nextLine()).not.toBeNull(); // its task still waits
     send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"));
-    expect(next()).toBeNull(); // the queue's head is now the team playing
+    expect(nextLine()).toBeNull(); // the queue's head is now the team playing
     send(task(1, "MirrorDungeon", "succeeded"), { type: "event", event: "end", result: "succeeded" } as Message, exit(0, true));
-    expect(next()).toBeNull();
+    expect(nextLine()).not.toBeNull(); // the next run is the next session's
+  });
+
+  test("a run that stops before the Mirror Dungeon task starts keeps its next-run line (#878)", async () => {
+    const user = await open();
+    await started(user);
+    send(task(0, "ClaimMail", "running"), { type: "stopping" });
+    expect(nextLine()).not.toBeNull();
+    send(task(0, "ClaimMail", "stopped"), task(1, "MirrorDungeon", "cancelled"));
+    expect(nextLine()).not.toBeNull(); // cancelled: it never played, the queue did not move
+    send({ type: "event", event: "end", result: "stopped" } as Message, exit(1, true));
+    expect(nextLine()).not.toBeNull();
   });
 
   test("Undo of 放棄變更 is gone during a run: it would bring back edits the run reads", async () => {

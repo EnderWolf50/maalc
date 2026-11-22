@@ -430,7 +430,7 @@ ol.reorder .item { flex: 1; min-width: 0; }
 ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--muted); letter-spacing: 0.03em; }
 .qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
   border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
-.teams-page { display: flex; flex-direction: column; gap: 18px; }
+.teams-page { display: flex; flex-direction: column; } /* one child since the queue left (#878): kept a flex box, as measured */
 /* a disabled team, in the team list and in the team queue (#878, the user's call of 2026-11-22): its name struck through in the
  * muted ink, in its place, no tag and the row not faded, so its words keep their contrast */
 .team-list .team-off, .mt-row.off .mt-name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }

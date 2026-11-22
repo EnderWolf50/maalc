@@ -404,6 +404,14 @@ describe("the next run on the task list's Mirror Dungeon row (#878)", () => {
     expect(line).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Tb\\s*${zh["queue.flag_on"]}$`));
   });
 
+  test.each([["disabled", "b"], ["deleted", "gone"]])("a start team %s since: no lit flag on the row, the task stops at its start", async (_, id) => {
+    const s = queue("a", "b");
+    s.teams[1].enabled = false;
+    s.run.start_team = id;
+    renderEditor(<RunTab />, s);
+    expect(nextLine(mirrorRows()[0])).not.toHaveTextContent(zh["queue.flag_on"]);
+  });
+
   test("only on the first ticked Mirror Dungeon row; none while none is ticked", async () => {
     const s = queue("a");
     s.tasks = [{ id: "MirrorDungeon", enabled: false }, { id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true },

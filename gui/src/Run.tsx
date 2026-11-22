@@ -16,7 +16,7 @@ import {
 } from "react";
 import { fill, type Key } from "./i18n";
 import { LockIcon } from "./KeywordGrid";
-import { TASK_ORDER, nextRuns, schema, type Difficulty, type LuxOptions, type Settings } from "./model";
+import { TASK_ORDER, nextRuns, schema, type Difficulty, type LuxOptions, type NextRun, type Settings } from "./model";
 import {
   LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
 } from "./runner";
@@ -225,24 +225,34 @@ function DiffPlate({ d }: { d: Difficulty }) {
 }
 
 /** Whether the next runs name two teams, one a difficulty: then each mark names its difficulty with its plate. */
-const splitRuns = (plays: ReturnType<typeof nextRuns>) => plays.length === 2 && plays[0].team !== plays[1].team;
+const splitRuns = (next: NextRun[]) => next.length === 2 && next[0].team !== next[1].team;
+
+/** What run.start_team amounts to: none set; an enabled team, whose flag stays in the file ("kept"); a disabled or a deleted
+ * team, which stops the task at its start (task_options.py start_team_errors). */
+type StartTeam = "none" | "kept" | "off" | "gone";
+function startTeamOf(s: Settings): StartTeam {
+  if (s.run.start_team === null) return "none";
+  const team = s.teams.find((x) => x.id === s.run.start_team);
+  return !team ? "gone" : team.enabled ? "kept" : "off";
+}
 
 /** The next Mirror Dungeon run on the task's row (spec #871 「隊伍佇列」): 「下一局」, then each difficulty's plate and its team,
- * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while a start team
- * is set. One line: where the names do not fit, it leaves the row, and a screen reader, rather than take a second line (the
- * queue's own marks still say it); the row is then one line high, as the others. */
+ * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while an enabled
+ * start team is set (one that stops the task is said under the queue). One line: where the names do not fit, it leaves the
+ * row, and a screen reader, rather than take a second line (the queue's own marks still say it); the row is then one line
+ * high, as the others. */
 function NextTeams() {
   const { s, t } = useEditor();
-  const plays = nextRuns(s);
+  const next = nextRuns(s);
   const name = (id: string | null) => (id === null ? t("queue.no_team") : s.teams.find((x) => x.id === id)?.name || "—");
   const [line, fits] = useFits<HTMLSpanElement>();
   return (
     <span className={"tr-next" + (fits ? "" : " clipped")} ref={line} aria-hidden={fits ? undefined : true}>
       <span className="lbl">{t("queue.next")}</span>
-      {splitRuns(plays)
-        ? plays.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
-        : <span className="nt-team">{name(plays[0].team)}</span>}
-      {s.run.start_team !== null && (
+      {splitRuns(next)
+        ? next.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
+        : <span className="nt-team">{name(next[0].team)}</span>}
+      {startTeamOf(s) === "kept" && (
         <span className="flag-on" title={t("queue.flag_on")}><Glyph d={FLAG} filled /><span className="sr-only">{t("queue.flag_on")}</span></span>
       )}
     </span>
@@ -332,8 +342,9 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
                   <span className={"tr-name" + (x.enabled ? "" : " muted")}>{name}</span>
                   {x.of > 1 && <em className="qtag" title={fill(t("tasks.entry_tip"), { n: x.nth + 1, name, of: x.of })}>#{x.nth + 1}</em>}
                 </span>
-                {/* until its task starts: from then the queue's head is the team playing */}
-                {j === firstMirror && (!task || task.state === "pending") && <NextTeams />}
+                {/* not while a run has started its task (pending and cancelled ones never did): the queue's head is then the
+                    team playing, and the Agent moves it */}
+                {j === firstMirror && !(locked && task && task.state !== "pending" && task.state !== "cancelled") && <NextTeams />}
                 {/* why it failed or was cancelled (runner.ts: the runner's reason, else the bot's stop line), in English
                     until #881 */}
                 {task?.reason && <small className="tr-reason">{reasonText(t, task.reason, name)}</small>}
@@ -710,13 +721,11 @@ function MirrorTeams() {
   // an id twice (a hand edit, which the check names) still gets a row of its own: `repeat` counts its rows before this one
   const seen = new Map<string, number>();
   const rows = s.team_queue.map((id) => { const repeat = seen.get(id) ?? 0; seen.set(id, repeat + 1); return { id, repeat }; });
-  const plays = nextRuns(s), split = splitRuns(plays);
+  const next = nextRuns(s), split = splitRuns(next);
   const start = s.run.start_team;
   const setStart = (id: string | null) => update((d) => { d.run.start_team = id; });
-  // the start team's state: set on an enabled team (the flag stays in the file), on a disabled or a deleted one (the agent
-  // stops the task at its start, task_options.py start_team_errors): a deleted one has no row whose flag clears it
-  const flagged = start === null ? null : byId.get(start);
-  const said = start === null ? null : !flagged ? "gone" : flagged.enabled ? "kept" : "off";
+  // under the queue: what a lit flag costs, or why the task will stop; a deleted team has no row whose flag clears it
+  const startTeam = startTeamOf(s);
   return (
     <fieldset className="mirror-teams" data-path="team_queue">
       <legend>{t("queue.title")}</legend>
@@ -730,7 +739,7 @@ function MirrorTeams() {
               const on = first && start === x.id, off = team !== undefined && !team.enabled;
               const name = team ? team.name || "—" : `? ${x.id}`;
               // the runs this row's team plays next, on its first row
-              const marks = first ? plays.filter((p) => p.team === x.id) : [];
+              const marks = first ? next.filter((p) => p.team === x.id) : [];
               return (
                 // the cells a space apart, which a grid does not draw, so the row reads as words; the name takes a problem's jump
                 <span className={"mt-row" + (off ? " off" : "")} title={off ? t("queue.off_tip") : undefined}>
@@ -744,7 +753,8 @@ function MirrorTeams() {
                     {marks.length > 0 && <span className="mt-next">{t("queue.next")}{split && marks.map((p) => <DiffPlate key={p.difficulty} d={p.difficulty} />)}</span>}
                   </span>
                   {team ? (
-                    // its words are drawn over it (index.css .start-flag::after); title="" keeps the list's own tooltip off them
+                    // its words are drawn over it (index.css .start-flag::after). title="" keeps the list's own tooltip (how
+                    // the queue turns, and how to drag, over every row) from showing over them; the list keeps it
                     <button type="button" className={"start-flag" + (on ? " on" : "")} aria-pressed={on}
                       aria-label={fill(t(on ? "queue.flag_clear" : "queue.flag_set"), { name })} title=""
                       data-tip={t(on ? "queue.flag_tip_on" : "queue.flag_tip")} disabled={locked || (off && !on)}
@@ -757,9 +767,9 @@ function MirrorTeams() {
             }} />
         )}
       </div>
-      {said === "kept" && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
-      {said === "off" && <p className="caution mt-note">{t("queue.flag_off_note")}</p>}
-      {said === "gone" && (
+      {startTeam === "kept" && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
+      {startTeam === "off" && <p className="caution mt-note">{t("queue.flag_off_note")}</p>}
+      {startTeam === "gone" && (
         <p className="caution mt-note">
           {fill(t("queue.flag_gone_note"), { id: start! })}{" "}
           <button type="button" disabled={locked} onClick={() => setStart(null)}>{t("queue.flag_clear_gone")}</button>
