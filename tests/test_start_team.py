@@ -1,8 +1,8 @@
 """MirrorDungeon's start team (#805, ADR 0014): run.start_team of the settings file (#813), the team this task starts
-from; null, no flag in the team queue (#878), the default. The task's start stops before any tap on a team deleted or
-disabled; its first new run picks its team with that team at the head of team_queue and writes it there once the run
+from; null, no flag in the team queue (#878), the default. Its first new run picks its team with that team at the head of team_queue and writes it there once the run
 opens, as a claim moves one to the end; a run under way at the task's start plays the team of the queue as it was before
-the move.
+the move. A flag on a team disabled or deleted has no effect (#878): the task follows the queue as with no flag, logs
+that it ignored the flag, and the flag stays in the file.
 
 Every task here starts on settings_cases' valid file: team a (any) then team b (hard_only), the list and the queue in
 that order; gone is a team since deleted.
@@ -27,8 +27,7 @@ from test_team_queue import on_disk as file_at  # file_at(root): the settings fi
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
 
-MIRROR_WHERE = "the options of the MirrorDungeon task in the settings GUI's task list"
-INSTEAD = f"clear its flag, or flag another team, in the team queue in {MIRROR_WHERE}"
+IGNORED = "the flag is ignored and the task follows the team queue"
 
 
 def said():
@@ -84,23 +83,43 @@ def start(context, monkeypatch, settings=lambda data: None, **run):
     return ok, [json.loads(c.args[0].data)["reason"] for c in urlopen.call_args_list]
 
 
-@pytest.mark.parametrize("team, edit, error, code", [
-    # the settings GUI deleted the team since the start team was picked
-    ("gone", lambda data: None, f"run/start_team: team 'gone' was deleted in the settings GUI; {INSTEAD}",
-     'stop code: StartTeamDeleted {"team":"gone"}'),
-    ("b", lambda data: data["teams"][1].update(enabled=False),
-     f"run/start_team: team 'Team b' (id 'b') is disabled; enable it in the settings GUI, or {INSTEAD}",
-     'stop code: StartTeamDisabled {"team":"b"}'),
+@pytest.mark.parametrize("team, edit, line", [
+    # the settings GUI deleted the team since its flag was set
+    ("gone", lambda data: None, f"run/start_team: team 'gone' is no longer listed, {IGNORED}"),
+    ("b", lambda data: data["teams"][1].update(enabled=False), f"run/start_team: team 'Team b' (id 'b') is disabled, {IGNORED}"),
 ])
-def test_a_deleted_or_disabled_start_team_stops_the_task_before_any_tap(context, monkeypatch, team, edit, error, code):
-    # the stop procedure (its evidence, the webhook), as a Luxcavation task's deleted team (#780)
-    ok, posted = start(context, monkeypatch, settings=edit, start_team=team)
-    assert ok is False and posted == [f"Invalid task options:\n- {error}"]
-    assert f"stop: Invalid task options:\n- {error}" in said()
-    assert said()[said().index(f"stop: Invalid task options:\n- {error}") + 1] == code  # #881: the team by its id
-    assert queue() == ["a", "b"] and "start_team" not in actions.TASK
-    context.tasker.controller.post_click.assert_not_called()
-    context.run_task.assert_not_called()
+def test_a_flag_on_a_deleted_or_disabled_team_is_ignored_and_logged_and_the_task_follows_the_queue(context, monkeypatch, team,
+                                                                                                   edit, line):
+    ok, posted = start(context, monkeypatch, settings=edit, difficulty="hard", start_team=team)
+    assert ok is True and posted == []  # no stop procedure, no webhook
+    assert said().count(line) == 1 and "start_team" not in actions.TASK
+    path = actions.ROOT / "config" / "settings.json"
+    before = path.read_bytes()
+    actions.LOG.clear()
+    assert plan_run(context)["team"]["id"] == "a"  # the queue's first enabled team, as with no flag
+    assert path.read_bytes() == before and start_lines() == [] and line not in said()  # no move to the head, logged once
+    assert json.loads(before)["run"]["start_team"] == team  # the flag stays, for the team enabled again
+
+
+def test_a_flag_on_a_team_enabled_again_works_again(context, monkeypatch):
+    start(context, monkeypatch, settings=lambda data: data["teams"][1].update(enabled=False), difficulty="hard",
+          start_team="b")
+    assert "start_team" not in actions.TASK
+    entry_page(context, difficulty="hard", start_team="b")  # the next task, b enabled again
+    assert plan_run(context)["team"]["id"] == "b" and queue() == ["b", "a"]
+
+
+def test_a_start_team_disabled_by_a_save_since_the_tasks_start_is_ignored_at_its_first_new_run(context):
+    entry_page(context, difficulty="hard", start_team="b")
+    path = actions.ROOT / "config" / "settings.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["teams"][1]["enabled"] = False  # the settings GUI saved while the task ran
+    path.write_text(json.dumps(data), encoding="utf-8")
+    before = path.read_bytes()
+    actions.LOG.clear()
+    assert plan_run(context)["team"]["id"] == "a"
+    assert path.read_bytes() == before and "start_team" not in actions.TASK
+    assert f"run/start_team: team 'Team b' (id 'b') is disabled, {IGNORED}" in said() and start_lines() == []
 
 
 @pytest.mark.parametrize("team", [None, "b"])

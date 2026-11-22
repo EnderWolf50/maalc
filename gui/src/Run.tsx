@@ -225,18 +225,14 @@ function DiffPlate({ d }: { d: Difficulty }) {
 /** Whether the next runs name two teams, one a difficulty: then each mark names its difficulty with its plate. */
 const splitRuns = (next: NextRun[]) => next.length === 2 && next[0].team !== next[1].team;
 
-/** What run.start_team amounts to: none set; an enabled team, whose flag stays in the file ("kept"); a disabled or a deleted
- * team, which stops the task at its start (task_options.py start_team_errors). */
-type StartTeam = "none" | "kept" | "off" | "gone";
-function startTeamOf(s: Settings): StartTeam {
-  if (s.run.start_team === null) return "none";
-  const team = s.teams.find((x) => x.id === s.run.start_team);
-  return !team ? "gone" : team.enabled ? "kept" : "off";
-}
+/** Whether run.start_team counts: it names an enabled team, whose flag stays in the file. A flag on a disabled team, or on
+ * a team deleted since (the next save drops it, App.tsx), has no effect: the task follows the queue as with no flag
+ * (task_options.py start_team_ignored, #878). */
+const startTeamCounts = (s: Settings) => s.teams.some((x) => x.id === s.run.start_team && x.enabled);
 
 /** The next Mirror Dungeon run on the task's row (spec #871 「隊伍佇列」): 「下一局」, then each difficulty's plate and its team,
  * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while an enabled
- * start team is set (one that stops the task is said under the queue). One line: where the names do not fit, it leaves the
+ * start team is set (a flag on a disabled or deleted team has no effect, so none). One line: where the names do not fit, it leaves the
  * row, and a screen reader, rather than take a second line (the queue's own marks still say it); the row is then one line
  * high, as the others. */
 function NextTeams() {
@@ -250,7 +246,7 @@ function NextTeams() {
       {splitRuns(next)
         ? next.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
         : <span className="nt-team">{name(next[0].team)}</span>}
-      {startTeamOf(s) === "kept" && (
+      {startTeamCounts(s) && (
         <span className="flag-on" title={t("queue.flag_on")}><Glyph d={FLAG} filled /><span className="sr-only">{t("queue.flag_on")}</span></span>
       )}
     </span>
@@ -723,8 +719,9 @@ function MirrorOptions() {
  * them). Every row on the list's own columns (index.css): its place, the team's name (cut short), its slot, its usage when kept
  * to one difficulty, the next-run mark against the flag, and the flag. A disabled team is struck through in its place; an id
  * that names no team (a hand edit, which the check names) is a row of its own. The flag writes run.start_team: on, off, one
- * team at most, none on a disabled team but to clear it. How the queue turns is the list's tooltip; under it, while a flag is
- * set, what it costs or why the task will stop. A run locks the order and the flags (LockContext). */
+ * team at most. On a disabled team it has no effect, and is dimmed as the row is, its words saying so; it still presses.
+ * How the queue turns is the list's tooltip; under it, while a flag that counts is set, what it costs. A run locks the
+ * order and the flags (LockContext). */
 function MirrorTeams() {
   const { s, update, t, tv, bad } = useEditor();
   const locked = useContext(LockContext);
@@ -735,8 +732,6 @@ function MirrorTeams() {
   const next = nextRuns(s), split = splitRuns(next);
   const start = s.run.start_team;
   const setStart = (id: string | null) => update((d) => { d.run.start_team = id; });
-  // under the queue: what a lit flag costs, or why the task will stop; a deleted team has no row whose flag clears it
-  const startTeam = startTeamOf(s);
   return (
     <fieldset className="mirror-teams" data-path="team_queue">
       <legend>{t("queue.title")}</legend>
@@ -768,7 +763,8 @@ function MirrorTeams() {
                     // the queue turns, and how to drag, over every row) from showing over them; the list keeps it
                     <button type="button" className={"start-flag" + (on ? " on" : "")} aria-pressed={on}
                       aria-label={fill(t(on ? "queue.flag_clear" : "queue.flag_set"), { name })} title=""
-                      data-tip={t(on ? "queue.flag_tip_on" : "queue.flag_tip")} disabled={locked || (off && !on)}
+                      data-tip={t(off ? (on ? "queue.flag_tip_off_on" : "queue.flag_tip_off") : on ? "queue.flag_tip_on" : "queue.flag_tip")}
+                      disabled={locked}
                       onClick={(e) => { e.stopPropagation(); setStart(on ? null : x.id); }}>
                       <Glyph d={FLAG} filled={on} size={16} />
                     </button>
@@ -778,14 +774,7 @@ function MirrorTeams() {
             }} />
         )}
       </div>
-      {startTeam === "kept" && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
-      {startTeam === "off" && <p className="caution mt-note">{t("queue.flag_off_note")}</p>}
-      {startTeam === "gone" && (
-        <p className="caution mt-note">
-          {fill(t("queue.flag_gone_note"), { id: start! })}{" "}
-          <button type="button" disabled={locked} onClick={() => setStart(null)}>{t("queue.flag_clear_gone")}</button>
-        </p>
-      )}
+      {startTeamCounts(s) && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
     </fieldset>
   );
 }

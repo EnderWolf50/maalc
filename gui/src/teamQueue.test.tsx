@@ -313,13 +313,23 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     expect(within(queueFrame()).getAllByRole("button", { pressed: true })).toEqual([flag("Tb", true)]);
   });
 
-  test("a disabled team's flag cannot be pressed", async () => {
+  test("a disabled team's flag presses too, dimmed as its row, its words saying it has no effect, and no line under the queue", async () => {
     const s = queue("a", "b");
     s.teams[1].enabled = false;
-    await mirror(s);
-    expect(flag("Tb")).toBeDisabled();
-    expect(flag("Ta")).toBeEnabled();
-    expect(cssValueOf(css, flag("Tb"), "cursor")).toBe("not-allowed");
+    const r = await mirror(s);
+    expect(flag("Tb")).toBeEnabled();
+    expect(flag("Tb")).toHaveAttribute("data-tip", zh["queue.flag_tip_off"]);
+    expect(cssValueOf(css, flag("Tb"), "opacity")).toBe("0.5");
+    expect(cssValueOf(css, flag("Ta"), "opacity")).toBeUndefined(); // an enabled team's, undimmed
+    await r.user.click(flag("Tb"));
+    expect(r.settings().run.start_team).toBe("b");
+    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
+    expect(cssValueOf(css, flag("Tb", true), "color")).toBe("var(--muted)"); // filled, not amber
+    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull(); // the flag has no effect, so it costs nothing
+    await r.user.click(flag("Tb", true));
+    expect(r.settings().run.start_team).toBeNull();
+    expect(zh["queue.flag_tip_off"]).toBe("隊伍停用中，旗子沒有作用");
+    expect(zh["queue.flag_tip_off_on"]).toBe("隊伍停用中，旗子沒有作用（再按取消）");
   });
 
   test("its words float over it while the pointer or the keyboard's focus is on it; no native tooltip of the list's under them", async () => {
@@ -345,27 +355,28 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     expect(zh["queue.flag_kept"]).toBe("旗子會存進設定檔，每次開始都會再排一次，用完記得改回。");
   });
 
-  test("a lit flag on a team disabled since can still be pressed, to clear it; a line says the task stops at its start", async () => {
+  test("a lit flag on a team enabled again counts again: amber, its usual words, and the line under the queue", async () => {
     const s = queue("a", "b");
     s.teams[1].enabled = false;
     s.run.start_team = "b";
-    const r = await mirror(s);
-    expect(within(queueFrame()).getByText(zh["queue.flag_off_note"])).toBeVisible();
-    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull();
-    await r.user.click(flag("Tb", true));
-    expect(r.settings().run.start_team).toBeNull();
-    expect(screen.queryByText(zh["queue.flag_off_note"])).toBeNull();
+    await mirror(s);
+    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
+    cleanup();
+    s.teams[1].enabled = true;
+    await mirror(s);
+    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_on"]);
+    expect(cssValueOf(css, flag("Tb", true), "color")).toBe("var(--accent)");
+    expect(within(queueFrame()).getByText(zh["queue.flag_kept"])).toBeVisible();
   });
 
-  test("a start team deleted since has no row: a line says the task stops at its start, and its button clears it", async () => {
+  test("a start team deleted since has no row and no flag: nothing under the queue, no button but the rows' flags", async () => {
     const s = queue("a", "b");
     s.run.start_team = "gone";
-    const r = await mirror(s);
-    expect(within(queueFrame()).getByText(fill(zh["queue.flag_gone_note"], { id: "gone" }))).toBeVisible();
+    await mirror(s);
     expect(within(queueFrame()).queryAllByRole("button", { pressed: true })).toEqual([]);
-    await r.user.click(within(queueFrame()).getByRole("button", { name: zh["queue.flag_clear_gone"] }));
-    expect(r.settings().run.start_team).toBeNull();
-    expect(screen.queryByText(fill(zh["queue.flag_gone_note"], { id: "gone" }))).toBeNull();
+    expect(queueFrame().querySelector("p")).toBeNull();
+    expect(within(queueFrame()).getAllByRole("button").map((b) => b.getAttribute("aria-label")))
+      .toEqual([fill(zh["queue.flag_set"], { name: "Ta" }), fill(zh["queue.flag_set"], { name: "Tb" })]);
   });
 });
 // Locked during a run: runner.test.tsx 「during a run」 (a run of the real page's runner sets the lock).
@@ -404,12 +415,12 @@ describe("the next run on the task list's Mirror Dungeon row (#878)", () => {
     expect(line).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Tb\\s*${zh["queue.flag_on"]}$`));
   });
 
-  test.each([["disabled", "b"], ["deleted", "gone"]])("a start team %s since: no lit flag on the row, the task stops at its start", async (_, id) => {
-    const s = queue("a", "b");
-    s.teams[1].enabled = false;
+  test.each([["disabled", "b"], ["deleted", "gone"]])("a start team %s: no lit flag on the row, the queue as with no flag", async (_, id) => {
+    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
+    s.teams[1].enabled = id !== "b";
     s.run.start_team = id;
     renderEditor(<RunTab />, s);
-    expect(nextLine(mirrorRows()[0])).not.toHaveTextContent(zh["queue.flag_on"]);
+    expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Tc$`));
   });
 
   test("only on the first ticked Mirror Dungeon row; none while none is ticked", async () => {
@@ -497,6 +508,22 @@ describe("in the editor", () => {
       expect([saved.team_queue, ids(saved)]).toEqual([["c", "b", "a"], ["a", "b", "c"]]);
       await toTeams(user);
       expect(shown()).toEqual(["Ta", "Tb", "Tc"]);
+    });
+
+    test("a flag on a team deleted since goes with the next save, which leaves nothing unsaved (#878)", async () => {
+      const s = queue("a", "b", "c");
+      s.run.start_team = "b";
+      file.text = text(s);
+      const user = userEvent.setup();
+      render(<App start="teams" />);
+      await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
+      await pickInList(user, "Tb");
+      await user.click(screen.getByRole("button", { name: zh.remove }));
+      await user.click(screen.getByRole("button", { name: zh.save }));
+      await waitFor(() => expect(file.saved).toHaveLength(1));
+      const saved: Settings = JSON.parse(file.saved[0]);
+      expect([ids(saved), saved.team_queue, saved.run.start_team]).toEqual([["a", "c"], ["a", "c"], null]);
+      await waitFor(() => expect(document.querySelector(".status")).not.toHaveTextContent(zh.unsaved));
     });
 
     test("a flag pressed is saved as run.start_team, and the queue as it was", async () => {

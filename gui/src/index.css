@@ -576,7 +576,6 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 }
 .dchip[data-d="hard"] { color: var(--fg); background: var(--line); }
 .mirror-teams > p.mt-note { font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
-.mirror-teams > p.mt-note button { margin-left: 4px; padding: 2px 10px; font-size: 12.5px; }
 /* a run locks the queue: the rows faded as a locked field is (input:disabled), the flags not faded twice */
 .mt-order ol.reorder.locked > li { opacity: 0.45; }
 .mt-order ol.reorder.locked .start-flag:disabled { opacity: 1; cursor: default; }
@@ -594,6 +593,11 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .start-flag.on { color: var(--accent); }
 .start-flag.on:hover:not(:disabled) { color: var(--accent-hi); }
 .start-flag:disabled { opacity: 0.3; cursor: not-allowed; }
+/* on a disabled team the flag has no effect (#878): dimmed with the row's struck-through name, a lit one filled but muted,
+ * not amber; it still presses, to set or clear it, and lights up under the pointer */
+.mt-row.off .start-flag { opacity: 0.5; }
+.mt-row.off .start-flag:hover:not(:disabled), .mt-row.off .start-flag:focus-visible { opacity: 1; }
+.mt-row.off .start-flag.on, .mt-row.off .start-flag.on:hover:not(:disabled) { color: var(--muted); }
 .start-flag::before, .start-flag::after {
   position: absolute; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.12s ease-out, translate 0.12s ease-out;
 }
