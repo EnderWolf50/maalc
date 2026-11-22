@@ -128,7 +128,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
             self.pass_tab = "daily"  # the tab the pass page's Pass Missions opens on: "daily", "weekly"
             self.bonuses = 3  # the Thread tab's Daily Bonuses n/3 (n left)
             self.stage = "exp" if start != "locked" else "locked"
-            self.unboxed = {"stage10"}  # the cards with no Consecutive Battle box: a stage never cleared (#886)
+            self.unboxed = {"stage10"}  # the pages with no Consecutive Battle box: a stage never cleared (#886; Thread's, #900)
             self.outcomes = []  # each battle's end, in order: "win", "lose", or None (no results page: straight back to the tab)
             self.outcome = None
             self.lux_tab = lux_tab  # the tab Luxcavation opens on
@@ -186,6 +186,8 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
                     self.screen = self.stage if self.outcome is None else "result"
                     if self.outcome == "win":
                         self.unboxed.discard(self.stage)  # cleared once: the box shows from now on
+                        if self.fight_box == "level":
+                            self.unboxed -= {"thread", "levels"}  # the Thread card's and its Level Select's (#900)
                 elif self.shots > 1 and self.outcome == "win":
                     return self.images["victory"]
             if self.screen == "team" and self.n[self.fight_box] > 1:

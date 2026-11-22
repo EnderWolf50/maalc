@@ -69,7 +69,7 @@ def test_sweep_where_both_boxes_read_ticked():
                     "LuxConsecExp1.png", "LuxConsecExp10Open.png", "LuxConsecExp1Open.png", "LuxConsecExp2Open.png",
                     "LuxConsecExp9Open.png", "LuxConsecThread1.png", "LuxConsecThread10Open.png", "LuxConsecThread2Open.png",
                     "LuxConsecThread3Open.png", "LuxExp.png", "LuxExpLocked.png", "LuxExpStage10.png",
-                    "LuxThread.png", "LuxThreadLust.png", "LuxThreadScrolled.png", "Mailbox.png", "MailboxEmpty.png",
+                    "LuxThread.png", "LuxThreadLust.png", "LuxThreadNoBox.synthetic.png", "LuxThreadScrolled.png", "Mailbox.png", "MailboxEmpty.png",
                     "RunVictory.png", "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png",
                     "UserAgreementTicked.png"]
 

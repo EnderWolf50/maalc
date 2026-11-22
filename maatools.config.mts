@@ -126,6 +126,10 @@ const screens: [image: string, hits: string[]][] = [
   // LuxThreadEnter ahead of it, so it acts on the tab with no open card only. LuxThreadLevels.png: Lust's Level Select
   // (Lv40/50/60, -2 Modules each, the list at its bottom), the page dimmed behind it.
   ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],
+  // Synthetic (#900): LuxThread.png and LuxThreadLevels.png with the Consecutive Battle box inpainted away, what a level never
+  // cleared would show (no live capture yet). LuxConsecLabel must miss on both; every other node reads as on the live captures.
+  ['LuxThreadNoBox.synthetic.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
+  ['LuxThreadLevelsNoBox.synthetic.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses']],
   ['LuxThreadScrolled.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
   ['LuxThreadLevels.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],  // the Daily Bonuses read through the dimming
   // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions
