@@ -619,3 +619,9 @@ def test_a_live_tool_still_runs_as_a_script(script):
     # A script's own folder, tools/live/, stays on its path: a module there that imported the stdlib `queue` would get
     # this queue.py instead and fail.
     subprocess.run([sys.executable, str(QUEUE_PY.parent / script), "--help"], check=True, capture_output=True)
+
+
+def test_a_pid_a_system_process_took_over_is_not_the_holder_that_started_at_a_known_time():
+    # #908: the process we started opens for us; a pid we cannot open any more belongs to someone else.
+    assert not lq.win_alive(FakeKernel(0), 4, 111, last_error=lambda: 5)
+    assert lq.win_alive(FakeKernel(0), 4, None, last_error=lambda: 5)  # no start recorded: only the pid is known

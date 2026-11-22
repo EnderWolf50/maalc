@@ -73,7 +73,9 @@ def kernel32():  # os.kill(pid, 0) would terminate the process on Windows, so as
 def win_alive(k, pid: int, start: int | None, last_error=lambda: ctypes.get_last_error()) -> bool:
     h = k.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not h:
-        return last_error() == ACCESS_DENIED  # a process of another user exists; only a missing pid is dead
+        # A process of another user exists; only a missing pid is dead. Yet one we started at a known time opened for us,
+        # so a pid that now denies access is a later (system) process that took it over (#908).
+        return start is None and last_error() == ACCESS_DENIED
     code, times = ctypes.c_ulong(), [ctypes.c_ulonglong() for _ in range(4)]
     k.GetExitCodeProcess(h, ctypes.byref(code))
     k.GetProcessTimes(h, *map(ctypes.byref, times))
