@@ -7,7 +7,7 @@ import * as api from "./api";
 import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
-import { newSettings, parseSettings, rebase, type Settings } from "./model";
+import { newSettings, parseSettings, rebase, withoutGoneStart, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
@@ -413,7 +413,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setRefused(false);
     try {
       for (let tries = 1; ; tries++) {
-        const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
+        const synced = (await sync())!; // what another writer changed since goes under the edits first (#501)
+        const current = withoutGoneStart(synced); // a flag on a team deleted since goes (#878)
         if (validate(current).length) {
           setRefused(true);
           setStatus("");
@@ -431,6 +432,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         }
         disk.current = written;
         latest.current = { s: current, savedText: written };
+        if (current !== synced) setS((now) => now && withoutGoneStart(now)); // the dropped flag is saved, not an edit; an edit made since stays
         setSavedText(written);
         wroteBack();
         setStatus("saved");

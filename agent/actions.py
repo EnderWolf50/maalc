@@ -30,7 +30,7 @@ import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
 from ocrtext import has, normalize
-from reasons import Reason, carried, code_line, of_node
+from reasons import Reason, code_line, of_node
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
 
@@ -589,19 +589,18 @@ class TaskStart(CustomAction):
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
-        play (task_options.target_floor_errors), as PlanRun fails it on bad settings, and takes the stop procedure on a
-        start team deleted or disabled (task_options.start_team_errors, #805), as a Luxcavation task on its team. A
-        start team it can play waits in TASK for the task's first new run (PlanRun): a run under way plays the team of
-        the queue as it is."""
+        play (task_options.target_floor_errors), as PlanRun fails it on bad settings. A start team deleted or disabled
+        is ignored, and the log says so (task_options.start_team_ignored_line, #878); one it can play waits in TASK for the
+        task's first new run (PlanRun): a run under way plays the team of the queue as it is."""
         if argv.node_name != "MirrorDungeon":
             return True
         if errors := task_options.target_floor_errors(TASK["options"], settings["teams"]):
             log(f"stop: {task_options.OptionsError(errors)}")
             return False
         start = TASK["options"]["start_team"]
-        if errors := task_options.start_team_errors(start, settings["teams"]):
-            return stop(context, carried(str(task_options.OptionsError(errors)), errors))
-        if start:
+        if ignored := task_options.start_team_ignored_line(start, settings["teams"]):
+            log(ignored)
+        elif start:
             TASK["start_team"] = start
         return True
 

@@ -14,9 +14,8 @@ describe("sayReason", () => {
   test("a team param, an id, reads as the settings name the team; one they do not have stays its id", () => {
     const names: Record<string, string> = { b: "高難度隊" };
     const team = (id: string) => names[id] ?? id;
-    expect(sayReason("zh_tw", { code: "StartTeamDisabled", params: { team: "b" } }, team)).toBe("起頭隊伍「高難度隊」是停用的。啟用它，或到隊伍佇列再按一次它的旗子取消。");
-    expect(sayReason("zh_tw", { code: "StartTeamDeleted", params: { team: "gone" } }, team))
-      .toBe("起頭隊伍「gone」已經刪掉了。到鏡牢選項的隊伍佇列取消旗子，或按另一支的旗子。");
+    expect(sayReason("zh_tw", { code: "SinnersShort", params: { team: "b", alive: 3, need: 5 } }, team))
+      .toBe("隊伍「高難度隊」的出戰順序只剩 3 位罪人活著，需要 5 位。");
     expect(sayReason("en_us", { code: "TeamDeleted", params: { team: "gone" } }, team))
       .toBe('The team "gone" was deleted. Pick another one in the options of this task.');
   });

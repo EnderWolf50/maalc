@@ -203,8 +203,8 @@ def test_a_task_with_no_options_of_its_own_reads_the_global_ones(context, monkey
 
 @pytest.mark.parametrize("case", CASES["task_start"], ids=lambda c: c["name"])
 def test_a_rule_that_crosses_a_tasks_options_with_the_teams_stops_it_at_its_start(context, monkeypatch, case):
-    # #777: the target floor's rule (#385), the start team (#805) and a Luxcavation task's team (#366) are the task's start's,
-    # not the settings' load, in the words they had since #779 but for the settings path they name (#813).
+    # #777: the target floor's rule (#385) and a Luxcavation task's team (#366) are the task's start's, not the settings'
+    # load, in the words they had since #779 but for the settings path they name (#813). The start team is no rule (#878).
     write(apply_edits(CASES["valid"], case["edits"]))
     ok, stops, said = start(context, monkeypatch, case["task"])
     target = next((e for e in case["edits"] if e["set"] == "run/target_floor"), None)
@@ -212,7 +212,7 @@ def test_a_rule_that_crosses_a_tasks_options_with_the_teams_stops_it_at_its_star
         assert ok is True and stops == [] and not [line for line in said if line.startswith("stop:")]
     elif case["task"] == "MirrorDungeon" and target:  # the target floor: a failure, as PlanRun's on bad settings
         assert ok is False and stops == [] and said[-1] == f"stop: {invalid(case['cross'])}"
-    else:  # the start team, a Luxcavation task's team: the stop procedure, as for any team it cannot play
+    else:  # a Luxcavation task's team: the stop procedure, as for any team it cannot play
         assert ok is False and stops == [invalid(case["cross"])]
     context.tasker.controller.post_click.assert_not_called()
     context.run_task.assert_not_called()  # not even GoHome

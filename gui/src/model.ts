@@ -500,6 +500,20 @@ export function nextRuns(s: Settings): NextRun[] {
   }));
 }
 
+/** The settings with run.start_team null when it names no team (a team deleted since its flag was set): the flag has no
+ * effect (agent task_options.start_team_ignored_line, #878), and a save drops it. The settings themselves when it names one. */
+export function withoutGoneStart(s: Settings): Settings {
+  const start = s.run.start_team;
+  return start === null || s.teams.some((t) => t.id === start) ? s : { ...s, run: { ...s.run, start_team: null } };
+}
+
+/** The settings with team `i` switched on or off. Switched off, it takes the start team's flag with it when it carries it
+ * (#878): a disabled team is never the start team, and switched on again it does not get the flag back. */
+export function setTeamEnabled(s: Settings, i: number, on: boolean) {
+  s.teams[i].enabled = on;
+  if (!on && s.run.start_team === s.teams[i].id) s.run.start_team = null;
+}
+
 /** The settings with team `team` added: last in the team list and last in the queue (#803). */
 export function addTeam(s: Settings, team: Team) {
   s.teams.push(team);
