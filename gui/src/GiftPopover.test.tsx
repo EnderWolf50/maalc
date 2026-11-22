@@ -42,17 +42,19 @@ async function open(lists: GiftList[], language?: Settings["language"], select =
 type Opened = Awaited<ReturnType<typeof open>>;
 const list = (r: Opened) => r.settings().gift_lists[0];
 
-const getTile = (id: number) => screen.getByRole("button", { name: new RegExp("^" + escape(GIFT_BY_ID.get(id)!.zh) + "，") });
-async function tile(r: Opened, id: number) {
-  await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${GIFT_BY_ID.get(id)!.keyword}` as Text]) }));
-  return getTile(id);
+/** A gift's tile, by its name in the UI's language. */
+const getTile = (id: number, en = false) =>
+  screen.getByRole("button", { name: new RegExp("^" + escape(en ? GIFT_BY_ID.get(id)!.en + ", " : GIFT_BY_ID.get(id)!.zh + "，")) });
+async function tile(r: Opened, id: number, en = false) {
+  await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + TEXT[en ? "en_us" : "zh_tw"][`kw.${GIFT_BY_ID.get(id)!.keyword}` as Text]) }));
+  return getTile(id, en);
 }
 /** The hover popover, or null while none is open. */
 const popover = () => screen.queryByRole("dialog", { name: /./ });
-/** Open the gift's keyword tab, hover its tile, and return the popover's queries. */
-async function hover(r: Opened, id: number) {
-  await tile(r, id);
-  await r.user.hover(getTile(id));
+/** Open the gift's keyword tab, hover its tile, and return the popover's queries; `en` in a window in English. */
+async function hover(r: Opened, id: number, en = false) {
+  await tile(r, id, en);
+  await r.user.hover(getTile(id, en));
   return within(popover()!);
 }
 
@@ -231,10 +233,10 @@ describe("hover popover: what it says", () => {
   test("in English the popover names a pack in English, as before (#899)", async () => {
     const en = TEXT.en_us;
     const r = await open([mine({ want: [specific.id] })], "en_us");
-    const material = specific.recipes![0][0];
-    await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + en[`kw.${GIFT_BY_ID.get(material)!.keyword}` as Text]) }));
-    await r.user.hover(screen.getByRole("button", { name: new RegExp("^" + escape(GIFT_BY_ID.get(material)!.en) + ", ") }));
-    expect(within(popover()!).getByText(say(en["gl.tip_pack"], { packs: "Crawling Abyss" }))).toBeInTheDocument();
+    const p = await hover(r, 9302, true);
+    expect(p.getByText(say(en["gl.tip_cat_line"], { kw: en["kw.Keywordless"], tier: "III" }) + say(en["gl.tip_cat_pack"], { packs: "The Unloving" }))).toBeInTheDocument();
+    const q = await hover(r, specific.recipes![0][0], true);
+    expect(q.getByText(say(en["gl.tip_pack"], { packs: "Crawling Abyss" }))).toBeInTheDocument();
     expect(popover()).not.toHaveTextContent("伏行深淵");
   });
 

@@ -2,7 +2,7 @@
 // and their effect text.
 import { effects, plates, recipes, webpFolder } from "./gameData";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { GIFT_SOURCES, PACK_ZH, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
+import { GIFT_SOURCES, SHOP_GIFTS, THEME_PACKS, packZh, type DataGift } from "./model";
 
 /** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
  * fusion: made by fusing, so wantable but never bought; material: a recipe's material no shop sells; other: no shop sells it
@@ -84,7 +84,7 @@ const PACK_NAMES = new Map(Object.entries(THEME_PACKS.pack_ids).map(([name, id])
  * its id as "#1234" for a pack the file does not know. */
 export const packName = (id: number, zh = false): string => {
   const name = PACK_NAMES.get(id);
-  return name === undefined ? `#${id}` : (zh && PACK_ZH[name]) || name;
+  return name === undefined ? `#${id}` : packZh(name, zh) ?? name;
 };
 
 /** The theme packs whose own pool (`pack_gifts`) holds the gift, by id: the only packs it shows in. */

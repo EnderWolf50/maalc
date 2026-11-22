@@ -213,12 +213,10 @@ def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_t
     assert len({d["zh_release"] for d in DATA.values()}) == 1
 
 
-def test_every_file_of_llc_s_chinese_names_the_conversion_it_was_written_with():
-    # s2tw, the characters alone (#899); the tables of tools/text_tables.py convert with to_traditional too
-    tables = [ROOT / "assets/resource/base/data" / n for n in ("event_text.json", "gift_text.json", "trial_text.json")]
-    for path in [*FILES.values(), *tables]:
-        note = json.loads(path.read_text(encoding="utf-8"))["note"]
-        assert re.search(r"\bOpenCC s2tw\b", note) and "s2twp" not in note, path.name
+def test_every_file_names_the_conversion_it_was_written_with():
+    # s2tw, the characters alone (#899)
+    for key, data in DATA.items():
+        assert re.search(r"\bOpenCC s2tw\b", data["note"]) and "s2twp" not in data["note"], key
 
 
 def test_the_data_matches_the_llc_release_when_it_is_downloaded():

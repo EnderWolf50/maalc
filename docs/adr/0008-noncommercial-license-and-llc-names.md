@@ -1,3 +1,5 @@
+> 修訂（使用者 2026-11-23 決定，#899）：簡轉繁改用 OpenCC `s2tw`，只把簡體字轉成繁體字，用詞照 LLC 原文、不改成臺灣用語；修正表只剩「松肉」改為「鬆肉」。NOTICE.md 寫的是現在的做法。下文保留原決定。
+
 # 非商用授權，飾品與星之恩惠的中文名稱用都市零漢化組的翻譯
 
 飾品與星之恩惠的中文名稱原本取自灰機 wiki：它缺 8 個新飾品，頁面又有 Cloudflare 擋，工具要人用瀏覽器存檔。[都市零漢化組（LLC）](https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany)的 release 涵蓋全部飾品，可直接從 GitHub 下載；星之恩惠的名稱與效果文字也在其中。
@@ -5,7 +7,7 @@
 LLC 採 CC BY-NC-SA 4.0，非商用且相同方式共享，與 MIT 不相容，所以：
 
 - 程式碼改用 [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)（`LICENSE`）。
-- 取自 LLC 的資料檔（`gift_search.json`、`gift_recipes.json`、`assets/resource/base/data/graces.json`）標 CC BY-NC-SA 4.0，NOTICE.md 寫明作者、release、授權連結與修改（OpenCC 簡轉繁加上修正表；2026-11-23 起用 `s2tw`，只轉字、不改用詞，#899）。
+- 取自 LLC 的資料檔（`gift_search.json`、`gift_recipes.json`、`assets/resource/base/data/graces.json`）標 CC BY-NC-SA 4.0，NOTICE.md 寫明作者、release、授權連結與修改（OpenCC s2twp 簡轉繁，加五個用詞修正）。
 - 中文名稱由 `tools/llc_text.py` 從 LLC 的 release 產生，檔頭記下所用 release；不再使用灰機 wiki。
 - 不沿用 AGPL 專案程式碼、圖片與模型的規則（[ADR 0001](0001-mit-and-no-agpl-derived-assets.md)）不變：授權改為非商用並沒有讓複製 AGPL 程式碼變得可行。
 

@@ -1,6 +1,7 @@
 """tools/text_tables.py (#768): the joined English, Simplified and Traditional text of events, gifts and trials."""
 
 import json
+import re
 
 import text_tables as tt
 
@@ -13,6 +14,13 @@ def test_plain_drops_markup_and_edges_and_a_missing_text():
 def test_zh_converts_simplified_characters_to_traditional_and_keeps_the_words():
     assert tt.zh("咖啡与纸鹤") == "咖啡與紙鶴"
     assert tt.zh("<b>刷新</b> 软件") == "刷新 軟件"  # characters alone (#899): Taiwan's wording (s2twp) would write 重新整理 軟體
+
+
+def test_every_table_names_the_conversion_it_was_written_with():
+    # s2tw, the characters alone (#899)
+    for name in ("event_text.json", "gift_text.json", "trial_text.json"):
+        note = json.loads((tt.DATA / name).read_text(encoding="utf-8"))["note"]
+        assert re.search(r"\bOpenCC s2tw\b", note) and "s2twp" not in note, name
 
 
 def test_gift_text_names_the_buff_tags_squeezes_blank_lines_and_drops_markup():

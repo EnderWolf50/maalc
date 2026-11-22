@@ -33,6 +33,9 @@ const dropOn = async (lane: Element, name: string) => {
   fireEvent.drop(lane, { dataTransfer });
   fireEvent.dragEnd(chip, { dataTransfer });
 };
+/** The + lanes, the one above the lanes and the one below, while neither has a box open. */
+const addLanes = (text: Record<string, string> = zh) =>
+  screen.getAllByText(new RegExp(text["packs.newLane"])).map((x) => x.closest(".lane")!);
 
 // #739: the plan screen shows nothing of what the gift lists want (the user, 2026-11-14: the two are not directly related,
 // and a mark for it confuses). A team of the default plan wants The Outcast's first own gift; the default list's materials
@@ -105,10 +108,8 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     await r.user.click(await screen.findByText("Mine"));
     return { ...r, asked, weights: () => r.settings().theme_pack_plans[0].weights };
   }
-  const chipOf = async (name: string) => (await screen.findByText(name, { selector: EN_NAME })).closest(".pk") as HTMLElement;
+  const chipOf = chipNamed;
   const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
-  /** The + lanes, the one above the lanes and the one below, while neither has a box open. */
-  const addLanes = () => screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
 
   test("clicking a pack opens a box on it with its weight; Enter keeps the new one", async () => {
     const r = await open();
@@ -395,7 +396,7 @@ describe("a pack's Chinese name", () => {
   test("dropped on a ＋ lane, a pack is named in Chinese beside the score box; one with no Chinese name in English", async () => {
     const r = await open("zh_tw");
     for (const [pack, shown] of [["The Outcast", "無歸屬者"], ["Old Pack", "Old Pack"]]) {
-      const top = screen.getAllByText(new RegExp(zh["packs.newLane"]))[0].closest(".lane")!; // while no box is open
+      const [top] = addLanes(); // while no box is open
       await dropOn(top, pack);
       expect(top).toHaveTextContent(new RegExp(`^＋ ${shown}$`));
       await r.user.keyboard("{Escape}");
@@ -404,7 +405,7 @@ describe("a pack's Chinese name", () => {
 
   test("in English a pack dropped on a ＋ lane is named in English, as before", async () => {
     await open("en_us");
-    const top = screen.getAllByText(new RegExp(TEXT.en_us["packs.newLane"]))[0].closest(".lane")!;
+    const [top] = addLanes(TEXT.en_us);
     await dropOn(top, "The Outcast");
     expect(top).toHaveTextContent(/^＋ The Outcast$/);
   });

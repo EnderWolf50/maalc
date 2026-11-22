@@ -2,7 +2,7 @@
 // above the user's own.
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import {
-  EVENT_MODES, MODE_KEYS, PACK_ZH, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, weightOf,
+  EVENT_MODES, MODE_KEYS, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, packZh, weightOf,
   type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
@@ -76,7 +76,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
   const { t, tv, bad, zh } = useEditor();
-  const zhOf = (n: string): string | undefined => (zh ? PACK_ZH[n] : undefined); // the Chinese UI's name of a pack (#899)
+  const zhOf = (n: string) => packZh(n, zh); // the Chinese UI's name of a pack (#899)
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
