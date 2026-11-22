@@ -357,15 +357,22 @@ def detached_doc(log: Path) -> dict | None:
         return None
 
 
+def ours(is_alive, doc: dict) -> bool:
+    """Whether the process a detach recorded still runs. A pid that denies us access passes `alive` (a ticket may be another
+    user's), yet a process we started opens for us: when its start time is recorded and no longer reads back as it, the pid
+    went to another process (#908)."""
+    return is_alive(doc["pid"], doc["start"]) and (doc["start"] is None or started(doc["pid"]) == doc["start"])
+
+
 def detached_running(log: Path, is_alive=alive) -> bool:
-    return (doc := detached_doc(log)) is not None and is_alive(doc["pid"], doc["start"])
+    return (doc := detached_doc(log)) is not None and ours(is_alive, doc)
 
 
 def detached_status(log: Path, is_alive=alive) -> tuple[bool, str]:
     """(whether the process `detach` started with this log still runs, a line saying so)."""
     if (doc := detached_doc(log)) is None:
         return False, f"nothing was started with --log {log}"
-    if is_alive(doc["pid"], doc["start"]):
+    if ours(is_alive, doc):
         return True, f"running pid {doc['pid']}: {doc['cmd'][:120]}"
     lines = log.read_text(encoding="utf-8", errors="replace").splitlines() if log.exists() else []
     return False, f"ended pid {doc['pid']}, last line: {lines[-1] if lines else '(no output)'}"
