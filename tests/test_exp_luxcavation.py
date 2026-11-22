@@ -185,9 +185,7 @@ def child(task="ExpLuxcavation", scenarios=SCENARIOS, consecutive=CONSECUTIVE, s
                 if self.shots > FIGHT_SHOTS:
                     self.screen = self.stage if self.outcome is None else "result"
                     if self.outcome == "win":
-                        self.unboxed.discard(self.stage)  # cleared once: the box shows from now on
-                        if self.fight_box == "level":
-                            self.unboxed -= {"thread", "levels"}  # the Thread card's and its Level Select's (#900)
+                        self.unboxed.clear()  # cleared once: the box shows from now on, on the Thread card and its Level Select too (#900)
                 elif self.shots > 1 and self.outcome == "win":
                     return self.images["victory"]
             if self.screen == "team" and self.n[self.fight_box] > 1:

@@ -127,7 +127,7 @@ const screens: [image: string, hits: string[]][] = [
   // (Lv40/50/60, -2 Modules each, the list at its bottom), the page dimmed behind it.
   ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],
   // Synthetic (#900): LuxThread.png and LuxThreadLevels.png with the Consecutive Battle box inpainted away, what a level never
-  // cleared would show (no live capture yet). LuxConsecLabel must miss on both; every other node reads as on the live captures.
+  // cleared would show (no live capture yet; the Level Select's still shows the dimmed card's own box behind it). LuxConsecLabel must miss on both; every other node reads as on the live captures.
   ['LuxThreadNoBox.synthetic.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
   ['LuxThreadLevelsNoBox.synthetic.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses']],
   ['LuxThreadScrolled.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
