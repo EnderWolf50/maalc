@@ -72,14 +72,16 @@ STOP = "js:document.querySelectorAll('.runner-bar button')[1]"
 RUN_END = "[run] end "  # runner/session.py: the run's last line
 # The Run tab's state, from the page (gui/src/Run.tsx RunControls, TaskList, RunLog). `rows` is every row of the task list
 # with the run's state the page writes on it (data-state, absent before a run, "off" on a row the run left out) and its
-# task id (data-task); run_tasks() keeps the run's. One markup wide and narrow: the run console is drawn in one place or the
+# task id (data-task); run_tasks() keeps the run's. A row's reason is the English one as the bot and the runner wrote it:
+# a coded reason's tooltip, under the sentence the row shows in the window's language (#881). One markup wide and narrow: the run console is drawn in one place or the
 # other, with the same classes.
 STATE_JS = """(() => { const s = document.querySelector(".runner-status");
   if (!s) return null;
   const text = (el) => el ? el.textContent.trim() : null;
+  const english = (el) => el && el.title ? el.title : text(el);
   return { phase: s.dataset.phase, status: text(s),
     rows: [...document.querySelectorAll(".task-list .task-row")].map((row) => ({ id: row.dataset.task, state: row.dataset.state ?? null,
-      name: text(row.querySelector(".tr-name")), reason: text(row.querySelector(".tr-reason")) })),
+      name: text(row.querySelector(".tr-name")), reason: english(row.querySelector(".tr-reason")) })),
     start: !document.querySelector(".runner-bar button.primary")?.disabled,
     alerts: [...document.querySelectorAll(".run-notes p, .crash[role=alert]")].map(text) }; })()"""
 RENDERED_JS = """(() => { const main = document.querySelector("main");

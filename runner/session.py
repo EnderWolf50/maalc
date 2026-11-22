@@ -10,9 +10,11 @@ A task ends succeeded or failed as MaaFramework says; stopped when the caller's 
 MaaFramework says of it (#832); failed, with the reason the bot logged, when the bot stopped the whole list while it
 ran, whatever MaaFramework says of it (#870); cancelled when it never ran: after a stop, after the bot stopped the whole
 list (the reason it logged comes with it), after the bot exited, or when the run failed before its first task.
+A reason comes with its code (#881): the one the bot logged after its stop line, or the runner's own (OWN_CODES).
 """
 from __future__ import annotations
 
+import json
 import os
 import queue
 import subprocess
@@ -46,7 +48,28 @@ NODES = 10  # nodes of each task the run log lists when it ends
 # agent/actions.py stop(): its first line names the reason; an account-level stop adds the second before post_stop
 STOP_LINE = "[maalc] stop: "
 HALT_LINE = "[maalc] account-level stop"
+CODE_LINE = "[maalc] stop code: "  # agent/reasons.py code_line, right after its stop line: that stop's code (#881)
+# the codes of agent/stop_reasons.json the runner's own reasons send, with their params
+OWN_CODES = {"NoEmulator": (), "ConnectFailed": ("address",), "ResourceFailed": (), "BotNotStarted": (),
+             "TaskerFailed": (), "RunnerFailed": ("error",), "BotExited": ("code",), "ListStopped": ()}
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
+
+
+def own(name: str, /, **params) -> tuple[str, dict]:
+    """One of the runner's own reason codes (OWN_CODES), with its params."""
+    assert set(params) == set(OWN_CODES[name]), (name, params)
+    return name, params
+
+
+def stop_code(text: str) -> tuple[str, dict] | None:
+    """(code, params) of a code line of the bot, its prefix off: the code, then its params as JSON when it has any. None
+    for a line the protocol could not carry (not JSON, params not text or whole numbers): the reason then goes alone."""
+    code, _, rest = text.partition(" ")
+    try:
+        params = json.loads(rest) if rest else {}
+    except ValueError:
+        return None
+    return (code, params) if code and protocol.params_ok(params) else None
 
 
 class Out:
@@ -183,6 +206,8 @@ class Session:
         # stop_at: when the caller's stop came; stop_posted, reposted: the first post_stop (the caller's or the
         # runner's own once the bot exited) and the last one
         self.stop_at = self.stop_posted = self.reposted = self.crash = self.halt = self.last_stop = None
+        # the codes of crash, halt and last_stop (#881): (code, params), or None for a reason with none
+        self.crash_code = self.halt_code = self.last_code = None
         self.timed_out = self.halt_awaited = False
         self.halted = threading.Event()
         self.tail = deque(maxlen=TAIL)
@@ -196,10 +221,12 @@ class Session:
         self.say(f"error {kind}: {message}")
         self.out.send("error", kind=kind, message=message, **fields)
 
-    def task(self, i: int, state: str, reason: str | None = None) -> None:
+    def task(self, i: int, state: str, reason: str | None = None, coded: tuple[str, dict] | None = None) -> None:
+        """The task's state, with its reason and the reason's code when there is one."""
         self.states[i] = state
+        code = {"reason_code": coded[0], **({"reason_params": coded[1]} if coded[1] else {})} if reason and coded else {}
         self.out.send("task", index=i, entry=self.tasks[i]["entry"], state=state,
-                      **({"reason": reason} if reason is not None else {}))
+                      **({"reason": reason} if reason is not None else {}), **code)
 
     # scan
     def scan(self) -> str:
@@ -223,7 +250,8 @@ class Session:
                 except Exception as e:
                     lines = traceback.format_exc().splitlines()
                     self.error("internal", f"{type(e).__name__}: {e}", tail=lines[-TAIL:])
-                    result = self.cancel_rest("failed", f"the runner failed: {type(e).__name__}")
+                    result = self.cancel_rest("failed", f"the runner failed: {type(e).__name__}",
+                                              own("RunnerFailed", error=type(e).__name__))
                 finally:
                     self.close_agent()
             self.out.settle()
@@ -233,32 +261,36 @@ class Session:
             self.out.close_log()
         return result
 
-    def cancel_rest(self, result: str, reason: str | None) -> str:
-        """Every task not yet ended is cancelled (with the reason, unless the caller stopped the run): the result."""
+    def cancel_rest(self, result: str, reason: str | None, coded: tuple[str, dict] | None = None) -> str:
+        """Every task not yet ended is cancelled (with the reason and its code, unless the caller stopped the run): the
+        result."""
         for i, state in enumerate(self.states):
             if state in ("pending", "running"):
-                self.cancel(i, reason)
+                self.cancel(i, reason, coded)
         return "stopped" if self.stop_at is not None else result
 
-    def cancel(self, i: int, reason: str | None) -> None:
-        self.task(i, "cancelled", None if self.stop_at is not None else reason)
+    def cancel(self, i: int, reason: str | None, coded: tuple[str, dict] | None = None) -> None:
+        self.task(i, "cancelled", None if self.stop_at is not None else reason, coded)
 
-    def fail(self, kind: str, message: str, reason: str | None = None, **fields) -> str:
-        """The run fails before its first task: the error, then the tasks cancelled (reason, else the message)."""
+    def fail(self, kind: str, message: str, reason: str | None = None, coded: tuple[str, dict] | None = None,
+             **fields) -> str:
+        """The run fails before its first task: the error, then the tasks cancelled (reason, else the message, with
+        its code)."""
         self.error(kind, message, **fields)
-        return self.cancel_rest("failed", reason or message)
+        return self.cancel_rest("failed", reason or message, coded)
 
     def run(self, root: Path, want: dict) -> str:
         fw = self.framework(root)
         device, until = self.device(fw, want)
         if device is None:
-            return self.cancel_rest("failed", "no emulator to run on")
+            return self.cancel_rest("failed", "no emulator to run on", own("NoEmulator"))
         self.out.send("connection", state="connecting", address=device.address)
         ctl = self.connect(fw, device, until)
         if ctl is None:
             if self.stop_at is not None:
                 return self.cancel_rest("stopped", None)
-            return self.fail("connect_failed", f"could not connect to {device.address}")
+            return self.fail("connect_failed", f"could not connect to {device.address}",
+                             coded=own("ConnectFailed", address=device.address))
         self.out.send("connection", state="connected", address=device.address)
         self.say(f"connected {device.name} {device.address}")
         self.poll()
@@ -267,7 +299,8 @@ class Session:
         self.out.send("resource", state="loading")
         res = fw.resource()
         if not res.post_bundle(str(root / "resource" / "base")).wait().succeeded:
-            return self.fail("resource_failed", f"could not load {root / 'resource' / 'base'}", "the resource did not load")
+            return self.fail("resource_failed", f"could not load {root / 'resource' / 'base'}", "the resource did not load",
+                             own("ResourceFailed"))
         self.out.send("resource", state="loaded")
         self.client = fw.agent_client()
         self.client.bind(res)
@@ -275,11 +308,12 @@ class Session:
         if not self.client.connect():
             code = self.agent.poll()
             return self.fail("agent_failed", "the bot did not connect" + (f": it exited with code {code}" if code is not None else ""),
-                             "the bot did not start", **({"code": code} if code is not None else {}), tail=list(self.tail))
+                             "the bot did not start", own("BotNotStarted"), **({"code": code} if code is not None else {}),
+                             tail=list(self.tail))
         t = fw.tasker()
         t.bind(res, ctl)
         if not t.inited:
-            return self.fail("internal", "the tasker did not initialise")
+            return self.fail("internal", "the tasker did not initialise", coded=own("TaskerFailed"))
         self.say(f"start {','.join(task['entry'] for task in self.tasks)} pid {os.getpid()} agent {self.agent.pid} "
                  f"install {root}")
         self.tasker = t
@@ -378,9 +412,12 @@ class Session:
     def agent_line(self, text: str) -> None:
         self.tail.append(text)
         if text.startswith(STOP_LINE):
-            self.last_stop = text.removeprefix(STOP_LINE)
+            self.last_stop, self.last_code = text.removeprefix(STOP_LINE), None
+        elif text.startswith(CODE_LINE):
+            self.last_code = stop_code(text.removeprefix(CODE_LINE))
         elif text.startswith(HALT_LINE):
             self.halt = self.last_stop or text.removeprefix("[maalc] ")
+            self.halt_code = self.last_code if self.last_stop else None
             self.halted.set()
         self.out.log("agent", text)
 
@@ -435,7 +472,7 @@ class Session:
         if self.crash is None and self.agent.poll() is not None:
             self.reader.join(DRAIN)  # its last lines first
             code = self.agent.returncode
-            self.crash = f"the bot exited with code {code}"
+            self.crash, self.crash_code = f"the bot exited with code {code}", own("BotExited", code=code)
             self.error("agent_exit", self.crash, code=code, tail=list(self.tail))
             if self.stop_posted is None:
                 self.post_stop()
@@ -468,13 +505,13 @@ class Session:
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
         if ran and self.stop_at is None and (halt := self.halt_reason(after)) is not None:
-            self.task(i, "failed", halt)
+            self.task(i, "failed", halt, self.halt_code)
         elif self.stop_at is None and status and status.succeeded:
             self.task(i, "succeeded")
         elif ran:
             self.task(i, "stopped" if self.stop_at is not None else "failed")
         else:
-            self.cancel(i, None if self.stop_at is not None else self.why_unrun())
+            self.cancel(i, *((None, None) if self.stop_at is not None else self.why_unrun()))
         self.say(f"{self.tasks[i]['entry']} status={self.states[i]} t={seconds:.0f}s")
         for n in (detail.nodes[-NODES:] if detail else []):
             self.say(f"node {n.name} {n.completed}")
@@ -496,7 +533,11 @@ class Session:
             self.halted.wait(HALT_WAIT)
         return self.halt
 
-    def why_unrun(self) -> str:
-        """Why a task never ran though nobody stopped the run: the bot exited, or it stopped the whole list (its
-        reason, which it logged before the post_stop that the tasker's stop came from)."""
-        return self.crash or self.await_halt() or "MaaFramework stopped the task list"
+    def why_unrun(self) -> tuple[str, tuple[str, dict] | None]:
+        """Why a task never ran though nobody stopped the run, with the reason's code: the bot exited, or it stopped the
+        whole list (its reason, which it logged before the post_stop that the tasker's stop came from)."""
+        if self.crash:
+            return self.crash, self.crash_code
+        if halt := self.await_halt():
+            return halt, self.halt_code
+        return "MaaFramework stopped the task list", own("ListStopped")

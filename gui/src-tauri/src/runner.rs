@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -29,6 +29,14 @@ pub const TAIL: usize = 20;
 const DRAIN: Duration = Duration::from_secs(2);
 
 // ---- the protocol (runner/protocol.py) ----
+
+/// A param of a reason code: text or a whole number (runner/protocol.py params_ok).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ReasonParam {
+    Text(String),
+    Number(i64),
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -123,6 +131,11 @@ pub enum Event {
         state: TaskState,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+        /// the reason's code of agent/stop_reasons.json and its params, which the page says it by (#881)
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason_code: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reason_params: Option<BTreeMap<String, ReasonParam>>,
     },
     Error {
         kind: ErrorKind,
@@ -684,6 +697,10 @@ mod tests {
         let sent = serde_json::to_value(Message::Event(e)).unwrap();
         assert_eq!(sent, serde_json::json!({"type": "event", "event": "task", "index": 1, "entry": "ClaimMail", "state": "cancelled", "reason": "maintenance"}));
         assert_eq!(serde_json::to_value(Message::Stopping).unwrap(), serde_json::json!({"type": "stopping"}));
+        // a reason's code and its params (#881) go to the page as they came
+        let e = Event::parse(r#"{"v":1,"event":"task","index":0,"entry":"MirrorDungeon","state":"failed","reason":"x","reason_code":"ConnectFailed","reason_params":{"address":"127.0.0.1:16384","n":3}}"#).unwrap();
+        assert_eq!(serde_json::to_value(Message::Event(e)).unwrap(), serde_json::json!({"type": "event", "event": "task", "index": 0,
+            "entry": "MirrorDungeon", "state": "failed", "reason": "x", "reason_code": "ConnectFailed", "reason_params": {"address": "127.0.0.1:16384", "n": 3}}));
     }
 
     #[cfg(windows)]

@@ -606,7 +606,7 @@ def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, stops):
     actions.STUCK["flag"] = ("MirrorMap", 3, "the game is frozen")
     assert actions.Recover().run(hub, None) is False
     assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL3",)] * 3
-    assert len(stops) == 1 and "3 times in a row" in stops[0], stops
+    assert len(stops) == 1 and "3 times in a row" in stops[0] and stops[0].code == "Stuck", stops
     assert actions.STUCK["ladder"].counts[3] == 0
 
 
@@ -632,7 +632,7 @@ def test_a_daily_task_stops_at_its_third_restart_though_each_got_past(hub, stops
     # #520: each restart got the bot past the main window, so the launch's streak never grows; the task's 2 end it.
     assert daily_restarts(hub, 3) == [True, True, False]
     assert restarts_run(hub) == 2
-    assert len(stops) == 1 and "2 times this task" in stops[0], stops
+    assert len(stops) == 1 and "2 times this task" in stops[0] and stops[0].code == "Stuck", stops
 
 
 def test_the_next_task_has_its_own_two_restarts(hub, stops):

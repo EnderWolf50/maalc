@@ -157,7 +157,7 @@ def formation_page(context, monkeypatch, reads, answers):
 def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s(context, clock, monkeypatch):
     # #258: the back arrow slept 2 s so that MirrorHub would not find the page again and back out twice; the wait now
     # ends when the Formation node no longer hits.
-    actions.RUN.update(team={"min_alive": 5, "name": "t"}, settings={})
+    actions.RUN.update(team={"min_alive": 5, "name": "t", "id": "t"}, settings={})
     monkeypatch.setitem(actions.TASK, "options", {"after_retries": "forfeit"})
     patch_all(monkeypatch, "participants", lambda context, image: (4, 4))
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])
@@ -171,7 +171,7 @@ def test_too_few_alive_backs_out_and_hands_back_once_the_page_goes_not_after_2_s
 
 def test_the_details_view_is_folded_and_read_once_its_button_shows_not_after_1_5_s(context, clock, monkeypatch):
     # #258: the » slept 1.5 s; now the order marks are read on the folded page once Details shows and the page is still.
-    actions.RUN.update(team={"min_alive": 0, "name": "t"}, settings={})
+    actions.RUN.update(team={"min_alive": 0, "name": "t", "id": "t"}, settings={})
     monkeypatch.setitem(actions.TASK, "options", {"after_retries": "stop"})
     patch_all(monkeypatch, "participants", lambda context, image: (5, 12))
     monkeypatch.setattr(run_start, "resolve_plan", lambda *a: [])  # ends the action after the dead are read
@@ -191,7 +191,7 @@ SPIDER_NEST = ["Ryōshū", "Yi Sang", "Faust", "Hong Lu", "Rodion", "Ishmael", "
 
 def order_page(context, monkeypatch, plan, dead, min_alive, screen_alive, after_retries="forfeit"):
     """A formation page (screen count screen_alive of 12) whose grey cards are `dead`; the stops, taps and log lines (#616)."""
-    actions.RUN.update(team={"min_alive": min_alive, "name": "t"}, settings={})
+    actions.RUN.update(team={"min_alive": min_alive, "name": "t", "id": "t"}, settings={})
     monkeypatch.setitem(actions.TASK, "options", {"after_retries": after_retries})
     actions.RUN.pop("forfeit", None)
     stops, taps, lines = [], [], []
@@ -251,3 +251,10 @@ def test_a_full_order_counts_as_the_screen_count_did(context, monkeypatch):
 def test_an_order_shorter_than_k_stops_with_after_retries_stop(context, monkeypatch):
     result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST, set(), 12, 12, "stop")
     assert result is False and len(stops) == 1 and "deployment order" in stops[0]
+    # the settings window's sentence names the team by its id, as the settings name it (#881)
+    assert (stops[0].code, stops[0].params) == ("SinnersShort", {"team": "t", "alive": len(SPIDER_NEST), "need": 12})
+
+
+def test_an_order_with_every_sinner_dead_stops_with_its_team(context, monkeypatch):
+    result, stops, taps, lines = order_page(context, monkeypatch, SPIDER_NEST, set(SPIDER_NEST), 0, 12, "stop")
+    assert result is False and [(r.code, r.params) for r in stops] == [("NoSinnerAlive", {"team": "t"})]

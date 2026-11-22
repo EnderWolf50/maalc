@@ -84,17 +84,20 @@ def start(context, monkeypatch, settings=lambda data: None, **run):
     return ok, [json.loads(c.args[0].data)["reason"] for c in urlopen.call_args_list]
 
 
-@pytest.mark.parametrize("team, edit, error", [
+@pytest.mark.parametrize("team, edit, error, code", [
     # the settings GUI deleted the team since the start team was picked
-    ("gone", lambda data: None, f"run/start_team: team 'gone' was deleted in the settings GUI; {INSTEAD}"),
+    ("gone", lambda data: None, f"run/start_team: team 'gone' was deleted in the settings GUI; {INSTEAD}",
+     'stop code: TeamDeleted {"team":"gone"}'),
     ("b", lambda data: data["teams"][1].update(enabled=False),
-     f"run/start_team: team 'Team b' (id 'b') is disabled; enable it in the settings GUI, or {INSTEAD}"),
+     f"run/start_team: team 'Team b' (id 'b') is disabled; enable it in the settings GUI, or {INSTEAD}",
+     'stop code: StartTeamDisabled {"team":"b"}'),
 ])
-def test_a_deleted_or_disabled_start_team_stops_the_task_before_any_tap(context, monkeypatch, team, edit, error):
+def test_a_deleted_or_disabled_start_team_stops_the_task_before_any_tap(context, monkeypatch, team, edit, error, code):
     # the stop procedure (its evidence, the webhook), as a Luxcavation task's deleted team (#780)
     ok, posted = start(context, monkeypatch, settings=edit, start_team=team)
     assert ok is False and posted == [f"Invalid task options:\n- {error}"]
     assert f"stop: Invalid task options:\n- {error}" in said()
+    assert said()[said().index(f"stop: Invalid task options:\n- {error}") + 1] == code  # #881: the team by its id
     assert queue() == ["a", "b"] and "start_team" not in actions.TASK
     context.tasker.controller.post_click.assert_not_called()
     context.run_task.assert_not_called()
