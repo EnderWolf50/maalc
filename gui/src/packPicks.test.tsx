@@ -4,7 +4,7 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { TEXT, fill } from "./i18n";
-import { newSettings, packZh, type Settings, type ThemePackPlan } from "./model";
+import { GROUP_MIN, newSettings, packZh, type Settings, type ThemePackPlan } from "./model";
 import { ThemePackTab } from "./ThemePacks";
 import { PACK_EN, dragHeld, dragOnto, englishOf, pickInList, renderEditor } from "./testing";
 
@@ -379,14 +379,17 @@ describe("picks in a lane grouped by difficulty", () => {
 // #899 with #742 and #743: the Chinese names hold in a grouped lane, in the search that ungroups it and on what picks show.
 describe("Chinese names in a grouped lane and on the picks", () => {
   const zhName = (en: string) => packZh(en, true)!;
+  /** The name a chip's `.nm` shows first: in the Chinese UI its Chinese name, before the small English one. */
+  const firstName = (nm: Element) => nm.firstChild!.textContent;
+  const firstNameOf = (en: string) => firstName(chipOf(en).querySelector(".nm")!);
   /** Each chip of the 0 lane's groups as [the name it shows first, the small English one under it]. */
-  const grouped = () => [...laneAt("0").querySelectorAll(".pg .pk .nm")].map((nm) => [nm.firstChild!.textContent, nm.querySelector(".en")?.textContent]);
+  const grouped = () => [...laneAt("0").querySelectorAll(".pg .pk .nm")].map((nm) => [firstName(nm), nm.querySelector(".en")?.textContent]);
 
   test("a grouped lane shows each pack's Chinese name, its English name under it", async () => {
     await open();
     expect(laneAt("0").querySelector(".packs")).toHaveClass("grouped");
     const names = grouped();
-    expect(names.length).toBeGreaterThanOrEqual(20);
+    expect(names.length).toBeGreaterThanOrEqual(GROUP_MIN);
     const english = names.map(([, en]) => en!);
     expect(english).toEqual(expect.arrayContaining(FIRST));
     expect(names).toEqual(english.map((en) => [zhName(en), en]));
@@ -398,8 +401,7 @@ describe("Chinese names in a grouped lane and on the picks", () => {
     const packs = laneAt("0").querySelector(".packs")!;
     expect(packs).not.toHaveClass("grouped");
     expect(packs.querySelector("section")).toBeNull();
-    const nm = chipOf("The Forgotten").querySelector(".nm")!;
-    expect(nm.firstChild!.textContent).toBe(zhName("The Forgotten"));
+    expect(firstNameOf("The Forgotten")).toBe(zhName("The Forgotten"));
   });
 
   test("picks dragged as one are named in Chinese on the bar; the drop and ＋ hints count them", async () => {
@@ -407,7 +409,7 @@ describe("Chinese names in a grouped lane and on the picks", () => {
     const picks = [FIRST[1], FIRST[4]];
     await ctrlClick(r.user, ...picks);
     expect(within(bar()).getByText(picks.map(zhName).join(zh["packs.floorSep"]))).toHaveClass("names");
-    expect(picks.map((n) => chipOf(n).querySelector(".nm")!.firstChild!.textContent)).toEqual(picks.map(zhName));
+    expect(picks.map(firstNameOf)).toEqual(picks.map(zhName));
     const held = dragHeld(chipOf(FIRST[1]), laneAt("-1"));
     expect(laneAt("-1")).toHaveTextContent(fill(zh["packs.drop"], { n: 2, w: "-1" }));
     held.end();

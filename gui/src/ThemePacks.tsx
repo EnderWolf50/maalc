@@ -239,7 +239,8 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const addLane = (at: AddAt) => onChange && (
     <div className="lane add" {...target(drag !== null && drag !== LINE, at)}>
       {typing?.lane === at
-        ? <>＋ {typing.what === PICKS ? fill(t("packs.many"), { n: picks.picks.length }) : packName(typing.what)} {box(typing.what, nextScore(at))}</>        : <>＋ {t("packs.newLane")}</>}
+        ? <>＋ {typing.what === PICKS ? fill(t("packs.many"), { n: picks.picks.length }) : packName(typing.what)} {box(typing.what, nextScore(at))}</>
+        : <>＋ {t("packs.newLane")}</>}
     </div>
   );
   const chips = <T extends string | number>(values: T[], value: T, label: (v: T) => string, pick: (v: T) => void, cls?: (v: T) => string) =>
