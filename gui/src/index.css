@@ -436,6 +436,10 @@ ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--mute
 .team-list .team-off, .mt-row.off .mt-name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 /* The Run tab (#814, #815, #875): its fields and the run console's parts; the two columns are the section at the end. */
 .run-page fieldset.emulator, .run-page details.globals, .run-page .run-log-box, .run-page .task-opts { align-items: stretch; }
+/* its notes, a cost or a risk under the field they belong to (spec #871 「說明文字」, #879): no last line of a word alone; and no
+ * word on the tab under 12 px, a tag's (#n, a usage) included */
+.run-page :is(p, small) { text-wrap: pretty; }
+.run-page .qtag { font-size: 12px; }
 /* The emulator (#876, spec #871 「模擬器（4A）」), in the console's column (400 px inside its frame): the pick list the
  * frame's width but for 偵測 beside it, whose room fits its longest Chinese word (重新偵測), so the list keeps its width as a
  * scan starts and ends; a scan that found none, or failed, on a line under them; then 手動設定, folded at first, its
@@ -459,7 +463,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
  * the field, its label included, or the field draws a focus ring (:focus-visible: the keyboard moved the focus in, or a text
  * or number box has it, clicked or not; a click on a switch or a choice leaves it to the pointer). Hidden, it keeps its room,
  * so nothing moves when it shows; a screen reader reads it either way, as the field's description (Run.tsx DescribedByKey). */
-.run-page code.key { margin-left: 8px; font: 400 11.5px/1 Consolas, monospace; color: var(--muted); visibility: hidden; }
+.run-page code.key { margin-left: 8px; font: 400 12px/1 Consolas, monospace; color: var(--muted); visibility: hidden; }
 /* the label and its key on one line (spec #871, round 4 item 12): where both do not fit, the key gives way and is cut short,
  * so the label never takes a second line and the field stays level with its neighbour's; the key's tooltip and a screen
  * reader still give it whole */
@@ -558,11 +562,11 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
   position: relative; grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; padding: 3px 4px 3px 10px;
 }
 .mt-order ol.reorder > li > .item, .mt-row { display: contents; }
-.mt-order ol.reorder > li > .badmark { position: absolute; left: 1px; top: 50%; translate: 0 -50%; font-size: 10px; }
+.mt-order ol.reorder > li > .badmark { position: absolute; left: 1px; top: 50%; translate: 0 -50%; font-size: 12px; }
 .mt-row .place { color: var(--muted); font: 600 14px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .mt-row .mt-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mt-row .mt-slot { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.mt-row .mt-use .qtag { margin-left: 0; font-size: 12px; } /* the Run tab has no text under 12 px */
+.mt-row .mt-use .qtag { margin-left: 0; }
 .mt-row .mt-mark { justify-self: end; }
 /* the next run: amber words, then the difficulty's plate when the two difficulties play two teams */
 .mt-next { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); white-space: nowrap; }
@@ -660,7 +664,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .schedule-list .day:has(input:disabled) { cursor: default; }
 .schedule-list .toggle { max-width: 26em; }
 .schedule-list > li > button.danger { margin-left: auto; }
-.schedule-list .task-name { flex-basis: 100%; color: var(--muted); font: 400 11.5px/1.3 Consolas, monospace; }
+.schedule-list .task-name { flex-basis: 100%; color: var(--muted); font: 400 12px/1.3 Consolas, monospace; }
 .sched-last { margin: 0; color: var(--fg-2); }
 .runner .crash { padding: 8px 12px; border: 1px solid var(--bad); border-radius: 2px; background: var(--bad-soft); }
 .runner .crash p { margin: 0 0 6px; color: var(--bad); font-weight: 600; }

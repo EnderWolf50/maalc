@@ -73,28 +73,26 @@ function KeyLabel({ path, text }: { path: string; text?: string }) {
     </span>
   );
 }
-/** The id of the hidden text that holds how a field works (its tooltip), which its controls take as their description too. */
-const helpId = (path: string) => `help:${path}`;
 /** The controls inside take settings key `path` as their description, so a screen reader reads the field's label as its name and
- * the key after it, whether or not the key shows; then `help`, how the field works, which the eye gets as the field's tooltip
- * (spec #871: on the page stays what warns of a cost or a risk). Every field of the tab that shows a key is one of the three
- * below. */
-const DescribedByKey = ({ path, help, children }: { path: string; help?: string; children: ReactNode }) => (
-  <DescribeContext.Provider value={help ? `${keyId(path)} ${helpId(path)}` : keyId(path)}>
-    {children}{help && <span id={helpId(path)} hidden>{help}</span>}
-  </DescribeContext.Provider>
+ * the key after it, whether or not the key shows; then how the field works, its tooltip (the field's `help`, ui.tsx Mark).
+ * Every field of the tab that shows a key is one of the three below, and each takes a `note` and a `help` (spec #871 「說明文字」):
+ * the note, on the page under it, only for what warns of a cost or a risk; how it works is its help. */
+const DescribedByKey = ({ path, children }: { path: string; children: ReactNode }) => (
+  <DescribeContext.Provider value={keyId(path)}>{children}</DescribeContext.Provider>
 );
 /** A field of the tab: its label and settings key, the control, a note; how it works (`help`) its tooltip. */
 const KeyField = ({ path, label, note, help, children }: { path: string; label?: string; note?: string; help?: string; children: ReactNode }) => (
-  <DescribedByKey path={path} help={help}>
-    <Field label={<KeyLabel path={path} text={label} />} path={path} note={note} title={help}>{children}</Field>
+  <DescribedByKey path={path}>
+    <Field label={<KeyLabel path={path} text={label} />} path={path} note={note} help={help}>{children}</Field>
   </DescribedByKey>
 );
 /** A switch of the tab with its note under it (#721): the label's text the size of the fields', its key after it. */
-function Switch({ path, checked, note, onChange }: { path: string; checked: boolean; note?: string; onChange: (on: boolean) => void }) {
+function Switch({ path, checked, note, help, onChange }: {
+  path: string; checked: boolean; note?: string; help?: string; onChange: (on: boolean) => void;
+}) {
   return (
     <DescribedByKey path={path}>
-      <Mark className="toggle" path={path}>
+      <Mark className="toggle" path={path} help={help}>
         <label className="check">
           <Input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /><KeyLabel path={path} />
         </label>
@@ -106,20 +104,19 @@ function Switch({ path, checked, note, onChange }: { path: string; checked: bool
 /** A switch with its number (off is null and greys the number out; switched on, it starts at `on`), laid out as the fields
  * beside it (#878, spec #871 round 5 item 4): its label and key on top in a field label's size, the switch and the number on
  * one line under it, so the number's box is level with a neighbour's select. Both controls take the label as their name. */
-function KeyToggleNum({ path, value, on, min, note, onChange }: {
-  path: string; value: number | null; on: number; min: number; note?: string; onChange: (v: number | null) => void;
+function KeyToggleNum({ path, value, on, min, help, onChange }: {
+  path: string; value: number | null; on: number; min: number; help?: string; onChange: (v: number | null) => void;
 }) {
   const label = useId();
   return (
     <DescribedByKey path={path}>
-      <Mark className="field toggle-field" path={path}>
+      <Mark className="field toggle-field" path={path} help={help}>
         <span id={label}><KeyLabel path={path} /></span>
         <div className="tf-line">
           <Input type="checkbox" checked={value !== null} aria-labelledby={label} onChange={(e) => onChange(e.target.checked ? on : null)} />
           <Input type="number" value={value ?? on} min={min} step={1} disabled={value === null} aria-labelledby={label}
             onChange={(e) => onChange(e.target.value === "" ? min : Math.trunc(Number(e.target.value)))} />
         </div>
-        {note && <small>{withBreaks(note)}</small>}
       </Mark>
     </DescribedByKey>
   );
@@ -673,8 +670,8 @@ function MirrorOptions() {
   const pastFive = run.target_floor > 5;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
   type Pick = "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries" | "theme_pack_refresh";
-  const pick = (k: Pick, note?: string) => (
-    <KeyField path={`run/${k}`} note={note}>
+  const pick = (k: Pick, note?: string, help?: string) => (
+    <KeyField path={`run/${k}`} note={note} help={help}>
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </KeyField>
   );
@@ -691,8 +688,8 @@ function MirrorOptions() {
             {/* Remove once the probe runs (#853-#856) have played floors 6-15 live: until then a screen there may be unknown. */}
             {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
           </KeyField>
-          <KeyToggleNum path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")} onChange={(v) => set({ runs: v })} />
-          {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
+          <KeyToggleNum path="run/runs" value={run.runs} on={1} min={1} help={t("run.runs_note")} onChange={(v) => set({ runs: v })} />
+          {pick("theme_pack_refresh", undefined, t("run.theme_pack_refresh_note"))}
         </div>
       </fieldset>
       <fieldset>
@@ -711,7 +708,8 @@ function MirrorOptions() {
           <KeyField path="run/wipe_retries">
             <Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} />
           </KeyField>
-          {pick("after_retries", t("run.after_retries_note"))}
+          {/* what forfeiting costs, while it is picked; how both choices go, the tooltip */}
+          {pick("after_retries", run.after_retries === "forfeit" ? t("run.after_retries_forfeit") : undefined, t("run.after_retries_note"))}
         </div>
       </fieldset>
     </div>
@@ -790,9 +788,9 @@ function MirrorTeams() {
   );
 }
 
-/** A Luxcavation task's team pick: `none` first (null), then the settings' teams as they are now, by name and slot. A team
- * deleted since stays the value, shown as deleted with why the task will stop, until another is picked: the agent stops the
- * task at its start over it. */
+/** A Luxcavation task's team pick: `none` first (null), then the settings' teams as they are now, by name and slot. With none
+ * picked, a caution says the task will stop; a team deleted since stays the value, shown as deleted with why the task will
+ * stop, until another is picked: the agent stops the task at its start over either. */
 function TeamPick({ value, none, onChange }: { value: string | null; none: string; onChange: (v: string | null) => void }) {
   const { s, t } = useEditor();
   const ids = s.teams.map((x) => x.id);
@@ -802,49 +800,48 @@ function TeamPick({ value, none, onChange }: { value: string | null; none: strin
     const x = s.teams.find((y) => y.id === id);
     return x ? fill(t("teamPick"), { name: x.name || "—", slot: x.game_team }) : fill(t("teamPick.gone"), { id });
   };
+  const warn = value === null ? t("lux.team_none_note") : gone ? t("teamPick.gone_note") : null;
   return (<>
     <Select value={value ?? ""} options={["", ...ids, ...(gone ? [value] : [])]} label={label} onChange={(v) => onChange(v || null)} />
-    {gone && <small className="caution">{t("teamPick.gone_note")}</small>}
+    {warn && <small className="caution">{warn}</small>}
   </>);
 }
 
-/** A Luxcavation task's options (spec 04 section 12). */
+/** A Luxcavation task's options (spec 04 section 12). What the task plays and how each mode goes is the mode's tooltip. */
 function LuxFields({ task }: { task: keyof Settings["luxcavation"] }) {
   const { s, update, t, tv } = useEditor();
   const opts = s.luxcavation[task];
   const set = (patch: Partial<LuxOptions>) => update((d) => { Object.assign(d.luxcavation[task], patch); });
   const path = `luxcavation/${task}`;
   return (
-    <div className="stack">
-      <p className="muted">{withBreaks(t(`lux.${task}_note`))}</p>
-      <div className="grid">
-        <KeyField path={`${path}/mode`}>
-          <Select value={opts.mode} options={LUX_MODES} label={(v) => tv("lux_mode", v)} onChange={(v) => set({ mode: v })} />
-        </KeyField>
-        <KeyField path={`${path}/count`} note={opts.mode === "daily" ? t("lux.count_unused") : undefined}>
-          <Num value={opts.count} min={1} disabled={opts.mode === "daily"} onChange={(v) => set({ count: v })} />
-        </KeyField>
-        <KeyField path={`${path}/team`} note={t("lux.team_note")}>
-          <TeamPick value={opts.team} none={t("lux.team_none")} onChange={(v) => set({ team: v })} />
-        </KeyField>
-        <Switch path={`${path}/consecutive`} checked={opts.consecutive} note={t("lux.consecutive_note")}
-          onChange={(on) => set({ consecutive: on })} />
-        <KeyField path={`${path}/retries`} note={t("lux.retries_note")}>
-          <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
-        </KeyField>
-      </div>
+    <div className="grid">
+      <KeyField path={`${path}/mode`} help={t(`lux.${task}_note`)}>
+        <Select value={opts.mode} options={LUX_MODES} label={(v) => tv("lux_mode", v)} onChange={(v) => set({ mode: v })} />
+      </KeyField>
+      {/* greyed out in daily mode, which its tooltip says why */}
+      <KeyField path={`${path}/count`} help={opts.mode === "daily" ? t("lux.count_unused") : undefined}>
+        <Num value={opts.count} min={1} disabled={opts.mode === "daily"} onChange={(v) => set({ count: v })} />
+      </KeyField>
+      <KeyField path={`${path}/team`} help={t("lux.team_note")}>
+        <TeamPick value={opts.team} none={t("lux.team_none")} onChange={(v) => set({ team: v })} />
+      </KeyField>
+      <Switch path={`${path}/consecutive`} checked={opts.consecutive} note={t("lux.consecutive_cost")} help={t("lux.consecutive_note")}
+        onChange={(on) => set({ consecutive: on })} />
+      <KeyField path={`${path}/retries`} help={t("lux.retries_note")}>
+        <Num value={opts.retries} min={0} onChange={(v) => set({ retries: v })} />
+      </KeyField>
     </div>
   );
 }
 
-/** Charge Enkephalin's count (spec 04 section 12): it spends Lunacy, which its note says first. */
+/** Charge Enkephalin's count (spec 04 section 12): what it spends first, on the page; how it charges, the count's tooltip. */
 function ChargeFields() {
   const { s, update, t } = useEditor();
   return (
     <div className="stack">
-      <p className="caution">{withBreaks(t("charge.note"))}</p>
+      <p className="caution">{withBreaks(t("charge.cost"))}</p>
       <div className="grid">
-        <KeyField path="charge_enkephalin/count">
+        <KeyField path="charge_enkephalin/count" help={t("charge.note")}>
           <Num value={s.charge_enkephalin.count} min={0} max={10} onChange={(v) => update((d) => { d.charge_enkephalin.count = v; })} />
         </KeyField>
       </div>
@@ -852,22 +849,23 @@ function ChargeFields() {
   );
 }
 
-/** The four options every task reads (spec 04 section 5): the webhook and three switches, each with its note, in a panel
- * folded at first (the user's call, 2026-11-20). Folded, its title turns red when one of them has a problem; a problem's
- * jump opens it (ui.tsx focusPath). */
+/** The four options every task reads (spec 04 section 5): the webhook and three switches in a panel folded at first (the
+ * user's call, 2026-11-20). What they are is its title's tooltip, what each does its own; on the page only the screenshots'
+ * risk. Folded, its title turns red when one of them has a problem; a problem's jump opens it (ui.tsx focusPath). */
 function GlobalOptions() {
   const { s, update, t, bad } = useEditor();
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
   return (
     <details className={"panel globals" + (GLOBAL_KEYS.some((k) => bad(`run/${k}`)) ? " bad" : "")}>
-      <summary>{t("globals.title")}</summary>
-      <p className="muted">{t("globals.note")}</p>
+      {/* a summary's title is its description too: its name is its words */}
+      <summary title={t("globals.note")}>{t("globals.title")}</summary>
       <div className="grid">
-        <KeyField path="run/webhook_url" note={t("run.webhook_url_note")}>
+        <KeyField path="run/webhook_url" help={t("run.webhook_url_note")}>
           <Input type="url" value={s.run.webhook_url} onChange={(e) => set({ webhook_url: e.target.value })} />
         </KeyField>
         {GLOBAL_KEYS.filter((k): k is Exclude<typeof k, "webhook_url"> => k !== "webhook_url").map((k) => (
-          <Switch key={k} path={`run/${k}`} checked={s.run[k]} note={t(`run.${k}_note`)} onChange={(on) => set({ [k]: on })} />
+          <Switch key={k} path={`run/${k}`} checked={s.run[k]} help={t(`run.${k}_note`)}
+            note={k === "keep_dismissed_screens" ? t("run.keep_dismissed_screens_risk") : undefined} onChange={(on) => set({ [k]: on })} />
         ))}
       </div>
     </details>

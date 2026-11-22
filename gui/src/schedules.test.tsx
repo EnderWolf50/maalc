@@ -179,6 +179,36 @@ describe("the schedules' editor", () => {
     expect(back.syncs).toEqual([]);
   });
 
+  // spec #871 「說明文字：頁面上只留花費與風險」 (#879): how the schedules work is the title's tooltip; on the page only what
+  // keeps one from running, while it can
+  test("with no schedule, the section says only that there is none: how they work is its title's tooltip", async () => {
+    back.text = fileOf(settings([]));
+    await open();
+    await waitFor(() => expect(back.syncs).toEqual([[]]));
+    const title = screen.getByText(zh["sched.title"], { selector: "legend" });
+    expect(title).toHaveAttribute("title", zh["sched.note"]);
+    expect(screen.getByRole("group", { name: zh["sched.title"] })).toHaveAccessibleDescription(zh["sched.note"]);
+    expect(screen.getByText(zh["sched.none"])).toBeVisible();
+    // no task written and none refused says nothing 「還沒有排程。」 does not
+    await act(async () => {});
+    expect(screen.queryByText(fill(zh["sched.synced"], { n: 0 }))).toBeNull();
+    for (const line of zh["sched.note"].split("\n")) expect(screen.queryByText(line)).toBeNull();
+    expect(screen.queryByText(zh["sched.logged_on_only"])).toBeNull();
+  });
+
+  test("with a schedule, it runs only while the user is logged on; the wake switch's tooltip says what it does, and while on, what it needs", async () => {
+    const user = await open();
+    expect(await screen.findByText(fill(zh["sched.synced"], { n: 1 }))).toBeVisible();
+    expect(screen.getByText(zh["sched.logged_on_only"])).toBeVisible();
+    const wake = wakeOf(rows()[0]);
+    expect(wake.closest("[title]")).toHaveAttribute("title", zh["sched.wake_note"]);
+    expect(wake).toHaveAccessibleDescription(zh["sched.wake_note"]);
+    for (const shown of screen.queryAllByText(zh["sched.wake_note"])) expect(shown).not.toBeVisible(); // the description's hidden copy
+    expect(within(rows()[0]).getByText(zh["sched.wake_needs"])).toBeVisible();
+    await user.click(wake);
+    expect(within(rows()[0]).queryByText(zh["sched.wake_needs"])).toBeNull();
+  });
+
   test("a run reads no schedule: they stay open to edits during one", async () => {
     const user = await open();
     await user.click(screen.getByRole("button", { name: zh["runner.start"] }));

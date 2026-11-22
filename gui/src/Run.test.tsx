@@ -447,23 +447,21 @@ describe("the Luxcavation tasks' and Charge Enkephalin's options", () => {
     await show(r, name);
     const count = screen.getByRole("spinbutton", { name: new RegExp(zh["lux.count"]) });
     expect(count).toBeDisabled();
-    expect(screen.getByText(zh["lux.count_unused"])).toBeVisible();
     await r.user.selectOptions(screen.getByRole("combobox", { name: zh["lux.mode"] }), "count");
     fireEvent.change(count, { target: { value: "6" } });
     await r.user.selectOptions(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) }), s.teams[0].id);
     fireEvent.change(screen.getByRole("spinbutton", { name: new RegExp(zh["lux.retries"]) }), { target: { value: "2" } });
     await r.user.click(screen.getByRole("checkbox", { name: zh["lux.consecutive"] }));
     expect(r.settings().luxcavation[task]).toEqual({ mode: "count", count: 6, team: s.teams[0].id, retries: 2, consecutive: false });
-    expectLines(zh[`lux.${task}_note`]);
   });
 
-  test("Charge Enkephalin's count, with Lunacy's cost on its note's first line", async () => {
+  test("Charge Enkephalin's count, with Lunacy's cost first on the page", async () => {
     const r = renderEditor(<RunTab />, newSettings());
     await show(r, "狂氣換腦啡肽");
     fireEvent.change(screen.getByRole("spinbutton", { name: zh["charge.count"] }), { target: { value: "4" } });
     expect(r.settings().charge_enkephalin.count).toBe(4);
-    expect(zh["charge.note"].split("\n")[0]).toContain("Lunacy");
-    expectLines(zh["charge.note"]);
+    expect(zh["charge.cost"].split("\n")[0]).toContain("Lunacy");
+    expectLines(zh["charge.cost"]);
   });
 });
 
@@ -491,9 +489,12 @@ describe("the global options and the emulator", () => {
     expect(r.settings().emulator).toEqual({ address: null, mumu_index: null, mumu_manager: null });
   });
 
-  test("the tab's long notes show one topic to a line", async () => {
-    await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
-    expectLines(zh["run.keep_dismissed_screens_note"]);
+  test("a long tooltip keeps one topic to a line", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await r.user.click(screen.getByText(zh["globals.title"]));
+    const tip = tipOf(screen.getByRole("checkbox", { name: zh["run.keep_dismissed_screens"] }));
+    expect(tip).toBe(zh["run.keep_dismissed_screens_note"]);
+    expect(tip!.split("\n")).toHaveLength(2);
   });
 
   test("手動設定 is a panel folded at first that holds the three fields; its title's tooltip names them (#876)", async () => {
@@ -602,22 +603,145 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
     const fields = [
       [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "run/difficulty"],
       [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.target_floor"]}`) }), "run/target_floor"],
-      [screen.getByRole("checkbox", { name: zh["run.runs"] }), "run/runs"],
-      [screen.getByRole("spinbutton", { name: zh["run.runs"] }), "run/runs"],
+      [screen.getByRole("checkbox", { name: zh["run.runs"] }), "run/runs", zh["run.runs_note"]],
+      [screen.getByRole("spinbutton", { name: zh["run.runs"] }), "run/runs", zh["run.runs_note"]],
       [screen.getByRole("checkbox", { name: zh["run.stop_when_weekly_bonus_out"] }), "run/stop_when_weekly_bonus_out"],
-      [screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) }), "run/webhook_url"],
-      [screen.getByRole("checkbox", { name: zh["run.auto_download"] }), "run/auto_download"],
+      [screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) }), "run/webhook_url", zh["run.webhook_url_note"]],
+      [screen.getByRole("checkbox", { name: zh["run.auto_download"] }), "run/auto_download", zh["run.auto_download_note"]],
       [screen.getByRole("textbox", { name: zh["emu.address"] }), "emulator/address", zh["emu.address_note"]],
       [screen.getByRole("spinbutton", { name: zh["emu.mumu_index"] }), "emulator/mumu_index", zh["emu.mumu_index_note"]],
       [screen.getByRole("textbox", { name: zh["emu.mumu_manager"] }), "emulator/mumu_manager"],
     ] as const;
-    // the key first, then how the field works where its tooltip says it (#876)
+    // the key first, then how the field works where its tooltip says it (#876, #879)
     for (const [control, path, help] of fields) {
       expect(control).not.toHaveAccessibleName(new RegExp(path));
       expect(control).toHaveAccessibleDescription(help ? `${path} ${help}` : path);
     }
     await show(r, "經驗本");
-    expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) })).toHaveAccessibleDescription("luxcavation/exp/team");
-    expect(screen.getByRole("checkbox", { name: zh["lux.consecutive"] })).toHaveAccessibleDescription("luxcavation/exp/consecutive");
+    expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) }))
+      .toHaveAccessibleDescription(described("luxcavation/exp/team", zh["lux.team_note"]));
+    expect(screen.getByRole("checkbox", { name: zh["lux.consecutive"] }))
+      .toHaveAccessibleDescription(described("luxcavation/exp/consecutive", zh["lux.consecutive_note"]));
+  });
+});
+
+/** The tooltip the pointer gets over a control: the title of the nearest element around it that has one. */
+const tipOf = (control: Element) => control.closest("[title]")?.getAttribute("title") ?? null;
+/** Text with its spaces and line breaks taken out: a note's lines are drawn with <br>, a tooltip's with "\n". */
+const flat = (text: string | null | undefined) => (text ?? "").replace(/\s+/g, "");
+/** The elements the page shows `text` in, the innermost ones: a field's hidden description is not shown. */
+const onPage = (text: string) => screen.queryAllByText((_, el) => !!el && flat(el.textContent).includes(flat(text))
+  && ![...el.children].some((c) => flat(c.textContent).includes(flat(text)))).filter((el) => !el.closest("[hidden]"));
+/** A field's description as a screen reader gets it: its settings key, then how it works (its tooltip). */
+const described = (path: string, help: string) => `${path} ${help}`;
+
+// spec #871 「說明文字：頁面上只留花費與風險」, #879's table: what warns of a cost or a risk stays on the page, under the field it
+// belongs to; how a field works is its tooltip (the element's title), which a screen reader reads as its description
+describe("on the page only a cost or a risk, how a field works its tooltip (#879)", () => {
+  test.each([["經驗本", "exp"], ["紐本", "thread"]] as const)("%s: the task's note is the mode's tooltip, each field's its own", async (name, task) => {
+    const s = newSettings();
+    Object.assign(s, queuedTeams([newTeam(1, "Ta")]));
+    const r = renderEditor(<RunTab />, s);
+    await show(r, name);
+    const path = `luxcavation/${task}`;
+    const mode = screen.getByRole("combobox", { name: zh["lux.mode"] });
+    const count = screen.getByRole("spinbutton", { name: new RegExp(zh["lux.count"]) });
+    const team = screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) });
+    const consecutive = screen.getByRole("checkbox", { name: zh["lux.consecutive"] });
+    const retries = screen.getByRole("spinbutton", { name: new RegExp(zh["lux.retries"]) });
+    for (const [control, key, help] of [
+      [mode, "mode", zh[`lux.${task}_note`]], [count, "count", zh["lux.count_unused"]], [team, "team", zh["lux.team_note"]],
+      [consecutive, "consecutive", zh["lux.consecutive_note"]], [retries, "retries", zh["lux.retries_note"]],
+    ] as const) {
+      expect(tipOf(control)).toBe(help);
+      expect(control).toHaveAccessibleDescription(described(`${path}/${key}`, help));
+    }
+    // how the task plays and each field works is on no line of the page
+    for (const line of zh[`lux.${task}_note`].split("\n")) expect(onPage(line)).toEqual([]);
+    for (const help of [zh["lux.count_unused"], zh["lux.team_note"], zh["lux.retries_note"], "超過 10 場時，先打 ×10，再打剩下的。"]) {
+      expect(onPage(help)).toEqual([]);
+    }
+    // what Consecutive Battle costs stays under it; no team picked stops the task, said as a caution while none is
+    expect(onPage(zh["lux.consecutive_cost"])).toEqual([expect.objectContaining({ tagName: "SMALL" })]);
+    expect(onPage(zh["lux.team_none_note"])).toEqual([expect.objectContaining({ className: "caution" })]);
+    // the count's tooltip only in daily mode, where it is greyed out; a team picked, the caution goes
+    await r.user.selectOptions(mode, "count");
+    expect(tipOf(count)).toBeNull();
+    expect(count).toHaveAccessibleDescription(`${path}/count`);
+    await r.user.selectOptions(team, s.teams[0].id);
+    expect(onPage(zh["lux.team_none_note"])).toEqual([]);
+  });
+
+  test("a Luxcavation task's deleted team says so as before, not that none is picked", async () => {
+    const s = newSettings();
+    s.luxcavation.exp.team = "gone";
+    await show(renderEditor(<RunTab />, s), "經驗本");
+    expect(onPage(zh["teamPick.gone_note"])).toHaveLength(1);
+    expect(onPage(zh["lux.team_none_note"])).toEqual([]);
+  });
+
+  test("Charge Enkephalin: its cost and prices on the page, its whole note the count's tooltip", async () => {
+    await show(renderEditor(<RunTab />, newSettings()), "狂氣換腦啡肽");
+    const count = screen.getByRole("spinbutton", { name: zh["charge.count"] });
+    expect(tipOf(count)).toBe(zh["charge.note"]);
+    expect(count).toHaveAccessibleDescription(described("charge_enkephalin/count", zh["charge.note"]));
+    expect(onPage(zh["charge.cost"])).toEqual([expect.objectContaining({ className: "caution" })]);
+    for (const moved of ["0 就什麼都不做", "手動換過的也算", "每次按確認前", "遊戲一天最多換 10 次"]) expect(onPage(moved)).toEqual([]);
+  });
+
+  test("Mirror Dungeon: the run limit, the theme pack refreshes and what to do when retries run out work in their tooltips", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await show(r, "鏡牢");
+    const limit = screen.getByRole("checkbox", { name: zh["run.runs"] });
+    const refresh = screen.getByRole("combobox", { name: new RegExp(`^${zh["run.theme_pack_refresh"]}`) });
+    const after = screen.getByRole("combobox", { name: new RegExp(`^${zh["run.after_retries"]}`) });
+    for (const [control, key, help] of [
+      [limit, "runs", zh["run.runs_note"]], [screen.getByRole("spinbutton", { name: zh["run.runs"] }), "runs", zh["run.runs_note"]],
+      [refresh, "theme_pack_refresh", zh["run.theme_pack_refresh_note"]], [after, "after_retries", zh["run.after_retries_note"]],
+    ] as const) {
+      expect(tipOf(control)).toBe(help);
+      expect(control).toHaveAccessibleDescription(described(`run/${key}`, help));
+    }
+    for (const moved of [zh["run.runs_note"], zh["run.theme_pack_refresh_note"], "全滅重打用完，或隊伍的存活門檻成立時，照這裡處理。"]) {
+      expect(onPage(moved)).toEqual([]);
+    }
+    // what forfeiting costs, only while it is picked
+    expect(r.settings().run.after_retries).toBe("forfeit");
+    expect(onPage(zh["run.after_retries_forfeit"])).toEqual([expect.objectContaining({ tagName: "SMALL" })]);
+    await r.user.selectOptions(after, "stop");
+    expect(onPage(zh["run.after_retries_forfeit"])).toEqual([]);
+  });
+
+  test("the global options: their title's tooltip says what they are, each field's how it works; the screenshots' risk stays", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    const title = screen.getByText(zh["globals.title"]);
+    expect(title).toHaveAttribute("title", zh["globals.note"]);
+    expect(title).toHaveAccessibleDescription(zh["globals.note"]);
+    await r.user.click(title);
+    expect(onPage(zh["globals.note"])).toEqual([]);
+    for (const key of GLOBAL_KEYS) {
+      const control = key === "webhook_url" ? screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) })
+        : screen.getByRole("checkbox", { name: zh[`run.${key}`] });
+      expect(tipOf(control)).toBe(zh[`run.${key}_note`]);
+      expect(control).toHaveAccessibleDescription(described(`run/${key}`, zh[`run.${key}_note`]));
+      for (const line of zh[`run.${key}_note`].split("\n")) expect(onPage(line)).toEqual([]);
+    }
+    expect(onPage(zh["run.keep_dismissed_screens_risk"])).toEqual([expect.objectContaining({ tagName: "SMALL" })]);
+  });
+
+  test("where a whole note is the tooltip, what stays on the page is cut from it word for word, in both languages", () => {
+    for (const text of [TEXT.zh_tw, TEXT.en_us]) {
+      expect(text["lux.consecutive_note"]).toContain(text["lux.consecutive_cost"]);
+      expect(text["run.after_retries_note"]).toContain(text["run.after_retries_forfeit"]);
+      for (const line of text["charge.cost"].split("\n")) expect(text["charge.note"]).toContain(line);
+      expect(text["sched.note"]).toContain(text["sched.logged_on_only"]);
+    }
+  });
+
+  test("notes wrap with no last line of a word alone", () => {
+    renderEditor(<RunTab />, newSettings());
+    for (const note of [onPage(zh["lux.consecutive_cost"])[0], onPage(zh["lux.team_none_note"])[0]]) {
+      expect(cssValueOf(css, note, "text-wrap")).toBe("pretty");
+    }
   });
 });

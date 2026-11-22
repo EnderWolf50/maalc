@@ -199,17 +199,31 @@ export function useMark() {
   return { ...(ids ? { "aria-invalid": true } as const : {}), ...(described ? { "aria-describedby": described } : {}) };
 }
 
+/** How a field or a title works, as its tooltip and, for a screen reader, its description (spec #871: on the page stays only
+ * what warns of a cost or a risk). `describes` is the id of its hidden copy, for an aria-describedby; `copy` that copy, put
+ * anywhere in the page. Nothing for no help. */
+export function useHelp(help: string | undefined) {
+  const id = useId();
+  return help ? { title: help, describes: id, copy: <span id={id} hidden>{help}</span> } : { title: undefined, describes: "", copy: null };
+}
+
 /** The frame of a field, red when a check fails at `path` or under it, with the data-path a problem's jump finds (focusPath).
  * The controls inside take the mark (Input, Choice). `as` is its tag; `marked` false keeps the mark off, for a frame whose
- * problems are marked further in. `title` is its tooltip. */
-export function Mark({ as: Tag = "div", path, className, marked = true, title, children }: {
-  as?: "div" | "label" | "td"; path?: string; className?: string; marked?: boolean; title?: string; children: ReactNode;
+ * problems are marked further in. `help`, how the field works, is the frame's tooltip, and the controls inside take it as
+ * their description after what DescribeContext names (useHelp). */
+export function Mark({ as: Tag = "div", path, className, marked = true, help, children }: {
+  as?: "div" | "label" | "td"; path?: string; className?: string; marked?: boolean; help?: string; children: ReactNode;
 }) {
   const { problemIds } = useEditor();
   const ids = path && marked ? problemIds(path) : "";
+  const outer = useContext(DescribeContext);
+  const tip = useHelp(help);
   return (
-    <Tag className={[className, ids && "bad"].filter(Boolean).join(" ") || undefined} data-path={path} title={title}>
-      <MarkContext.Provider value={ids}>{children}</MarkContext.Provider>
+    <Tag className={[className, ids && "bad"].filter(Boolean).join(" ") || undefined} data-path={path} title={tip.title}>
+      <MarkContext.Provider value={ids}>
+        <DescribeContext.Provider value={[outer, tip.describes].filter(Boolean).join(" ")}>{children}</DescribeContext.Provider>
+      </MarkContext.Provider>
+      {tip.copy}
     </Tag>
   );
 }
@@ -223,12 +237,13 @@ export const LockContext = createContext(false);
 export const Input = (props: ComponentProps<"input">) => <input {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
 export const Choice = (props: ComponentProps<"select">) => <select {...useMark()} {...props} disabled={useContext(LockContext) || props.disabled} />;
 
-/** A field: its label, the control, a note under it; `title` is the tooltip of the whole field, its label included. */
-export function Field({ label, path, note, title, children }: {
-  label: ReactNode; path?: string; note?: string; title?: string; children: ReactNode;
+/** A field: its label, the control, a note under it (a cost or a risk); `help`, how it works, the tooltip of the whole field,
+ * its label included, and its control's description (Mark). */
+export function Field({ label, path, note, help, children }: {
+  label: ReactNode; path?: string; note?: string; help?: string; children: ReactNode;
 }) {
   return (
-    <Mark as="label" className="field" path={path} title={title}>
+    <Mark as="label" className="field" path={path} help={help}>
       <span>{label}</span>
       {children}
       {note && <small>{withBreaks(note)}</small>}
