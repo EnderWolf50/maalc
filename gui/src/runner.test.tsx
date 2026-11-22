@@ -93,7 +93,10 @@ const stopButton = () => screen.getByRole("button", { name: new RegExp(`^(${zh["
 /** A task's tick; `n` (from 1) the tick of its nth entry, for a task listed more than once. */
 const tick = (name: string, n?: number) =>
   screen.getByRole("checkbox", { name: n ? fill(zh["tasks.tick_nth"], { name, n }) : fill(zh["tasks.tick"], { name }) });
-const runTasks = () => within(screen.getByRole("list", { name: zh["runner.tasks"] })).getAllByRole("listitem");
+/** The task list's rows; the state each one shows of the run ("off": a row the run left out, null: none shown). */
+const taskList = () => within(document.querySelector(".task-list")!);
+const taskRows = () => taskList().getAllByRole("listitem");
+const rowStates = () => taskRows().map((li) => li.querySelector(".task-row")!.getAttribute("data-state"));
 // its rows by tag: a role query over 2000 rows takes seconds
 const logLines = () => [...screen.getByRole("list", { name: zh["runner.log"] }).querySelectorAll("li")];
 const send = (...messages: Message[]) => act(() => { for (const m of messages) back.send!(m); });
@@ -167,22 +170,128 @@ describe("Start and Stop", () => {
 });
 
 describe("what the run shows", () => {
-  test("each posted task shows its state, in all six; a task the bot cancelled or stopped in shows why (#870)", async () => {
+  /** Settings whose first six rows are ticked, the run's six tasks in this order, and the last two not. */
+  const sixTicked = () => {
+    const s = settings();
+    s.tasks.forEach((x, j) => { x.enabled = j < 6; });
+    back.text = fileOf(s);
+    return ["ClaimMail", "MirrorDungeon", "ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation"];
+  };
+
+  test("the k-th ticked row shows the run's k-th task's state, in all six, in words; a row the run left out dims (#877)", async () => {
+    const order = sixTicked();
+    const user = await open();
+    expect(rowStates()).toEqual(Array(8).fill(null)); // no run yet: no states
+    await started(user);
+    expect(back.starts[0].entries).toEqual(order);
+    expect(rowStates()).toEqual([...order.map(() => "pending"), "off", "off"]);
+    const states = ["pending", "running", "succeeded", "failed", "stopped", "cancelled"] as const;
+    send(...states.map((state, k) => task(k, order[k], state)));
+    expect(rowStates()).toEqual([...states, "off", "off"]);
+    const rows = taskRows();
+    states.forEach((state, k) => expect(within(rows[k]).getByText(zh[`runner.state.${state}`])).toBeVisible());
+    for (const row of rows.slice(6)) {
+      expect(within(row).queryByText(new RegExp(Object.values(states).map((x) => zh[`runner.state.${x}`]).join("|")))).toBeNull();
+      expect(cssValueOf(css, row, "opacity")).toBe("0.55");
+    }
+    for (const row of rows.slice(0, 6)) expect(cssValueOf(css, row, "opacity")).toBeUndefined();
+  });
+
+  test("only the state's words take its colour, the running one's amber; a failed or cancelled row keeps its frame (#877)", async () => {
+    const order = sixTicked();
     const user = await open();
     await started(user);
-    expect(runTasks().map((x) => x.textContent)).toEqual([`${zh["task.ClaimMail"]}${zh["runner.state.pending"]}`,
-      `${zh["task.MirrorDungeon"]}${zh["runner.state.pending"]}`]);
     const states = ["pending", "running", "succeeded", "failed", "stopped", "cancelled"] as const;
-    const why: Partial<Record<string, string>> = { failed: "ClientOutdated: the game client is out of date", cancelled: "maintenance" };
-    send(...states.map((state, i) => task(i, "ClaimMail", state, why[state])));
-    const rows = runTasks();
-    expect(rows).toHaveLength(6);
-    states.forEach((state, i) => {
-      expect(rows[i]).toHaveAttribute("data-state", state);
-      expect(within(rows[i]).getByText(zh[`runner.state.${state}`])).toBeVisible();
-    });
-    expect(within(rows[3]).getByText(why.failed!)).toBeVisible();
-    expect(within(rows[5]).getByText("maintenance")).toBeVisible();
+    send(...states.map((state, k) => task(k, order[k], state)));
+    const rows = taskRows();
+    const ink = (k: number) => cssValueOf(css, within(rows[k]).getByText(zh[`runner.state.${states[k]}`]), "color");
+    expect(states.map((_, k) => ink(k))).toEqual(["var(--muted)", "var(--accent-ink)", "var(--keep)", "var(--bad)", "var(--accent-ink)", "var(--muted)"]);
+    // the frame and the fill of each row as any other's (row 0 is the picked one): no state of the run looks like a wrong
+    // setting's red frame, nor like the picked row
+    const frame = (li: Element) => ["border-color", "border-style", "background", "outline", "animation"].map((p) => cssValueOf(css, li, p));
+    for (const row of rows.slice(2, 6)) expect(frame(row)).toEqual(frame(rows[1]));
+    expect(cssValueOf(css, rows[1].querySelector(".task-row")!, "animation")).toBeUndefined();
+  });
+
+  test("a failed or cancelled row says why under its name: the runner's reason, else the bot's stop line; tasks named as the list names them, the row's own name in front left out (#877)", async () => {
+    const user = await open();
+    await user.click(tick("經驗本"));
+    await user.click(tick("紐本"));
+    await started(user);
+    expect(back.starts[0].entries).toEqual(["ClaimMail", "MirrorDungeon", "ExpLuxcavation", "ThreadLuxcavation"]);
+    send(log("[maalc] task ClaimMail started"), task(0, "ClaimMail", "running"), log("[maalc] stop: ClaimMail: the mailbox did not open"),
+      task(0, "ClaimMail", "failed"), log("[maalc] task MirrorDungeon started"), task(1, "MirrorDungeon", "running"),
+      task(1, "MirrorDungeon", "succeeded"), log("[maalc] task ExpLuxcavation started"),
+      task(2, "ExpLuxcavation", "failed", "MaintenanceNotice: maintenance before the ThreadLuxcavation task"),
+      task(3, "ThreadLuxcavation", "cancelled", "MaintenanceNotice: maintenance"));
+    const rows = taskRows();
+    const why = (row: HTMLElement) => row.querySelector(".tr-reason")?.textContent ?? null;
+    // the ticked rows: 領信, 鏡牢, then 經驗本 and 紐本 after the two unticked ones
+    expect([0, 1, 4, 5].map((j) => why(rows[j]))).toEqual(["the mailbox did not open", null,
+      "MaintenanceNotice: maintenance before the 紐本 task", "MaintenanceNotice: maintenance"]);
+    // in the body's face, not the rows' condensed numerals (ol.reorder .item small): it is a sentence to read
+    expect(cssValueOf(css, rows[0].querySelector(".tr-reason")!, "font")).toBe("400 12.5px/1.4 var(--font-ui)");
+    // under the name, in the row
+    const name = within(rows[0]).getByText("領信");
+    expect(name.compareDocumentPosition(within(rows[0]).getByText("the mailbox did not open")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test.each([["a tick"], ["a move"], ["a copy"], ["a remove"], ["an add"], ["a tick undone"], ["a remove undone"]])("after the run the states stay until the list changes: %s clears them for good (#877)", async (edit) => {
+    const user = await open();
+    await started(user);
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true));
+    const after = ["succeeded", "failed", ...Array(6).fill("off")];
+    expect(rowStates()).toEqual(after);
+    // another setting, a pick: the list is the run's still
+    await user.click(taskList().getByText(zh["task.MirrorDungeon"]));
+    await user.selectOptions(screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "hard");
+    expect(rowStates()).toEqual(after);
+    // each edit here leaves the ticked rows the run's tasks, so the list itself changing is what clears them
+    const pass = taskRows()[7];
+    if (edit === "a tick") await user.click(tick("領通行證任務"));
+    if (edit === "a move") await altMove(user, pass, "ArrowUp");
+    if (edit === "a copy") await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.copy"], { name: "領通行證任務" }) }));
+    if (edit === "a remove") await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.remove"], { name: "領通行證任務" }) }));
+    if (edit === "an add") {
+      await user.click(taskList().getByRole("button", { name: zh["tasks.add"] }));
+      await user.click(screen.getByRole("menuitem", { name: new RegExp(`^${zh["task.ClaimPassMissions"]}`) }));
+    }
+    // the list as the run's again: the states stay gone
+    if (edit === "a tick undone") { await user.click(tick("領通行證任務")); await user.click(tick("領通行證任務")); }
+    if (edit === "a remove undone") {
+      await user.click(within(pass).getByRole("button", { name: fill(zh["tasks.remove"], { name: "領通行證任務" }) }));
+      await user.click(taskList().getByRole("button", { name: zh.undo }));
+    }
+    expect(rowStates().every((x) => x === null)).toBe(true);
+  });
+
+  test("a page loaded again during a run takes the list as it reads it for the run's: its states show, and stay after the end until an edit", async () => {
+    back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "running")],
+      active: true };
+    const user = await open();
+    await waitFor(() => expect(rowStates().slice(0, 2)).toEqual(["running", "pending"]));
+    send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true));
+    expect(rowStates().slice(0, 2)).toEqual(["succeeded", "failed"]);
+    await altMove(user, taskRows()[7], "ArrowUp"); // an unticked row: the ticked ones are the run's still
+    expect(rowStates().every((x) => x === null)).toBe(true);
+  });
+
+  test("an ended run's messages coming one by one, a render between each, still write no states: the backend's word decides", async () => {
+    back.history = { messages: [], active: false };
+    await open();
+    await waitFor(() => expect(back.send).toBeDefined());
+    for (const m of [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "succeeded"),
+      task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" } as Message, exit(0, true)]) send(m);
+    expect(screen.getByText(/^跑完了，有任務沒成功$/)).toBeVisible();
+    expect(rowStates().every((x) => x === null)).toBe(true);
+  });
+
+  test("a page loaded again after a run ended writes no states on the rows: the list may have changed since the run", async () => {
+    back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "succeeded"),
+      task(1, "MirrorDungeon", "failed"), { type: "event", event: "end", result: "failed" }, exit(0, true)], active: false };
+    await open();
+    await waitFor(() => expect(screen.getByText(/^跑完了，有任務沒成功$/)).toBeVisible());
+    expect(rowStates().every((x) => x === null)).toBe(true);
   });
 
   test("a task with both its entries ticked is posted twice, and each entry shows its own state (#811)", async () => {
@@ -192,12 +301,8 @@ describe("what the run shows", () => {
     await started(user);
     expect(back.starts[0].entries).toEqual(["ClaimMail", "MirrorDungeon", "AssembleModules", "AssembleModules"]);
     send(task(2, "AssembleModules", "succeeded"), task(3, "AssembleModules", "running"));
-    expect(runTasks().map((x) => [x.textContent, x.dataset.state])).toEqual([
-      [`${zh["task.ClaimMail"]}${zh["runner.state.pending"]}`, "pending"],
-      [`${zh["task.MirrorDungeon"]}${zh["runner.state.pending"]}`, "pending"],
-      [`${zh["task.AssembleModules"]}${zh["runner.state.succeeded"]}`, "succeeded"],
-      [`${zh["task.AssembleModules"]}${zh["runner.state.running"]}`, "running"],
-    ]);
+    // the list: ClaimMail, MirrorDungeon, ChargeEnkephalin, AssembleModules, ExpLuxcavation, ThreadLuxcavation, AssembleModules, ...
+    expect(rowStates()).toEqual(["pending", "pending", "off", "succeeded", "off", "off", "running", "off"]);
   });
 
   test("the status says what the run is doing: the connection and the resource", async () => {
@@ -353,12 +458,12 @@ describe("what the run shows", () => {
     const user = await open();
     await started(user);
     send(task(0, "ClaimMail", "running"), exit(3, false));
-    expect(runTasks().map((x) => x.dataset.state)).toEqual(["failed", "cancelled"]);
+    expect(rowStates().slice(0, 2)).toEqual(["failed", "cancelled"]);
     back.starts = [];
     await started(user);
     send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "running"), { type: "stopping" },
       { type: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
-    expect(runTasks().map((x) => x.dataset.state)).toEqual(["succeeded", "stopped"]);
+    expect(rowStates().slice(0, 2)).toEqual(["succeeded", "stopped"]);
   });
 
   test("the runner's error event, whose own kind names the error, leaves the view as it was", async () => {
@@ -388,10 +493,12 @@ describe("what the run shows", () => {
   });
 
   test("a page loaded again during a run takes up the run so far, Stop on", async () => {
-    back.history = { messages: [task(0, "ClaimMail", "running"), log("[maalc] task ClaimMail started")], active: true };
+    // the runner posts each task pending at the start (runner/session.py start)
+    back.history = { messages: [task(0, "ClaimMail", "pending"), task(1, "MirrorDungeon", "pending"), task(0, "ClaimMail", "running"),
+      log("[maalc] task ClaimMail started")], active: true };
     await open();
     await waitFor(() => expect(logLines()).toHaveLength(1));
-    expect(runTasks()[0]).toHaveAttribute("data-state", "running");
+    expect(rowStates().slice(0, 2)).toEqual(["running", "pending"]);
     expect(stopButton()).toBeEnabled();
     expect(startButton()).toBeDisabled();
   });
@@ -670,13 +777,20 @@ describe("the device scan (#876)", () => {
 describe("during a run", () => {
   test("the task list, the task options, the global options and the emulator are locked; a task still shows its options", async () => {
     const user = await open();
+    // a delete before the run: its Undo would change the list the run reads
+    await user.click(taskList().getByRole("button", { name: fill(zh["tasks.remove"], { name: zh["task.ClaimPassMissions"] }) }));
+    expect(taskList().getByRole("button", { name: zh.undo })).toBeVisible();
     await started(user);
-    expect(screen.getByText(zh["runner.locked"])).toBeVisible();
-    const list = within(document.querySelector(".task-list")!);
+    // one line says so, where 加入任務 was: the page's one note of the lock
+    expect(screen.getAllByText(zh["runner.locked"])).toHaveLength(1);
+    expect(taskList().getByText(zh["runner.locked"])).toBeVisible();
+    const list = taskList();
     expect(tick("領信")).toBeDisabled();
+    // no tick, no copy, no remove, no 加入任務, no Undo
+    expect(list.queryAllByRole("button")).toEqual([]);
     for (const row of list.getAllByRole("listitem")) {
       expect(row).toHaveAttribute("draggable", "false");
-      for (const b of within(row).queryAllByRole("button")) expect(b).toBeDisabled();
+      for (const box of within(row).getAllByRole("checkbox")) expect(box).toBeDisabled();
     }
     // neither a drag nor Alt with an arrow moves a task (#873)
     const order = () => list.getAllByRole("listitem").map((li) => li.textContent);
@@ -684,6 +798,7 @@ describe("during a run", () => {
     dragOnto(list.getAllByRole("listitem")[2], list.getAllByRole("listitem")[0]);
     await altMove(user, list.getAllByRole("listitem")[0], "ArrowDown");
     expect(order()).toEqual(before);
+    expect(back.starts[0].entries).toEqual(["ClaimMail", "MirrorDungeon"]);
     expect(screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) })).toBeDisabled();
     // the emulator's whole frame: its pick list, the scan and the fields under 手動設定
     expect(emuPick()).toBeDisabled();
@@ -694,15 +809,14 @@ describe("during a run", () => {
     await user.click(list.getByText(zh["task.ExpLuxcavation"]));
     expect(screen.getByRole("group", { name: "經驗本" })).toBeVisible();
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.mode"]}`) })).toBeDisabled();
-    // no entry added or removed (#811)
-    await user.click(list.getAllByText(zh["task.AssembleModules"])[1]);
-    expect(screen.getByRole("button", { name: fill(zh["tasks.again"], { name: zh["task.AssembleModules"] }) })).toBeDisabled();
-    expect(screen.getByRole("button", { name: zh["tasks.remove"] })).toBeDisabled();
     send(exit(0, true));
     expect(tick("領信")).toBeEnabled();
     expect(emuPick()).toBeEnabled();
     expect(scanButton()).toBeEnabled();
     expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toBeEnabled();
+    expect(screen.queryByText(zh["runner.locked"])).toBeNull();
+    expect(list.getByRole("button", { name: zh["tasks.add"] })).toBeEnabled();
+    expect(list.getByRole("button", { name: zh.undo })).toBeVisible(); // back with the run's end
   });
 
   test("Undo of 放棄變更 is gone during a run: it would bring back edits the run reads", async () => {
@@ -781,6 +895,75 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
     expect(values("resource", "state")).toEqual(new Set(RESOURCE_STATES));
     expect(values("task", "state")).toEqual(new Set(TASK_STATES));
     expect(values("end", "result")).toEqual(new Set(RESULTS));
+  });
+
+  test("the run's list: the one it started from; a run taken up takes the settings' first; another list drops it for good (#877)", () => {
+    const one = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: false }];
+    const other = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true }];
+    const begun = reduce(IDLE, { type: "begin", entries: ["ClaimMail"], list: one });
+    expect(reduce(begun, { type: "list", list: one, adopt: false })).toBe(begun);
+    const edited = reduce(begun, { type: "list", list: other, adopt: false });
+    expect([edited.list, edited.unlisted]).toEqual([undefined, true]);
+    // the list as it was again: still gone, also where it may take one
+    expect(reduce(edited, { type: "list", list: one, adopt: true }).list).toBeUndefined();
+    // a page that took the run up: nothing before the run's tasks are known, then the settings' list as they read when the
+    // backend said the run is under way, and while it runs; an ended one takes none
+    const taken = reduce(IDLE, task(0, "ClaimMail", "running"));
+    expect(reduce(IDLE, { type: "list", list: one, adopt: true })).toBe(IDLE);
+    expect(reduce(taken, { type: "list", list: one, adopt: false }).list).toBeUndefined();
+    expect(reduce(taken, { type: "list", list: one, adopt: true }).list).toEqual(one);
+    const ended = reduce(taken, exit(0, true));
+    expect(reduce(ended, { type: "list", list: one, adopt: true }).list).toBeUndefined();
+    // a new run starts on its own list
+    expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other })).toMatchObject({ list: other });
+    expect(reduce(edited, { type: "begin", entries: ["ClaimMail"], list: other }).unlisted).toBeUndefined();
+  });
+
+  describe("a failed task's reason (#877): the runner's, else the bot's last stop line in that task", () => {
+    const agent = (line: string): Message => ({ type: "event", event: "log", t: "10:00:00.000", source: "agent", line });
+    const fold = (entries: string[], ...messages: Message[]) =>
+      messages.reduce(reduce, reduce(IDLE, { type: "begin", entries })).tasks.map((x) => x.reason);
+    const begun = (id: string) => agent(`[maalc] task ${id} started`);
+    const stopped = (reason: string) => agent(`[maalc] stop: ${reason}`);
+
+    test("the bot's lines as agent/actions.py writes them: a task's start, a stop", () => {
+      for (const line of ['log(f"task {argv.node_name} started")', 'log(f"stop: {reason}")']) expect(actionsPy).toContain(line);
+    });
+
+    test("a failed task with no reason of the runner's takes the bot's last stop line since the bot started it", () => {
+      expect(fold(["ThreadLuxcavation"], begun("ThreadLuxcavation"), task(0, "ThreadLuxcavation", "running"),
+        stopped("Thread Luxcavation: battle 2 lost"), stopped("Thread Luxcavation: defeated with the 2 retries used up"),
+        task(0, "ThreadLuxcavation", "failed"))).toEqual(["Thread Luxcavation: defeated with the 2 retries used up"]);
+    });
+
+    test("the task before's stop line is not the next task's reason", () => {
+      expect(fold(["ExpLuxcavation", "ClaimMail"], begun("ExpLuxcavation"), stopped("EXP Luxcavation: no team picked"),
+        task(0, "ExpLuxcavation", "failed"), begun("ClaimMail"), task(1, "ClaimMail", "failed")))
+        .toEqual(["EXP Luxcavation: no team picked", undefined]);
+    });
+
+    test("the next task's start may come before the runner ends the one before (it looks every 0.5 s): each keeps its own", () => {
+      expect(fold(["ExpLuxcavation", "ClaimMail"], begun("ExpLuxcavation"), stopped("EXP Luxcavation: no team picked"),
+        begun("ClaimMail"), task(0, "ExpLuxcavation", "failed"), task(1, "ClaimMail", "failed")))
+        .toEqual(["EXP Luxcavation: no team picked", undefined]);
+      // a task listed twice, its entries one after the other: the bot's nth start of it is the run's nth entry of it
+      expect(fold(["AssembleModules", "AssembleModules"], begun("AssembleModules"), stopped("no modules to assemble"),
+        begun("AssembleModules"), task(0, "AssembleModules", "failed"), task(1, "AssembleModules", "failed")))
+        .toEqual(["no modules to assemble", undefined]);
+    });
+
+    test("the runner's own reason comes first; a cancelled task, which never ran, takes only the runner's; a stop is no reason", () => {
+      expect(fold(["MirrorDungeon", "ClaimMail", "ExpLuxcavation"], begun("MirrorDungeon"), stopped("MaintenanceNotice: maintenance"),
+        task(0, "MirrorDungeon", "failed", "MaintenanceNotice: the halt (#870)"), task(1, "ClaimMail", "cancelled"),
+        task(2, "ExpLuxcavation", "cancelled", "MaintenanceNotice: maintenance")))
+        .toEqual(["MaintenanceNotice: the halt (#870)", undefined, "MaintenanceNotice: maintenance"]);
+      expect(fold(["ClaimMail"], begun("ClaimMail"), stopped("x"), task(0, "ClaimMail", "stopped"))).toEqual([undefined]);
+    });
+
+    test("only the bot's own lines count: not the runner's, not MaaFramework's output", () => {
+      expect(fold(["ClaimMail"], begun("ClaimMail"), log("[maalc] stop: quoted", "runner"), log("[maalc] stop: quoted", "console"),
+        task(0, "ClaimMail", "failed"))).toEqual([undefined]);
+    });
   });
 
   test.each(cases.addresses as [string, string, boolean][])("%s and %s are one device: %s, as the runner picks it", (a, b, same) => {

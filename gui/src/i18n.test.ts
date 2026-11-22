@@ -69,7 +69,7 @@ describe("English names a press of Start a session and keeps run for a Mirror Du
   });
 
   test("the run's texts say session, the Mirror Dungeon's say run", () => {
-    expect(TEXT.en_us["runner.tasks"]).toBe("This session's tasks");
+    expect(TEXT.en_us["runner.locked"]).toBe("Session under way: these settings cannot change");
     expect(TEXT.en_us["sched.title"]).toBe("Scheduled sessions");
     expect(TEXT.en_us["run.group_run"]).toBe("Each run"); // 每一局
   });

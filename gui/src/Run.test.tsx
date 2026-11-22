@@ -19,7 +19,10 @@ const ids = (s: Settings) => s.tasks.map((x) => x.id);
 const tick = (name: string) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick"], { name }) });
 /** The tick of a task's nth entry (from 1), a task listed more than once. */
 const nthTick = (name: string, n: number) => screen.getByRole("checkbox", { name: fill(zh["tasks.tick_nth"], { name, n }) });
-const again = (name: string) => screen.getByRole("button", { name: fill(zh["tasks.again"], { name }) });
+/** The copy and the ✕ of the row of a task listed once. */
+const copy = (name: string) => list().getByRole("button", { name: fill(zh["tasks.copy"], { name }) });
+const remove = (name: string) => list().getByRole("button", { name: fill(zh["tasks.remove"], { name }) });
+const addButton = () => list().getByRole("button", { name: zh["tasks.add"] });
 /** Settings whose task list has Assemble Modules before and after the Luxcavations, a task listed twice, none ticked. */
 function assembleTwice() {
   const s = newSettings();
@@ -155,7 +158,6 @@ describe("the task list", () => {
     expect(rows()[8]).toHaveAttribute("aria-current", "true");
     expect(rows()[7]).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("group", { name: zh["run.group_run"] })).toBeVisible();
-    expect(screen.getByText(fill(zh["tasks.entries"], { n: 2 }))).toBeVisible();
     // both entries read the task's one set of options
     await r.user.selectOptions(screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "hard");
     expect(r.settings().run.difficulty).toBe("hard");
@@ -163,35 +165,181 @@ describe("the task list", () => {
     await altMove(r.user, rows()[8], "ArrowUp");
     expect(rows()[7]).toHaveAttribute("aria-current", "true");
     expect(rows()[8]).not.toHaveAttribute("aria-current");
-    await r.user.click(within(rows()[1]).getByText("換腦啡肽模組"));
-    expect(screen.getByText(fill(zh["tasks.entries"], { n: 2 }))).toBeVisible();
-    await r.user.click(within(rows()[6]).getByText("領信"));
-    expect(screen.queryByText(fill(zh["tasks.entries"], { n: 2 }))).toBeNull();
   });
 
-  test("再加一次 lists the picked task once more, unticked, right after it, and picks it; an extra entry can be removed, a task's last one not", async () => {
-    const r = renderEditor(<RunTab />, assembleTwice());
-    await r.user.click(within(rows()[7]).getByText("鏡牢"));
-    expect(screen.queryByRole("button", { name: zh["tasks.remove"] })).toBeNull(); // the task's only entry
-    await r.user.click(again("鏡牢"));
-    expect(ids(r.settings()).slice(6)).toEqual(["ClaimMail", "MirrorDungeon", "MirrorDungeon"]);
-    expect(r.settings().tasks[8]).toEqual({ id: "MirrorDungeon", enabled: false });
-    expect(rows()[8]).toHaveAttribute("aria-current", "true");
-    await r.user.click(within(rows()[2]).getByText("經驗本"));
-    await r.user.click(again("經驗本"));
-    expect(ids(r.settings()).slice(2, 5)).toEqual(["ExpLuxcavation", "ExpLuxcavation", "ThreadLuxcavation"]);
+  test("a task listed more than once tags each entry #n, its tooltip which entry and that they share the options; one listed once, none", () => {
+    renderEditor(<RunTab />, assembleTwice());
+    const tags = list().getAllByText(/^#\d$/);
+    expect(tags.map((x) => [x.textContent, x.closest("li"), x.getAttribute("title")])).toEqual([
+      ["#1", rows()[1], fill(zh["tasks.entry_tip"], { n: 1, name: "換腦啡肽模組", of: 2 })],
+      ["#2", rows()[4], fill(zh["tasks.entry_tip"], { n: 2, name: "換腦啡肽模組", of: 2 })],
+    ]);
+    // the old notes under the list are gone: what the tag's tooltip says now
+    expect(document.querySelector(".task-list")!.textContent).not.toContain("列了");
+  });
+
+  test("a row's tooltip is its name and id, the one place the id shows (the agent's stop lines name a task by it)", () => {
+    renderEditor(<RunTab />, newSettings());
+    expect(rows().map((x) => x.querySelector("[title]")!.getAttribute("title"))).toEqual(
+      ["ExpLuxcavation", "ThreadLuxcavation", "ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions", "MirrorDungeon"]
+        .map((id) => fill(zh["tasks.row_tip"], { name: zh[`task.${id}` as keyof typeof zh], id })));
+    expect(screen.queryByText("ExpLuxcavation")).toBeNull();
+  });
+
+  test("a row's copy lists its task once more right under it, unticked, and picks the copy; the two read #1 and #2", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await show(r, "領通行證任務");
+    await r.user.click(copy("領信"));
+    expect(r.settings().tasks.slice(2, 4)).toEqual([{ id: "ClaimMail", enabled: true }, { id: "ClaimMail", enabled: false }]);
     expect(rows()[3]).toHaveAttribute("aria-current", "true");
-    // the picked one goes; the pick stays on the task, on its entry left
-    await r.user.click(screen.getByRole("button", { name: zh["tasks.remove"] }));
-    expect(ids(r.settings()).filter((id) => id === "ExpLuxcavation")).toHaveLength(1);
+    expect(screen.getByRole("group", { name: "領信" })).toBeVisible();
+    expect(nthTick("領信", 1)).toBeChecked();
+    expect(nthTick("領信", 2)).not.toBeChecked();
+    expect([rows()[2], rows()[3]].map((x) => within(x).getByText(/^#\d$/).textContent)).toEqual(["#1", "#2"]);
+    // the copy's own buttons name its entry's task: a copy of the copy goes under it
+    await r.user.click(within(rows()[3]).getByRole("button", { name: fill(zh["tasks.copy"], { name: "領信" }) }));
+    expect(ids(r.settings()).slice(2, 6)).toEqual(["ClaimMail", "ClaimMail", "ClaimMail", "ChargeEnkephalin"]);
+    expect(rows()[4]).toHaveAttribute("aria-current", "true");
+  });
+
+  test("a row's ✕ takes it out, a task's only entry too, with Undo under the list, which puts it back and picks it", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    await show(r, "領通行證任務");
+    await r.user.click(remove("領信"));
+    expect(ids(r.settings())).not.toContain("ClaimMail");
+    // the pick stays on its entry, now a row up
+    expect(rows()[4]).toHaveAttribute("aria-current", "true");
+    expect(rows()[4]).toHaveTextContent("領通行證任務");
+    const note = list().getByRole("status");
+    expect(note).toHaveTextContent(fill(zh["undo.deleted"], { name: "領信" }));
+    await r.user.click(within(note).getByRole("button", { name: zh.undo }));
+    expect(r.settings().tasks).toEqual(newSettings().tasks);
     expect(rows()[2]).toHaveAttribute("aria-current", "true");
-    expect(screen.queryByRole("button", { name: zh["tasks.remove"] })).toBeNull();
-    // a ticked first entry: removing it keeps the extra one with its own tick
-    await r.user.click(within(rows()[1]).getByText("換腦啡肽模組"));
-    await r.user.click(nthTick("換腦啡肽模組", 1));
-    await r.user.click(screen.getByRole("button", { name: zh["tasks.remove"] }));
-    expect(r.settings().tasks.filter((x) => x.id === "AssembleModules")).toEqual([{ id: "AssembleModules", enabled: false }]);
-    expect(tick("換腦啡肽模組")).not.toBeChecked();
+    expect(list().queryByRole("status")).toBeNull();
+  });
+
+  test("the picked row's ✕ picks the row that takes its place, the row before when it was the last", async () => {
+    const r = renderEditor(<RunTab />, assembleTwice());
+    // the second entry of a task listed twice: the first one's removal leaves the pick on it, its tag gone
+    await r.user.click(within(rows()[4]).getByText("換腦啡肽模組"));
+    await r.user.click(within(rows()[1]).getByRole("button", { name: fill(zh["tasks.remove"], { name: "換腦啡肽模組" }) }));
+    expect(rows()[3]).toHaveAttribute("aria-current", "true");
+    expect(rows()[3]).toHaveTextContent("換腦啡肽模組");
+    expect(list().queryByText(/^#\d$/)).toBeNull();
+    await r.user.click(remove("換腦啡肽模組"));
+    expect(rows()[3]).toHaveAttribute("aria-current", "true");
+    expect(rows()[3]).toHaveTextContent("領通行證任務");
+    await show(r, "鏡牢");
+    await r.user.click(remove("鏡牢"));
+    expect(rows()[rows().length - 1]).toHaveAttribute("aria-current", "true");
+    expect(rows()[rows().length - 1]).toHaveTextContent("領信");
+  });
+
+  test("the focus stays in the list: after a ✕ on the row that took its place, after an Undo on the row put back, in an empty list on 加入任務", async () => {
+    const s = newSettings();
+    s.tasks = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true }];
+    const r = renderEditor(<RunTab />, s);
+    remove("領信").focus();
+    await r.user.keyboard("{Enter}");
+    expect(rows()[0]).toHaveTextContent("鏡牢");
+    expect(rows()[0]).toHaveFocus();
+    list().getByRole("button", { name: zh.undo }).focus();
+    await r.user.keyboard("{Enter}");
+    expect(rows()[0]).toHaveTextContent("領信");
+    expect(rows()[0]).toHaveFocus();
+    remove("鏡牢").focus();
+    await r.user.keyboard("{Enter}");
+    expect(rows()[0]).toHaveFocus(); // the last row went: the one before it
+    remove("領信").focus();
+    await r.user.keyboard("{Enter}");
+    expect(addButton()).toHaveFocus();
+  });
+
+  test("an empty list says how to add a task, and no options show", async () => {
+    const s = newSettings();
+    s.tasks = [{ id: "ClaimMail", enabled: true }];
+    const r = renderEditor(<RunTab />, s);
+    expect(screen.queryByText(zh["tasks.empty"])).toBeNull();
+    await r.user.click(remove("領信"));
+    expect(r.settings().tasks).toEqual([]);
+    expect(list().getByText(zh["tasks.empty"])).toBeVisible();
+    expect(document.querySelector(".task-options")).toBeEmptyDOMElement();
+  });
+
+  test("the copy and the ✕ show over the row's end only under the pointer, or the keyboard's focus on the row or on them", () => {
+    renderEditor(<RunTab />, newSettings());
+    const row = rows()[2];
+    const acts = copy("領信").parentElement!;
+    expect(acts).toContainElement(remove("領信"));
+    const shown = (at?: Element | { focus: Element }) =>
+      [cssValueOf(css, acts, "opacity", at), cssValueOf(css, acts, "pointer-events", at)];
+    expect(shown()).toEqual(["0", "none"]); // no room of their own, and no click lands on them unseen
+    expect(cssValueOf(css, acts, "position")).toBe("absolute");
+    expect(shown(row)).toEqual(["1", "auto"]);
+    expect(shown({ focus: row })).toEqual(["1", "auto"]);
+    expect(shown({ focus: remove("領信") })).toEqual(["1", "auto"]);
+    expect(cssValueOf(css, copy("經驗本").parentElement!, "opacity", row)).toBe("0"); // another row's stay hidden
+  });
+
+  test("加入任務 lists each task in a new file's order, how often the list has it where that is not once; a pick adds it last, unticked, picked", async () => {
+    const s = assembleTwice().tasks.filter((x) => x.id !== "ClaimMail");
+    const r = renderEditor(<RunTab />, { ...newSettings(), tasks: s });
+    await r.user.click(addButton());
+    const items = within(screen.getByRole("menu", { name: zh["tasks.add"] })).getAllByRole("menuitem");
+    // the order a new file lists them in, read from the schema's default
+    expect(items.map((x) => x.querySelector("span")!.textContent)).toEqual(newSettings().tasks.map((x) => zh[`task.${x.id}` as keyof typeof zh]));
+    const said = Object.fromEntries(items.map((x) => [x.querySelector("span")!.textContent, x.querySelector("small")!.textContent]));
+    expect(said).toEqual({ 經驗本: "", 紐本: "", 領信: zh["tasks.absent"], 狂氣換腦啡肽: "", 換腦啡肽模組: fill(zh["tasks.listed"], { n: 2 }),
+      領通行證任務: "", 鏡牢: "" });
+    await r.user.click(items[2]);
+    expect(r.settings().tasks[r.settings().tasks.length - 1]).toEqual({ id: "ClaimMail", enabled: false });
+    expect(rows()[rows().length - 1]).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("group", { name: "領信" })).toBeVisible();
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(addButton()).toHaveFocus();
+  });
+
+  test("the menu opens over the page, taking no room, its first item focused; the arrows, Home and End step; Escape, Tab or a click away close it", async () => {
+    const r = renderEditor(<RunTab />, newSettings());
+    expect(addButton()).toHaveAttribute("aria-expanded", "false");
+    await r.user.click(addButton());
+    expect(addButton()).toHaveAttribute("aria-expanded", "true");
+    const menu = screen.getByRole("menu");
+    expect(cssValueOf(css, menu, "position")).toBe("absolute");
+    const items = within(menu).getAllByRole("menuitem");
+    expect(items[0]).toHaveFocus();
+    // the focused item shows, whether the menu opened from the pointer or the keyboard
+    expect(cssValueOf(css, items[0], "background")).toBe("var(--hov)");
+    expect(cssValueOf(css, items[1], "background")).toBe("none");
+    await r.user.keyboard("{ArrowDown}");
+    expect(items[1]).toHaveFocus();
+    await r.user.keyboard("{End}");
+    expect(items[6]).toHaveFocus();
+    await r.user.keyboard("{ArrowDown}");
+    expect(items[0]).toHaveFocus();
+    await r.user.keyboard("{ArrowUp}");
+    expect(items[6]).toHaveFocus();
+    await r.user.keyboard("{Home}");
+    expect(items[0]).toHaveFocus();
+    // the pointer moves the focus too: one item lit, the one Enter picks
+    await r.user.hover(items[3]);
+    expect(items[3]).toHaveFocus();
+    await r.user.keyboard("{Home}");
+    expect(items[0]).toHaveFocus();
+    // the pointer still on the 4th, the focus on the 1st: the 1st alone is lit
+    expect(cssValueOf(css, items[3], "background", items[3])).toBe("none");
+    expect(cssValueOf(css, items[0], "background", items[3])).toBe("var(--hov)");
+    await r.user.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(addButton()).toHaveFocus();
+    await r.user.keyboard("{Enter}");
+    expect(within(screen.getByRole("menu")).getAllByRole("menuitem")[0]).toHaveFocus();
+    await r.user.tab();
+    expect(screen.queryByRole("menu")).toBeNull();
+    await r.user.click(addButton());
+    await r.user.click(screen.getByRole("group", { name: "經驗本" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(r.settings().tasks).toEqual(newSettings().tasks); // nothing added
   });
 });
 

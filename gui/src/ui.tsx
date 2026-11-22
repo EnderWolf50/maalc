@@ -86,12 +86,16 @@ export function useUndo() {
 /** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
  * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
  * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
- * note, so an Undo never puts a row into the next team picked. The teams and plans use useUndo. */
-export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "") {
+ * note, so an Undo never puts a row into the next team picked. `undone` hears the row an Undo put back and the place it had
+ * (the Run tab picks a task list entry it brought back). The teams and plans use useUndo. */
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "", undone?: (row: T, at: number) => void) {
   const [last, setLast] = useScopedState<{ row: T; at: number; name: string } | null>(scope, null);
   const note = last && (
-    <UndoNote name={last.name}
-      onUndo={() => { edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); }); setLast(null); }} />
+    <UndoNote name={last.name} onUndo={() => {
+      edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); });
+      setLast(null);
+      undone?.(last.row, last.at);
+    }} />
   );
   const remove = (rows: T[], i: number, name: string) => {
     setLast({ row: rows[i], at: i, name: name || "—" });

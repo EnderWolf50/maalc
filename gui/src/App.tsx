@@ -12,7 +12,7 @@ import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, entryKey, taskOfPath } from "./Run";
-import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
+import { IDLE, RunnerContext, crashed, isRunning, reduce, wantsList, type Runner } from "./runner";
 import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
@@ -141,6 +141,9 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setLastScheduled({ id, at, outcome });
     return api.logSchedule(`${at} ${line}`).catch(() => {});
   };
+  // the run this page took up was under way when it did (the backend's word, not the phase of the moment: its messages come
+  // one by one); a run this page starts carries its own list, so this stays as it is for good
+  const [takenUp, setTakenUp] = useState(false);
   // whether the backend answered if this page took up a run, and whether it handed out the scheduled starts this window opened
   // for, the first of them begun: until both, the Run tab does not know whether a run is under way or starting as it opens (#876)
   const [attached, setAttached] = useState(false);
@@ -149,11 +152,16 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
     api.attachRun((m) => { if (live) dispatch(m); }).then((underWay) => {
       if (!live) return;
-      if (underWay) dispatch({ type: "attached" }); // running now: the run's messages come after the answer
+      if (underWay) { dispatch({ type: "attached" }); setTakenUp(true); } // running now: the run's messages come after the answer
       setAttached(true);
     }, () => { if (live) setAttached(true); });
     return () => { live = false; };
   }, []);
+  // the run's list follows the settings' task list (runner.ts listed): a run under way a page took up takes it, and after a
+  // run an edit to it takes the run's states off the Run tab's rows for good
+  const tasksNow = s ? JSON.stringify(s.tasks) : null;
+  const runWantsList = wantsList(run);
+  useEffect(() => { if (s) dispatch({ type: "list", list: s.tasks, adopt: takenUp }); }, [tasksNow, runWantsList, takenUp]);
   // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
   // its last step failed and how the last apply went (read at the window's start), each above every tab until dismissed.
   const [update, setUpdate] = useState<Update | null>(null);
@@ -450,7 +458,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       const { s: now } = latest.current;
       const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
       if (!entries.length) return "no_task";
-      const begin = { type: "begin", entries } as const;
+      // the whole list it starts from: the Run tab writes the run's states on its rows while the list is still this one
+      const begin = { type: "begin", entries, list: now!.tasks } as const;
       runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
       dispatch(begin);
       return await api.startRun(entries, now!.emulator, dispatch).then(() => null, (e: unknown) => {

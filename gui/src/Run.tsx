@@ -1,24 +1,29 @@
 // The Run tab (#814, #815, #816, #875, spec #811 「設定視窗」, spec #871 「版面（L1 B）」, spec 04 sections 5, 12 and 14), in two
 // columns with no titles over them, whose first frames start on one line. Left, the task list (ticks, drag or Alt+↑↓: the run
-// order; a task listed again, or an extra entry removed, #811) beside the picked task's options, then the global options
-// (folded) and the scheduled runs (Schedules.tsx). Right, held in view as the page scrolls, the run console: Start, Stop and
-// the run's status, the emulator with the device scan, and the live log, in that order idle and running. A narrow window
+// order; a row copied or removed, any task added back, #811, #877; during a run each row's state) beside the picked task's
+// options, then the global options (folded) and the scheduled runs (Schedules.tsx). Right, held in view as the page scrolls,
+// the run console: Start, Stop and the run's status, the emulator with the device scan, and the live log, in that order idle
+// and running. A narrow window
 // (NARROW) puts the console's Start line on top and its emulator and log under the options. Each control writes the settings
 // key the runner or the agent reads at a task's start, and shows that key after its label while the pointer is over the field
 // or the field draws a focus ring: the agent's stop lines name an option by it ("run/start_team: team 'x' was deleted ...").
 // A team pick lists the settings' teams as they are now. During a run the settings it reads are locked (LockContext): a task
 // still shows its options when clicked.
 import {
-  memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode,
+  memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps,
+  type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
 } from "react";
 import { fill, type Key } from "./i18n";
-import { schema, type LuxOptions, type Settings } from "./model";
-import { LOG_LINES, crashed, isRunning, sameAddress, useRunner, type Device, type LogLine, type RunView } from "./runner";
+import { LockIcon } from "./KeywordGrid";
+import { TASK_ORDER, schema, type LuxOptions, type Settings } from "./model";
+import {
+  LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
+} from "./runner";
 import * as api from "./api";
 import { SchedulesSection } from "./Schedules";
 import {
   Choice, DescribeContext, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, translate, useEditor, usePick,
-  withBreaks,
+  useUndoRow, withBreaks,
 } from "./ui";
 
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
@@ -109,10 +114,13 @@ export const entryKey = (tasks: { id: string }[], j: number) => {
   return n ? `${tasks[j].id}#${n}` : tasks[j].id;
 };
 
+/** A task list entry as its row shows it: `key` its pick key (entryKey), `nth` its place among its task's entries (from 0),
+ * `of` how many the task has. */
+type Row = Settings["tasks"][number] & { key: string; nth: number; of: number };
+
 export function RunTab() {
-  const { s, update, t, bad } = useEditor();
-  // each entry a row of its own: `nth` is its place among its task's entries (from 0), `of` how many the task has
-  const rows = s.tasks.map((x, j) => ({
+  const { s } = useEditor();
+  const rows: Row[] = s.tasks.map((x, j) => ({
     ...x, key: entryKey(s.tasks, j), nth: nthOf(s.tasks, j), of: s.tasks.filter((y) => y.id === x.id).length,
   }));
   const [i, setSel] = usePick("tasks", rows.map((x) => ({ id: x.key })));
@@ -135,17 +143,6 @@ export function RunTab() {
     shown.current?.scrollIntoView?.({ block: "start" });
     revealed?.();
   }, [reveal]);
-  // the picked task once more, unticked, right after the picked entry, and picked: a new entry runs only once ticked
-  const again = () => {
-    const tasks = [...s.tasks.slice(0, i + 1), { id: picked.id, enabled: false }, ...s.tasks.slice(i + 1)];
-    update((d) => { d.tasks = tasks; });
-    setSel(entryKey(tasks, i + 1));
-  };
-  // a task's last entry stays (the button is only there while it has another): every task is listed, to be ticked
-  const remove = () => {
-    update((d) => { d.tasks.splice(i, 1); });
-    setSel(picked.id);
-  };
   return (
     <div className="run-page"><LockContext.Provider value={locked}>
       <div className={"run-grid" + (narrow ? " narrow" : "")}>
@@ -162,35 +159,7 @@ export function RunTab() {
         <div className="run-main">
           {/* no titles over the columns: the list, the options and the console start on one line */}
           <div className="split">
-            <aside className="task-list" data-path="tasks">
-              {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
-              <ReorderList items={rows} keyOf={(x) => x.key} selected={i} onSelect={(j, list) => setSel(entryKey(list, j))}
-                label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
-                onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
-                render={(x, j) => (
-                  <span className="task-row">
-                    {/* the tick's own hit area, larger than the bare box; a click there ticks and leaves the picked task as it is */}
-                    <label className="tick" onClick={(e) => e.stopPropagation()}>
-                      <Input type="checkbox" checked={x.enabled}
-                        aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name: taskName(t, x.id), n: x.nth + 1 })}
-                        onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
-                    </label>
-                    <span className={x.enabled ? "" : "muted"}>{taskName(t, x.id)}</span>
-                  </span>
-                )} />
-              {picked && (
-                <div className="task-actions">
-                  <button type="button" disabled={locked} onClick={again}>
-                    <span aria-hidden>+ </span>{fill(t("tasks.again"), { name: taskName(t, picked.id) })}
-                  </button>
-                  {picked.of > 1 && <button type="button" className="danger" disabled={locked} onClick={remove}>{t("tasks.remove")}</button>}
-                </div>
-              )}
-              {/* under the list, not over the options: the options' frame stays level with the list and the console */}
-              {picked && picked.of > 1 && <p className="muted">{fill(t("tasks.entries"), { n: picked.of })}</p>}
-              {/* under the list, not over the page: a run moves nothing in the console or the columns' tops */}
-              {locked && <p className="run-locked" role="status">{t("runner.locked")}</p>}
-            </aside>
+            <TaskList rows={rows} pickedAt={i} setSel={setSel} />
             <section className="task-options">{picked && <TaskOptions id={picked.id} />}</section>
           </div>
           {narrow && <><EmulatorFields scan={scan} manual={manual} /><RunLog folded raw={raw} boxRef={keep} /></>}
@@ -200,6 +169,169 @@ export function RunTab() {
         </div>
       </div>
     </LockContext.Provider></div>
+  );
+}
+
+/** A small drawn icon of the task rows and the list's add button: a 16 px box, a 1.5 px line. */
+const Glyph = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5"
+    strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+);
+const COPY = "M5.5 5.5h7v7h-7z M3.5 10.5v-7h7", CROSS = "M4.5 4.5l7 7 M11.5 4.5l-7 7", PLUS = "M8 3.5v9 M3.5 8h9";
+
+/** Each row's state in the run the window shows, by row (spec #871 「執行中的任務清單」): the runner posts the ticked entries in
+ * the list's order, so the k-th ticked row is the run's k-th task. Held while the list is the run's (runner.ts RunView list):
+ * the lock keeps it so during the run, and after it the first tick, move, copy, remove or add ends them for good, as the list
+ * and the run no longer read together. Null then, before a run, and when the ticked rows are not the run's tasks. */
+function rowStates(tasks: Settings["tasks"], view: RunView) {
+  if (!view.tasks.length || !view.list || !sameList(view.list, tasks)) return null;
+  const ticked = tasks.flatMap((x, j) => (x.enabled ? [j] : []));
+  if (ticked.length !== view.tasks.length || ticked.some((j, k) => tasks[j].id !== view.tasks[k].entry)) return null;
+  return new Map(ticked.map((j, k) => [j, view.tasks[k]]));
+}
+
+/** The task list (spec #871 「任務清單（3B）」): each entry a row with its tick and name (#n when its task is listed more than
+ * once), dragged or moved with Alt to set the run order (ReorderList). A row's copy and remove show over its end under the
+ * pointer or the keyboard's focus and take no room (index.css .tr-acts); 「加入任務」 under the list adds any task. During a
+ * run the list cannot change, and the line where 加入任務 was says so: the one note of the lock on the page. */
+function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; setSel: (key: string) => void }) {
+  const { s, update, t, bad } = useEditor();
+  const locked = useContext(LockContext);
+  const states = rowStates(s.tasks, useRunner().view);
+  // the row the focus goes to after the render: a removed row's button, or the Undo note's, leaves with what it removed or
+  // put back, and the focus would drop to the page's top; it goes to the row that took the removed one's place, or to the
+  // row put back (加入任務 when the list is empty)
+  const aside = useRef<HTMLElement>(null);
+  const focusAt = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (focusAt.current === null) return;
+    const rowEls = aside.current?.querySelectorAll<HTMLElement>("ol.reorder > li");
+    (rowEls?.[Math.min(focusAt.current, rowEls.length - 1)] ?? aside.current?.querySelector<HTMLElement>(".add-task > button"))?.focus();
+    focusAt.current = null;
+  });
+  // an Undo puts the entry back where it was and picks it, as the team list's does
+  const [undoNote, removeRow] = useUndoRow<Settings["tasks"][number]>((fn) => update((d) => fn(d.tasks)), "", (row, at) => {
+    const tasks = [...s.tasks];
+    tasks.splice(Math.min(at, tasks.length), 0, row);
+    setSel(entryKey(tasks, Math.min(at, s.tasks.length)));
+    focusAt.current = Math.min(at, s.tasks.length);
+  });
+  // a new entry of task `id` at place `at`, unticked (it runs only once ticked), and picked: a copy right under the row it
+  // copies, an add at the end
+  const insertAt = (at: number, id: string) => {
+    const tasks = [...s.tasks.slice(0, at), { id, enabled: false }, ...s.tasks.slice(at)];
+    update((d) => { d.tasks = tasks; });
+    setSel(entryKey(tasks, at));
+  };
+  // any row goes, a task's only one too (加入任務 lists it again); the pick stays on its entry, and moves to the row that takes
+  // the removed one's place when it was the one removed (the row before, when it was the last). A pick key counts its task's
+  // entries before it, so it is counted again in the list without the row.
+  const removeAt = (j: number) => {
+    const tasks = s.tasks.filter((_, k) => k !== j);
+    removeRow(s.tasks, j, taskName(t, s.tasks[j].id));
+    if (tasks.length) setSel(entryKey(tasks, j === pickedAt ? Math.min(j, tasks.length - 1) : pickedAt > j ? pickedAt - 1 : pickedAt));
+    focusAt.current = j;
+  };
+  return (
+    <aside className="task-list" data-path="tasks" ref={aside}>
+      {/* a moved list's rows still carry the keys of before the move: the pick's key is counted in the list after it */}
+      <ReorderList items={rows} keyOf={(x) => x.key} selected={pickedAt} onSelect={(j, list) => setSel(entryKey(list, j))}
+        label={t("tasks.title")} badAt={(j) => bad(`tasks/${j}`) || (TASK_ROOTS[rows[j].id] ?? []).some(bad)}
+        onChange={(moved) => update((d) => { d.tasks = moved.map(({ id, enabled }) => ({ id, enabled })); })}
+        render={(x, j) => {
+          const name = taskName(t, x.id);
+          const copyName = fill(t("tasks.copy"), { name }), removeName = fill(t("tasks.remove"), { name });
+          const task = states?.get(j); // the run's task on this row
+          return (
+            // its id only here, in its tooltip: the agent's stop lines name a task by it ("the ExpLuxcavation task"). Its state
+            // in a run (data-state: "off" for a row the run left out, which fades) in words, their colour alone: the row itself
+            // stays as it was (#871, round 4 item 5), so a running row does not read as the picked one, nor a failed one as a
+            // wrong one
+            <span className="task-row" title={fill(t("tasks.row_tip"), { name, id: x.id })}
+              data-state={states ? task?.state ?? "off" : undefined}>
+              {/* the tick's own hit area, the first line and the row's padding; a click there ticks and leaves the picked task as
+                  it is */}
+              <label className="tick" onClick={(e) => e.stopPropagation()}>
+                <Input type="checkbox" checked={x.enabled} aria-label={fill(t(x.of > 1 ? "tasks.tick_nth" : "tasks.tick"), { name, n: x.nth + 1 })}
+                  onChange={(e) => update((d) => { d.tasks[j].enabled = e.target.checked; })} />
+              </label>
+              <span className="tr-main">
+                <span className="tr-line">
+                  <span className={"tr-name" + (x.enabled ? "" : " muted")}>{name}</span>
+                  {x.of > 1 && <em className="qtag" title={fill(t("tasks.entry_tip"), { n: x.nth + 1, name, of: x.of })}>#{x.nth + 1}</em>}
+                </span>
+                {/* why it failed or was cancelled (runner.ts: the runner's reason, else the bot's stop line), in English
+                    until #881 */}
+                {task?.reason && <small className="tr-reason">{reasonText(t, task.reason, name)}</small>}
+              </span>
+              {task && <span className="tr-state">{t(`runner.state.${task.state}`)}</span>}
+              {!locked && (
+                <span className="tr-acts">
+                  <button type="button" className="icon" title={copyName} aria-label={copyName}
+                    onClick={(e) => { e.stopPropagation(); insertAt(j + 1, x.id); }}><Glyph d={COPY} /></button>
+                  <button type="button" className="icon remove" title={removeName} aria-label={removeName}
+                    onClick={(e) => { e.stopPropagation(); removeAt(j); }}><Glyph d={CROSS} /></button>
+                </span>
+              )}
+            </span>
+          );
+        }} />
+      {!rows.length && <p className="muted">{t("tasks.empty")}</p>}
+      {/* an Undo during a run would change the list it reads: it waits for the run's end */}
+      {!locked && undoNote}
+      {/* under the list, not over the page: a run moves nothing in the console or the columns' tops */}
+      {locked ? <p className="run-locked" role="status"><LockIcon className="lock" />{t("runner.locked")}</p> : <AddTask onPick={(id) => insertAt(s.tasks.length, id)} />}
+    </aside>
+  );
+}
+
+/** 「＋ 加入任務」 and its menu, which opens over the page and moves nothing under it: each task by name, in a new file's
+ * order (the schema's default, model.ts TASK_ORDER), with how often the list has it where that is not once. Open, the focus
+ * is on its first item; the arrows, Home and End step through it, Escape closes it back to the button, and Tab or a click
+ * outside closes it too. A pick adds the task (TaskList append). */
+function AddTask({ onPick }: { onPick: (id: string) => void }) {
+  const { s, t } = useEditor();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const menu = useId();
+  const items = () => [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+  const close = (refocus: boolean) => { setOpen(false); if (refocus) button.current?.focus(); };
+  useEffect(() => {
+    if (!open) return;
+    items()[0]?.focus();
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [open]);
+  const onKey = (e: ReactKeyboardEvent) => {
+    const list = items(), at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const to = ({ ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: list.length - 1 } as Record<string, number>)[e.key];
+    if (to !== undefined) { e.preventDefault(); list[(to + list.length) % list.length]?.focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); close(true); }
+    else if (e.key === "Tab") setOpen(false); // and the focus goes on to what follows, as from any other control
+  };
+  return (
+    <div className="add-task" ref={box}>
+      <button type="button" ref={button} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menu : undefined}
+        onClick={() => setOpen(!open)}>
+        <Glyph d={PLUS} />{t("tasks.add")}
+      </button>
+      {open && (
+        <div className="add-menu" role="menu" id={menu} aria-label={t("tasks.add")} onKeyDown={onKey}>
+          {TASK_ORDER.map((id) => {
+            const n = s.tasks.filter((x) => x.id === id).length;
+            return (
+              // the pointer moves the focus as the arrows do: one item lit, the one a key acts on
+              <button type="button" role="menuitem" tabIndex={-1} key={id} onPointerEnter={(e) => e.currentTarget.focus()}
+                onClick={() => { onPick(id); close(true); }}>
+                <span>{taskName(t, id)}</span><small>{n === 0 ? t("tasks.absent") : n > 1 ? fill(t("tasks.listed"), { n }) : ""}</small>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -298,6 +430,13 @@ const NAMED = new RegExp(`(?<!Clear )\\b(${[...Object.keys(BOT_NAMES), ...TASKS]
 /** A line with each task it names written as the list names it: 「[run] 紐本 status=failed」 for "[run] ThreadLuxcavation
  * status=failed". The runner's log file keeps the line as it came. */
 const namesInList = (t: (k: Key) => string, text: string) => text.replace(NAMED, (m) => taskName(t, BOT_NAMES[m] ?? m));
+/** A task's reason under its row (`name`, its task's name in the list): the tasks it names as the list names them, and the
+ * row's own name in front left out, which the row says already (「defeated with the 2 retries used up」 under 紐本, for
+ * "Thread Luxcavation: defeated with the 2 retries used up"). */
+function reasonText(t: (k: Key) => string, reason: string, name: string) {
+  const text = namesInList(t, reason);
+  return text.startsWith(`${name}: `) ? text.slice(name.length + 2) : text;
+}
 /** A line that says a task failed or was stopped, or the run did (runner/session.py finish, error and end; agent/actions.py
  * stop): drawn in the failed state's colour. */
 const FAILED_LINE = /\bstatus=(failed|stopped)\b|^\[run\] (error |end (failed|stopped)\b)|^\[maalc\] stop: /;
@@ -352,29 +491,8 @@ function RunControls() {
   </>);
 }
 
-/** Each posted task's state, while a run shows (#877 writes them on the task list's rows instead): in the log's frame, above
- * the log, so nothing in the console moves as a run starts. */
-function RunTasks({ view }: { view: RunView }) {
-  const { t } = useEditor();
-  if (!view.tasks.length) return null;
-  return (
-    <div className="run-tasks">
-      <h3>{t("runner.tasks")}</h3>
-      <ol aria-label={t("runner.tasks")}>
-        {view.tasks.map((x, j) => (
-          <li key={j} data-state={x.state}>
-            <span>{taskName(t, x.entry)}</span>
-            <span className="state">{t(`runner.state.${x.state}`)}</span>
-            {x.reason && <small>{x.reason}</small>}
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-/** The live log (the last LOG_LINES lines, MaaFramework's own output hidden unless `raw` asks for it), how a run that crashed
- * ended and the run's tasks. In the console's column it takes the column's remaining height, empty but for one faint line
+/** The live log (the last LOG_LINES lines, MaaFramework's own output hidden unless `raw` asks for it) and how a run that
+ * crashed ended. In the console's column it takes the column's remaining height, empty but for one faint line
  * until a run logs. `folded` (a narrow window, under the list and the options) it is a panel, folded until a run starts. How
  * much the window keeps and where the whole log is: its title's tooltip. `boxRef` takes its frame. */
 function RunLog({ folded = false, raw: [showConsole, setShowConsole], boxRef }: {
@@ -411,7 +529,6 @@ function RunLog({ folded = false, raw: [showConsole, setShowConsole], boxRef }: 
         <pre>{view.exit!.tail.join("\n")}</pre>
       </div>
     )}
-    <RunTasks view={view} />
     <div className="log-well">
       <ol className={"run-log" + (shown.length ? "" : " empty")} ref={pane} aria-label={t("runner.log")} tabIndex={0}
         onScroll={(e) => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
