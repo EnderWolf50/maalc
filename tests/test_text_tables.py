@@ -10,9 +10,9 @@ def test_plain_drops_markup_and_edges_and_a_missing_text():
     assert tt.plain(None) == ""
 
 
-def test_zh_converts_simplified_to_taiwan_wording_then_applies_the_fix_table():
+def test_zh_converts_simplified_characters_to_traditional_and_keeps_the_words():
     assert tt.zh("咖啡与纸鹤") == "咖啡與紙鶴"
-    assert tt.zh("<b>刷新</b>") == "刷新"  # s2twp alone makes it 重新整理, the fix table puts the game's word back
+    assert tt.zh("<b>刷新</b> 软件") == "刷新 軟件"  # characters alone (#899): Taiwan's wording (s2twp) would write 重新整理 軟體
 
 
 def test_gift_text_names_the_buff_tags_squeezes_blank_lines_and_drops_markup():

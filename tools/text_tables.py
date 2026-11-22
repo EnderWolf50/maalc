@@ -8,7 +8,7 @@ the Localize Limbus Company (LLC) release's `LLC_zh-CN` files, and writes three 
   gift_text.json   gift id -> names, keyword and tier, effect and enhanced effect (the id + 10000 gift) in the same three languages
                    (desc_*, plus_*)
   trial_text.json  trial buff id -> the trial's English text, Simplified name and text, and Traditional name and text
-Every Traditional field is the Simplified one with markup dropped, converted by `llc_text.to_traditional` (OpenCC s2twp and its fix
+Every Traditional field is the Simplified one with markup dropped, converted by `llc_text.to_traditional` (OpenCC s2tw and its fix
 table): the one conversion maalc and lc-helper share. LLC is CC BY-NC-SA 4.0 (NOTICE.md). Written for the lc-helper (#759).
 """
 
@@ -37,7 +37,7 @@ def plain(text):
 
 
 def zh(text):
-    """LLC's Simplified `text`, markup dropped, as Traditional (the shared s2twp conversion and fix table)."""
+    """LLC's Simplified `text`, markup dropped, as Traditional (the shared s2tw conversion and fix table)."""
     return to_traditional(plain(text))
 
 
@@ -189,7 +189,7 @@ def base_gifts(unpack, ids_wanted, en_names, cn_names):
 
 def notes(client, release):
     common = (f"the game client {client}'s English text and the Localize Limbus Company release's LLC_zh-CN files (Simplified Chinese, in the "
-              "_cn fields and cn), the Traditional Chinese (_zh fields and zh) converted from it with OpenCC s2twp and its fix table "
+              "_cn fields and cn), the Traditional Chinese (_zh fields and zh) converted from it with OpenCC s2tw and its fix table "
               "(tools/llc_text.py), markup tags dropped. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/text_tables.py.")
     return {"event_text.json": "Text of each event and page of event_table.json by event id (the table has the keys, hints and effects): " + common,
             "gift_text.json": ("Names, keyword, tier, effect (desc_*) and enhanced effect (plus_*, the gift of id + 10000) of each gift of "

@@ -12,8 +12,9 @@ gift the settings GUI shows (catalog_ids), English from the client's `EN_EGOgift
 keywords they name: their names in the `Bufs*.json` and `BattleKeywords*.json` of each, their colour and icon from the client's
 static buff data (#764; tools/buf_icons.py draws the icons). And data/theme_pack_names.json: each theme pack's Chinese
 name by its id in data/theme_packs.yaml's `pack_ids` (`LLC_zh-CN/MirrorDungeonTheme*.json`), and the packs the release names
-none of, which the GUI shows in English (#899). Simplified to Traditional with OpenCC s2twp. Fails on a gift or grace the
-release lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
+none of, which the GUI shows in English (#899). Simplified to Traditional characters with OpenCC s2tw, the words kept, and
+the fix table (`to_traditional`). Fails on a gift or grace the release lacks; gift_recipes.py reuses `gift_names`. LLC is
+CC BY-NC-SA 4.0 (NOTICE.md).
 """
 
 import argparse
@@ -43,10 +44,11 @@ BUFFS = STATIC + "/buff"  # the client's buff records
 # The gift records that carry a gift's sin (attributeType): the mirror dungeon's own first, then the plain ones; 9038, 9111
 # and 9195 carry another sin in the plain tables (client 1.118.1).
 GIFT_TABLES = ("ego-gift-mirrordungeon", "ego-gift")
-_S2TWP = opencc.OpenCC("s2twp")
-# where s2twp's Taiwan wording is wrong for the game text; the last two are in theme packs' names (#899)
-FIXES = {"指標": "指針", "重新整理": "刷新", "映象": "鏡像", "透過階層": "通過階層", "松肉": "鬆肉", "儲存的信念": "保存的信念",
-         "迴圈": "循環"}
+# Simplified characters to Taiwan's Traditional ones, the words kept: s2twp's Taiwan wording (軟件 -> 軟體) is not used, the
+# user's call of 2026-11-23 (#899).
+_S2TW = opencc.OpenCC("s2tw")
+# where s2tw's characters are wrong for the game text: 松 is both 松 (pine) and 鬆 (loose) in Traditional, and s2tw keeps the pine
+FIXES = {"松肉": "鬆肉"}
 YELLOW = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
 BLUE = "#627eff"  # the game's blue of a keyword in a grace's effect text; the GUI shows it plain
 # The colours of a gift's effect text by their names in the game's ColorCode table (static data ui/ColorCode.json, client
@@ -60,7 +62,7 @@ TMP_TAGS = {"align", "allcaps", "alpha", "b", "br", "color", "cspace", "font", "
 
 
 def to_traditional(text):
-    text = _S2TWP.convert(text)
+    text = _S2TW.convert(text)
     for wrong, right in FIXES.items():
         text = text.replace(wrong, right)
     return text
@@ -68,11 +70,11 @@ def to_traditional(text):
 
 FIXES_NOTE = ", ".join(f"{a}->{b}" for a, b in FIXES.items())
 NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), "
-           "converted with OpenCC s2twp, then " + FIXES_NOTE + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
+           "converted with OpenCC s2tw, then " + FIXES_NOTE + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 def note_graces(client):
     return ("Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company "
             "release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's "
-            "start-buff values, converted with OpenCC s2twp, then " + FIXES_NOTE + ". English names and effect text: the game client "
+            "start-buff values, converted with OpenCC s2tw, then " + FIXES_NOTE + ". English names and effect text: the game client "
             f"{client}'s EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, "
             "keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the "
             "template colours the game's yellow (" + YELLOW + "), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 "
@@ -90,14 +92,14 @@ def note_effects(client):
             "keywords: each keyword the texts name: its name in each language (Bufs*.json, BattleKeywords*.json of each), its "
             "colour as the client's ColorCode table names it (its buff's buffType in the static data buff/*.json) and its icon "
             "(data/buf_icons/<icon>.webp, tools/buf_icons.py). A bracketed note that names no keyword stays as written. The "
-            "Chinese converted with OpenCC s2twp run by run, then " + FIXES_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see "
+            "Chinese converted with OpenCC s2tw run by run, then " + FIXES_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see "
             "NOTICE.md). Written by tools/llc_text.py.")
 
 
 def note_packs():
     return ("Each theme pack's Chinese name by its id (data/theme_packs.yaml's pack_ids; en: the pack's name there): the "
             "Localize Limbus Company release's LLC_zh-CN/MirrorDungeonTheme*.json name (Simplified Chinese), converted with "
-            "OpenCC s2twp, then " + FIXES_NOTE + ". missing: the ids of the packs of pack_ids the release names none of; the "
+            "OpenCC s2tw, then " + FIXES_NOTE + ". missing: the ids of the packs of pack_ids the release names none of; the "
             "settings GUI shows their English name. The agent does not read this file. Chinese names licensed CC BY-NC-SA 4.0 "
             "(see NOTICE.md). Written by tools/llc_text.py.")
 

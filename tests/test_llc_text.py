@@ -1,4 +1,5 @@
 import json
+import re
 import zipfile
 from pathlib import Path
 
@@ -183,7 +184,7 @@ def test_the_chinese_is_converted_run_by_run_and_must_read_as_the_text_converted
     assert llc_text.effect_runs("使[Sinking]层数增加<i><color=#a16a3b>铜钱</color></i>", {"Sinking": "沉沦"}, llc_text.to_traditional) == [
         "使", {"kw": "Sinking"}, "層數增加", {"text": "銅錢", "i": True, "colour": "Neutral"}]
 
-    def convert(text):  # reads "AB" as one phrase, as s2twp might read a phrase across a keyword's edge
+    def convert(text):  # reads "AB" as one phrase, as OpenCC's phrase table might read one across a keyword's edge
         return text.replace("AB", "X")
     with pytest.raises(ValueError, match="run by run"):
         llc_text.effect_runs("A[K]", {"K": "B"}, convert)
@@ -212,6 +213,14 @@ def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_t
     assert len({d["zh_release"] for d in DATA.values()}) == 1
 
 
+def test_every_file_of_llc_s_chinese_names_the_conversion_it_was_written_with():
+    # s2tw, the characters alone (#899); the tables of tools/text_tables.py convert with to_traditional too
+    tables = [ROOT / "assets/resource/base/data" / n for n in ("event_text.json", "gift_text.json", "trial_text.json")]
+    for path in [*FILES.values(), *tables]:
+        note = json.loads(path.read_text(encoding="utf-8"))["note"]
+        assert re.search(r"\bOpenCC s2tw\b", note) and "s2twp" not in note, path.name
+
+
 def test_the_data_matches_the_llc_release_when_it_is_downloaded():
     import llc_text
     from local_dir import local_dir
@@ -228,11 +237,13 @@ def plain(text):
     return [{"text": text, "up": False}]
 
 
-def test_traditional_conversion_keeps_the_game_s_words():
+def test_traditional_conversion_changes_the_characters_and_keeps_the_words():
+    # the user's call of 2026-11-23 (#899): Simplified characters to Traditional ones (OpenCC s2tw), no Taiwan wording (s2twp)
     import llc_text
-    assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 松肉锤") == "生鏽的指針 通過階層 鏡像迷宮 刷新 鬆肉錘"
-    # two theme packs (#899): s2twp's Taiwan wording turns them into a computer's words
-    assert llc_text.to_traditional("保存的信念 循环呼吸") == "保存的信念 循環呼吸"
+    assert llc_text.to_traditional("软件 鼠标 信息 内存") == "軟件 鼠標 信息 內存"  # s2twp: 軟體 滑鼠 資訊 記憶體
+    assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 保存的信念 循环呼吸") == "生鏽的指針 通過階層 鏡像迷宮 刷新 保存的信念 循環呼吸"
+    # 松 is both 松 (pine) and 鬆 (loose) in Traditional: s2tw keeps the pine, the fix table makes the hammer's 鬆
+    assert llc_text.to_traditional("松肉锤") == "鬆肉錘"
     assert llc_text.effect_lines("<color=#627eff>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == [plain("初始經費 +150(最多100)")]
     assert llc_text.effect_lines("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == [plain("獲得2層 守護")]
 

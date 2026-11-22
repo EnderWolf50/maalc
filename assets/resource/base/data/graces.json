@@ -1,5 +1,5 @@
 {
-  "note": "Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2twp, then 指標->指針, 重新整理->刷新, 映象->鏡像, 透過階層->通過階層, 松肉->鬆肉, 儲存的信念->保存的信念, 迴圈->循環. English names and effect text: the game client 1.119.0's EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the template colours the game's yellow (#f8c200), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.",
+  "note": "Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's start-buff values, converted with OpenCC s2tw, then 松肉->鬆肉. English names and effect text: the game client 1.119.0's EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the template colours the game's yellow (#f8c200), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/llc_text.py.",
   "zh_source": "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany",
   "zh_release": "2026111401",
   "license": "CC BY-NC-SA 4.0",
@@ -194,18 +194,18 @@
           "base": [
             [{"text": "商店裡展出的飾品數量 +1", "up": false}],
             [{"text": "戰鬥勝利時獲得的經費 +20%", "up": false}],
-            [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}]
+            [{"text": "提升商店裡更高等級飾品的展出概率", "up": false}]
           ],
           "plus": [
             [{"text": "商店裡展出的飾品數量 +1", "up": false}],
             [{"text": "戰鬥勝利時獲得的經費 ", "up": false}, {"text": "+30%", "up": true}],
-            [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}],
+            [{"text": "提升商店裡更高等級飾品的展出概率", "up": false}],
             [{"text": "進入商店時，獲得等同於當前持有的飾品等級之和的經費(最多75)", "up": true}]
           ],
           "plus2": [
             [{"text": "商店裡展出的飾品數量 +1", "up": false}],
             [{"text": "戰鬥勝利時獲得的經費 ", "up": false}, {"text": "+40%", "up": true}],
-            [{"text": "提升商店裡更高等級飾品的展出機率", "up": false}],
+            [{"text": "提升商店裡更高等級飾品的展出概率", "up": false}],
             [{"text": "進入商店時，獲得等同於當前持有的飾品等級之和的經費(最多150)", "up": true}]
           ]
         }
@@ -239,12 +239,12 @@
           "plus": [
             [{"text": "可免費進行商店關鍵詞刷新 1次", "up": false}],
             [{"text": "進入第1層時，隨機獲得", "up": false}, {"text": "2件", "up": true}, {"text": "1級飾品", "up": false}],
-            [{"text": "特殊商店出現機率 +10%", "up": true}]
+            [{"text": "特殊商店出現概率 +10%", "up": true}]
           ],
           "plus2": [
             [{"text": "可免費進行商店關鍵詞刷新", "up": false}, {"text": "2次", "up": true}],
             [{"text": "進入第1層時，隨機獲得", "up": false}, {"text": "3件", "up": true}, {"text": "1級飾品", "up": false}],
-            [{"text": "特殊商店出現機率 +25%", "up": true}]
+            [{"text": "特殊商店出現概率 +25%", "up": true}]
           ]
         }
       }

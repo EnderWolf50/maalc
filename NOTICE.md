@@ -62,7 +62,7 @@ SOFTWARE.
 - `assets/resource/base/data/trial_text.json` 的試煉中文名稱與效果：`LLC_zh-CN/Bufs_Mirror*.json` 的 `name` 與 `desc`，依試煉的 buff id 對應（簡體在 `cn`、`desc_cn`，繁體在 `zh`、`desc_zh`）。
 - `assets/resource/base/data/theme_pack_names.json` 的主題包中文名稱（`zh`）：`LLC_zh-CN/MirrorDungeonTheme*.json` 的 `name`，依 `theme_packs.yaml` 的 `pack_ids` 以主題包 id 對應；release 沒有的包列在 `missing`，設定介面顯示英文名稱。同檔的英文名稱（`en`）是 `theme_packs.yaml` 的名稱，屬於 © Project Moon。
 
-修改：以 OpenCC `s2twp` 由簡體轉成繁體，再改七個用詞（「指標」改回「指針」、「重新整理」改回「刷新」、「映象」改為「鏡像」、「透過階層」改為「通過階層」、「松肉」改為「鬆肉」，以及主題包名稱的「儲存的信念」改回「保存的信念」、「迴圈」改回「循環」）；星之恩惠的效果文字填入數值，黃色標籤改成每段文字的 `up` 標記，其餘顏色標籤去掉；飾品的效果文字存成一段段文字：狀態標籤存成狀態詞的代號（名稱另列），斜體與上色的文字保留斜體與顏色的名稱，其餘標記去掉；中文逐段轉換。事件、飾品與試煉的文字（`event_text.json`、`gift_text.json`、`trial_text.json`）另外去掉標記（`<...>` 標籤）；飾品的效果文字再把 `[狀態]` 換成狀態名稱（簡體原文換成簡體的狀態名稱）；簡轉繁一律經過同一份 `s2twp` 轉換與修正表（`tools/llc_text.py` 的 `to_traditional`），由 `tools/text_tables.py` 寫入。轉換由 `tools/llc_text.py` 與 `tools/text_tables.py` 完成，所用 release 記在各資料檔的 `zh_release`。這八個資料檔的中文名稱與效果文字（含這三個檔的簡體原文）同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱、英文效果文字與數值仍是 © Project Moon。
+修改：以 OpenCC `s2tw` 把簡體字轉成繁體字（臺灣的字形），用詞照原文、不改成臺灣用語（例如「软件」轉成「軟件」，不是「軟體」），再把「松肉」改為「鬆肉」（「松」在繁體是「松」與「鬆」兩個字，`s2tw` 留「松」）；星之恩惠的效果文字填入數值，黃色標籤改成每段文字的 `up` 標記，其餘顏色標籤去掉；飾品的效果文字存成一段段文字：狀態標籤存成狀態詞的代號（名稱另列），斜體與上色的文字保留斜體與顏色的名稱，其餘標記去掉；中文逐段轉換。事件、飾品與試煉的文字（`event_text.json`、`gift_text.json`、`trial_text.json`）另外去掉標記（`<...>` 標籤）；飾品的效果文字再把 `[狀態]` 換成狀態名稱（簡體原文換成簡體的狀態名稱）；簡轉繁一律經過同一份 `s2tw` 轉換與修正表（`tools/llc_text.py` 的 `to_traditional`），由 `tools/text_tables.py` 寫入。轉換由 `tools/llc_text.py` 與 `tools/text_tables.py` 完成，所用 release 記在各資料檔的 `zh_release`。這八個資料檔的中文名稱與效果文字（含這三個檔的簡體原文）同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱、英文效果文字與數值仍是 © Project Moon。
 
 ## 發佈 zip 內附的第三方程式
 
