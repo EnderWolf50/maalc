@@ -4,7 +4,7 @@
 // this, so it stays open to edits during a run.
 import { fill, type Key } from "./i18n";
 import { DAYS, newSchedule, useSchedules, type ScheduleView } from "./schedule";
-import { Field, Input, Mark, useEditor, withBreaks } from "./ui";
+import { Field, Input, Mark, useEditor, useHelp } from "./ui";
 
 /** The last scheduled start as the section says it, in the window's language. */
 function sayOutcome(t: (k: Key) => string, { id, at, outcome: o }: NonNullable<ScheduleView["last"]>) {
@@ -29,10 +29,13 @@ export function SchedulesSection() {
     const had = d.schedules[i].days;
     d.schedules[i].days = DAYS.filter((x) => (x === day ? on : had.includes(x)));
   });
+  // how the schedules work is the title's tooltip and the section's description (spec #871 「說明文字」); on the page, while
+  // there is one, only when it will not run
+  const help = useHelp(t("sched.note"));
   return (
-    <fieldset className="schedules" data-path="schedules">
-      <legend>{t("sched.title")}</legend>
-      <p className="muted">{withBreaks(t("sched.note"))}</p>
+    <fieldset className="schedules" data-path="schedules" aria-describedby={help.describes}>
+      <legend title={help.title}>{t("sched.title")}</legend>
+      {list.length > 0 && <p className="muted">{t("sched.logged_on_only")}</p>}
       {list.length ? (
         <ol className="schedule-list" aria-label={t("sched.title")}>
           {list.map((x, i) => {
@@ -58,12 +61,13 @@ export function SchedulesSection() {
                   <Input type="time" value={x.time} required
                     onChange={(e) => { const v = e.target.value; if (v) update((d) => { d.schedules[i].time = v; }); }} />
                 </Field>
-                <Mark className="toggle" path={`${path}/wake`}>
+                {/* what it does, its tooltip; what it needs from Windows, under it while it is on */}
+                <Mark className="toggle" path={`${path}/wake`} help={t("sched.wake_note")}>
                   <label className="check">
                     <Input type="checkbox" checked={x.wake} onChange={(e) => update((d) => { d.schedules[i].wake = e.target.checked; })} />
                     {t("sched.wake")}
                   </label>
-                  <small>{t("sched.wake_note")}</small>
+                  {x.wake && <small>{t("sched.wake_needs")}</small>}
                 </Mark>
                 <button type="button" className="danger" aria-label={fill(t("sched.remove"), { n: i + 1 })}
                   onClick={() => update((d) => { d.schedules.splice(i, 1); })}>{t("remove")}</button>
@@ -78,6 +82,7 @@ export function SchedulesSection() {
       </div>
       <SyncState unsaved={unsaved} />
       {last && <p className="sched-last" role="status">{sayOutcome(t, last)}</p>}
+      {help.copy}
     </fieldset>
   );
 }
@@ -91,8 +96,10 @@ function SyncState({ unsaved }: { unsaved: boolean }) {
   // the state the window found the Task Scheduler in, not an action of the user's that failed: no alert
   if ("error" in synced) return <p className="caution">{fill(t("sched.sync_failed"), { error: synced.error })}</p>;
   const { written, kept, errors } = synced.done;
+  const n = written.length + kept.length;
   return (<>
-    <p className="muted">{fill(t("sched.synced"), { n: written.length + kept.length })}</p>
+    {/* no task and none refused: 「還沒有排程。」 says it already */}
+    {(n > 0 || errors.length > 0) && <p className="muted">{fill(t("sched.synced"), { n })}</p>}
     {errors.length > 0 && (
       <div className="caution">
         <p>{t("sched.sync_errors")}</p>

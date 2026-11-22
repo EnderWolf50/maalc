@@ -14,7 +14,7 @@ from pathlib import Path
 
 from settings import settings_path, write_settings
 
-# The settings GUI marks the next run with its own copy (gui/src/model.ts nextRunPlaces): tests/settings_cases.json
+# The settings GUI marks the next run with its own copy (gui/src/model.ts nextRuns): tests/settings_cases.json
 # next_run holds both to the same picks.
 USAGE_FITS = {"any": {"hard", "normal"}, "hard_only": {"hard"}, "normal_only": {"normal"}}
 UNUSABLE = (OSError, ValueError, LookupError, TypeError)  # a settings file missing, broken or of the wrong shape

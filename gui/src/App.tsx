@@ -7,12 +7,12 @@ import * as api from "./api";
 import { DeploymentTab } from "./Deployment";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
-import { newSettings, parseSettings, rebase, type Settings } from "./model";
+import { newSettings, parseSettings, rebase, withoutGoneStart, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
 import { RunTab, entryKey, taskOfPath } from "./Run";
-import { IDLE, RunnerContext, crashed, isRunning, reduce, type Runner } from "./runner";
+import { IDLE, RunnerContext, crashed, isRunning, reduce, wantsList, type Runner } from "./runner";
 import { ScheduleContext, logLine, stamp, type Outcome, type ScheduleView } from "./schedule";
 import { StarlightTab } from "./Starlight";
 import { TeamsTab } from "./Teams";
@@ -23,8 +23,9 @@ import { sayProblem, validate, type Problem } from "./validate";
 import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowControls";
 
 export const TABS = [
-  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules"]],
-  ["teams", "tab.teams", TeamsTab, ["teams", "team_queue"]],
+  // the team queue is arranged in the Mirror Dungeon task's options (#878): a problem in it opens the Run tab on that task
+  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules", "team_queue"]],
+  ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
   ["starlight", "tab.starlight", StarlightTab, ["starlight_plans"]],
@@ -141,11 +142,27 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setLastScheduled({ id, at, outcome });
     return api.logSchedule(`${at} ${line}`).catch(() => {});
   };
+  // the run this page took up was under way when it did (the backend's word, not the phase of the moment: its messages come
+  // one by one); a run this page starts carries its own list, so this stays as it is for good
+  const [takenUp, setTakenUp] = useState(false);
+  // whether the backend answered if this page took up a run, and whether it handed out the scheduled starts this window opened
+  // for, the first of them begun: until both, the Run tab does not know whether a run is under way or starting as it opens (#876)
+  const [attached, setAttached] = useState(false);
+  const [startsBegun, setStartsBegun] = useState(false);
   useEffect(() => {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
-    api.attachRun((m) => { if (live) dispatch(m); }).catch(() => {});
+    api.attachRun((m) => { if (live) dispatch(m); }).then((underWay) => {
+      if (!live) return;
+      if (underWay) { dispatch({ type: "attached" }); setTakenUp(true); } // running now: the run's messages come after the answer
+      setAttached(true);
+    }, () => { if (live) setAttached(true); });
     return () => { live = false; };
   }, []);
+  // the run's list follows the settings' task list (runner.ts listed): a run under way a page took up takes it, and after a
+  // run an edit to it takes the run's states off the Run tab's rows for good
+  const tasksNow = s ? JSON.stringify(s.tasks) : null;
+  const runWantsList = wantsList(run);
+  useEffect(() => { if (s) dispatch({ type: "list", list: s.tasks, adopt: takenUp }); }, [tasksNow, runWantsList, takenUp]);
   // The self-update (#817): the newer release the start's check found and how far its update is, shown in the header; why
   // its last step failed and how the last apply went (read at the window's start), each above every tab until dismissed.
   const [update, setUpdate] = useState<Update | null>(null);
@@ -318,9 +335,16 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   useEffect(() => {
     if (!ready) return;
     let queue: Promise<unknown> = Promise.resolve();
-    // taken before a StrictMode double start drops the first effect: the backend hands each start out once
+    // taken before a StrictMode double start drops the first effect: the backend hands each start out once. startsBegun once
+    // the first start has begun (a run's start marks the window busy at once, startRun), or none came
     const take = () => {
-      queue = queue.then(() => api.takeScheduled()).then(async (all) => { for (const r of all) await scheduledRef.current(r); }).catch(() => {});
+      queue = queue.then(() => api.takeScheduled()).then(async (all) => {
+        for (const r of all) {
+          const done = scheduledRef.current(r);
+          setStartsBegun(true);
+          await done;
+        }
+      }).catch(() => {}).then(() => setStartsBegun(true));
     };
     take();
     return api.onScheduled(take);
@@ -389,7 +413,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setRefused(false);
     try {
       for (let tries = 1; ; tries++) {
-        const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
+        const synced = (await sync())!; // what another writer changed since goes under the edits first (#501)
+        const current = withoutGoneStart(synced); // a flag on a team deleted since goes (#878)
         if (validate(current).length) {
           setRefused(true);
           setStatus("");
@@ -407,6 +432,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         }
         disk.current = written;
         latest.current = { s: current, savedText: written };
+        if (current !== synced) setS((now) => now && withoutGoneStart(now)); // the dropped flag is saved, not an edit; an edit made since stays
         setSavedText(written);
         wroteBack();
         setStatus("saved");
@@ -435,7 +461,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       const { s: now } = latest.current;
       const entries = now!.tasks.filter((x) => x.enabled).map((x) => x.id); // a task's id is its entry node (interface.json)
       if (!entries.length) return "no_task";
-      const begin = { type: "begin", entries } as const;
+      // the whole list it starts from: the Run tab writes the run's states on its rows while the list is still this one
+      const begin = { type: "begin", entries, list: now!.tasks } as const;
       runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
       dispatch(begin);
       return await api.startRun(entries, now!.emulator, dispatch).then(() => null, (e: unknown) => {
@@ -499,6 +526,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     stop: () => { api.stopRun().catch(() => {}); },
     blocked: starting ? "saving" : problems.length ? "problems" : s.tasks.some((x) => x.enabled) ? null : "no_task",
     reveal, revealed: () => setReveal(false),
+    settled: attached && startsBegun,
   };
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */

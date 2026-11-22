@@ -1,14 +1,15 @@
 // Component tests of the teams tab's skill replacement panel (#454, spec 04 section 9; the layout the user adopted on 2026-11-06):
-// collapsed by default; only the sinners to change are listed, in priority order (drag or buttons), each with S1 worked out from
-// the S2 and S3 steppers, the swaps the target needs and, when it needs two kinds, which to try first; ID Skill Search's switch
-// and payment below.
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+// collapsed by default; only the sinners to change are listed, in priority order (a row drags, or moves with Alt and an arrow),
+// each with S1 worked out from the S2 and S3 steppers, the swaps the target needs and, when it needs two kinds, which to try
+// first; ID Skill Search's switch and payment below.
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
 import { SINNERS, addTeam, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
-import { pickInList, queuedTeams, renderEditor } from "./testing";
+import css from "./index.css?raw";
+import { altMove, cssValueOf, dragHeld, dragOnto, pickInList, queuedTeams, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[] }));
@@ -38,13 +39,6 @@ const s1 = (name: string) => within(row(name)).getByLabelText(`${name} S1`);
 const pill = (name: string) => row(name).querySelector<HTMLElement>(".skill-pill")!;
 const order = (name: string) => within(row(name)).getByRole<HTMLSelectElement>("combobox", { name: `${name} ${zh["skill.order"]}` });
 const rest = () => panel().querySelector<HTMLElement>(".skill-rest")!;
-const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
-function drag(from: Element, to: Element) {
-  fireEvent.dragStart(from, { dataTransfer: dt() });
-  fireEvent.dragOver(to, { dataTransfer: dt() });
-  fireEvent.drop(to, { dataTransfer: dt() });
-  fireEvent.dragEnd(from, { dataTransfer: dt() });
-}
 
 describe("the list", () => {
   test("is collapsed until opened; with nobody listed it says every deck stays 3/2/1 and names all 12 as unchanged", async () => {
@@ -181,22 +175,68 @@ describe("targets", () => {
 });
 
 describe("priority order", () => {
-  test("↓ moves a sinner one place down, ↑ moves it back, the ends have no way out", async () => {
+  // #873: the whole row drags and Alt with an arrow moves it, as in every sortable list; no handle, no ↑↓, the ✕ stays
+  test("a row has no move buttons, only its ✕, and the row itself drags", async () => {
+    const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1)]));
+    await expand(r);
+    for (const name of ["Yi Sang", "Faust"]) {
+      expect(row(name)).toHaveAttribute("draggable", "true");
+      expect(within(row(name)).queryByRole("button", { name: `${zh.up} ${name}` })).toBeNull();
+      expect(within(row(name)).queryByRole("button", { name: `${zh.down} ${name}` })).toBeNull();
+      expect(within(row(name)).getByRole("button", { name: `${zh["skill.remove"]} ${name}` })).toBeVisible();
+      expect(row(name)).not.toHaveTextContent("⋮");
+    }
+  });
+
+  test("Alt+↓ moves a sinner one place down, Alt+↑ back, Alt+End and Alt+Home to either end; the focus stays on the row", async () => {
     const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1), entry("Gregor", 1, 1, 4)]));
     await expand(r);
-    await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh.down} Yi Sang` }));
+    await altMove(r.user, row("Yi Sang"), "ArrowDown");
     expect(stored(r).map((x) => x.sinner)).toEqual(["Faust", "Yi Sang", "Gregor"]);
     expect(listed()).toEqual(["Faust", "Yi Sang", "Gregor"]);
-    await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh.up} Yi Sang` }));
+    expect(row("Yi Sang")).toHaveFocus();
+    expect(within(panel()).getByText("移到第 2 位，共 3 位").closest("[aria-live]")).toHaveAttribute("aria-live", "polite");
+    await r.user.keyboard("{Alt>}{ArrowUp}{/Alt}");
     expect(listed()).toEqual(["Yi Sang", "Faust", "Gregor"]);
-    expect(within(row("Yi Sang")).getByRole("button", { name: `${zh.up} Yi Sang` })).toBeDisabled();
-    expect(within(row("Gregor")).getByRole("button", { name: `${zh.down} Gregor` })).toBeDisabled();
+    await r.user.keyboard("{Alt>}{End}{/Alt}");
+    expect(listed()).toEqual(["Faust", "Gregor", "Yi Sang"]);
+    expect(row("Yi Sang")).toHaveFocus();
+    await r.user.keyboard("{Alt>}{Home}{/Alt}");
+    expect(listed()).toEqual(["Yi Sang", "Faust", "Gregor"]);
+    expect(row("Yi Sang")).toHaveAccessibleDescription(zh.moveHint);
+  });
+
+  test("Alt with an arrow on a control inside a row (a stepper, the order select) moves nothing", async () => {
+    const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1)]));
+    await expand(r);
+    step("Yi Sang", "S3", "inc").focus();
+    await r.user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    order("Yi Sang").focus();
+    await r.user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(listed()).toEqual(["Yi Sang", "Faust"]);
+  });
+
+  test("a row shows the grabbing hand; while dragged it is dimmed, and a line marks where it lands, past the row under it", async () => {
+    const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1), entry("Gregor", 1, 1, 4)]));
+    await expand(r);
+    const look = (name: string, prop: string) => cssValueOf(css, row(name), prop);
+    expect(look("Faust", "cursor")).toBe("grab");
+    let held = dragHeld(row("Yi Sang"), row("Gregor"));
+    expect(Number(look("Yi Sang", "opacity"))).toBeLessThan(1);
+    expect(look("Gregor", "box-shadow")).toMatch(/^0 \dpx /); // dragged down: it lands after Gregor, the line under it
+    expect(look("Faust", "box-shadow")).toBeUndefined();
+    held.end();
+    held = dragHeld(row("Gregor"), row("Faust"));
+    expect(look("Faust", "box-shadow")).toMatch(/^0 -\dpx /); // dragged up: before Faust, the line over it
+    held.leave(); // out of the list: no drop place left
+    expect(look("Faust", "box-shadow")).toBeUndefined();
+    held.end();
   });
 
   test("dragging a sinner onto another moves it there, with its target and order", async () => {
     const r = renderEditor(<TeamsTab />, settings([entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1), entry("Gregor", 1, 3, 2, false)]));
     await expand(r);
-    drag(row("Gregor"), row("Yi Sang"));
+    dragOnto(row("Gregor"), row("Yi Sang"));
     expect(listed()).toEqual(["Gregor", "Yi Sang", "Faust"]);
     expect(stored(r)).toEqual([entry("Gregor", 1, 3, 2, false), entry("Yi Sang", 2, 2, 2), entry("Faust", 3, 2, 1)]);
     expect(row("Gregor").querySelector(".skill-rank")).toHaveTextContent(/^1$/);

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from ocrtext import compact, floor_number, has
+from reasons import Reason
 
 
 class Result(NamedTuple):
@@ -140,7 +141,8 @@ def forfeits_stop(forfeits):
     """
     if len(forfeits) < FORFEITS_IN_A_ROW:
         return None
-    return f"{len(forfeits)} runs in a row forfeited" + (f" ({forfeits[-1]})" if forfeits[-1] else "")
+    return Reason(f"{len(forfeits)} runs in a row forfeited" + (f" ({forfeits[-1]})" if forfeits[-1] else ""),
+                  "ForfeitsInARow", runs=len(forfeits))
 
 
 CLAIM_COST = 5  # the Enkephalin Modules one Claim takes (Claim, spec 03 section 14)

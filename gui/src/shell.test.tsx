@@ -119,13 +119,31 @@ test("a problem in a task's option opens the Run tab with that task picked, its 
   const problems = await screen.findByRole("alert");
   expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveClass("bad");
   await user.click(within(problems).getByRole("button"));
-  expect(screen.getByRole("heading", { name: /紐本.*ThreadLuxcavation/ })).toBeVisible();
+  expect(screen.getByRole("group", { name: "紐本" })).toBeVisible();
   await waitFor(() => expect(screen.getByRole("spinbutton", { name: new RegExp(zh["lux.retries"]) })).toHaveFocus());
   expect(document.querySelector(".task-list li.selected")).toHaveClass("bad");
 });
 
+test("a problem in a global option marks their folded panel, and its jump opens it, the field focused (#875)", async () => {
+  const s = newSettings();
+  (s.run as { auto_download: unknown }).auto_download = "yes"; // broken by hand
+  file.text = JSON.stringify(s, null, 2) + "\n";
+  const user = userEvent.setup();
+  render(<App start="teams" />);
+  const problems = await screen.findByRole("alert");
+  await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
+  const panel = screen.getByText(zh["globals.title"]).closest("details")!;
+  expect(panel).not.toHaveAttribute("open");
+  expect(panel).toHaveClass("bad");
+  await user.click(within(problems).getByRole("button"));
+  expect(panel).toHaveAttribute("open");
+  await waitFor(() => expect(screen.getByRole("checkbox", { name: new RegExp(`^${zh["run.auto_download"]}`) })).toHaveFocus());
+});
+
 test("a problem in a task list entry picks that entry, the second of a task listed twice too (#811)", async () => {
   const s = newSettings();
+  s.tasks = ["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules"]
+    .map((id) => ({ id, enabled: false }));
   (s.tasks[4] as { enabled: unknown }).enabled = "yes"; // the second Assemble Modules, broken by hand
   file.text = JSON.stringify(s, null, 2) + "\n";
   const user = userEvent.setup();
@@ -226,7 +244,11 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     const saved = JSON.parse(file.saved[0]);
     expect([saved.version, saved.run.difficulty, saved.run.start_team, saved.luxcavation.exp.team, saved.emulator.address])
       .toEqual([23, "hard", null, "a", "127.0.0.1:16384"]);
-    expect(saved.tasks.slice(0, 2)).toEqual([{ id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true }]);
+    // MXU's two, then each task MXU did not list, unticked though a new file ticks it, in a new file's order (#874)
+    expect(saved.tasks).toEqual([
+      { id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true },
+      ...["ThreadLuxcavation", "ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
+    ]);
     // MXU's file and the others are only read
     expect(file.writes).toEqual(["old", "settings"]);
     expect([...file.reads].sort()).toEqual(["mxu-maalc.json", "settings.v20.json", "team_options.json"]);
@@ -238,7 +260,8 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
       fill(zh["rb.tasks"], { tasks: "鏡牢、經驗本" }),
       fill(zh["rb.address"], { address: "127.0.0.1:16384" }),
       zh["rb.missed"], zh["rb.webhook"],
-      fill(zh["rb.team"], { where: "鏡牢 · 這次從哪一支隊伍開始", team: "gone", none: "照隊伍佇列" }),
+      // the start team by the queue's flag that sets it (#878)
+      fill(zh["rb.team"], { where: "鏡牢 · 起頭隊伍（隊伍佇列的旗子）", team: "gone", none: "沒有旗子" }),
     ]) expect(shown).toHaveTextContent(text);
     // over every tab, until dismissed
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));
@@ -255,7 +278,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     expect(shown).toHaveTextContent(TEXT.en_us["rb.webhook"]);
   });
 
-  test("with neither MXU's file nor settings.v20.json, the notice says the options are at their defaults, no task ticked", async () => {
+  test("with neither MXU's file nor settings.v20.json, the notice says the options and the task list are at their defaults", async () => {
     write(olderFile(22));
     render(<App start="teams" />);
     const shown = await notice();
@@ -346,10 +369,7 @@ test("a save keeps the task options, the task list, the emulator and the schedul
   expect(saved.teams[0].name).toBe("Ta!");
   const kept = ["run", "luxcavation", "charge_enkephalin", "emulator", "schedules"] as const;
   expect(Object.fromEntries(kept.map((k) => [k, saved[k]]))).toEqual(Object.fromEntries(kept.map((k) => [k, s[k]])));
-  // the tasks the list left out come last, unticked, once each in a new file's order (#814)
-  expect(saved.tasks).toEqual([
-    ...s.tasks, ...["ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
-  ]);
+  expect(saved.tasks).toEqual(s.tasks); // the tasks the file's list leaves out stay out (#874)
 });
 
 test("with nothing edited the header says there is nothing to save", async () => {

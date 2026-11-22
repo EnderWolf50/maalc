@@ -244,16 +244,17 @@ def test_the_sections_version_23_added_are_the_schemas_defaults_as_the_shared_va
     assert settings.defaults() == ADDED
 
 
-def test_a_new_files_task_list_is_the_readmes_suggested_order_every_task_listed_none_ticked():
-    # #811: the order runs AssembleModules before and after the Luxcavations; README's 日常任務 table names each task's id
+def test_a_new_files_task_list_is_every_task_once_all_ticked_in_the_users_order_the_readmes_suggested_order():
+    # #874 (the user's order, 2026-11-20): ready to run as installed; README's 日常任務 table names each task's id
+    order = ["ExpLuxcavation", "ThreadLuxcavation", "ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions",
+             "MirrorDungeon"]
+    tasks = settings.defaults()["tasks"]
+    assert tasks == [{"id": id, "enabled": True} for id in order]
+    assert set(order) == set(settings.SCHEMA["$defs"]["task"]["enum"])
     readme = (Path(__file__).parent.parent / "README.md").read_text(encoding="utf-8")
     ids = dict(re.findall(r"^\| (\S+?)（`(\w+)`）", readme, re.M))
-    order = readme.split("### 建議順序", 1)[1].strip().splitlines()[0].split(" → ")
-    tasks = settings.defaults()["tasks"]
-    assert [t["id"] for t in tasks] == [ids[name] for name in order]
-    assert [t["id"] for t in tasks].count("AssembleModules") == 2
-    assert {t["id"] for t in tasks} == set(settings.SCHEMA["$defs"]["task"]["enum"])
-    assert not any(t["enabled"] for t in tasks)
+    suggested = readme.split("### 建議順序", 1)[1].strip().splitlines()[0].split(" → ")
+    assert [ids[name] for name in suggested] == order
 
 
 def test_every_version_from_the_oldest_has_its_migration():

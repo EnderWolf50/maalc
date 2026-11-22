@@ -332,8 +332,8 @@ const defaultsOf = (props: Record<string, object>) =>
 export const newId = () => crypto.randomUUID();
 
 /** The sections version 23 added (#813) as a new file has them, from the schema's defaults (agent/settings.py defaults):
- * run, luxcavation (Thread's count 3, the day's bonuses), charge_enkephalin, emulator; tasks the README's suggested order,
- * AssembleModules twice, none ticked (#811); schedules none. */
+ * run, luxcavation (Thread's count 3, the day's bonuses), charge_enkephalin, emulator; tasks every task once, all ticked, in
+ * the user's order (#874); schedules none. */
 export function newSections(): Pick<Settings, "run" | "luxcavation" | "charge_enkephalin" | "tasks" | "emulator" | "schedules"> {
   const lux = () => defaultsOf(schema.$defs.luxcavation.properties) as unknown as LuxOptions;
   return {
@@ -346,7 +346,7 @@ export function newSections(): Pick<Settings, "run" | "luxcavation" | "charge_en
   };
 }
 
-/** A new settings file: empty lists (spec 04 section 4), the task options at their defaults, no task ticked. */
+/** A new settings file: empty lists (spec 04 section 4), the task options at their defaults, every task ticked. */
 export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw",
@@ -415,17 +415,9 @@ function queueInListOrder(teams: unknown): unknown[] {
 }
 
 /** Each task id once, in the order a new file lists them (a task listed twice at its first entry's place): the order a
- * task a list leaves out is put back in (withEveryTask, the read-back). */
+ * read-back of v1.0.0's task list puts the tasks it did not list in (readBack.ts). A load keeps a task list as the file has
+ * it: a task left out stays out (#874). */
 export const TASK_ORDER: string[] = [...new Set((P.tasks.default as { id: string }[]).map((x) => x.id))];
-
-/** The task list with each task it leaves out last, unticked, once each in TASK_ORDER, so the Run tab can tick it (#814): the
- * schema lets a hand edit leave one out, and a task not ticked does not run, so nothing changes what runs. A list broken by
- * hand stays as it is, for the schema check to name; so does an entry it does not know. */
-function withEveryTask(tasks: unknown): unknown {
-  if (!Array.isArray(tasks)) return tasks;
-  const listed = new Set(tasks.map((x) => (isObject(x) ? x.id : undefined)));
-  return [...tasks, ...TASK_ORDER.filter((id) => !listed.has(id)).map((id) => ({ id, enabled: false }))];
-}
 
 /** Parse a settings file; an older version is migrated and the caller writes it back, one without a migration refused
  * (spec 04 section 2). old: the file's version and the file as it read, before its migration (null when it needed none),
@@ -449,7 +441,6 @@ export function parseSettings(text: string): {
   let unknown = 0; // ids in a list that no data file has (a new season): dropped, the caller warns
   data = {
     ...data,
-    tasks: withEveryTask(data.tasks),
     gift_lists: lists.map((l: unknown) => {
       if (!wellFormed(l)) return l; // the schema check names what is wrong
       const cleaned = cleanGiftList(l);
@@ -488,14 +479,39 @@ export function rebase(base: Settings, draft: Settings, disk: Settings): Setting
  * both to the same picks). */
 const USAGE_FITS: Record<string, string[]> = { any: ["hard", "normal"], hard_only: ["hard"], normal_only: ["normal"] };
 
-/** Where in team_queue the team of the next hard and the next normal run is: the first enabled team whose usage fits that
- * difficulty (agent/team_queue.py pick_team); -1 when no team does. */
-export function nextRunPlaces(s: Settings): { hard: number; normal: number } {
-  const plays = (d: string) => s.team_queue.findIndex((id) => {
-    const team = s.teams.find((t) => t.id === id);
-    return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(d);
-  });
-  return { hard: plays("hard"), normal: plays("normal") };
+export type Difficulty = "normal" | "hard";
+
+/** The Mirror Dungeon task's next new run, for each difficulty it plays (run.difficulty: auto plays either), Normal first:
+ * the team that plays it, the first enabled team in team_queue whose usage fits that difficulty (agent/team_queue.py
+ * pick_team), the queue counted from run.start_team when the queue holds it (headed: the task picks its first new run with
+ * that team at the head). `team` null: no team plays it. */
+export type NextRun = { difficulty: Difficulty; team: string | null };
+export function nextRuns(s: Settings): NextRun[] {
+  const start = s.run.start_team;
+  const queue = start !== null && s.team_queue.includes(start) ? [start, ...s.team_queue.filter((id) => id !== start)] : s.team_queue;
+  const d = s.run.difficulty;
+  const played: Difficulty[] = d === "normal" || d === "hard" ? [d] : ["normal", "hard"];
+  return played.map((difficulty) => ({
+    difficulty,
+    team: queue.find((id) => {
+      const team = s.teams.find((t) => t.id === id);
+      return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(difficulty);
+    }) ?? null,
+  }));
+}
+
+/** The settings with run.start_team null when it names no team (a team deleted since its flag was set): the flag has no
+ * effect (agent task_options.start_team_ignored_line, #878), and a save drops it. The settings themselves when it names one. */
+export function withoutGoneStart(s: Settings): Settings {
+  const start = s.run.start_team;
+  return start === null || s.teams.some((t) => t.id === start) ? s : { ...s, run: { ...s.run, start_team: null } };
+}
+
+/** The settings with team `i` switched on or off. Switched off, it takes the start team's flag with it when it carries it
+ * (#878): a disabled team is never the start team, and switched on again it does not get the flag back. */
+export function setTeamEnabled(s: Settings, i: number, on: boolean) {
+  s.teams[i].enabled = on;
+  if (!on && s.run.start_team === s.teams[i].id) s.run.start_team = null;
 }
 
 /** The settings with team `team` added: last in the team list and last in the queue (#803). */

@@ -20,7 +20,7 @@ const back = vi.hoisted(() => ({
   text: "", saved: [] as string[], starts: [] as string[][], send: undefined as ((m: Message) => void) | undefined,
   scheduled: [] as { id: string; opened: boolean; update_unfinished?: boolean }[], more: undefined as (() => void) | undefined,
   logged: [] as string[], syncs: [] as unknown[], syncFail: "", syncErrors: [] as string[], closed: 0,
-  update: null as UpdateOutcome | null,
+  update: null as UpdateOutcome | null, scans: 0,
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -33,6 +33,7 @@ vi.mock("./api", async (original) => ({
     return Promise.resolve();
   },
   attachRun: () => Promise.resolve(false),
+  scanDevices: () => { back.scans++; return Promise.resolve([]); },
   onCloseRequested: () => () => {},
   takeScheduled: () => { const all = back.scheduled; back.scheduled = []; return Promise.resolve(all); },
   onScheduled: (more: () => void) => { back.more = more; return () => {}; },
@@ -54,8 +55,8 @@ const EVERY_DAY = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 function settings(schedules: Settings["schedules"] = [{ id: "s1", days: ["mon", "fri"], time: "05:10", wake: true }]) {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "T1")]));
-  s.tasks = [{ id: "ClaimMail", enabled: true }, ...s.tasks.filter((x) => x.id !== "ClaimMail")];
-  s.tasks.find((x) => x.id === "MirrorDungeon")!.enabled = true;
+  s.tasks = [{ id: "ClaimMail", enabled: true },
+    ...s.tasks.filter((x) => x.id !== "ClaimMail").map((x) => ({ ...x, enabled: x.id === "MirrorDungeon" }))];
   s.schedules = schedules;
   return s;
 }
@@ -75,6 +76,7 @@ beforeEach(() => {
   back.syncErrors = [];
   back.closed = 0;
   back.update = null;
+  back.scans = 0;
 });
 
 /** The window, on the Run tab it opens on, once the settings are read. */
@@ -177,6 +179,36 @@ describe("the schedules' editor", () => {
     expect(back.syncs).toEqual([]);
   });
 
+  // spec #871 「說明文字：頁面上只留花費與風險」 (#879): how the schedules work is the title's tooltip; on the page only what
+  // keeps one from running, while it can
+  test("with no schedule, the section says only that there is none: how they work is its title's tooltip", async () => {
+    back.text = fileOf(settings([]));
+    await open();
+    await waitFor(() => expect(back.syncs).toEqual([[]]));
+    const title = screen.getByText(zh["sched.title"], { selector: "legend" });
+    expect(title).toHaveAttribute("title", zh["sched.note"]);
+    expect(screen.getByRole("group", { name: zh["sched.title"] })).toHaveAccessibleDescription(zh["sched.note"]);
+    expect(screen.getByText(zh["sched.none"])).toBeVisible();
+    // no task written and none refused says nothing 「還沒有排程。」 does not
+    await act(async () => {});
+    expect(screen.queryByText(fill(zh["sched.synced"], { n: 0 }))).toBeNull();
+    for (const line of zh["sched.note"].split("\n")) expect(screen.queryByText(line)).toBeNull();
+    expect(screen.queryByText(zh["sched.logged_on_only"])).toBeNull();
+  });
+
+  test("with a schedule, it runs only while the user is logged on; the wake switch's tooltip says what it does, and while on, what it needs", async () => {
+    const user = await open();
+    expect(await screen.findByText(fill(zh["sched.synced"], { n: 1 }))).toBeVisible();
+    expect(screen.getByText(zh["sched.logged_on_only"])).toBeVisible();
+    const wake = wakeOf(rows()[0]);
+    expect(wake.closest("[title]")).toHaveAttribute("title", zh["sched.wake_note"]);
+    expect(wake).toHaveAccessibleDescription(zh["sched.wake_note"]);
+    for (const shown of screen.queryAllByText(zh["sched.wake_note"])) expect(shown).not.toBeVisible(); // the description's hidden copy
+    expect(within(rows()[0]).getByText(zh["sched.wake_needs"])).toBeVisible();
+    await user.click(wake);
+    expect(within(rows()[0]).queryByText(zh["sched.wake_needs"])).toBeNull();
+  });
+
   test("a run reads no schedule: they stay open to edits during one", async () => {
     const user = await open();
     await user.click(screen.getByRole("button", { name: zh["runner.start"] }));
@@ -201,6 +233,20 @@ describe("a scheduled run's start (--run <id>)", () => {
     expect(logged("[schedule] s1: the run ended; the window closes")).toBe(true);
   });
 
+  test("the window a schedule opened starts its run and scans for no device: the tab opens during a run (#876)", async () => {
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toEqual([["ClaimMail", "MirrorDungeon"]]));
+    // the button says 偵測 once the window knows of the start: no scan began, none will
+    expect(await screen.findByRole("button", { name: zh["emu.scan"] })).toBeDisabled();
+    expect(back.scans).toBe(0);
+  });
+
+  test("a window that opens with no scheduled start scans once (#876)", async () => {
+    await open();
+    await waitFor(() => expect(back.scans).toBe(1));
+  });
+
   test("a scheduled run brings the live log and Stop into view, once", async () => {
     const seen: Element[] = [];
     const was = Element.prototype.scrollIntoView;
@@ -209,8 +255,9 @@ describe("a scheduled run's start (--run <id>)", () => {
       back.scheduled = [{ id: "s1", opened: true }];
       const user = await open();
       await waitFor(() => expect(seen).toHaveLength(1));
-      expect(seen[0]).toHaveClass("runner");
+      // the run console: Stop and the live log
       expect(within(seen[0] as HTMLElement).getByRole("button", { name: zh["runner.stop"] })).toBeEnabled();
+      expect(within(seen[0] as HTMLElement).getByRole("list", { name: zh["runner.log"] })).toBeInTheDocument();
       await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
       await user.click(screen.getByRole("tab", { name: zh["tab.run"] }));
       expect(seen).toHaveLength(1); // back on the Run tab later, the page stays where the user is

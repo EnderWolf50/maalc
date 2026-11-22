@@ -536,6 +536,7 @@ def test_a_task_whose_settings_forfeit_every_run_stops_after_3_in_a_row(context,
     result, logged, started, lines = mirror_task(context, monkeypatch, runs)
     assert result is False
     assert f"stop: 3 runs in a row forfeited ({why})" in logged
+    assert logged[logged.index(f"stop: 3 runs in a row forfeited ({why})") + 1] == 'stop code: ForfeitsInARow {"runs":3}'
     assert started == 3 and lines == ["giveup"] * 3
 
 

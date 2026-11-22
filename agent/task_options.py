@@ -3,11 +3,13 @@ once, before any tap, and keeps in actions.TASK["options"]; every reader takes t
 
 They come from the settings file: run (MirrorDungeon's own and the four every task reads), luxcavation.<exp|thread> and
 charge_enkephalin (ADR 0015). The settings' schema checks them when the file loads. The rules that cross them with the
-teams (MirrorDungeon's target floor and start team, a Luxcavation task's team) are checked here, at the task's start, so
-a team deleted or disabled stops only the task that names it."""
+teams (MirrorDungeon's target floor, a Luxcavation task's team) are checked here, at the task's start, so a team
+deleted or disabled stops only the task that names it; MirrorDungeon's start team on such a team is ignored, not an
+error (start_team_ignored_line)."""
 
 import json
 
+from reasons import Reason
 from settings import SCHEMA, SettingsError
 
 # The settings' run keys every task reads: the stop procedure's webhook, the title's two dialogs, the kept screens.
@@ -73,19 +75,22 @@ def target_floor_errors(options, teams):
     return errors
 
 
-def start_team_errors(team, teams):
-    """MirrorDungeon's start team (#805): run.start_team, None for 「照隊伍佇列」, names an enabled team of teams. An id not
-    in teams is a team deleted in the settings GUI; a disabled team is one no run of the queue picks. Either stops the
-    task before any tap."""
+def start_team_ignored_line(team, teams):
+    """MirrorDungeon's start team (#805): run.start_team, None for no flag in the team queue, names an enabled team of
+    teams. A flag on a disabled team, or on an id not in teams (a deleted team), has no effect: the task follows the
+    queue as with no flag, and the flag stays in the file, counting again once the team is enabled (#878). The settings
+    GUI leaves no such flag (it takes the flag off with the team it disables, and its save drops one on a team deleted),
+    so it comes from a hand edit, a file read back from MXU (on a disabled team), or a save made while a task ran. The
+    line for the log that says so, None for a flag that counts or no flag."""
     if team is None:
-        return []
-    instead = f"pick another team, or 「照隊伍佇列」 (follow the team queue), in {where('MirrorDungeon')}"
+        return None
     found = next((t for t in teams if t["id"] == team), None)
     if found is None:
-        return [f"run/start_team: team {team!r} was deleted in the settings GUI; {instead}"]
+        return f"run/start_team: team {team!r} is no longer listed, the flag is ignored and the task follows the team queue"
     if not found["enabled"]:
-        return [f"run/start_team: team {found['name']!r} (id {team!r}) is disabled; enable it in the settings GUI, or {instead}"]
-    return []
+        return (f"run/start_team: team {found['name']!r} (id {team!r}) is disabled, the flag is ignored and the task "
+                "follows the team queue")
+    return None
 
 
 def team_errors(task, team, teams):
@@ -93,7 +98,8 @@ def team_errors(task, team, teams):
     not. None: none picked yet. An id not in teams: a team deleted in the settings GUI."""
     path = f"luxcavation/{LUX_KEY[task]}/team"
     if team is None:
-        return [f"{path}: no team picked; pick one in {where(task)}"]
+        return [Reason(f"{path}: no team picked; pick one in {where(task)}", "NoTeamPicked")]
     if team not in {t["id"] for t in teams}:
-        return [f"{path}: team {team!r} was deleted in the settings GUI; pick another in {where(task)}"]
+        return [Reason(f"{path}: team {team!r} was deleted in the settings GUI; pick another in {where(task)}", "TeamDeleted",
+                       team=team)]
     return []
