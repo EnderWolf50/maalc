@@ -2,7 +2,7 @@
 import { expect, test } from "vitest";
 import {
   FUSION_CONDITIONS, GIFT_KEYWORDS, SEARCH_GIFTS, SEARCH_TABS, addTeam, buyOrder, clickCard, clickEnhance, defaultGorder, enhanceAll, exportGiftList, gracePrice,
-  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, packGroups, THEME_PACKS, selectAll, starlightCost, toggleGift, toggleSinner,
+  importGiftList, lanesOf, lineAt, newPackPlan, newSettings, newTeam, floorBadges, onFloor, packGroups, GROUP_MIN, THEME_PACKS, selectAll, starlightCost, toggleGift, toggleSinner,
   weightOf, type GiftList, type StarlightValues,
 } from "./model";
 import { validate } from "./validate";
@@ -27,7 +27,9 @@ test("a long lane groups its packs by difficulty from the data file, in the lane
   const lane = [...many("a"), ...many("b"), ...many("c"), ...many("d"), ...many("e"), "gone"];
   expect(packGroups(lane, packs)?.map((g) => [g.group, g.names.length])).toEqual([["both", 8], ["hard", 8], ["extreme", 4], ["other", 1]]);
   expect(packGroups(lane, packs)![0].names).toEqual([...many("a"), ...many("d")]);
-  expect(packGroups(lane.slice(0, 19), packs)).toBeNull(); // under 20 packs
+  expect(packGroups(lane.slice(0, GROUP_MIN - 1), packs)).toBeNull(); // under 20 packs
+  expect(packGroups(lane, packs, "extreme")).toBeNull(); // every pack shown is on EXTREME, e's HARD floors too
+  expect(packGroups(lane, packs, "hard")?.length).toBe(4); // the filter's packs come in already: grouping is the same
   expect(packGroups([...many("a"), ...many("a"), ...many("a"), ...many("d"), ...many("d")], packs)).toBeNull(); // all in one group
   expect(packGroups([...many("a"), ...many("a"), ...many("a"), ...many("d"), ...many("b")], packs)?.map((g) => g.group)).toEqual(["both", "hard"]);
   // the bundled data file: every pack with NORMAL floors has HARD ones too, and the rest are HARD without NORMAL or EXTREME only

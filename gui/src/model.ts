@@ -179,18 +179,21 @@ const FLOOR_MODES = ["N", "H", "I", "X"] as const;
 /** The floors a 15-floor run plays as INFINITY and as EXTREME, as the agent reads them (agent/run_start.py MODE_BANDS, #387). */
 export const MODE_BANDS = { I: [6, 10], X: [11, 15] } as const;
 
-/** A long lane's groups (#742, the user's option A of 2026-11-22), by the data file's N, H and X keys: NORMAL (every such pack
+/** A long lane's groups (#742; grouping by difficulty, the user's choice of 2026-11-22), by the data file's N, H and X keys: NORMAL (every such pack
  * has HARD floors too), HARD without NORMAL, EXTREME only, and the rest (a pack the data file lacks). */
 export type PackGroup = "both" | "hard" | "extreme" | "other";
 const PACK_GROUPS: PackGroup[] = ["both", "hard", "extreme", "other"];
-/** The fewest packs a lane groups (the main thread, 2026-11-22: the default plan's -5 lane holds 51). */
+/** The fewest packs a lane groups: every lane that long, not only 0 (the default plan's -5 lane holds 51); a shorter one is
+ * a few rows, read at a glance. */
 export const GROUP_MIN = 20;
 const groupOf = (f: PackFloors | undefined): PackGroup => (!f ? "other" : f.N?.length ? "both" : f.H?.length ? "hard" : f.X ? "extreme" : "other");
 
-/** The groups of a lane's packs, each in the lane's order, the empty ones left out; null when the lane stays one run of packs:
- * under GROUP_MIN packs, or all of them in one group (a filter above left only that one), where a title would say nothing. */
-export function packGroups(names: string[], packs: Record<string, PackFloors>): { group: PackGroup; names: string[] }[] | null {
-  if (names.length < GROUP_MIN) return null;
+/** The groups of a lane's packs shown at the difficulty the filter picks, each in the lane's order, the empty ones left out;
+ * null when the lane stays one run of packs: under GROUP_MIN packs, all of them in one group (a filter above left only that
+ * one), where a title would say nothing, or EXTREME picked, where every pack shown is on EXTREME and 只在困難 would say not. */
+export function packGroups(names: string[], packs: Record<string, PackFloors>, difficulty: PackMode = ""):
+  { group: PackGroup; names: string[] }[] | null {
+  if (names.length < GROUP_MIN || difficulty === "extreme") return null;
   const groups = PACK_GROUPS.map((group) => ({ group, names: names.filter((n) => groupOf(packs[n]) === group) }))
     .filter((g) => g.names.length);
   return groups.length < 2 ? null : groups;

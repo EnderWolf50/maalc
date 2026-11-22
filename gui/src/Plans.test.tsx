@@ -380,16 +380,15 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack: 無�
   expect(chip("EXTREME")).toBeInTheDocument();
 });
 
-// #742: a lane of 20 packs or more splits by difficulty (the user's option A, 2026-11-22), every lane, not only 0.
+// #742: a lane of 20 packs or more splits by difficulty (the user's choice of 2026-11-22), every lane, not only 0.
 describe("a long lane split into difficulty groups", () => {
   const laneOf = (w: string) => [...document.querySelectorAll<HTMLElement>(".lane")].find((l) => l.querySelector(".w")?.textContent === w)!;
   /** Each group of a lane: its h3's title, the count it gives and the packs under it. */
-  const groupsIn = (lane: HTMLElement) => [...lane.querySelectorAll<HTMLElement>("section")].map((s) => ({
-    heading: within(s).getByRole("heading", { level: 3 }),
-    title: within(s).getByRole("heading", { level: 3 }).querySelector(".t")!.textContent,
-    count: Number(s.querySelector("h3 .n")!.textContent),
-    packs: [...s.querySelectorAll<HTMLElement>(".pk")],
-  }));
+  const groupsIn = (lane: HTMLElement) => [...lane.querySelectorAll<HTMLElement>("section")].map((s) => {
+    const heading = within(s).getByRole("heading", { level: 3 });
+    return { heading, title: heading.querySelector(".t")!.textContent, count: Number(heading.querySelector(".n")!.textContent),
+      packs: [...s.querySelectorAll<HTMLElement>(".pk")] };
+  });
   const badges = (pk: HTMLElement) => [...pk.querySelectorAll(".fl")].map((b) => b.className);
   const open = async () => {
     const r = renderEditor(<ThemePackTab />, newSettings()); // the locked default plan: 0 holds 61 packs, -5 holds 51, +10 one
@@ -437,6 +436,8 @@ describe("a long lane split into difficulty groups", () => {
     await user.click(chip(zh["packs.floorsNormal"]));
     expect(laneOf("0").querySelector("section")).toBeNull(); // every NORMAL pack is in the first group: no title says anything
     expect(laneOf("0").querySelectorAll(".pk").length).toBeGreaterThan(20);
+    await user.click(chip(zh["packs.floorsExtreme"]));
+    expect(laneOf("0").querySelector("section")).toBeNull(); // every pack shown is on EXTREME: 只在困難 would say otherwise
     await user.click(chip(zh["packs.anyDifficulty"]));
     await user.type(screen.getByRole("searchbox", { name: zh["packs.search"] }), "emotional");
     expect(laneOf("0").querySelector("section")).toBeNull();

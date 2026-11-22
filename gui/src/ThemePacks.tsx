@@ -209,7 +209,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       {line === 0 && lineBar}
       {lanes.map((w, i) => {
         const inLane = shown.filter((n) => weightOf(plan, n) === w);
-        const groups = packGroups(inLane, data.packs); // a long lane split by difficulty (#742), after the filters and the search
+        const groups = packGroups(inLane, data.packs, difficulty); // a long lane split by difficulty (#742), after the filters and the search
         return <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
           <div className="lane" {...target(drag !== LINE, w)}>
@@ -217,9 +217,10 @@ function PackPlanEditor({ data, plan, path, onChange }: {
             <div className={"packs" + (groups ? " grouped" : "")}>
               {groups?.map(({ group, names }) => {
                 const { title, note } = GROUPS[group];
+                const id = `${uid}${w}${group}`;
                 return (
-                  <section key={group} className="pg" aria-labelledby={`${uid}${w}${group}`}>
-                    <h3 id={`${uid}${w}${group}`}>
+                  <section key={group} className="pg" aria-labelledby={id}>
+                    <h3 id={id}>
                       <span className="t">{t(title)}</span><span className="n">{names.length}</span>
                       {note && <small>{fill(t(note), { n: MODE_BANDS.X.join("–") })}</small>}
                     </h3>
