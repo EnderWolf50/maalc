@@ -17,7 +17,7 @@ export function ReadBackNotice({ report, onDismiss }: { report: Report; onDismis
     const task = taskOfPath(path);
     return `${task ? taskName(t, task) : t("globals.title")} · ${t(optionLabel(path))}`;
   };
-  const none = (path: string) => t(path === "run/start_team" ? "run.start_team_queue" : "lux.team_none");
+  const none = (path: string) => t(path === "run/start_team" ? "run.start_team_none" : "lux.team_none");
   const value = (path: string, v: unknown) => {
     const key = path.split("/").pop()!;
     if (TEAM_PATHS.has(path)) {

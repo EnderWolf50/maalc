@@ -46,7 +46,7 @@
   - 版本 22（#803）：頂層新增 `team_queue`，隊伍佇列從此和 `teams` 的順序分開（第 9 節「輪替」，[ADR 0014](../adr/0014-team-queue-apart-from-team-list.md)）。從版本 21 遷移時照 `teams` 當時的順序建立，其他不變，所以升級後輪到誰不變；`teams` 手改壞的照它有的 id 建立，由 schema 報錯。版本 20 的檔照順序一路遷移到 22，版本 20 的記錄行與搬走的值照舊。
     - Agent 在記憶體裡遷移，不寫回；21 → 22 沒有記錄行，因為遷移不會讓任何值失效。GUI 遷移後寫回，舊檔先原樣另存成 `config/settings.v21.json`，不列任何值。
     - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `migrate_v21`）。舊版 Agent 讀到版本 22 會報「比自己新」。
-  - 版本 23（#813）：執行選項、日常參數與全域選項回到設定檔：`run`、`luxcavation`、`charge_enkephalin` 三段，鍵名與預設值照版本 20（第 5、12 節）；`run` 新增 `start_team`（起頭隊伍，`null` 是「照隊伍佇列」）。另加 `tasks`、`emulator`、`schedules` 三段（第 14 節）。理由見 [ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)。
+  - 版本 23（#813）：執行選項、日常參數與全域選項回到設定檔：`run`、`luxcavation`、`charge_enkephalin` 三段，鍵名與預設值照版本 20（第 5、12 節）；`run` 新增 `start_team`（起頭隊伍，`null` 是沒有旗子亮著，照隊伍佇列輪替）。另加 `tasks`、`emulator`、`schedules` 三段（第 14 節）。理由見 [ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)。
     - 從版本 22 遷移：每一段用預設值補上，一段裡缺的鍵也用預設值補上。版本 20 的檔一路遷移時，20 → 21 不再刪掉這三段，所以留著它原本的值，只補上 `start_team` 與它可能沒有的 `keep_dismissed_screens`。手改壞的值照留，由 schema 報錯。
     - Agent 在記憶體裡遷移，不寫回。檔案還是版本 22 以前時，每個任務開始時（讀選項之前，設定檔有錯也記）記一行 `settings older than version 23: the task options are read from its run, luxcavation and charge_enkephalin again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; open the settings GUI once: it writes the file as version 23`，GUI 寫回之前每次都記。
     - GUI 讀到版本 22 以前的檔時，先把舊檔原樣另存成 `config/settings.v<版本>.json`（已有就蓋掉；存不了就顯示讀取失敗，設定檔不動）；設定檔通過檢查就寫回版本 23，沒通過就等使用者改好按儲存。
@@ -54,7 +54,7 @@
       1. `config/mxu-maalc.json`（MXU v2.7.1 的設定檔，`lastActiveInstanceId` 的實例，沒有就第一個）：任務的選項值依 v1.0.0 `interface.json` 的選項名稱對回設定鍵（選擇型用 case 名稱，開關的 `true` 是 Yes，輸入型讀文字），隊伍依 id 對回；任務清單的順序照 MXU 的任務陣列，MXU 的每一項是任務清單的一項（同一個任務列了幾次就留幾項，#811），勾選看 `enabledByController[控制器]`，沒有才看 `enabled`；同一個任務列了幾次時，這些項共用一份選項，用勾選的第一項的（都沒勾就用第一項的），各項讀成的設定值不一樣時在提示裡寫「各項的選項不一樣」（比的是讀回後的值：局數上限關著時 MXU 留著的局數、留在預設的值都不算不一樣）；MXU 沒列的任務排在最後、不勾，每個一項，照新設定檔的順序（第 14 節；這是一次性的匯入，平常讀檔不補，#874）；`savedDevice.adbDeviceAddress` 對回 `emulator.address`。
       2. 沒有 MXU 的檔（或讀不了、讀不懂、沒有實例）：`config/settings.v20.json`（v1.0.0 的設定視窗遷移版本 20 時另存的檔）的三段，每個值照 schema 檢查。任務清單與模擬器照預設。
       3. 都沒有：預設值。
-    - 讀不回的值照預設，列在提示裡：MXU 加密存放的 webhook（`encryptedValues`；MXU 以前存成明文的照樣讀回）、對不到的值（不是選項接受的 case 或數字）、刪掉的隊伍（改成「未選擇」或「照隊伍佇列」，名稱取自 `config/team_options.json` 的 case，沒有就寫 id）、maalc 沒有的任務。
+    - 讀不回的值照預設，列在提示裡：MXU 加密存放的 webhook（`encryptedValues`；MXU 以前存成明文的照樣讀回）、對不到的值（不是選項接受的 case 或數字）、刪掉的隊伍（改成「未選擇」或「沒有旗子」，名稱取自 `config/team_options.json` 的 case，沒有就寫 id）、maalc 沒有的任務。
     - 版本 20 的檔（v0.1.0）保留它自己的三段，只從 MXU 的檔讀回任務清單與模擬器位址。版本 23 的檔不讀回：它的值已經是使用者在「執行」分頁設的（開發者的安裝也一樣）。
     - 寫回版本 23 之後，在分頁上方顯示一次提示，直到使用者按「知道了」：讀了哪個檔（MXU 的實例名稱）、先找過卻不在的檔、讀不了的檔與原因、和預設不同的值（另有幾個讀到的值和預設相同）、勾選的任務與順序、模擬器位址，以及沒讀到要重填的值；webhook 只說「已設定」。設定檔沒通過檢查時，提示等那次儲存寫進去之後才顯示。寫回之前 Agent 照舊版本寫了檔（領獎後移動佇列），重新讀檔時用同一批讀回的檔再讀一次，所以讀回的值不會不見。
     - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `migrate_v20`、`migrate_v21`、`migrate_v22`），新段落的預設值也是兩邊共用的 `valid`。舊版 Agent 讀到版本 23 會報「比自己新」。
@@ -357,7 +357,7 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 
 經驗本（任務 `ExpLuxcavation`，`luxcavation.exp`）、紐本（`ThreadLuxcavation`，`luxcavation.thread`，#368）與狂氣換腦啡肽（`ChargeEnkephalin`，`charge_enkephalin`，#373）怎麼跑，鍵名與預設值照版本 20（#813，[ADR 0015](../adr/0015-settings-window-runs-the-tasks.md)）。讀法同第 5 節：入口動作（`LuxStart`、`ChargeStart`）在點任何東西之前讀一次，記一行 `options: ...`。要跑哪些日常、依什麼順序，由任務清單決定（第 14 節，[ADR 0010](../adr/0010-one-pi-task-per-daily.md)）。設定視窗的「執行」分頁在任務清單點那個任務，右邊顯示它的選項；隊伍的下拉選單直接列出設定檔裡的隊伍，新增或改名立刻看得到，選的隊伍已經刪掉時顯示「已刪除的隊伍」與任務會停下的提醒（#814）。（#362、#366）
 
-提示與頁面上的提醒（第 14 節的規則，#879）：經驗本與紐本打哪一關、兩種模式怎麼打，是「模式」的滑鼠提示；場數（只在每日模式時，那時欄位是灰的）、隊伍、連戰、戰敗重打怎麼運作，是各自的提示。頁面上只留連戰的「一場 ×N 算 N 場，也花 N 倍的腦啡肽模組。」，以及還沒選隊伍時的警示「沒選隊伍，或選的隊伍已經刪掉時，任務一開始就停下。」（選了已刪掉的隊伍時是上面那句提醒）。狂氣換腦啡肽的頁面上提醒會花 Lunacy 與價格怎麼漲，整段說明是次數欄位的提示。
+提示與頁面上的提醒（第 14 節的規則，#879）：經驗本與紐本打哪一關、兩種模式怎麼打，是「模式」的滑鼠提示；場數（只在每日模式時，那時欄位是灰的）、隊伍、連戰、戰敗重打怎麼運作，是各自的提示。頁面上只留連戰的「一場 ×N 算 N 場，也花 N 倍的腦啡肽模組。」，以及還沒選隊伍時的警示「沒選隊伍時，任務一開始就停下。」（選了已刪掉的隊伍時是上面那句提醒）。狂氣換腦啡肽的頁面上提醒會花 Lunacy 與價格怎麼漲，整段說明是次數欄位的提示。
 
 經驗本與紐本的欄位相同：
 

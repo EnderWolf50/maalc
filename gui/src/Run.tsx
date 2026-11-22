@@ -729,9 +729,9 @@ function MirrorTeams() {
   const { s, update, t, tv, bad } = useEditor();
   const locked = useContext(LockContext);
   const byId = new Map(s.teams.map((x) => [x.id, x]));
-  // an id twice (a hand edit, which the check names) still gets a row of its own: `repeat` counts its rows before this one
-  const seen = new Map<string, number>();
-  const rows = s.team_queue.map((id) => { const repeat = seen.get(id) ?? 0; seen.set(id, repeat + 1); return { id, repeat }; });
+  // an id twice (a hand edit, which the check names) still gets a row of its own, keyed as a task's second entry is
+  const ids = s.team_queue.map((id) => ({ id }));
+  const rows = ids.map((x, j) => ({ ...x, key: entryKey(ids, j), first: nthOf(ids, j) === 0 }));
   const next = nextRuns(s), split = splitRuns(next);
   const start = s.run.start_team;
   const setStart = (id: string | null) => update((d) => { d.run.start_team = id; });
@@ -742,11 +742,11 @@ function MirrorTeams() {
       <legend>{t("queue.title")}</legend>
       <div className="mt-order" data-path="run/start_team">
         {rows.length > 0 && (
-          <ReorderList items={rows} keyOf={(x) => (x.repeat ? `${x.id}#${x.repeat}` : x.id)} badAt={(j) => bad(`team_queue/${j}`)}
+          <ReorderList items={rows} keyOf={(x) => x.key} badAt={(j) => bad(`team_queue/${j}`)}
             label={t("queue.title")} help={t("queue.help")}
             onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
             render={(x, j) => {
-              const team = byId.get(x.id), first = x.repeat === 0;
+              const team = byId.get(x.id), first = x.first;
               const on = first && start === x.id, off = team !== undefined && !team.enabled;
               const name = team ? team.name || "—" : `? ${x.id}`;
               // the runs this row's team plays next, on its first row
