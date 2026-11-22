@@ -102,6 +102,9 @@ const zh_tw = {
   "packs.newLane": "拖到這裡，輸入新的分數",
   "packs.floorsNormal": "普通", "packs.floorsHard": "困難", "packs.floorSep": "、", "packs.floorsKey": "數字＝會出現的樓層",
   "packs.floorsInfinity": "無限", "packs.floorsExtreme": "極限", // the user's words, 2026-11-14; en_us keeps the game's
+  // a long lane's groups (#742): option A's titles and notes, as the user chose them on 2026-11-22
+  "packs.groupBoth": "普通、困難都會出現", "packs.groupHard": "只在困難", "packs.groupHardNote": "其中多數也在無限",
+  "packs.groupExtreme": "只在極限", "packs.groupExtremeNote": "第 {n} 層", "packs.groupOther": "其他",
   "packs.weightPrompt": "分數（−10 到 10 的整數）：",
   "packs.weightRange": "分數必須是 −10 到 10 的整數。",
   "packs.eventPacks": "活動卡包",
@@ -612,6 +615,8 @@ const en_us: typeof zh_tw = {
   "packs.newLane": "Drop here to type a new weight",
   "packs.floorsNormal": "NORMAL", "packs.floorsHard": "HARD", "packs.floorSep": ", ", "packs.floorsKey": "numbers = the floors it appears on",
   "packs.floorsInfinity": "INFINITY", "packs.floorsExtreme": "EXTREME",
+  "packs.groupBoth": "On NORMAL and HARD", "packs.groupHard": "HARD only", "packs.groupHardNote": "most also on INFINITY",
+  "packs.groupExtreme": "EXTREME only", "packs.groupExtremeNote": "floors {n}", "packs.groupOther": "Other",
   "packs.weightPrompt": "Weight (a whole number from -10 to 10):",
   "packs.weightRange": "The weight must be a whole number from -10 to 10.",
   "packs.eventPacks": "Event packs",

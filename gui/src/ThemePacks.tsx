@@ -1,9 +1,10 @@
 // Theme pack plans (spec 04 section 8): lanes of weights with the refresh threshold between them, and the locked default plan
 // above the user's own.
-import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { fill, type Key } from "./i18n";
 import {
-  EVENT_MODES, MODE_KEYS, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, weightOf,
-  type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
+  EVENT_MODES, MODE_BANDS, MODE_KEYS, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor,
+  packGroups, weightOf, type PackGroup, type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
 import { Field, Select, useEditor, useSlashFocus, withBreaks } from "./ui";
@@ -38,6 +39,13 @@ const FLOORS = Array.from({ length: 16 }, (_, i) => i);
 const BADGES = {
   N: ["packs.floorsNormal", ""], H: ["packs.floorsHard", " hard"], I: ["packs.floorsInfinity", " inf"], X: ["packs.floorsExtreme", " ext"],
 } as const;
+/** A long lane's group (#742): its title and the small note beside it ({n}: EXTREME's floors). */
+const GROUPS: Record<PackGroup, { title: Key; note?: Key }> = {
+  both: { title: "packs.groupBoth" },
+  hard: { title: "packs.groupHard", note: "packs.groupHardNote" },
+  extreme: { title: "packs.groupExtreme", note: "packs.groupExtremeNote" },
+  other: { title: "packs.groupOther" },
+};
 
 /** A pack's weight typed in place (#679, in place of prompt()): Enter keeps a whole number from -10 to 10, or says why not
  * beside the box; leaving the box keeps a number typed into it as Enter does, and leaves the weight as it was when nothing
@@ -129,6 +137,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   // The line stops between two lanes, or under the last one (never refresh): gap g (1..lanes) sits under lane g-1, so its
   // threshold is that lane's weight.
   const toGap = (g: number) => set({ threshold: lanes[g - 1] });
+  const uid = useId(); // the group titles' ids
   const chip = (name: string) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
@@ -198,13 +207,26 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       onClick={() => { const p = pressed.current; pressed.current = null; if (p) ask(p); }}>
       {addLane("top")}
       {line === 0 && lineBar}
-      {lanes.map((w, i) => (
-        <Fragment key={w}>
+      {lanes.map((w, i) => {
+        const inLane = shown.filter((n) => weightOf(plan, n) === w);
+        const groups = packGroups(inLane, data.packs); // a long lane split by difficulty (#742), after the filters and the search
+        return <Fragment key={w}>
           {i > 0 && gapOrLine(i)}
           <div className="lane" {...target(drag !== LINE, w)}>
             <span className={"w" + (w > 0 ? " pos" : w < 0 ? " neg" : "")}>{w > 0 ? `+${w}` : w}</span>
-            <div className="packs">
-              {shown.filter((n) => weightOf(plan, n) === w).map(chip)}
+            <div className={"packs" + (groups ? " grouped" : "")}>
+              {groups?.map(({ group, names }) => {
+                const { title, note } = GROUPS[group];
+                return (
+                  <section key={group} className="pg" aria-labelledby={`${uid}${w}${group}`}>
+                    <h3 id={`${uid}${w}${group}`}>
+                      <span className="t">{t(title)}</span><span className="n">{names.length}</span>
+                      {note && <small>{fill(t(note), { n: MODE_BANDS.X.join("–") })}</small>}
+                    </h3>
+                    <div className="pgp">{names.map(chip)}</div>
+                  </section>
+                );
+              }) ?? inLane.map(chip)}
               {w === plan.unlisted && !query.trim() && (
                 <span className={"pk unlisted" + (path && bad(`${path}/unlisted`) ? " bad" : "")} data-path={path && `${path}/unlisted`}
                   {...dragged(UNLISTED)} {...clickable(UNLISTED)}>
@@ -215,8 +237,8 @@ function PackPlanEditor({ data, plan, path, onChange }: {
               )}
             </div>
           </div>
-        </Fragment>
-      ))}
+        </Fragment>;
+      })}
       {gapOrLine(lanes.length)}
       {addLane("bottom")}
     </div>
