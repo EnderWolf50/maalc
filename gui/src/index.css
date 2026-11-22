@@ -576,7 +576,6 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 }
 .dchip[data-d="hard"] { color: var(--fg); background: var(--line); }
 .mirror-teams > p.mt-note { font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
-.mirror-teams > p.mt-note button { margin-left: 4px; padding: 2px 10px; font-size: 12.5px; }
 /* a run locks the queue: the rows faded as a locked field is (input:disabled), the flags not faded twice */
 .mt-order ol.reorder.locked > li { opacity: 0.45; }
 .mt-order ol.reorder.locked .start-flag:disabled { opacity: 1; cursor: default; }
@@ -594,6 +593,18 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .start-flag.on { color: var(--accent); }
 .start-flag.on:hover:not(:disabled) { color: var(--accent-hi); }
 .start-flag:disabled { opacity: 0.3; cursor: not-allowed; }
+/* on a disabled team (#878) the flag sets nothing: the icon faint (not the button, whose opacity would fade the words drawn
+ * on it), the no-entry pointer, unlit under it, its words saying why. One already there (a hand edit, an old file) has no
+ * effect: dimmed with the row's struck-through name, filled but muted, not amber; it lights up under the pointer, as a press
+ * clears it */
+.start-flag[aria-disabled="true"] { cursor: not-allowed; }
+.start-flag[aria-disabled="true"] svg { opacity: 0.3; }
+.start-flag[aria-disabled="true"]:hover:not(:disabled) { color: var(--muted); }
+.start-flag[aria-disabled="true"]:active:not(:disabled) svg { transform: none; }
+.mt-row.off .start-flag.on { opacity: 0.5; }
+.mt-row.off .start-flag.on:hover:not(:disabled), .mt-row.off .start-flag.on:focus-visible { opacity: 1; }
+.mt-row.off .start-flag.on, .mt-row.off .start-flag.on:hover:not(:disabled) { color: var(--muted); }
+.mt-order ol.reorder.locked .mt-row.off .start-flag:disabled { opacity: 0.5; } /* locked too, under the row's fade */
 .start-flag::before, .start-flag::after {
   position: absolute; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.12s ease-out, translate 0.12s ease-out;
 }
@@ -1018,7 +1029,17 @@ ol.skill-sinners > li[data-dragging] { opacity: 0.4; } /* and the line where it 
 .lane .w { width: 40px; flex: none; text-align: right; font: 700 22px/1.2 var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; }
 .lane .w.pos { color: var(--accent-ink); }
 .lane .w.neg { color: var(--fg-2); }
-.lane .packs { display: flex; flex-wrap: wrap; gap: 8px 6px; flex: 1; }
+.lane .packs, .pgp { display: flex; flex-wrap: wrap; gap: 8px 6px; }
+.lane .packs { flex: 1; }
+/* A long lane's difficulty groups (#742): a small quiet title with its count over the group's packs, a hairline between groups;
+   the threshold's line stays the loudest text in the lanes. */
+.lane .packs.grouped { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+.lane .packs.grouped > .pk.unlisted { align-self: flex-start; }
+.pg { display: flex; flex-direction: column; gap: 4px; }
+.pg + .pg { padding-top: 8px; border-top: 1px solid var(--line); }
+.pg h3 { display: flex; align-items: baseline; gap: 6px; margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--fg-2); }
+.pg h3 .n { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.pg h3 small { color: var(--muted); font-weight: 400; font-size: 11.5px; }
 .lane.add { color: var(--muted); justify-content: center; align-items: center; border: 1px dashed var(--line-2); margin: 8px 0; }
 .lanes.carrying .lane.add { color: var(--fg); border-color: var(--accent-line); background: var(--accent-soft); }
 .lanes .gap { height: 12px; }
@@ -1054,6 +1075,34 @@ small.fl.inf { color: var(--fl-i); background: none; border: 1px dashed var(--fl
 small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
+/* Several packs picked at once (#743). The bar above the lanes is one line high picked or not, so a Ctrl click never moves the
+ * packs under the next one, and while packs are picked it stays at the top of the scrolling page (top -16 px: main's padding,
+ * as nav.sections). A pack's marks sit on its corners, out of the flow, for the same reason; the box drawn from empty space
+ * and a lane's drop label are drawn over the lanes, never in their flow. */
+.pickbar { display: flex; align-items: center; gap: 12px; min-height: 30px; padding: 0 12px; font-size: 12.5px; border: 1px solid transparent; border-radius: 4px; corner-shape: bevel; }
+.pickbar.on { position: sticky; top: -16px; z-index: 4; border-color: var(--accent-line); background: var(--accent-soft); }
+.pickbar b { color: var(--accent-ink); white-space: nowrap; }
+/* a narrow window shortens the names first, then the keys, never wrapping to a second line */
+.pickbar .names, .pickbar .keys, .pickbar > .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
+.pickbar .names { flex: 1 1 0; min-width: 4em; }
+.pickbar .keys { flex: 0 1 auto; }
+.pickbar button { flex: none; padding: 1px 10px; font-size: 12.5px; white-space: nowrap; }
+.lanes, .lane, .pk { position: relative; }
+.lanes.boxing { user-select: none; }
+.marquee { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent-line); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.pk.picked { border-color: var(--accent-line); background: var(--sel); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.pk .tick, .pk .count {
+  position: absolute; top: -7px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; pointer-events: none;
+  background: var(--accent); color: var(--on-accent); font: 700 11px/16px var(--font-display); text-align: center;
+}
+.pk .tick { left: -6px; }
+.pk .count { right: 2px; } /* inside the corner: the next pack's tick sits 6 px past this edge */
+.pk.lifted { opacity: 0.45; }
+.lane.lit { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.lane .droplabel {
+  position: absolute; top: 6px; right: 8px; padding: 2px 8px; pointer-events: none; white-space: nowrap; font-size: 12.5px; font-weight: 700;
+  color: var(--accent-ink); background: var(--panel); border: 1px solid var(--accent-line); border-radius: 4px;
+}
 /* a pack's weight typed in place */
 .weigh { display: inline-flex; align-items: center; gap: 4px; }
 .weigh input { width: 4.5em; padding: 0 4px; }

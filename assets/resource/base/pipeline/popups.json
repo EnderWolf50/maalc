@@ -165,10 +165,11 @@
     // After clearing floor 5 with the Parallel Superposition Mode engaged: `You can enter the Parallel Superposition
     // Mode.` / `Enter the Parallel Superposition Mode and proceed to the next floor?` (InfinityFloor_CheckEnter_Modal_Desc),
     // Cancel / Confirm. ParallelPrompt Confirms it towards a target floor above 5, else Cancels (#434, spec 01,
-    // 無限鏡牢彈窗). Seen only as the game's help-sheet picture of the prompt (tests/screens/ParallelModePrompt.png),
-    // so its place on screen is not confirmed (#852): both ROIs are wide and the tap goes to the button text found. It
-    // covers the page under it, so it sits before the pages; RouteMap gives the map up under it (actions.COVERS). Its
-    // 1.5 s stay (#258): no live log has the prompt yet to time a change against.
+    // 無限鏡牢彈窗). Live (#852, tests/screens/ParallelModePromptOverMap.png): it rises over the floor-5 map once the
+    // boss is beaten; Cancel brings the run's Victory (RunVictory), then Exploration Complete and the reward window.
+    // Both ROIs stay wide, shared with ExtremeModePrompt (#854), and the tap goes to the button text found. It covers
+    // the page under it, so it sits before the pages; RouteMap gives the map up under it (actions.COVERS). Its 1.5 s
+    // stay (#258): live, the prompt was gone 0.2 s after Cancel, and Connecting and RunVictory followed within 1.2 s.
     "ParallelModePrompt": {
         "recognition": "And",
         "all_of": [

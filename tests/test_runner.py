@@ -640,21 +640,24 @@ def test_adb_state_asks_as_maaframeworks_connect_does_with_the_devices_own_adb()
     assert devices.adb_state(MUMU0, run=missing).startswith("FileNotFoundError")
 
 
-def test_adb_state_takes_no_longer_than_its_timeout_for_every_call():
-    # the runner hands it the time left until 120 s after the launch: a hung adb does not hold the start past it
+def test_adb_state_takes_no_longer_than_its_timeout_for_every_call(monkeypatch):
+    # the runner hands it the time left until 120 s after the launch: a hung adb does not hold the start past it.
+    # A fake clock that only the fake adb moves (#908): a busy machine's stalls cannot change what each call is given.
+    now = [100.0]
+    monkeypatch.setattr(devices, "time", SimpleNamespace(monotonic=lambda: now[0]))
     timeouts = []
 
     def run(cmd, stdout, timeout, **kw):
         timeouts.append(timeout)
-        time.sleep(0.05)
+        now[0] += 0.05
         stdout.write(b"device\n")
         return SimpleNamespace(returncode=0)
     assert devices.adb_state(MUMU0, timeout=3.0, run=run) == "device"
-    # each call gets what the ones before left (a ~50 ms sleep each), the connect CONNECT_WAIT at most; start-server
+    # each call gets what the ones before left (50 ms each), the connect CONNECT_WAIT at most; start-server
     # gets it all: a connect cut while it starts the server leaves none, and the next look would start it again
     # (measured on adb 1.0.41, #839)
-    assert len(timeouts) == 3 and 2.9 < timeouts[0] <= 3.0 and timeouts[1] <= devices.CONNECT_WAIT
-    assert timeouts[2] <= 3.0 - 0.06
+    assert len(timeouts) == 3 and timeouts[0] == pytest.approx(3.0) and timeouts[1] == pytest.approx(devices.CONNECT_WAIT)
+    assert timeouts[2] == pytest.approx(3.0 - 0.1)
     assert devices.adb_state(MUMU0, timeout=60.0, run=run) == "device" and max(timeouts[3:]) <= devices.ADB_TIMEOUT
     timeouts.clear()
     assert devices.adb_state(MUMU0, timeout=0.0, run=run).startswith("TimeoutExpired") and timeouts == []

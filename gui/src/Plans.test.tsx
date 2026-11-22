@@ -11,7 +11,7 @@ import css from "./index.css?raw";
 import { DeploymentTab } from "./Deployment";
 import { StarlightTab } from "./Starlight";
 import { ThemePackTab } from "./ThemePacks";
-import { cssRules, cssValueOf, expectLines, filterEffect, pickInList, renderEditor, textOf } from "./testing";
+import { PACK_EN, cssRules, cssValueOf, englishOf, expectLines, filterEffect, pickInList, renderEditor, textOf } from "./testing";
 
 const zh = TEXT.zh_tw;
 const mine = (want: number[]): GiftList => ({
@@ -19,11 +19,7 @@ const mine = (want: number[]): GiftList => ({
 });
 const settings = (patch: Partial<Settings> = {}): Settings => ({ ...newSettings(), language: "zh_tw", ...patch });
 
-// A pack's English name: the chip's name, or under its Chinese name in the Chinese UI (#899).
-const EN_NAME = ".nm, .nm .en";
-/** The English name of a chip's `.nm`. */
-const englishOf = (nm: Element) => (nm.querySelector(".en") ?? nm).textContent;
-const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: EN_NAME })).closest(".pk") as HTMLElement;
+const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: PACK_EN })).closest(".pk") as HTMLElement;
 /** Drag the pack `name` onto `lane`. */
 const dropOn = async (lane: Element, name: string) => {
   const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
@@ -322,8 +318,8 @@ describe("dragging a pack chip", () => {
     const plan = { id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" };
     const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan] }));
     await r.user.click(await screen.findByText("Mine"));
-    const chip = (await screen.findByText("The Forgotten", { selector: EN_NAME })).closest(".pk")!;
-    const lane = (await screen.findByText("The Outcast", { selector: EN_NAME })).closest(".lane")!;
+    const chip = (await screen.findByText("The Forgotten", { selector: PACK_EN })).closest(".pk")!;
+    const lane = (await screen.findByText("The Outcast", { selector: PACK_EN })).closest(".lane")!;
     const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
     fireEvent.dragStart(chip, { dataTransfer });
     fireEvent.dragOver(lane, { dataTransfer });
@@ -467,6 +463,70 @@ test("INFINITY and EXTREME are choices of the filter and badges of a pack: 無�
   renderEditor(<ThemePackTab />, { ...newSettings(), language: "en_us" });
   expect(chip("INFINITY")).toBeInTheDocument();
   expect(chip("EXTREME")).toBeInTheDocument();
+});
+
+// #742: a lane of 20 packs or more splits by difficulty (the user's choice of 2026-11-22), every lane, not only 0.
+describe("a long lane split into difficulty groups", () => {
+  const laneOf = (w: string) => [...document.querySelectorAll<HTMLElement>(".lane")].find((l) => l.querySelector(".w")?.textContent === w)!;
+  /** Each group of a lane: its h3's title, the count it gives and the packs under it. */
+  const groupsIn = (lane: HTMLElement) => [...lane.querySelectorAll<HTMLElement>("section")].map((s) => {
+    const heading = within(s).getByRole("heading", { level: 3 });
+    return { heading, title: heading.querySelector(".t")!.textContent, count: Number(heading.querySelector(".n")!.textContent),
+      packs: [...s.querySelectorAll<HTMLElement>(".pk")] };
+  });
+  const badges = (pk: HTMLElement) => [...pk.querySelectorAll(".fl")].map((b) => b.className);
+  const open = async () => {
+    const r = renderEditor(<ThemePackTab />, newSettings()); // the locked default plan: 0 holds 61 packs, -5 holds 51, +10 one
+    await waitFor(() => expect(shown("Chachihu")).toBe(true));
+    return r;
+  };
+
+  test("the default plan's 0 and -5 lanes group under h3 titles with their counts, each pack under its difficulties", async () => {
+    await open();
+    for (const w of ["0", "-5"]) {
+      const lane = laneOf(w);
+      const groups = groupsIn(lane);
+      const titles = [zh["packs.groupBoth"], zh["packs.groupHard"], zh["packs.groupExtreme"]];
+      expect(groups.length).toBeGreaterThanOrEqual(2);
+      expect(titles.filter((x) => groups.some((g) => g.title === x))).toEqual(groups.map((g) => g.title)); // in this order
+      for (const g of groups) {
+        expect(g.count).toBe(g.packs.length);
+        for (const pk of g.packs) {
+          const b = badges(pk);
+          if (g.title === zh["packs.groupBoth"]) expect(b).toEqual(expect.arrayContaining(["fl", "fl hard"]));
+          if (g.title === zh["packs.groupHard"]) expect(b).toContain("fl hard");
+          if (g.title !== zh["packs.groupBoth"]) expect(b).not.toContain("fl");
+          if (g.title === zh["packs.groupExtreme"]) expect(b).toEqual(["fl ext"]);
+        }
+      }
+      expect(groups.reduce((n, g) => n + g.count, 0)).toBe(lane.querySelectorAll(".pk:not(.unlisted)").length);
+    }
+    const extreme = groupsIn(laneOf("0")).find((g) => g.title === zh["packs.groupExtreme"])!;
+    expect(extreme.packs.length).toBeGreaterThan(0);
+    expect(extreme.heading).toHaveTextContent("第 11–15 層");
+    expect(laneOf("+10").querySelector("section")).toBeNull(); // one pack: flat
+  });
+
+  test("a title is quieter than the refresh threshold's line", async () => {
+    await open();
+    const title = laneOf("0").querySelector("h3")!;
+    expect(cssValueOf(css, title, "color")).toBe("var(--fg-2)");
+    expect(cssValueOf(css, document.querySelector(".thr")!, "color")).toBe("var(--fg)");
+  });
+
+  test("a difficulty picked above hides the groups it empties, and a lane left with one group or under 20 packs is flat", async () => {
+    const { user } = await open();
+    await user.click(chip(zh["packs.floorsHard"]));
+    expect(groupsIn(laneOf("0")).map((g) => g.title)).toEqual([zh["packs.groupBoth"], zh["packs.groupHard"]]);
+    await user.click(chip(zh["packs.floorsNormal"]));
+    expect(laneOf("0").querySelector("section")).toBeNull(); // every NORMAL pack is in the first group: no title says anything
+    expect(laneOf("0").querySelectorAll(".pk").length).toBeGreaterThan(20);
+    await user.click(chip(zh["packs.floorsExtreme"]));
+    expect(laneOf("0").querySelector("section")).toBeNull(); // every pack shown is on EXTREME: 只在困難 would say otherwise
+    await user.click(chip(zh["packs.anyDifficulty"]));
+    await user.type(screen.getByRole("searchbox", { name: zh["packs.search"] }), "emotional");
+    expect(laneOf("0").querySelector("section")).toBeNull();
+  });
 });
 
 test("the deployment order plan's grid shows each sinner's default identity card (#718), lit as the formation screen's (#750, #761)", () => {

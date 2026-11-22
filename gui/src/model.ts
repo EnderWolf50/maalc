@@ -188,6 +188,26 @@ const FLOOR_MODES = ["N", "H", "I", "X"] as const;
 /** The floors a 15-floor run plays as INFINITY and as EXTREME, as the agent reads them (agent/run_start.py MODE_BANDS, #387). */
 export const MODE_BANDS = { I: [6, 10], X: [11, 15] } as const;
 
+/** A long lane's groups (#742; grouping by difficulty, the user's choice of 2026-11-22), by the data file's N, H and X keys: NORMAL (every such pack
+ * has HARD floors too), HARD without NORMAL, EXTREME only, and the rest (a pack the data file lacks). */
+export type PackGroup = "both" | "hard" | "extreme" | "other";
+const PACK_GROUPS: PackGroup[] = ["both", "hard", "extreme", "other"];
+/** The fewest packs a lane groups: every lane that long, not only 0 (the default plan's -5 lane holds 51); a shorter one is
+ * a few rows, read at a glance. */
+export const GROUP_MIN = 20;
+const groupOf = (f: PackFloors | undefined): PackGroup => (!f ? "other" : f.N?.length ? "both" : f.H?.length ? "hard" : f.X ? "extreme" : "other");
+
+/** The groups of a lane's packs shown at the difficulty the filter picks, each in the lane's order, the empty ones left out;
+ * null when the lane stays one run of packs: under GROUP_MIN packs, all of them in one group (a filter above left only that
+ * one), where a title would say nothing, or EXTREME picked, where every pack shown is on EXTREME and 只在困難 would say not. */
+export function packGroups(names: string[], packs: Record<string, PackFloors>, difficulty: PackMode = ""):
+  { group: PackGroup; names: string[] }[] | null {
+  if (names.length < GROUP_MIN || difficulty === "extreme") return null;
+  const groups = PACK_GROUPS.map((group) => ({ group, names: names.filter((n) => groupOf(packs[n]) === group) }))
+    .filter((g) => g.names.length);
+  return groups.length < 2 ? null : groups;
+}
+
 /** Whether a pack with these floors ({N: [1, 2], H: [1]}: NORMAL 1-2, HARD 1; I, X: every floor of MODE_BANDS) shows on
  * difficulty ("" any) and floor (0 any). */
 export function onFloor(floors: PackFloors, difficulty: PackMode, floor: number) {
@@ -507,6 +527,20 @@ export function nextRuns(s: Settings): NextRun[] {
       return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(difficulty);
     }) ?? null,
   }));
+}
+
+/** The settings with run.start_team null when it names no team (a team deleted since its flag was set): the flag has no
+ * effect (agent task_options.start_team_ignored_line, #878), and a save drops it. The settings themselves when it names one. */
+export function withoutGoneStart(s: Settings): Settings {
+  const start = s.run.start_team;
+  return start === null || s.teams.some((t) => t.id === start) ? s : { ...s, run: { ...s.run, start_team: null } };
+}
+
+/** The settings with team `i` switched on or off. Switched off, it takes the start team's flag with it when it carries it
+ * (#878): a disabled team is never the start team, and switched on again it does not get the flag back. */
+export function setTeamEnabled(s: Settings, i: number, on: boolean) {
+  s.teams[i].enabled = on;
+  if (!on && s.run.start_team === s.teams[i].id) s.run.start_team = null;
 }
 
 /** The settings with team `team` added: last in the team list and last in the queue (#803). */

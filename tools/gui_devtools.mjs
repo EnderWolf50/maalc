@@ -36,9 +36,11 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
                                      drawn black (the header's "header .path" shows a local path). The page only: the
                                      window with its frame is cua's get_window_state
   scheme <light|dark>                emulates prefers-color-scheme, kept until stopped (or --keep S)
-  press <target> [--hold MS] [--move DX,DY] [--steps N] [--button left|right|middle]
+  press <target> [--hold MS] [--move DX,DY] [--steps N] [--button left|right|middle] [--with MODS]
                                      presses the mouse at the target, holds it MS (100; 600 with --move), moving by DX,DY
-                                     while held, and releases; a drag the page starts is reported and cancelled
+                                     while held, and releases; a drag the page starts is reported and cancelled; --with
+                                     holds modifiers through it, Ctrl, Shift, Alt or Meta joined by + (Ctrl+Shift): a Ctrl
+                                     click, which cua cannot send in the background. A negative move takes =: --move=-40,0
   hover <target> [--force]           the pointer on the target (--force: the CSS :hover state only), kept until stopped
                                      (or --keep S)
   key <combo>... [--ime] [--delay MS]
@@ -89,7 +91,7 @@ const COMMANDS = {
   still: { page: true, options: { element: str, pad: str, mask: { type: "string", multiple: true } } },
   // holds: the command's effect is a state its session holds, so it is kept until stopped unless --keep says otherwise
   scheme: { page: true, holds: true },
-  press: { page: true, options: { hold: str, move: str, steps: str, button: str } },
+  press: { page: true, options: { hold: str, move: str, steps: str, button: str, with: str } },
   hover: { page: true, holds: true, options: { force: flag } },
   key: { page: true, options: { ime: flag, delay: str } },
   drag: { page: true, options: { steps: str, cancel: flag } },
@@ -184,6 +186,7 @@ export function parseCommand(argv) {
       if (options.move !== undefined) pair(options.move, "--move");
       if (options.steps !== undefined) number(options.steps, "--steps", { min: 1, integer: true });
       if (options.button !== undefined && !["left", "right", "middle"].includes(options.button)) usage("--button takes left, right or middle");
+      if (options.with !== undefined) modifierBits(options.with);
       break;
     case "hover":
       targets(1, 1, "a target");
@@ -275,13 +278,21 @@ function keyOf(name, bits) {
   return NAMED[name.toLowerCase()] ?? null;
 }
 
+/** The modifier `name` names (Ctrl, Shift, Alt, Meta, any case); `where` heads the usage error for any other. */
+const modifierOf = (name, where) => MODIFIERS[name.toLowerCase()] ?? usage(`${where}: unknown modifier ${name} (Ctrl, Shift, Alt, Meta)`);
+
+/** The Input.dispatch*Event modifiers bits of "Ctrl", "Shift+Ctrl" ...: what a press --with holds during its mouse events. */
+export function modifierBits(text) {
+  return text.split("+").reduce((bits, p) => bits | modifierOf(p.trim(), `--with ${text}`).bit, 0);
+}
+
 /** The Input.dispatchKeyEvent params for a key combo ("Shift+Tab"): each modifier down, the key down and up, the modifiers
  * up. A key types its text only with no Ctrl, Alt or Meta; with Alt (and no Ctrl) it is a system key, as Windows sends it.
  * `ime` reports the key as an input method reports it ("Process", 229). */
 export function keyEvents(combo, ime = false) {
   const parts = combo.split("+").map((p) => p.trim());
   const name = parts.pop();
-  const mods = parts.map((p) => MODIFIERS[p.toLowerCase()] ?? usage(`${combo}: unknown modifier ${p} (Ctrl, Shift, Alt, Meta)`));
+  const mods = parts.map((p) => modifierOf(p, combo));
   if (MODIFIERS[name.toLowerCase()]) usage(`${combo}: a modifier needs a key after it, as Shift+Tab`);
   const bits = mods.reduce((b, m) => b | m.bit, 0);
   const k = keyOf(name, bits) ?? usage(`${combo}: unknown key ${name}`);
@@ -607,6 +618,7 @@ const STEPS = {
     const buttons = BUTTONS[button];
     const move = c.options.move ? pair(c.options.move, "--move") : null;
     const hold = Number(c.options.hold ?? (move ? 600 : 100));
+    const modifiers = c.options.with ? modifierBits(c.options.with) : 0; // held through every mouse event of the press
     let drag = null;
     if (move) {
       cdp.on("Input.dragIntercepted", (p) => { drag = p; });
@@ -614,20 +626,20 @@ const STEPS = {
       undo.push(() => cdp.send("Input.setInterceptDrags", { enabled: false }));
     }
     let end = at;
-    await mouse(cdp, "mouseMoved", at);
-    await mouse(cdp, "mousePressed", at, { button, buttons, clickCount: 1 });
+    await mouse(cdp, "mouseMoved", at, { modifiers });
+    await mouse(cdp, "mousePressed", at, { button, buttons, clickCount: 1, modifiers });
     let down = true;
-    undo.push(async () => { if (down) await mouse(cdp, "mouseReleased", end, { button, clickCount: 1 }); });
+    undo.push(async () => { if (down) await mouse(cdp, "mouseReleased", end, { button, clickCount: 1, modifiers }); });
     if (move) {
       const steps = Number(c.options.steps ?? 12);
       for (let i = 1; i <= steps; i++) {
         end = { x: at.x + (move.x * i) / steps, y: at.y + (move.y * i) / steps };
-        await mouse(cdp, "mouseMoved", end, { button, buttons });
+        await mouse(cdp, "mouseMoved", end, { button, buttons, modifiers });
         await sleep(hold / steps);
       }
       if (drag) await cdp.send("Input.dispatchDragEvent", { type: "dragCancel", x: end.x, y: end.y, data: drag.data });
     } else await sleep(hold);
-    await mouse(cdp, "mouseReleased", end, { button, clickCount: 1 });
+    await mouse(cdp, "mouseReleased", end, { button, clickCount: 1, modifiers });
     down = false;
     return { pressed: at, held: hold, ...(move ? { released: end, dragStarted: !!drag } : {}) };
   },

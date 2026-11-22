@@ -197,25 +197,10 @@ def button_taps(context):
     return [c for c in context.tasker.controller.post_click.call_args_list if c.args == event_actions.EVENT_BUTTON]
 
 
-def map_world(context, nodes, links, bus_x, width=1800):
-    """A map wider than the screen, the bus at (bus_x, BUS_HOME's y) on screen; drags move the screen over it.
-
-    nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
-    The bus's chevrons lead to the first column's nodes; a tap on anything but Enter opens a node panel.
-    The bus stands on a node already entered (no tap on it first, #88). Returns the screen's offsets after each drag.
-    """
-    actions.RUN["map_entered"] = True
-    bx, by = 446, map_actions.BUS_HOME[1]  # on the map; the screen starts at 446 - bus_x
-
-    def at(column, row):
-        return bx + map_actions.SLOT[0] + (column - 1) * 255, by + map_actions.SLOT[1] + {"up": -213, "mid": 0, "down": 213}[row]
-    world = np.random.default_rng(2).integers(0, 30, size=(720, width, 3)).astype(np.uint8)
-    for a, b in links:
-        (x0, y0), (x1, y1) = at(*a), at(*b)
-        for t in np.linspace(0, 1, 600):
-            x, y = int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t)
-            world[y - 2:y + 3, x - 2:x + 3] = 200
-    off, start, offsets = [bx - bus_x], [], []  # the screen's left edge on the map; where the touch went down
+def pan_over(context, width, left):
+    """Touches drag the screen's left edge, from left, over a map `width` px wide: across only, stopping at its ends.
+    Returns ([the left edge, as it moves], [the left edge after each drag])."""
+    off, start, offsets = [left], [], []
 
     def down(x, y):
         start[:] = [x, off[0]]
@@ -230,7 +215,38 @@ def map_world(context, nodes, links, bus_x, width=1800):
         return MagicMock()
     ctl = context.tasker.controller
     ctl.post_touch_down.side_effect, ctl.post_touch_move.side_effect, ctl.post_touch_up.side_effect = down, move, up
-    ctl.post_screencap.return_value.wait.return_value.get.side_effect = lambda: world[:, off[0]:off[0] + 1280].copy()
+    return off, offsets
+
+
+def map_world(context, nodes, links, bus_x, width=1800):
+    """A map wider than the screen, the bus at (bus_x, BUS_HOME's y) on screen; drags move the screen over it.
+
+    nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
+    The bus's chevrons lead to the first column's nodes; a tap on anything but Enter opens a node panel.
+    The bus stands on a node already entered (no tap on it first, #88). Returns the screen's offsets after each drag.
+    Each screenshot differs from the last in a corner, as the bus' flame flickers on every frame the game draws (#907).
+    """
+    actions.RUN["map_entered"] = True
+    bx, by = 446, map_actions.BUS_HOME[1]  # on the map; the screen starts at 446 - bus_x
+
+    def at(column, row):
+        return bx + map_actions.SLOT[0] + (column - 1) * 255, by + map_actions.SLOT[1] + {"up": -213, "mid": 0, "down": 213}[row]
+    world = np.random.default_rng(2).integers(0, 30, size=(720, width, 3)).astype(np.uint8)
+    for a, b in links:
+        (x0, y0), (x1, y1) = at(*a), at(*b)
+        for t in np.linspace(0, 1, 600):
+            x, y = int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t)
+            world[y - 2:y + 3, x - 2:x + 3] = 200
+    off, offsets = pan_over(context, width, bx - bus_x)
+    ctl = context.tasker.controller
+    shots = [0]
+
+    def shot():
+        image = world[:, off[0]:off[0] + 1280].copy()
+        shots[0] += 1
+        image[:20, -20:] = 255 * (shots[0] % 2)  # 400 px: past map_actions.FLICKER, under recovery.same_screen's share
+        return image
+    ctl.post_screencap.return_value.wait.return_value.get.side_effect = shot
     marks = {(at(c, r)[0], at(c, r)[1], m) for (c, r), ms in nodes.items() for m in ms}
 
     def run_recognition(name, image, override=None):
@@ -827,7 +843,8 @@ def test_the_guard_gives_the_page_up_after_a_second(context, clock, guarded):
 def test_a_window_the_map_reads_under_is_the_map_gone(context, clock, guarded, window):
     # #850: the map reads under the Hidden Battle window (HiddenBattleOverMap.synthetic.png); RouteMap tapping on would
     # tap through it, Enter included. MirrorHub answers it with Skip. #434: so does it under the floor 5 and 10 prompts
-    # (ParallelMode*OverMap.synthetic.png), whose Confirm would take the run on; MirrorHub answers them by the target.
+    # (ParallelModePromptOverMap.png, live #852; ParallelModeExtremeOverMap.synthetic.png), whose Confirm would take the
+    # run on; MirrorHub answers them by the target.
     context.run_recognition.side_effect = lambda name, image, override=None: \
         SimpleNamespace(hit=True) if name in ("MirrorMap", window) else None
     with pytest.raises(actions.PageGone):

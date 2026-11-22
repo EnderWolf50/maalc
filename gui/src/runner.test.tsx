@@ -854,7 +854,7 @@ describe("during a run", () => {
 
   test("the team queue is locked too: no drag and no Alt move, every flag off, each row faded to 0.45 (#878)", async () => {
     const s = settings();
-    Object.assign(s, queuedTeams([newTeam(1, "T1"), newTeam(2, "T2")]));
+    Object.assign(s, queuedTeams([newTeam(1, "T1"), newTeam(2, "T2"), { ...newTeam(3, "T3"), enabled: false }]));
     s.run.start_team = s.teams[0].id;
     back.text = fileOf(s);
     const user = await open();
@@ -867,13 +867,17 @@ describe("during a run", () => {
       expect(cssValueOf(css, row, "opacity")).toBe("0.45");
     }
     const flags = queue().getAllByRole("button");
-    expect(flags).toHaveLength(2);
+    expect(flags).toHaveLength(3);
     for (const flag of flags) expect(flag).toBeDisabled();
     expect(cssValueOf(css, flags[1], "opacity")).toBe("1"); // the row's fade alone: a flag is not dimmed twice
+    // a disabled team's: 0.5 under the row's fade, its icon not faded again (disabled with the rest, so not aria-disabled)
+    expect(flags[2]).not.toHaveAttribute("aria-disabled");
+    expect(cssValueOf(css, flags[2], "opacity")).toBe("0.5");
+    expect(cssValueOf(css, flags[2].querySelector("svg")!, "opacity")).toBeUndefined();
     const rows = queue().getAllByRole("listitem");
     dragOnto(rows[1], rows[0]);
     await altMove(user, rows[1], "ArrowUp");
-    expect(order()).toEqual(["T1", "T2"]);
+    expect(order()).toEqual(["T1", "T2", "T3"]);
     send(exit(0, true));
     for (const flag of queue().getAllByRole("button")) expect(flag).toBeEnabled();
   });

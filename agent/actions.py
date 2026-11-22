@@ -30,7 +30,7 @@ import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
 from ocrtext import has, normalize
-from reasons import Reason, carried, code_line, of_node
+from reasons import Reason, code_line, of_node
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
 
@@ -246,8 +246,9 @@ POPUPS = ("Connecting", "RetryPopup", "PopupButton")  # MirrorHub's global popup
 # Windows that leave a page's anchor readable under them, answered by MirrorHub before that page. #213: a GET! window
 # over the map after a fight leaves its buttons (MirrorMap) lit. Not the shop's: Shop closes its own GET! windows.
 # #850: the Hidden Battle window may come after RouteMap tapped an event node; the map reads under it, and a tap
-# through it could land on its Enter. #434: the map reads under the floor 5 and 10 prompts too (ParallelMode*OverMap.synthetic.png),
-# and where they come after the boss is not known (#852): a tap through one could land on its Confirm.
+# through it could land on its Enter. #434: the map reads under the floor 5 and 10 prompts too
+# (ParallelModePromptOverMap.png, ParallelModeExtremeOverMap.synthetic.png): live (#852) the floor 5 one rose over the
+# map once the boss was beaten, before the run's Victory, and a tap through it could land on its Confirm.
 COVERS = {"MirrorMap": ("GiftGet", "HiddenBattle", "ParallelModePrompt", "ExtremeModePrompt")}
 # Windows that hide a page's anchor where the action's own taps close them anyway: they pass its guard as its page.
 # #309: an event's GET! windows, over its page or the map it ends on, close on any tap, the text taps on the dead corner too.
@@ -589,19 +590,18 @@ class TaskStart(CustomAction):
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
-        play (task_options.target_floor_errors), as PlanRun fails it on bad settings, and takes the stop procedure on a
-        start team deleted or disabled (task_options.start_team_errors, #805), as a Luxcavation task on its team. A
-        start team it can play waits in TASK for the task's first new run (PlanRun): a run under way plays the team of
-        the queue as it is."""
+        play (task_options.target_floor_errors), as PlanRun fails it on bad settings. A start team deleted or disabled
+        is ignored, and the log says so (task_options.start_team_ignored_line, #878); one it can play waits in TASK for the
+        task's first new run (PlanRun): a run under way plays the team of the queue as it is."""
         if argv.node_name != "MirrorDungeon":
             return True
         if errors := task_options.target_floor_errors(TASK["options"], settings["teams"]):
             log(f"stop: {task_options.OptionsError(errors)}")
             return False
         start = TASK["options"]["start_team"]
-        if errors := task_options.start_team_errors(start, settings["teams"]):
-            return stop(context, carried(str(task_options.OptionsError(errors)), errors))
-        if start:
+        if ignored := task_options.start_team_ignored_line(start, settings["teams"]):
+            log(ignored)
+        elif start:
             TASK["start_team"] = start
         return True
 

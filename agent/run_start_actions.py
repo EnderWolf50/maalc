@@ -72,7 +72,8 @@ class PlanRun(CustomAction):
     The task's start team (run.start_team, kept by TaskStart, #805) is at the head of the queue the
     task's first new run picks from (team_queue.headed), and is written there once that run opens (team_queue.to_head):
     a task that ends here with nothing left to do, or backs out to read the Modules, leaves the file alone. A start
-    team whose usage does not fit the run is passed over as the queue passes over any team, and the log says so.
+    team whose usage does not fit the run is passed over as the queue passes over any team, and the log says so; one a
+    save since TaskStart disabled or deleted is ignored, as TaskStart ignores it (task_options.start_team_ignored_line).
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
@@ -98,6 +99,10 @@ class PlanRun(CustomAction):
             return finish(context, "weekly bonuses used up")
         difficulty = run_start.run_difficulty(run["difficulty"], weekly, run["target_floor"])
         start = TASK.get("start_team")
+        if start and (ignored := task_options.start_team_ignored_line(start, settings["teams"])):  # a save since TaskStart
+            log(ignored)
+            del TASK["start_team"]
+            start = None
         team = pick_team(headed(settings, start) if start else settings, difficulty)
         if team is None:
             return finish(context, f"no enabled team may run {difficulty}")
@@ -122,11 +127,10 @@ class PlanRun(CustomAction):
         RUN.clear()
         if start := TASK.pop("start_team", None):
             log(to_head(ROOT, start))
-            first = next((t for t in settings["teams"] if t["id"] == start), None)  # None: deleted since the start
-            if first and team["id"] != start:
-                why = first["usage"] if first["enabled"] else "disabled"
-                log(f"start team {first['name']!r} (run.start_team) is {why}: a {difficulty} run passes over it, and "
-                    "it keeps its place in the team queue")
+            if team["id"] != start:
+                first = next(t for t in settings["teams"] if t["id"] == start)
+                log(f"start team {first['name']!r} (run.start_team) is {first['usage']}: a {difficulty} run passes over "
+                    "it, and it keeps its place in the team queue")
         # planned: the run's team is known (picked here, or after a restart the queue's, current_run), so the claim may
         # move it to the end of the queue and runs.jsonl names it.
         limit = recovery.floor_limit(recovery.read_runs(ROOT), team["id"], run["target_floor"])

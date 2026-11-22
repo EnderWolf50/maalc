@@ -25,7 +25,9 @@ ENTER = {"exp": "LuxExpEnter", "thread": "LuxThreadEnter"}  # the node whose box
 NONE = {"Drive.png": "exp", "LuxTeamSelect.png": "thread", "MainWindow.png": "level", "LuxConsecThread1.png": "level",
         "LuxConsecExp1.png": "level"}
 # #886 (live 2026-11-22): stage 10 newly open at the right, never cleared: its card has no box where stages 8 and 9 have one.
-NO_BOX = {"LuxExpStage10.png": "exp"}
+# #900: the Thread card and the Level Select with the box inpainted away (synthetic: no live capture of a Thread level never
+# cleared yet); what the bot reads there is what it reads where a real card has none.
+NO_BOX = {"LuxExpStage10.png": "exp", "LuxThreadNoBox.synthetic.png": "thread", "LuxThreadLevelsNoBox.synthetic.png": "level"}
 TEAM_PAGES = ["LuxTeamSelect.png", "LuxTeamSelectChain.png"]
 NOT_TEAM_PAGES = ["LuxConsecExp1.png", "LuxThreadLevels.png", "TeamSelect.png"]
 
@@ -68,7 +70,7 @@ def test_the_title_reads_as_its_count(name, n):
     assert read()["read"][name] == n
 
 
-@pytest.mark.parametrize("name", [*(k for k, v in READS.items() if v[0] in ENTER), *NO_BOX])
+@pytest.mark.parametrize("name", [*(k for k, v in READS.items() if v[0] in ENTER), *(k for k, b in NO_BOX.items() if b in ENTER)])
 def test_a_card_page_is_read_from_the_enter_the_bot_taps(name):
     assert read()["enters"][name] is not None
 

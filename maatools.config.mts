@@ -48,13 +48,17 @@ const screens: [image: string, hits: string[]][] = [
   // the one after floor 10 are two nodes, each reading its own text.
   ['ParallelModePrompt.png', ['ParallelModePrompt', 'HelpPager']],
   ['ParallelModeExtreme.png', ['ExtremeModePrompt', 'HelpPager']],
-  // Synthetic (#434, until #852 and #854 bring live ones): each help-sheet dialog cut out and put at the screen's
-  // centre over the floor-5 map dimmed to 35%. The map reads under it; the prompt comes first in the hub.
-  ['ParallelModePromptOverMap.synthetic.png', ['ParallelModePrompt', 'MapBus', 'MirrorMap']],
+  // Live 2026-11-22 (#852): the prompt after floor 5 over the floor-5 map, the boss beaten (TEAMS #3, HARD, the
+  // entry switch ON). The map's buttons read under it, its bus does not: live, RouteMap looked for the bus for 7.7 s
+  // under it before its guard gave the map up. The prompt comes first in the hub.
+  ['ParallelModePromptOverMap.png', ['ParallelModePrompt', 'MirrorMap']],
+  // Synthetic (#434, until #854 brings a live one): the help-sheet dialog cut out and put at the screen's centre over
+  // the floor-5 map dimmed to 35%.
   ['ParallelModeExtremeOverMap.synthetic.png', ['ExtremeModePrompt', 'MapBus', 'MirrorMap']],
-  // Synthetic (#850, until #855 brings a live one): ParallelModePromptOverMap with its text repainted as the Hidden
-  // Battle window's (EN_MirrorDungeonUI_6: the COGNITION ERROR WARNING title, Skip / Enter). Where the window sits
-  // is not known; the map reads under it, and the window comes first in the hub.
+  // Synthetic (#850, until #855 brings a live one): #434's synthetic ParallelModePromptOverMap (since replaced by the
+  // live one, #852) with its text repainted as the Hidden Battle window's (EN_MirrorDungeonUI_6: the COGNITION ERROR
+  // WARNING title, Skip / Enter). Where the window sits is not known; the map reads under it, and the window comes
+  // first in the hub.
   ['HiddenBattleOverMap.synthetic.png', ['HiddenBattle', 'MapBus', 'MirrorMap']],
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
   // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
@@ -126,6 +130,10 @@ const screens: [image: string, hits: string[]][] = [
   // LuxThreadEnter ahead of it, so it acts on the tab with no open card only. LuxThreadLevels.png: Lust's Level Select
   // (Lv40/50/60, -2 Modules each, the list at its bottom), the page dimmed behind it.
   ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],
+  // Synthetic (#900): LuxThread.png and LuxThreadLevels.png with the Consecutive Battle box inpainted away, what a level never
+  // cleared would show (no live capture yet; the Level Select's still shows the dimmed card's own box behind it). LuxConsecLabel must miss on both; every other node reads as on the live captures.
+  ['LuxThreadNoBox.synthetic.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
+  ['LuxThreadLevelsNoBox.synthetic.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses']],
   ['LuxThreadScrolled.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
   ['LuxThreadLevels.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],  // the Daily Bonuses read through the dimming
   // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions

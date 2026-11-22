@@ -30,6 +30,7 @@ IDENTITY = {
     # Luxcavation's narrower LV panel: the LV label sits elsewhere (#366)
     "LuxExp": [NAME_PLATE], "LuxExpLocked": [NAME_PLATE], "LuxExpStage10": [NAME_PLATE], "LuxThread": [NAME_PLATE],  # #886
     "LuxThreadScrolled": [NAME_PLATE], "LuxThreadLust": [NAME_PLATE], "LuxThreadLevels": [NAME_PLATE],  # #368
+    "LuxThreadNoBox.synthetic": [NAME_PLATE], "LuxThreadLevelsNoBox.synthetic": [NAME_PLATE],  # #900
     **{n: [NAME_PLATE] for n in LUX_CONSEC},  # #375: the Consecutive Battle box on the EXP, Thread and Level Select pages
     # the main window dimmed under the Mailbox and the popup: the Copy button and LV label do not match
     "ServerErrorRetry": [UID_PLATE, NAME_PLATE], "ServerErrorRetryCountdown": [UID_PLATE, NAME_PLATE],
@@ -83,6 +84,7 @@ def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "DriveWalpurgis", "SinnersTab", "WindowTabPressed", "ServerErrorRetry", "ServerErrorRetryCountdown",
                      "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
                      "LuxExp", "LuxExpLocked", "LuxExpStage10", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
+                     "LuxThreadNoBox.synthetic", "LuxThreadLevelsNoBox.synthetic",
                      *LUX_CONSEC, "EnkephalinAssembled", "MailParcelReceived", "EnkephalinModulesArrowAsFour", "EnkephalinModulesNoArrow"}
 
 

@@ -52,7 +52,7 @@
 | 標題畫面的資料下載對話框 | 按 Confirm，等下載完（卡住偵測暫停） | #86 |
 | 單鈕彈窗（後備） | 畫面中央只有一個 Close／Confirm／OK 的彈窗，按它；有兩個按鈕的問句不按 | #85、#86 |
 
-現狀（#85）：自己跳出的教學（`i` 打開的說明頁已做，自己跳出的還沒截到）、每週重置通知、升級彈窗（`Pass Level Up` 以外）還沒有專用節點，沒有截圖；`Recover` 在 `MirrorHub` 認不出畫面逾時時把畫面存到 `logs/unknown/`，下次遇到就有截圖可補。無限鏡牢的兩個彈窗（依目標層數 Confirm 或 Cancel，#434）已做，素材是遊戲說明頁裡的彈窗圖與用它合成的圖，實機截圖由 #852、#854 補。
+現狀（#85）：自己跳出的教學（`i` 打開的說明頁已做，自己跳出的還沒截到）、每週重置通知、升級彈窗（`Pass Level Up` 以外）還沒有專用節點，沒有截圖；`Recover` 在 `MirrorHub` 認不出畫面逾時時把畫面存到 `logs/unknown/`，下次遇到就有截圖可補。無限鏡牢的兩個彈窗（依目標層數 Confirm 或 Cancel，#434）已做，素材是遊戲說明頁裡的彈窗圖與用它合成的圖；第 5 層後的提示已換成實機截圖（#852），第 10 層後的由 #854 補。
 
 ## 導航到鏡牢入口頁
 
@@ -111,7 +111,7 @@
 - 從主畫面點 Drive → Luxcavation（`NavLuxcavation`）→ Thread 分頁（停在 EXP 分頁時點 Thread，`LuxThreadTab`：Luxcavation 面板加上 EXP 分頁亮著）→ 今天唯一開放的異想體卡的 Enter（`LuxThreadEnter`，動作 `LuxEnter`）→ Level Select（`LuxThreadLevel`，動作 `LuxEnter`）→ 最下面那一列的 Enter。
 - 開放的卡才有亮的 Enter 按鈕（對模板 1.0，其他天才開的卡最多 0.6）。清單從今天的卡開始排，所以進頁就看得到；但清單記得上次捲到哪裡，捲走後看不到亮的 Enter，這時往右滑（`LuxThreadSwipe`，`max_hit` 4）把左邊的卡帶進來。滑的方向沒實機驗證（unverified）。
 - 每日模式：`ThreadHome`（`LuxHome`）只讀腦啡肽模組數；第一次看到開放卡片的 Enter 時，`LuxEnter` 先讀分頁頂部的 Daily Bonuses（`ThreadBonuses`），剩 n 次就打 n 場，再決定打不打（`lux_actions.plan`，#429）。自訂次數模式：`ThreadHome` 讀完腦啡肽模組就決定打 `count` 場，不讀 Daily Bonuses（#431）。
-- Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個腦啡肽模組（`luxcavation.THREAD_COST`），所以腦啡肽模組檢查是 2 × 這次要打的場數。`LuxThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣腦啡肽模組、不開戰。不按 Skip Battle。連戰（任務選項 `ThreadConsecutive`，預設開）設在外層開放卡片的框（座標依實際 Enter 平移，`ENTER_AT`，`LuxThreadEnter` 在按卡片的 Enter 之前設），Level Select 頂端的框位置固定，數字從外層帶入，`LuxThreadLevel` 在按 Enter 前再讀一次確認（不符就用同一套方法改；在 Level Select 改不會存回外層）。做法、拆 10 加剩下的，同經驗本。（#375）
+- Level Select 一開啟清單就停在最底，最難的等級（Lust 是 Lv60）是最下面那一列；每級消耗 2 個腦啡肽模組（`luxcavation.THREAD_COST`），所以腦啡肽模組檢查是 2 × 這次要打的場數。`LuxThreadLevel` 點畫面上最低的那個 Enter；按 Enter 本身不扣腦啡肽模組、不開戰。不按 Skip Battle。連戰（任務選項 `ThreadConsecutive`，預設開）設在外層開放卡片的框（座標依實際 Enter 平移，`ENTER_AT`，`LuxThreadEnter` 在按卡片的 Enter 之前設），Level Select 頂端的框位置固定，數字從外層帶入，`LuxThreadLevel` 在按 Enter 前再讀一次確認（不符就用同一套方法改；在 Level Select 改不會存回外層）。做法、拆 10 加剩下的，同經驗本。外層卡片或 Level Select 沒有連戰框（沒通關過的等級，#900）時，那一步照經驗本的 `NO_BOX` 處理（log 的名字是 `thread`、`level`）；每次進 `LuxEnter` 都重算這一場的 `size`，所以這一場打幾場由開戰前最後一步（Level Select）的框決定：沒有框就單場，有框就設成 ×N。贏了通關，框出現，下一次進場（從外層卡片，結算停在 Level Select 時從 Level Select）再設 ×N。紐本沒有框的實機截圖還沒有：`tests/screens/LuxThreadNoBox.synthetic.png`、`LuxThreadLevelsNoBox.synthetic.png` 是合成的。（#375、#900）
 - Level Select 之後接選隊頁：和經驗本同一個節點，`ThreadHub` 與 `ExpHub` 都列 `[JumpBack]LuxTeamSelect`。（#366、#368）
 - 打完一場經結算頁（`LuxResult`）回到 Thread 分頁就算一場（實機 2026-10-27：Confirm 後落在 Thread 分頁，不是 Level Select）：`battle_over` 依勝敗計次、再打或回主畫面結束；停在 Level Select 也照算。
 - 隊伍是任務選項 `luxcavation.thread.team` 選的隊伍（#813）。
