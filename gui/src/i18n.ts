@@ -94,7 +94,7 @@ const zh_tw = {
   "packs.anyFloor": "全部樓層",
   "packs.floor": "第 {n} 層",
   "packs.names": "名稱",
-  "packs.search": "搜尋主題包", "packs.search_ph": "搜尋主題包名稱（按 / 跳過來）",
+  "packs.search": "搜尋主題包", "packs.search_ph": "搜尋主題包中文或英文名稱（按 / 跳過來）",
   "packs.images": "圖片",
   "packs.hint": "每一欄是一個分數（−10 到 10）。bot 選分數最高的包，同分選最左邊。\n把主題包拖到別欄，就改成那一欄的分數。拖到「＋」可以輸入新的分數，點主題包也能直接輸入。沒有主題包的欄會消失，0 欄一直保留。\n上方的篩選只改變顯示的包。分數不分難度，也不分樓層。",
   "packs.threshold": "刷新門檻 {n}：最好的包低於這條線就刷新（可上下拖曳，放到最下面就不刷新）",

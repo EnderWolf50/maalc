@@ -2,7 +2,7 @@
 import { giftList as giftListCheck } from "virtual:settings-validator";
 import { parse as parseYaml } from "yaml";
 import schema from "../../agent/settings.schema.json";
-import { graces, recipes, search as gifts, shopYaml, themePacksYaml } from "./gameData";
+import { graces, packNames, recipes, search as gifts, shopYaml, themePacksYaml } from "./gameData";
 
 export { schema };
 
@@ -170,6 +170,12 @@ export function parseThemePacks(text: string): ThemePacks {
 }
 /** The season's theme pack data file, read when the window starts (gameData.ts). */
 export const THEME_PACKS: ThemePacks = parseThemePacks(themePacksYaml);
+/** Each pack's Chinese name by its name (#899): theme_pack_names.json's name of its id in `pack_ids`, from LLC. A pack LLC has
+ * not named, or one the data file lacks, has none, and shows its English name. */
+export const PACK_ZH: Record<string, string> = Object.fromEntries(Object.entries(THEME_PACKS.pack_ids).flatMap(([name, id]) => {
+  const zh = (packNames.packs as Record<string, { zh: string } | undefined>)[String(id)]?.zh;
+  return zh ? [[name, zh]] : [];
+}));
 
 /** The pack filter's difficulties, "" any: the modes of the data file's floors. */
 export type PackMode = "" | "normal" | "hard" | "infinity" | "extreme";

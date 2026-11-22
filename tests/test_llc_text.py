@@ -7,7 +7,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {"gift_search": ROOT / "assets/resource/base/data/gift_search.json",
          "gift_recipes": ROOT / "assets/resource/base/data/gift_recipes.json", "graces": ROOT / "assets/resource/base/data/graces.json",
-         "gift_effects": ROOT / "assets/resource/base/data/gift_effects.json"}
+         "gift_effects": ROOT / "assets/resource/base/data/gift_effects.json",
+         "theme_pack_names": ROOT / "assets/resource/base/data/theme_pack_names.json"}
 DATA = {k: json.loads(p.read_text(encoding="utf-8")) for k, p in FILES.items()}
 
 
@@ -230,6 +231,8 @@ def plain(text):
 def test_traditional_conversion_keeps_the_game_s_words():
     import llc_text
     assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 松肉锤") == "生鏽的指針 通過階層 鏡像迷宮 刷新 鬆肉錘"
+    # two theme packs (#899): s2twp's Taiwan wording turns them into a computer's words
+    assert llc_text.to_traditional("保存的信念 循环呼吸") == "保存的信念 循環呼吸"
     assert llc_text.effect_lines("<color=#627eff>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == [plain("初始經費 +150(最多100)")]
     assert llc_text.effect_lines("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == [plain("獲得2層 守護")]
 
@@ -293,3 +296,38 @@ def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_th
         pytest.skip("the client's English text missing")
     names, english = llc_text.english_grace_texts(local_dir("unpack"), static)
     assert {g["en"]: g["effects"]["en"] for g in DATA["graces"]["graces"]} == {names[i]: english[i] for i in names}
+
+
+# #899: the settings GUI shows each theme pack's Chinese name, by its id in theme_packs.yaml's pack_ids.
+def theme_packs():
+    import yaml
+    return yaml.safe_load((ROOT / "assets/resource/base/data/theme_packs.yaml").read_text(encoding="utf-8"))
+
+
+def test_every_theme_pack_has_a_chinese_name_or_is_listed_as_one_llc_lacks():
+    table, names = theme_packs(), DATA["theme_pack_names"]
+    missing = set(names["missing"])
+    for name in table["packs"]:
+        i = table["pack_ids"][name]
+        row = names["packs"].get(str(i))
+        assert (row is None) == (i in missing), f"{name} ({i}): named and listed as missing, or neither"
+        assert row is None or row == {"en": name, "zh": row["zh"]} and row["zh"], f"{name} ({i}): {row}"
+    assert sorted(names["packs"], key=int) == sorted(str(i) for i in table["pack_ids"].values() if i not in missing)
+
+
+def test_a_theme_pack_s_chinese_name_is_llc_s_name_of_its_id_and_a_pack_llc_lacks_is_listed():
+    import llc_text
+    packs, missing = llc_text.pack_rows({1001: "被遗忘者们", 1119: "憎恶与绝望", 1500: ""},
+                                        {"The Forgotten": 1001, "Walpurgis Night: Hatred and Despair": 1119, "New Pack": 1500, "Newer": 1501})
+    assert packs == {"1001": {"en": "The Forgotten", "zh": "被遺忘者們"}, "1119": {"en": "Walpurgis Night: Hatred and Despair", "zh": "憎惡與絕望"}}
+    assert missing == [1500, 1501]
+
+
+def test_the_theme_pack_names_match_the_llc_release_when_it_is_downloaded():
+    import llc_text
+    from local_dir import local_dir
+    path = local_dir("llc") / f"{DATA['theme_pack_names']['zh_release']}.zip"
+    if not path.is_file():
+        pytest.skip("release zip not downloaded (tools/llc_text.py)")
+    packs, missing = llc_text.pack_names(zipfile.ZipFile(path), theme_packs()["pack_ids"])
+    assert (packs, missing) == (DATA["theme_pack_names"]["packs"], DATA["theme_pack_names"]["missing"])

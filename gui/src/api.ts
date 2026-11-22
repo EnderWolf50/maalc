@@ -20,6 +20,7 @@ export interface GameFiles {
 /** Every text file the window reads (paths under data/). */
 export const GAME_TEXTS = [
   "gift_effects.json", "gift_lists.yaml", "gift_recipes.json", "gift_search.json", "graces.json", "shop.yaml", "theme_packs.yaml",
+  "theme_pack_names.json",
   "sinner_cards/index.json", "theme_pack_covers/index.json", "gift_plates/plates.json",
 ];
 /** Every image folder the window lists (under data/). */

@@ -2,7 +2,7 @@
 // above the user's own.
 import { Fragment, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent } from "react";
 import {
-  EVENT_MODES, MODE_KEYS, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, weightOf,
+  EVENT_MODES, MODE_KEYS, PACK_ZH, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor, weightOf,
   type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
@@ -75,17 +75,18 @@ function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | nul
 function PackPlanEditor({ data, plan, path, onChange }: {
   data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
-  const { t, tv, bad } = useEditor();
+  const { t, tv, bad, zh } = useEditor();
+  const zhOf = (n: string): string | undefined => (zh ? PACK_ZH[n] : undefined); // the Chinese UI's name of a pack (#899)
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
-  const [query, setQuery] = useState(""); // a part of a pack's name: only the packs that hold it show
+  const [query, setQuery] = useState(""); // a part of a pack's name, English or Chinese: only the packs that hold it show
   const searchBox = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
-  const matchesQuery = (n: string) => n.toLowerCase().includes(query.trim().toLowerCase());
+  const matchesQuery = (n: string) => [n, zhOf(n)].some((x) => x?.toLowerCase().includes(query.trim().toLowerCase()));
   const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra].filter(matchesQuery);
   useSlashFocus(searchBox); // as on the gift list tab
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
@@ -132,11 +133,16 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const chip = (name: string) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
+    // In Chinese the Chinese name, the English one under it in small type; under a card, which prints the English title, the
+    // Chinese name alone (#899).
+    const zhName = zhOf(name);
+    const label = !cover ? <span className="nm">{zhName ?? name}{zhName && <small className="en" lang="en">{name}</small>}</span>
+      : zhName && <span className="nm">{zhName}</span>;
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "")} data-path={path && `${path}/weights/${name}`}
         {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
-        {!cover && <span className="nm">{name}</span>}
+        {label}
         {floors
           ? floors.map((f) => {
             const label = `${t(BADGES[f.mode][0])} ${f.text}`;
