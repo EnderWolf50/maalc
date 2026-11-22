@@ -8,7 +8,7 @@ import actions
 import run_start_actions
 import settings
 import test_actions
-from team_queue import migrate_cursor, pick_team, requeue, resumed_team
+from team_queue import headed, migrate_cursor, pick_team, requeue, resumed_team
 from test_resumed_run import claim
 from test_settings import CASES, apply_edits
 from test_task_chain import entry_page
@@ -52,9 +52,11 @@ def test_no_team_fits():
 
 @pytest.mark.parametrize("case", CASES["next_run"], ids=lambda c: c["name"])
 def test_the_next_run_of_each_difficulty_is_the_one_the_settings_gui_marks(case):
-    # tests/settings_cases.json next_run: the GUI's team queue block marks the same teams (#804, gui/src/teamQueue.test.tsx)
+    # tests/settings_cases.json next_run: the GUI's team queue marks the same teams (#804, #878, gui/src/teamQueue.test.tsx),
+    # from the start team when one is set, as the Mirror Dungeon task picks its first new run (run_start_actions.py)
     settings = apply_edits(CASES["valid"], case["edits"])
-    picked = [pick_team(settings, d) for d in ("hard", "normal")]
+    start = settings["run"]["start_team"]
+    picked = [pick_team(headed(settings, start) if start else settings, d) for d in ("hard", "normal")]
     assert [team and team["id"] for team in picked] == [case["hard"], case["normal"]]
 
 

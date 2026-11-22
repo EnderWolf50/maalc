@@ -1,7 +1,8 @@
 // The Run tab (#814, #815, #816, #875, spec #811 「設定視窗」, spec #871 「版面（L1 B）」, spec 04 sections 5, 12 and 14), in two
 // columns with no titles over them, whose first frames start on one line. Left, the task list (ticks, drag or Alt+↑↓: the run
 // order; a row copied or removed, any task added back, #811, #877; during a run each row's state) beside the picked task's
-// options, then the global options (folded) and the scheduled runs (Schedules.tsx). Right, held in view as the page scrolls,
+// options (the Mirror Dungeon task's under the team queue and its start flags, #878), then the global options (folded) and the
+// scheduled runs (Schedules.tsx). Right, held in view as the page scrolls,
 // the run console: Start, Stop and the run's status, the emulator with the device scan, and the live log, in that order idle
 // and running. A narrow window
 // (NARROW) puts the console's Start line on top and its emulator and log under the options. Each control writes the settings
@@ -10,20 +11,20 @@
 // A team pick lists the settings' teams as they are now. During a run the settings it reads are locked (LockContext): a task
 // still shows its options when clicked.
 import {
-  memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentProps,
+  memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
 } from "react";
 import { fill, type Key } from "./i18n";
 import { LockIcon } from "./KeywordGrid";
-import { TASK_ORDER, schema, type LuxOptions, type Settings } from "./model";
+import { TASK_ORDER, nextRuns, schema, type Difficulty, type LuxOptions, type Settings } from "./model";
 import {
   LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
 } from "./runner";
 import * as api from "./api";
 import { SchedulesSection } from "./Schedules";
 import {
-  Choice, DescribeContext, Field, Input, LockContext, Mark, Num, ReorderList, Select, ToggleNum, translate, useEditor, usePick,
-  useUndoRow, withBreaks,
+  Choice, DescribeContext, Field, Input, LockContext, Mark, Num, ReorderList, Select, translate, useEditor, usePick, useUndoRow,
+  withBreaks,
 } from "./ui";
 
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
@@ -35,9 +36,9 @@ export const TASKS: string[] = schema.$defs.task.enum;
 export const GLOBAL_KEYS = ["webhook_url", "auto_accept_terms", "auto_download", "keep_dismissed_screens"] as const;
 const isGlobal = (key: string) => (GLOBAL_KEYS as readonly string[]).includes(key);
 /** The settings paths that hold each task's options, a task with none left out: the one table the tab, its problem marks
- * and the read-back's notice go by. */
+ * and the read-back's notice go by. The team queue is the Mirror Dungeon task's too: only that task reads it (#878). */
 const TASK_ROOTS: Record<string, string[]> = {
-  MirrorDungeon: Object.keys(RUN).filter((k) => !isGlobal(k)).map((k) => `run/${k}`),
+  MirrorDungeon: [...Object.keys(RUN).filter((k) => !isGlobal(k)).map((k) => `run/${k}`), "team_queue"],
   ExpLuxcavation: ["luxcavation/exp"], ThreadLuxcavation: ["luxcavation/thread"], ChargeEnkephalin: ["charge_enkephalin"],
 };
 const within = (path: string, root: string) => path === root || path.startsWith(root + "/");
@@ -101,9 +102,27 @@ function Switch({ path, checked, note, onChange }: { path: string; checked: bool
     </DescribedByKey>
   );
 }
-/** A switch with its number (ToggleNum), its key after the switch's label. */
-const KeyToggleNum = ({ path, ...rest }: Omit<ComponentProps<typeof ToggleNum>, "label">) =>
-  <DescribedByKey path={path}><ToggleNum label={<KeyLabel path={path} />} path={path} {...rest} /></DescribedByKey>;
+/** A switch with its number (off is null and greys the number out; switched on, it starts at `on`), laid out as the fields
+ * beside it (#878, spec #871 round 5 item 4): its label and key on top in a field label's size, the switch and the number on
+ * one line under it, so the number's box is level with a neighbour's select. Both controls take the label as their name. */
+function KeyToggleNum({ path, value, on, min, note, onChange }: {
+  path: string; value: number | null; on: number; min: number; note?: string; onChange: (v: number | null) => void;
+}) {
+  const label = useId();
+  return (
+    <DescribedByKey path={path}>
+      <Mark className="field toggle-field" path={path}>
+        <span id={label}><KeyLabel path={path} /></span>
+        <div className="tf-line">
+          <Input type="checkbox" checked={value !== null} aria-labelledby={label} onChange={(e) => onChange(e.target.checked ? on : null)} />
+          <Input type="number" value={value ?? on} min={min} step={1} disabled={value === null} aria-labelledby={label}
+            onChange={(e) => onChange(e.target.value === "" ? min : Math.trunc(Number(e.target.value)))} />
+        </div>
+        {note && <small>{withBreaks(note)}</small>}
+      </Mark>
+    </DescribedByKey>
+  );
+}
 
 /** How many entries of entry j's task come before it (a task may be listed more than once, #811). */
 const nthOf = (tasks: { id: string }[], j: number) => tasks.slice(0, j).filter((x) => x.id === tasks[j].id).length;
@@ -172,12 +191,63 @@ export function RunTab() {
   );
 }
 
-/** A small drawn icon of the task rows and the list's add button: a 16 px box, a 1.5 px line. */
-const Glyph = ({ d }: { d: string }) => (
-  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5"
-    strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+/** A small drawn icon of the task rows, the list's add button and the team queue's flags: a 16 px box, a 1.5 px line, drawn
+ * `size` px; `filled` fills the shape too (a start team's lit flag). */
+const Glyph = ({ d, filled = false, size = 14 }: { d: string; filled?: boolean; size?: number }) => (
+  <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill={filled ? "currentColor" : "none"} stroke="currentColor"
+    strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
 );
 const COPY = "M5.5 5.5h7v7h-7z M3.5 10.5v-7h7", CROSS = "M4.5 4.5l7 7 M11.5 4.5l-7 7", PLUS = "M8 3.5v9 M3.5 8h9";
+const FLAG = "M4.5 14V2.5 M4.5 3h7l-1.75 2.75L11.5 8.5h-7z";
+
+/** Whether a one-line element shows all it holds, measured again after each render and as its width changes: false once its
+ * content is wider than it is. True where nothing is laid out (the tests' DOM). Its CSS must give it the same width either
+ * way (index.css .tr-next.clipped), or it would go back and forth. */
+function useFits<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [fits, setFits] = useState(true);
+  const check = () => { const el = ref.current; if (el) setFits(el.scrollWidth <= el.clientWidth + 1); };
+  useLayoutEffect(check); // the names it holds may have changed
+  useLayoutEffect(() => {
+    if (!ref.current || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(check);
+    watch.observe(ref.current);
+    return () => watch.disconnect();
+  }, []);
+  return [ref, fits] as const;
+}
+
+/** A difficulty as a small plate of its own, ahead of the team it names: Hard's filled, Normal's a frame, neither red (red is
+ * an error's). */
+function DiffPlate({ d }: { d: Difficulty }) {
+  const { tv } = useEditor();
+  return <b className="dchip" data-d={d}>{tv("difficulty", d)}</b>;
+}
+
+/** Whether the next runs name two teams, one a difficulty: then each mark names its difficulty with its plate. */
+const splitRuns = (plays: ReturnType<typeof nextRuns>) => plays.length === 2 && plays[0].team !== plays[1].team;
+
+/** The next Mirror Dungeon run on the task's row (spec #871 「隊伍佇列」): 「下一局」, then each difficulty's plate and its team,
+ * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while a start team
+ * is set. One line: where the names do not fit, it leaves the row, and a screen reader, rather than take a second line (the
+ * queue's own marks still say it); the row is then one line high, as the others. */
+function NextTeams() {
+  const { s, t } = useEditor();
+  const plays = nextRuns(s);
+  const name = (id: string | null) => (id === null ? t("queue.no_team") : s.teams.find((x) => x.id === id)?.name || "—");
+  const [line, fits] = useFits<HTMLSpanElement>();
+  return (
+    <span className={"tr-next" + (fits ? "" : " clipped")} ref={line} aria-hidden={fits ? undefined : true}>
+      <span className="lbl">{t("queue.next")}</span>
+      {splitRuns(plays)
+        ? plays.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
+        : <span className="nt-team">{name(plays[0].team)}</span>}
+      {s.run.start_team !== null && (
+        <span className="flag-on" title={t("queue.flag_on")}><Glyph d={FLAG} filled /><span className="sr-only">{t("queue.flag_on")}</span></span>
+      )}
+    </span>
+  );
+}
 
 /** Each row's state in the run the window shows, by row (spec #871 「執行中的任務清單」): the runner posts the ticked entries in
  * the list's order, so the k-th ticked row is the run's k-th task. Held while the list is the run's (runner.ts RunView list):
@@ -198,6 +268,8 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
   const { s, update, t, bad } = useEditor();
   const locked = useContext(LockContext);
   const states = rowStates(s.tasks, useRunner().view);
+  // the row that says which team plays the next Mirror Dungeon run: the first ticked one, which a run plays first
+  const firstMirror = s.tasks.findIndex((x) => x.id === "MirrorDungeon" && x.enabled);
   // the row the focus goes to after the render: a removed row's button, or the Undo note's, leaves with what it removed or
   // put back, and the focus would drop to the page's top; it goes to the row that took the removed one's place, or to the
   // row put back (加入任務 when the list is empty)
@@ -260,6 +332,8 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
                   <span className={"tr-name" + (x.enabled ? "" : " muted")}>{name}</span>
                   {x.of > 1 && <em className="qtag" title={fill(t("tasks.entry_tip"), { n: x.nth + 1, name, of: x.of })}>#{x.nth + 1}</em>}
                 </span>
+                {/* until its task starts: from then the queue's head is the team playing */}
+                {j === firstMirror && (!task || task.state === "pending") && <NextTeams />}
                 {/* why it failed or was cancelled (runner.ts: the runner's reason, else the bot's stop line), in English
                     until #881 */}
                 {task?.reason && <small className="tr-reason">{reasonText(t, task.reason, name)}</small>}
@@ -569,8 +643,8 @@ function TaskOptions({ id }: { id: string }) {
   );
 }
 
-/** The Mirror Dungeon task's options (spec 04 section 5) in three groups by what they decide: the run itself, the weekly
- * bonuses, what happens when something fails. */
+/** The Mirror Dungeon task's options (spec 04 section 5): the team queue, which only this task reads, the box's whole width on
+ * top (#878), then three groups by what they decide: the run itself, the weekly bonuses, what happens when something fails. */
 function MirrorOptions() {
   const { s, update, t, tv } = useEditor();
   const run = s.run;
@@ -584,6 +658,7 @@ function MirrorOptions() {
   );
   return (
     <div className="groups">
+      <MirrorTeams />
       <fieldset>
         <legend>{t("run.group_run")}</legend>
         <div className="grid">
@@ -596,9 +671,6 @@ function MirrorOptions() {
           </KeyField>
           <KeyToggleNum path="run/runs" value={run.runs} on={1} min={1} note={t("run.runs_note")} onChange={(v) => set({ runs: v })} />
           {pick("theme_pack_refresh", t("run.theme_pack_refresh_note"))}
-          <KeyField path="run/start_team" note={t("run.start_team_note")}>
-            <TeamPick value={run.start_team} none={t("run.start_team_queue")} markOff onChange={(v) => set({ start_team: v })} />
-          </KeyField>
         </div>
       </fieldset>
       <fieldset>
@@ -624,26 +696,94 @@ function MirrorOptions() {
   );
 }
 
-/** A team pick (the start team, a Luxcavation task's team): `none` first (null), then the settings' teams as they are now,
- * by name and slot, a disabled one marked when that stops the task (`markOff`). A team deleted since stays the value, shown
- * as deleted with why the task will stop, until another is picked: the agent stops the task at its start over it. */
-function TeamPick({ value, none, markOff = false, onChange }: {
-  value: string | null; none: string; markOff?: boolean; onChange: (v: string | null) => void;
-}) {
+/** The team queue at the top of the Mirror Dungeon options (#878, spec #871 「隊伍佇列（只在鏡牢選項裡）」, ADR 0014):
+ * team_queue in its order, dragged or moved with Alt (its moves change team_queue only; the Agent's show once the window reads
+ * them). Every row on the list's own columns (index.css): its place, the team's name (cut short), its slot, its usage when kept
+ * to one difficulty, the next-run mark against the flag, and the flag. A disabled team is struck through in its place; an id
+ * that names no team (a hand edit, which the check names) is a row of its own. The flag writes run.start_team: on, off, one
+ * team at most, none on a disabled team but to clear it. How the queue turns is the list's tooltip; under it, while a flag is
+ * set, what it costs or why the task will stop. A run locks the order and the flags (LockContext). */
+function MirrorTeams() {
+  const { s, update, t, tv, bad } = useEditor();
+  const locked = useContext(LockContext);
+  const byId = new Map(s.teams.map((x) => [x.id, x]));
+  // an id twice (a hand edit, which the check names) still gets a row of its own: `repeat` counts its rows before this one
+  const seen = new Map<string, number>();
+  const rows = s.team_queue.map((id) => { const repeat = seen.get(id) ?? 0; seen.set(id, repeat + 1); return { id, repeat }; });
+  const plays = nextRuns(s), split = splitRuns(plays);
+  const start = s.run.start_team;
+  const setStart = (id: string | null) => update((d) => { d.run.start_team = id; });
+  // the start team's state: set on an enabled team (the flag stays in the file), on a disabled or a deleted one (the agent
+  // stops the task at its start, task_options.py start_team_errors): a deleted one has no row whose flag clears it
+  const flagged = start === null ? null : byId.get(start);
+  const said = start === null ? null : !flagged ? "gone" : flagged.enabled ? "kept" : "off";
+  return (
+    <fieldset className="mirror-teams" data-path="team_queue">
+      <legend>{t("queue.title")}</legend>
+      <div className="mt-order" data-path="run/start_team">
+        {rows.length > 0 && (
+          <ReorderList items={rows} keyOf={(x) => (x.repeat ? `${x.id}#${x.repeat}` : x.id)} badAt={(j) => bad(`team_queue/${j}`)}
+            label={t("queue.title")} help={t("queue.help")}
+            onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
+            render={(x, j) => {
+              const team = byId.get(x.id), first = x.repeat === 0;
+              const on = first && start === x.id, off = team !== undefined && !team.enabled;
+              const name = team ? team.name || "—" : `? ${x.id}`;
+              // the runs this row's team plays next, on its first row
+              const marks = first ? plays.filter((p) => p.team === x.id) : [];
+              return (
+                // the cells a space apart, which a grid does not draw, so the row reads as words; the name takes a problem's jump
+                <span className={"mt-row" + (off ? " off" : "")} title={off ? t("queue.off_tip") : undefined}>
+                  <span className="place">{j + 1}</span>{" "}
+                  <span className="mt-name" data-path={`team_queue/${j}`} tabIndex={-1}>
+                    {name}{off && <span className="sr-only">{t("team.off_read")}</span>}
+                  </span>{" "}
+                  <small className="mt-slot">{team && `TEAMS #${team.game_team}`}</small>{" "}
+                  <span className="mt-use">{team && team.usage !== "any" && <em className="qtag">{tv("usage", team.usage)}</em>}</span>{" "}
+                  <span className="mt-mark">
+                    {marks.length > 0 && <span className="mt-next">{t("queue.next")}{split && marks.map((p) => <DiffPlate key={p.difficulty} d={p.difficulty} />)}</span>}
+                  </span>
+                  {team ? (
+                    // its words are drawn over it (index.css .start-flag::after); title="" keeps the list's own tooltip off them
+                    <button type="button" className={"start-flag" + (on ? " on" : "")} aria-pressed={on}
+                      aria-label={fill(t(on ? "queue.flag_clear" : "queue.flag_set"), { name })} title=""
+                      data-tip={t(on ? "queue.flag_tip_on" : "queue.flag_tip")} disabled={locked || (off && !on)}
+                      onClick={(e) => { e.stopPropagation(); setStart(on ? null : x.id); }}>
+                      <Glyph d={FLAG} filled={on} size={16} />
+                    </button>
+                  ) : <span />}
+                </span>
+              );
+            }} />
+        )}
+      </div>
+      {said === "kept" && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
+      {said === "off" && <p className="caution mt-note">{t("queue.flag_off_note")}</p>}
+      {said === "gone" && (
+        <p className="caution mt-note">
+          {fill(t("queue.flag_gone_note"), { id: start! })}{" "}
+          <button type="button" disabled={locked} onClick={() => setStart(null)}>{t("queue.flag_clear_gone")}</button>
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+/** A Luxcavation task's team pick: `none` first (null), then the settings' teams as they are now, by name and slot. A team
+ * deleted since stays the value, shown as deleted with why the task will stop, until another is picked: the agent stops the
+ * task at its start over it. */
+function TeamPick({ value, none, onChange }: { value: string | null; none: string; onChange: (v: string | null) => void }) {
   const { s, t } = useEditor();
   const ids = s.teams.map((x) => x.id);
-  const team = s.teams.find((x) => x.id === value);
-  const gone = value !== null && !team;
+  const gone = value !== null && !s.teams.some((x) => x.id === value);
   const label = (id: string) => {
     if (id === "") return none;
     const x = s.teams.find((y) => y.id === id);
-    if (!x) return fill(t("teamPick.gone"), { id });
-    return fill(t(markOff && !x.enabled ? "teamPick.off" : "teamPick"), { name: x.name || "—", slot: x.game_team });
+    return x ? fill(t("teamPick"), { name: x.name || "—", slot: x.game_team }) : fill(t("teamPick.gone"), { id });
   };
-  const warn = gone ? "teamPick.gone_note" : markOff && team && !team.enabled ? "teamPick.off_note" : null;
   return (<>
     <Select value={value ?? ""} options={["", ...ids, ...(gone ? [value] : [])]} label={label} onChange={(v) => onChange(v || null)} />
-    {warn && <small className="caution">{t(warn)}</small>}
+    {gone && <small className="caution">{t("teamPick.gone_note")}</small>}
   </>);
 }
 

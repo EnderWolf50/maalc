@@ -260,7 +260,8 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
       fill(zh["rb.tasks"], { tasks: "鏡牢、經驗本" }),
       fill(zh["rb.address"], { address: "127.0.0.1:16384" }),
       zh["rb.missed"], zh["rb.webhook"],
-      fill(zh["rb.team"], { where: "鏡牢 · 這次從哪一支隊伍開始", team: "gone", none: "照隊伍佇列" }),
+      // the start team by the queue's flag that sets it (#878)
+      fill(zh["rb.team"], { where: "鏡牢 · 起頭隊伍（隊伍佇列的旗子）", team: "gone", none: "照隊伍佇列" }),
     ]) expect(shown).toHaveTextContent(text);
     // over every tab, until dismissed
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));

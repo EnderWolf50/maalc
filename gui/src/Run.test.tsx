@@ -367,14 +367,30 @@ describe("the Mirror Dungeon task's options", () => {
     await show(r, "鏡牢");
     const limit = screen.getByRole("checkbox", { name: zh["run.runs"] });
     expect(limit).toBeChecked();
-    fireEvent.change(within(limit.closest(".toggle") as HTMLElement).getByRole("spinbutton"), { target: { value: "3" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: zh["run.runs"] }), { target: { value: "3" } });
     expect(r.settings().run.runs).toBe(3);
     await r.user.click(limit);
     expect(r.settings().run.runs).toBeNull();
+    expect(screen.getByRole("spinbutton", { name: zh["run.runs"] })).toBeDisabled();
     fireEvent.change(screen.getByRole("spinbutton", { name: zh["run.wipe_retries"] }), { target: { value: "5" } });
     expect(r.settings().run.wipe_retries).toBe(5);
     await r.user.click(screen.getByRole("checkbox", { name: zh["run.stop_when_weekly_bonus_out"] }));
     expect(r.settings().run.stop_when_weekly_bonus_out).toBe(true);
+  });
+
+  test("the run limit is laid out as the fields beside it: its label on top, the switch and the number on one line under it (#878)", async () => {
+    await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
+    const limit = screen.getByRole("checkbox", { name: zh["run.runs"] });
+    const count = screen.getByRole("spinbutton", { name: zh["run.runs"] });
+    expect(limit.parentElement).toBe(count.parentElement); // one line
+    const label = screen.getByText(zh["run.runs"], { selector: ".kl" }).closest("[data-path='run/runs'] > *")!;
+    expect(label.compareDocumentPosition(limit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // above them
+    expect(label.contains(limit)).toBe(false);
+    // the label the size and weight of its neighbours' (the difficulty's, a field's label)
+    const beside = screen.getByText(zh["run.difficulty"], { selector: ".kl" }).closest("[data-path='run/difficulty'] > *")!;
+    for (const p of ["font-size", "font-weight", "color"]) expect(cssValueOf(css, label, p)).toBe(cssValueOf(css, beside, p));
+    expect(cssValueOf(css, limit.parentElement!, "display")).toBe("flex");
+    expect(cssValueOf(css, limit.parentElement!, "align-items")).toBe("center");
   });
 });
 
@@ -385,39 +401,27 @@ describe("the team pick lists", () => {
     s.teams[1].enabled = false;
     return s;
   };
-  const startTeam = () => screen.getByRole("combobox", { name: new RegExp(`^${zh["run.start_team"]}`) }) as HTMLSelectElement;
   const optionsOf = (el: HTMLSelectElement) => [...el.options].map((o) => o.textContent);
 
-  test("the start team lists the settings' teams after 照隊伍佇列, a disabled one marked; a pick writes its id, 照隊伍佇列 null", async () => {
-    const s = two();
-    const r = renderEditor(<RunTab />, s);
-    await show(r, "鏡牢");
-    expect(optionsOf(startTeam())).toEqual(["照隊伍佇列", "Ta（TEAMS #1）", "Tb（TEAMS #2，停用）"]);
-    await r.user.selectOptions(startTeam(), s.teams[0].id);
-    expect(r.settings().run.start_team).toBe(s.teams[0].id);
-    await r.user.selectOptions(startTeam(), "");
-    expect(r.settings().run.start_team).toBeNull();
-    await r.user.selectOptions(startTeam(), s.teams[1].id);
-    expect(screen.getByText(zh["teamPick.off_note"])).toBeVisible();
-  });
-
-  test("a team added or renamed shows at once", async () => {
+  test("a team added or renamed shows at once, in the team queue and in a Luxcavation task's team pick", async () => {
     const s = two();
     const r = renderEditor(<><RunTab /><Rename /></>, s);
     await show(r, "鏡牢");
     await r.user.click(screen.getByRole("button", { name: "rename and add" }));
-    expect(optionsOf(startTeam())).toEqual(["照隊伍佇列", "Renamed（TEAMS #1）", "Tb（TEAMS #2，停用）", "Tc（TEAMS #3）"]);
+    const queueRows = within(screen.getByRole("list", { name: zh["queue.title"] })).getAllByRole("listitem");
+    expect(queueRows.map((li) => li.textContent!.match(/Renamed|T\w/)![0])).toEqual(["Renamed", "Tb", "Tc"]);
     await show(r, "經驗本");
     const team = screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) }) as HTMLSelectElement;
     expect(optionsOf(team)).toEqual(["未選擇", "Renamed（TEAMS #1）", "Tb（TEAMS #2）", "Tc（TEAMS #3）"]);
   });
 
-  test("a team deleted since shows as deleted, with why the task will stop", async () => {
+  test("a Luxcavation task's team deleted since shows as deleted, with why the task will stop", async () => {
     const s = two();
-    s.run.start_team = "gone";
-    await show(renderEditor(<RunTab />, s), "鏡牢");
-    expect(startTeam().value).toBe("gone");
-    expect(startTeam().selectedOptions[0].textContent).toBe(fill(zh["teamPick.gone"], { id: "gone" }));
+    s.luxcavation.exp.team = "gone";
+    await show(renderEditor(<RunTab />, s), "經驗本");
+    const team = screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) }) as HTMLSelectElement;
+    expect(team.value).toBe("gone");
+    expect(team.selectedOptions[0].textContent).toBe(fill(zh["teamPick.gone"], { id: "gone" }));
     expect(screen.getByText(zh["teamPick.gone_note"])).toBeVisible();
   });
 });
@@ -489,7 +493,7 @@ describe("the global options and the emulator", () => {
 
   test("the tab's long notes show one topic to a line", async () => {
     await show(renderEditor(<RunTab />, newSettings()), "鏡牢");
-    for (const key of ["run.start_team_note", "run.keep_dismissed_screens_note"] as const) expectLines(zh[key]);
+    expectLines(zh["run.keep_dismissed_screens_note"]);
   });
 
   test("手動設定 is a panel folded at first that holds the three fields; its title's tooltip names them (#876)", async () => {
@@ -524,7 +528,7 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
   const shown = (path: string, at?: Element | { focus: Element }) => cssValueOf(css, keyOf(path), "visibility", at) !== "hidden";
   // a field of each kind: a task option's choice, the run limit (a switch with its number), a task's switch, a global option's
   // text and switch, the emulator's fields
-  const MIRROR = ["run/difficulty", "run/start_team", "run/runs", "run/stop_when_weekly_bonus_out"];
+  const MIRROR = ["run/difficulty", "run/target_floor", "run/runs", "run/stop_when_weekly_bonus_out"];
   const EVERY_TASK = ["run/webhook_url", "run/auto_download", "emulator/address", "emulator/mumu_index", "emulator/mumu_manager"];
 
   test("stays in the page after its label, shown only while the pointer is over that field, its label included", async () => {
@@ -535,13 +539,13 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
       expect(shown(path)).toBe(false);
     }
     // over a label, and over a field's control: that field's key shows, no other
-    const label = keyOf("run/start_team").closest(".keyed")!;
-    expect(shown("run/start_team", label)).toBe(true);
+    const label = keyOf("run/target_floor").closest(".keyed")!;
+    expect(shown("run/target_floor", label)).toBe(true);
     expect(shown("run/difficulty", label)).toBe(false);
     const runs = screen.getByRole("checkbox", { name: zh["run.runs"] });
     expect(shown("run/runs", runs)).toBe(true);
-    expect(shown("run/runs", within(runs.closest(".toggle") as HTMLElement).getByRole("spinbutton"))).toBe(true);
-    expect(shown("run/start_team", runs)).toBe(false);
+    expect(shown("run/runs", screen.getByRole("spinbutton", { name: zh["run.runs"] }))).toBe(true);
+    expect(shown("run/target_floor", runs)).toBe(false);
     for (const path of EVERY_TASK) expect(shown(path, keyOf(path).closest(".keyed")!)).toBe(true);
     expect(shown("emulator/address", keyOf("emulator/mumu_index"))).toBe(false);
     await show(r, "經驗本");
@@ -564,7 +568,7 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
     expect(shown("run/target_floor", { focus: difficulty })).toBe(false);
     const runs = screen.getByRole("checkbox", { name: zh["run.runs"] });
     expect(shown("run/runs", { focus: runs })).toBe(true);
-    expect(shown("run/runs", { focus: within(runs.closest(".toggle") as HTMLElement).getByRole("spinbutton") })).toBe(true);
+    expect(shown("run/runs", { focus: screen.getByRole("spinbutton", { name: zh["run.runs"] }) })).toBe(true);
     const download = screen.getByRole("checkbox", { name: zh["run.auto_download"] });
     expect(shown("run/auto_download", { focus: download })).toBe(true);
     expect(shown("run/auto_accept_terms", { focus: download })).toBe(false);
@@ -597,8 +601,9 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
     await show(r, "鏡牢");
     const fields = [
       [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.difficulty"]}`) }), "run/difficulty"],
-      [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.start_team"]}`) }), "run/start_team"],
+      [screen.getByRole("combobox", { name: new RegExp(`^${zh["run.target_floor"]}`) }), "run/target_floor"],
       [screen.getByRole("checkbox", { name: zh["run.runs"] }), "run/runs"],
+      [screen.getByRole("spinbutton", { name: zh["run.runs"] }), "run/runs"],
       [screen.getByRole("checkbox", { name: zh["run.stop_when_weekly_bonus_out"] }), "run/stop_when_weekly_bonus_out"],
       [screen.getByRole("textbox", { name: new RegExp(`^${zh["run.webhook_url"]}`) }), "run/webhook_url"],
       [screen.getByRole("checkbox", { name: zh["run.auto_download"] }), "run/auto_download"],
