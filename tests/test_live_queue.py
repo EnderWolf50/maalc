@@ -621,7 +621,19 @@ def test_a_live_tool_still_runs_as_a_script(script):
     subprocess.run([sys.executable, str(QUEUE_PY.parent / script), "--help"], check=True, capture_output=True)
 
 
-def test_a_pid_a_system_process_took_over_is_not_the_holder_that_started_at_a_known_time():
-    # #908: the process we started opens for us; a pid we cannot open any more belongs to someone else.
-    assert not lq.win_alive(FakeKernel(0), 4, 111, last_error=lambda: 5)
-    assert lq.win_alive(FakeKernel(0), 4, None, last_error=lambda: 5)  # no start recorded: only the pid is known
+def test_resume_does_not_take_a_pid_another_process_now_owns_for_the_hold(tmp_path, monkeypatch):
+    # #908: the hold ended and a system process took its pid. `alive` lets a pid that denies access pass (a ticket may be
+    # another user's), but the process the hold's detach started opens for us, so a start time that no longer reads
+    # back as the recorded one is not the hold.
+    task = tmp_path / "t"
+    task.mkdir()
+    lq.pid_file(task / "hold.log").write_text(json.dumps({"pid": 4, "start": 111, "cmd": "hold"}))
+    (task / "hold.log").write_text("[queue] start t\n")
+    monkeypatch.setattr(lq, "started", lambda pid: None)  # opening the pid is denied
+    out = hl.resume(task, is_alive=lambda pid, start: True)
+    assert out[0].startswith("hold: ended pid 4") and "hold ended" in out[-1]
+    monkeypatch.setattr(lq, "started", lambda pid: 111)  # the same process
+    assert hl.resume(task, is_alive=lambda pid, start: True)[0].startswith("hold: running pid 4")
+    lq.pid_file(task / "hold.log").write_text(json.dumps({"pid": 4, "start": None, "cmd": "hold"}))  # start unknown: the pid decides
+    monkeypatch.setattr(lq, "started", lambda pid: None)
+    assert hl.resume(task, is_alive=lambda pid, start: True)[0].startswith("hold: running pid 4")

@@ -103,7 +103,7 @@ def test_claim_is_never_tapped():
 def test_the_probe_names_only_screens_with_a_node():
     nodes = load_nodes()
     assert not set(gu.DIALOG_NODES) & set(nodes) and gu.PROBE not in nodes  # the probe's own nodes override no pipeline node
-    assert set(gu.STEPS) - set(gu.DIALOG_NODES) <= set(nodes)
+    assert (set(gu.STEPS) | set(gu.ENDS)) - set(gu.DIALOG_NODES) <= set(nodes)
 
 
 class Game:

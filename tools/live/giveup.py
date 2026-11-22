@@ -30,7 +30,7 @@ GiveUpRewards:
 
 It may start on any of these screens. Each screen is named with the pipeline's own node (`look`'s probe), and the three
 dialogs with the text the bot reads inside its actions; it is checked before every tap but WipeDialog's Confirm. A screenshot of each screen
-before its tap goes to --out, and one of the main window at the end. Exit 1, with a screenshot, when no known screen
+before its tap goes to --out, and one of the end screen (the main window or the entry page) at the end. Exit 1, with a screenshot, when no known screen
 shows for --timeout seconds (60), one screen stays after its looks, or the main window or the entry page shows before any give-up.
 
 **look** names the screen of each image with the same probe: the tests' seam, and a check on a capture.
@@ -115,11 +115,10 @@ DIALOG_NODES = {
 # to FADE_LOOKS looks a second apart in all, whichever of them shows.
 FADING = ("ExplorationReward", "ExplorationComplete")
 FADE_LOOKS = 10
-# The end: the main window, after GiveUpRewards (live 2026-11-07: with no dialog, then Connecting and Now Loading) or
+# The end: the main window or the entry page, after GiveUpRewards (live 2026-11-07: with no dialog, then Connecting and Now Loading) or
 # after the dialog's Confirm. Tried after every step's screen.
-END = "HomeReached"
 # Giving up a run begun on the Mirror Dungeon entry page ends there, on "Before Entry", not on the main window (#908).
-ENDS = (END, "MirrorEntryNewRun")
+ENDS = ("HomeReached", "MirrorEntryNewRun")
 PROBE = "GiveUpProbe"
 SCREENS = (*STEPS, *ENDS)  # the probe's order
 LOOK_MS = 1500  # how long one look tries before it names no screen
@@ -151,10 +150,10 @@ def look(t) -> str | None:
 
 
 def give_up(look, tap, shot, key, timeout: float = 60, clock=time.monotonic, sleep=time.sleep, say=print) -> int:
-    """Look, tap (or press the key) what the screen asks, look again, until the main window shows after GiveUpRewards (exit 0). After
+    """Look, tap (or press the key) what the screen asks, look again, until the main window or the entry page shows after GiveUpRewards (exit 0). After
     GiveUpRewards only the give-up dialog's Confirm is tapped. Exit 1 when no known screen shows for `timeout` seconds,
     one screen stays after its looks in a row, the reward screens stay FADE_LOOKS looks after GiveUpRewards, or the main
-    window shows before any give-up (no run to end).
+    window or the entry page shows before any give-up (no run to end).
     """
     known_at, last, in_row, gave_up, faded = clock(), None, 0, False, 0
     while True:
