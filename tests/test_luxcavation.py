@@ -346,6 +346,7 @@ def test_each_battle_has_its_own_retries_a_win_resets_them(context, monkeypatch)
     # loses twice.
     steps, stops, ends = over_after(monkeypatch, ("lose", "win", "lose", "win", "lose", "lose"))
     assert steps == [None] * 5 + [False] and stops == ["EXP: defeated with the 1 retries used up"] and ends == []
+    assert (stops[0].code, stops[0].params) == ("LuxDefeated", {"retries": 1})  # #881
 
 
 @pytest.mark.parametrize("retries, results", [(1, ("lose", "lose")), (0, ("lose",))])

@@ -13,6 +13,7 @@ import run_start
 from actions import (RUN, TO_BATTLE, current_run, drag, end_battle, hands_back, log, options, page_guard, saturation,
                      screen, seen, still, stop, stuck, tap, tap_settled, tap_shown, tap_then, text, until)
 from ocrtext import fraction, has
+from reasons import Reason
 
 
 # Formation page (spec 03 section 3). Cards are in battle.SINNERS order, two rows of six.
@@ -504,7 +505,7 @@ class Wipe(CustomAction):
         choice = battle.after_wipe(used, opts["wipe_retries"], opts["after_retries"])
         log(f"wipe: {used} of {opts['wipe_retries']} retries used: {choice}")
         if choice == "stop":
-            return stop(context, "retries used up")
+            return stop(context, Reason("retries used up", "RetriesUsedUp"))
         for _ in range(3):
             tap_settled(context, *DEFEAT_OPTIONS[choice], timeout=1.2)  # the options are cards: pick one, then Confirm
             if tap_then(context, *DEFEAT_CONFIRM, lambda im: not has(text(context, im, DEFEAT_TEXT), "participating"),

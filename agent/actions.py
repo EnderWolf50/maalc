@@ -30,6 +30,7 @@ import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
 from ocrtext import has, normalize
+from reasons import Reason, code_line, of_node
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
 
@@ -487,6 +488,8 @@ def stop(context, reason, line=None, whole_list=False):
     return: that ends the task.
     """
     log(f"stop: {reason}")
+    if coded := code_line(reason):  # the settings window's sentence for it (#881)
+        log(coded)
     TASK["ended"] = True
     if line is None and TASK.get("entry") == "MirrorDungeon" and not TASK.get("settled"):
         try:
@@ -695,7 +698,7 @@ class StopTask(CustomAction):
     the next task of the client's list starts from its own GoHome."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}")
+        return stop(context, of_node(argv.node_name, f"{argv.node_name}: {param(argv.custom_action_param, '')}"))
 
 
 def go_home(context):
@@ -714,9 +717,9 @@ def restart_game(context, reason, kind=None):
     forgotten. kind: the screen type the game is stuck on; None for HomeLost, which no hub read. True once RecoverL3
     ran, through or not (GoHome goes on from wherever it left the game); False after the stop procedure."""
     if TASK.get("l3", 0) >= recovery.L3_PER_TASK:
-        return stop(context, f"{reason}; game restarted {recovery.L3_PER_TASK} times this task")
+        return stop(context, Reason(f"{reason}; game restarted {recovery.L3_PER_TASK} times this task", "Stuck"))
     if why := STUCK["restarts"].attempt(kind):
-        return stop(context, f"{reason}; {why}")
+        return stop(context, Reason(f"{reason}; {why}", "Stuck"))
     log(f"recovery L3: {reason} (restart {STUCK['restarts'].in_a_row} of {recovery.L3_FAILED_IN_A_ROW} in a row, "
         f"{TASK.get('l3', 0) + 1} of {recovery.L3_PER_TASK} this task)")
     detail = context.run_task("RecoverL3")
@@ -791,7 +794,7 @@ class DailyRecover(CustomAction):
         kind, level, reason = STUCK["flag"]
         STUCK["flag"] = None
         if level < 3:
-            return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}")
+            return stop(context, Reason(f"{argv.node_name}: {param(argv.custom_action_param, '')}", "Stuck"))
         if not restart_game(context, reason, kind):
             return False
         hub = context.get_node_data(argv.node_name)["next"][0]["name"]
@@ -848,7 +851,7 @@ class Recover(CustomAction):
         while True:
             level, why = STUCK["ladder"].stuck(kind, start, STUCK["restarts"])
             if level is None:
-                return stop(context, f"{reason}; {why}")
+                return stop(context, Reason(f"{reason}; {why}", "Stuck"))
             log(f"recovery L{level}: {reason}")
             detail = context.run_task(f"RecoverL{level}")
             if detail and detail.status.succeeded:
@@ -1020,7 +1023,8 @@ class ConfirmDownload(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game asks to download data: run.auto_download is off", whole_list=True)
+            return stop(context, Reason("the game asks to download data: run.auto_download is off", "DownloadOff"),
+                        whole_list=True)
         context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         STUCK["watch"].hold(time.monotonic(), recovery.DOWNLOAD_HOLD)
         restart_floor_clock()  # live 2026-10-21: 32 min of download would trip it, and L3 mid-download
@@ -1038,9 +1042,10 @@ class AcceptUpdate(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_download"):
-            return stop(context, "the game has an update: run.auto_download is off", whole_list=True)
+            return stop(context, Reason("the game has an update: run.auto_download is off", "UpdateOff"), whole_list=True)
         if STUCK["updates"] >= UPDATE_RESTARTS:
-            return stop(context, f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started", whole_list=True)
+            return stop(context, Reason(f"the game asked for an update {UPDATE_RESTARTS + 1} times since the bot started",
+                                      "UpdateRepeats", times=UPDATE_RESTARTS + 1), whole_list=True)
         STUCK["updates"] += 1
         context.tasker.controller.post_click(*box_centre(argv.box)).wait()
         log("game update accepted: restarting the game")
@@ -1071,7 +1076,7 @@ class AcceptTerms(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         if not allowed("auto_accept_terms"):
-            return stop(context, "User Agreement: run.auto_accept_terms is off", whole_list=True)
+            return stop(context, Reason("User Agreement: run.auto_accept_terms is off", "TermsOff"), whole_list=True)
         image = screen(context)
         for x, y in AGREE_BOXES:
             if not agree_ticked(image, x, y):
@@ -1092,7 +1097,8 @@ class Halt(CustomAction):
     goes to the log and the webhook. An account-level stop: the whole task list ends."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        return stop(context, f"{argv.node_name}: {param(argv.custom_action_param, '')}", whole_list=True)
+        return stop(context, of_node(argv.node_name, f"{argv.node_name}: {param(argv.custom_action_param, '')}"),
+                    whole_list=True)
 
 
 # s after a taken tap that TapUntil's settle holds: a login's CONNECTINGs, GoHome's 60 s wait on each, and the gaps

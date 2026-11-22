@@ -118,6 +118,8 @@
 
 ### 停止程序
 
+停止程序先在 log 記 `stop: <原因>`（英文）。原因有代碼時，下一行記 `stop code: <代碼>`，有參數時接著寫參數的 JSON，例如 `stop code: LuxDefeated {"retries":2}`。代碼與兩種語言的句子在 `agent/stop_reasons.json`：設定視窗照介面語言顯示那一句（[04](04-settings.md)「狀態」）。webhook 與 `logs/` 的記錄只有英文原因，沒有代碼（#881）。有代碼的：`Halt` 與 `StopTask` 的節點（代碼就是節點名稱）、`auto_download` 或 `auto_accept_terms` 關閉、遊戲一直要求更新、恢復用完（`Stuck`）、鏡牢的重試用完、連續放棄、買不起計畫中的加成、Luxcavation 的重試用完；其餘照舊只有英文。
+
 1. 保存最近 20 張畫面作為證據，放在 `<root>/logs/evidence/<時間>/`（`<root>` 是 Agent 的根目錄）。（#14、#19）實作：`<時間>` 是 UTC ISO 時間、冒號換成 `-`；`00.png` 起依序是 hub 最近分派的畫面，最後一張是停止當下的畫面；另有 `agent.log`，是 Agent 最近 500 行記錄。（#31）
 2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是執行任務那一方的選項（執行器與 `tools/live/bot.py` 用 `Tasker.set_save_on_error`；v1.0.0 的 MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）
 3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）鏡牢任務停止時寫這一行。Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時，和接續的局一樣從設定與隊伍佇列補出這局的計畫來寫（[03-decisions.md](03-decisions.md) 第 1 節）：這時還沒讀到畫面，遊戲裡沒有進行中的局也照寫。這個任務已經結算完一局（領獎或放棄）、還沒開下一局時停止，不寫；設定讀不到時不寫。其他任務（Luxcavation、日常）的停止不寫。（#31、#436）

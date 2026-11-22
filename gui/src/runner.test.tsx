@@ -9,11 +9,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import actionsPy from "../../agent/actions.py?raw";
 import luxActionsPy from "../../agent/lux_actions.py?raw";
+import reasonsPy from "../../agent/reasons.py?raw";
 import sessionPy from "../../runner/session.py?raw";
 import cases from "../../tests/runner_cases.json";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
+import { REASONS } from "./reasons";
 import { IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message } from "./runner";
 import css from "./index.css?raw";
 import { altMove, cssValueOf, dragOnto, queuedTeams } from "./testing";
@@ -234,6 +236,36 @@ describe("what the run shows", () => {
     // under the name, in the row
     const name = within(rows[0]).getByText("領信");
     expect(name.compareDocumentPosition(within(rows[0]).getByText("the mailbox did not open")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test.each([["zh_tw"], ["en_us"]] as const)("a reason with a code says it in the window's language (%s), its English text the tooltip; one with no code, or a code the window does not know, says the English text (#881)", async (lang) => {
+    const words = TEXT[lang];
+    back.text = fileOf({ ...settings(), language: lang });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: words["runner.start"] }));
+    await waitFor(() => expect(back.starts).toHaveLength(1));
+    const coded = (index: number, entry: string, state: string, reason: string, code: string, params?: Record<string, string | number>): Message =>
+      ({ type: "event", event: "task", index, entry, state, reason, reason_code: code, ...(params ? { reason_params: params } : {}) } as Message);
+    send(log("[maalc] task ClaimMail started"), task(0, "ClaimMail", "running"), log("[maalc] stop: ClaimMailLost: the mail was not claimed"),
+      log("[maalc] stop code: ClaimMailLost"), task(0, "ClaimMail", "failed"),
+      coded(1, "MirrorDungeon", "failed", "the game asked for an update 3 times since the bot started", "UpdateRepeats", { times: 3 }));
+    let rows = taskRows();
+    const why = (row: HTMLElement) => row.querySelector(".tr-reason");
+    expect([why(rows[0])?.textContent, why(rows[1])?.textContent]).toEqual(
+      [REASONS.ClaimMailLost[lang], fill(REASONS.UpdateRepeats[lang], { times: 3 })]);
+    expect(why(rows[0])?.getAttribute("title")).toBe("ClaimMailLost: the mail was not claimed");
+    expect(why(rows[1])?.getAttribute("title")).toBe("the game asked for an update 3 times since the bot started");
+    // a second run: no code, a code of a newer bot's, a code whose params do not fill its sentence
+    send({ type: "event", event: "end", result: "failed" }, exit(0, true));
+    await user.click(screen.getByRole("button", { name: words["runner.start"] }));
+    await waitFor(() => expect(back.starts).toHaveLength(2));
+    send(task(0, "ClaimMail", "failed", "MaintenanceNotice: maintenance"),
+      coded(1, "MirrorDungeon", "cancelled", "a reason of a newer bot", "NotYetKnown"),
+      coded(1, "MirrorDungeon", "cancelled", "the game asked for an update", "UpdateRepeats"));
+    rows = taskRows();
+    expect([why(rows[0])?.textContent, why(rows[1])?.textContent]).toEqual(["MaintenanceNotice: maintenance", "the game asked for an update"]);
+    expect(why(rows[0])?.getAttribute("title")).toBeNull();
   });
 
   test.each([["a tick"], ["a move"], ["a copy"], ["a remove"], ["an add"], ["a tick undone"], ["a remove undone"]])("after the run the states stay until the list changes: %s clears them for good (#877)", async (edit) => {
@@ -958,6 +990,28 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
         task(2, "ExpLuxcavation", "cancelled", "MaintenanceNotice: maintenance")))
         .toEqual(["MaintenanceNotice: the halt (#870)", undefined, "MaintenanceNotice: maintenance"]);
       expect(fold(["ClaimMail"], begun("ClaimMail"), stopped("x"), task(0, "ClaimMail", "stopped"))).toEqual([undefined]);
+    });
+
+    test("a reason's code (#881): the runner's with its reason, else the code line after the bot's stop line in that task", () => {
+      const codes = (entries: string[], ...messages: Message[]) =>
+        messages.reduce(reduce, reduce(IDLE, { type: "begin", entries })).tasks.map((x) => x.code);
+      const coded = (line: string) => agent(`[maalc] stop code: ${line}`);
+      expect(codes(["MirrorDungeon", "ExpLuxcavation"],
+        { type: "event", event: "task", index: 0, entry: "MirrorDungeon", state: "failed", reason: "x", reason_code: "UpdateRepeats", reason_params: { times: 3 } },
+        { type: "event", event: "task", index: 1, entry: "ExpLuxcavation", state: "cancelled", reason: "x", reason_code: "UpdateRepeats" }))
+        .toEqual([{ code: "UpdateRepeats", params: { times: 3 } }, { code: "UpdateRepeats", params: {} }]);
+      expect(codes(["ThreadLuxcavation"], begun("ThreadLuxcavation"), stopped("Thread Luxcavation: defeated with the 2 retries used up"),
+        coded('LuxDefeated {"retries":2}'), task(0, "ThreadLuxcavation", "failed"))).toEqual([{ code: "LuxDefeated", params: { retries: 2 } }]);
+      // a later stop line with no code (an older bot's), and a code line the window cannot read, leave the reason uncoded
+      expect(codes(["ClaimMail"], begun("ClaimMail"), stopped("a"), coded("Stuck"), stopped("b"), task(0, "ClaimMail", "failed"))).toEqual([undefined]);
+      expect(codes(["ClaimMail"], begun("ClaimMail"), stopped("a"), coded("Stuck {not json"), task(0, "ClaimMail", "failed"))).toEqual([undefined]);
+      // the code goes with the runner's reason only: a task with no reason has no code
+      expect(codes(["ClaimMail"], { type: "event", event: "task", index: 0, entry: "ClaimMail", state: "stopped", reason_code: "Stuck" })).toEqual([undefined]);
+    });
+
+    test("the code line as agent/reasons.py writes it", () => {
+      expect(reasonsPy).toContain('CODE_LINE = "stop code: "');
+      expect(actionsPy).toContain("if coded := code_line(reason):");
     });
 
     test("only the bot's own lines count: not the runner's, not MaaFramework's output", () => {

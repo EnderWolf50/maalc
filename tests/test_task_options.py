@@ -399,6 +399,7 @@ def test_the_global_options_reach_go_home_run_as_a_sub_task():
     o = run_child(__file__)["download_off"]
     assert o["nodes"] == ["ClaimMail", "MailHome"] and (o["clicks"], o["keys"]) == ([], []), o
     assert o["stops"][0] == "stop: the game asks to download data: run.auto_download is off", o
+    assert o["said"][o["said"].index(o["stops"][0]) + 1] == "stop code: DownloadOff", o  # the window's sentence (#881)
     assert o["halted"] and o["evidence"] == 1, o
 
 

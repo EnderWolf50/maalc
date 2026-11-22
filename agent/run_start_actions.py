@@ -24,6 +24,7 @@ from actions import (GET_CONFIRM, GET_TITLE, POPUPS, ROOT, RUN, STUCK, TASK, TO_
                      restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
                      text, until)
 from ocrtext import compact, floor_number, has
+from reasons import Reason
 from settings import GIFT_KEYWORDS, SettingsError, gift_tables, load_settings
 from team_queue import headed, pick_team, to_head
 
@@ -317,7 +318,7 @@ class BuyStarlight(CustomAction):
         for n, level, price in missed:
             log(f"grace {n} {level} costs {price}: not bought")
         if missed and unaffordable == "stop":
-            return stop(context, "a planned grace is unaffordable")
+            return stop(context, Reason("a planned grace is unaffordable", "GraceUnaffordable"))
         for n, level, price in buys:
             x, y = grace_box(n)
             image = page_guard(context, "StarlightPage")

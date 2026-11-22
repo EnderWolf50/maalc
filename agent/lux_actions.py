@@ -14,6 +14,7 @@ import task_options
 from actions import (RUN, TASK, TaskStart, box_centre, end_battle, finish, go_home, log, log_change, ocr_texts, param,
                      screen, seen, shows, stop, tap, tap_then, text, until)
 from ocrtext import digits
+from reasons import Reason
 
 
 def module_count(context, image):
@@ -184,7 +185,8 @@ def battle_over(context):
     if step == luxcavation.FINISH:
         return finish(context, f"{lux['name']}: {lux['won']} won")
     if step == luxcavation.STOP:
-        return stop(context, f"{lux['name']}: defeated with the {lux['retries']} retries used up")
+        return stop(context, Reason(f"{lux['name']}: defeated with the {lux['retries']} retries used up", "LuxDefeated",
+                                    retries=lux["retries"]))
     RUN["guard"] = RUN["team"]["guard_turns"]  # each battle guards its first turns (2026-10-27)
     return None
 
