@@ -1,5 +1,6 @@
-// UI text in zh_tw and en_us (spec 04 section 3). Game nouns (sinners, reward cards, theme packs, trials) stay in English and
-// are not listed here; grace names are in graces.json. The gift list tab shows the keywords in Chinese too (kw.*, from the mockup).
+// UI text in zh_tw and en_us (spec 04 section 3). Game nouns (sinners, reward cards, trials) stay in English and are not listed
+// here; grace names are in graces.json, theme packs' Chinese names in theme_pack_names.json (#899). The gift list tab shows the
+// keywords in Chinese too (kw.*, from the mockup).
 
 /** Fill the {name} placeholders of a text. */
 export const fill = (text: string, vars: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));

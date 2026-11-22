@@ -170,7 +170,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const addLane = (at: AddAt) => onChange && (
     <div className="lane add" {...target(drag !== null && drag !== LINE, at)}>
       {typing?.lane === at
-        ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what, nextScore(at))}</>
+        ? <>＋ {typing.what === UNLISTED ? t("packs.unlisted") : zhOf(typing.what) ?? typing.what} {box(typing.what, nextScore(at))}</>
         : <>＋ {t("packs.newLane")}</>}
     </div>
   );

@@ -24,6 +24,15 @@ const EN_NAME = ".nm, .nm .en";
 /** The English name of a chip's `.nm`. */
 const englishOf = (nm: Element) => (nm.querySelector(".en") ?? nm).textContent;
 const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: EN_NAME })).closest(".pk") as HTMLElement;
+/** Drag the pack `name` onto `lane`. */
+const dropOn = async (lane: Element, name: string) => {
+  const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
+  const chip = await chipNamed(name);
+  fireEvent.dragStart(chip, { dataTransfer });
+  fireEvent.dragOver(lane, { dataTransfer });
+  fireEvent.drop(lane, { dataTransfer });
+  fireEvent.dragEnd(chip, { dataTransfer });
+};
 
 // #739: the plan screen shows nothing of what the gift lists want (the user, 2026-11-14: the two are not directly related,
 // and a mark for it confuses). A team of the default plan wants The Outcast's first own gift; the default list's materials
@@ -100,15 +109,6 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
   const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
   /** The + lanes, the one above the lanes and the one below, while neither has a box open. */
   const addLanes = () => screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
-  /** Drag the pack `name` onto `lane`. */
-  const dropOn = async (lane: Element, name: string) => {
-    const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
-    const chip = await chipOf(name);
-    fireEvent.dragStart(chip, { dataTransfer });
-    fireEvent.dragOver(lane, { dataTransfer });
-    fireEvent.drop(lane, { dataTransfer });
-    fireEvent.dragEnd(chip, { dataTransfer });
-  };
 
   test("clicking a pack opens a box on it with its weight; Enter keeps the new one", async () => {
     const r = await open();
@@ -390,6 +390,23 @@ describe("a pack's Chinese name", () => {
     const chip = screen.getByRole("img", { name: "The Outcast" }).closest(".pk")!;
     expect(chip.querySelector(".nm")!.textContent).toBe("無歸屬者"); // the card prints the English title
     expect(chip).toHaveAttribute("title", "The Outcast");
+  });
+
+  test("dropped on a ＋ lane, a pack is named in Chinese beside the score box; one with no Chinese name in English", async () => {
+    const r = await open("zh_tw");
+    for (const [pack, shown] of [["The Outcast", "無歸屬者"], ["Old Pack", "Old Pack"]]) {
+      const top = screen.getAllByText(new RegExp(zh["packs.newLane"]))[0].closest(".lane")!; // while no box is open
+      await dropOn(top, pack);
+      expect(top).toHaveTextContent(new RegExp(`^＋ ${shown}$`));
+      await r.user.keyboard("{Escape}");
+    }
+  });
+
+  test("in English a pack dropped on a ＋ lane is named in English, as before", async () => {
+    await open("en_us");
+    const top = screen.getAllByText(new RegExp(TEXT.en_us["packs.newLane"]))[0].closest(".lane")!;
+    await dropOn(top, "The Outcast");
+    expect(top).toHaveTextContent(/^＋ The Outcast$/);
   });
 
   test("in English picture mode a card has no name under it, as before", async () => {

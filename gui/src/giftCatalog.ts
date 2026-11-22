@@ -2,7 +2,7 @@
 // and their effect text.
 import { effects, plates, recipes, webpFolder } from "./gameData";
 import { FUSIONS, materialsOf, type Fusion } from "./gifts";
-import { GIFT_SOURCES, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
+import { GIFT_SOURCES, PACK_ZH, SHOP_GIFTS, THEME_PACKS, type DataGift } from "./model";
 
 /** buyable: a shop may sell it (SHOP_GIFTS, #626: the drop pool less its global excludes and the fusion gifts), tier I-IV;
  * fusion: made by fusing, so wantable but never bought; material: a recipe's material no shop sells; other: no shop sells it
@@ -80,8 +80,12 @@ export const FUSION_BY_ID = new Map(FUSIONS.map((f) => [f.id, f]));
 export const usedIn = (id: number): Fusion[] => FUSIONS.filter((f) => materialsOf(f).includes(id));
 
 const PACK_NAMES = new Map(Object.entries(THEME_PACKS.pack_ids).map(([name, id]): [number, string] => [id, name]));
-/** A theme pack's name in the season's file (its `pack_ids`); its id as "#1234" for a pack the file does not know. */
-export const packName = (id: number): string => PACK_NAMES.get(id) ?? `#${id}`;
+/** A theme pack's name in the season's file (its `pack_ids`), in the Chinese UI (`zh`) its Chinese name when it has one (#899);
+ * its id as "#1234" for a pack the file does not know. */
+export const packName = (id: number, zh = false): string => {
+  const name = PACK_NAMES.get(id);
+  return name === undefined ? `#${id}` : (zh && PACK_ZH[name]) || name;
+};
 
 /** The theme packs whose own pool (`pack_gifts`) holds the gift, by id: the only packs it shows in. */
 export const packsOf = (id: number): number[] =>
