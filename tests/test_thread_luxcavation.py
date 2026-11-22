@@ -4,19 +4,26 @@ success. The game model and the child are test_exp_luxcavation.py's, run here fo
 decisions are tested in process in test_luxcavation.py (#641).
 """
 
+import pytest
 from daily_child import inside, interface as interface_json, run_child
-from test_exp_luxcavation import (CARD_ENTER, CONFIRM_TAP, DRIVE_TAB, EVENT_CARD, EVENT_PORTRAITS, LEVEL_ENTERS, LUXCAVATION,
+from test_exp_luxcavation import (CARD_ENTER, CONFIRM_TAP, DRIVE_TAB, EVENT_CARD, EVENT_PORTRAITS, LEVEL_ENTERS, LOSE, LUXCAVATION,
                                   TEAM_ROW, THREAD_TAB, TO_BATTLE, VERY_HIGH, WIN, WINDOW_TAB, child, confirms, title_taps)
 
 # test_exp_luxcavation.py's SCENARIOS shape; a Thread level takes 2 Modules.
 SCENARIOS = {"thread": ("drive", "b", 1, 0, WIN, "exp"), "thread_two_levels": ("drive", "b", 2, 0, WIN, "exp", "levels"),
              "thread_event": ("drive", "b", 1, 0, WIN, "scrolled"), "thread_x3": ("drive", "b", 3, 0, WIN, "thread"),
-             "thread_frozen": ("main", "b", 1, 0, WIN, "exp")}
-CONSECUTIVE = {"thread_x3"}
-DAILY = {"thread"}
+             "thread_frozen": ("main", "b", 1, 0, WIN, "exp"), "unboxed_daily": ("drive", "b", 1, 0, WIN, "exp"),
+             "unboxed_x3": ("drive", "b", 3, 0, WIN, "thread"), "unboxed_lose": ("drive", "b", 3, 1, LOSE + WIN, "thread"),
+             "unboxed_card": ("drive", "b", 3, 0, WIN, "thread")}
+CONSECUTIVE = {"thread_x3", "unboxed_daily", "unboxed_x3", "unboxed_lose", "unboxed_card"}
+DAILY = {"thread", "unboxed_daily"}
 # #429: the Daily Bonuses n/3 (n left; the model's default 3/3, a fresh day): 2/3 one won today, two left; 0/3 all three
 # spent, which count mode does not read (#431). #440: the game frozen on the main window until it restarts.
-STATES = {"thread": {"bonuses": 2}, "thread_two_levels": {"bonuses": 0}, "thread_frozen": {"frozen": True}}
+# #900: the Thread card and its Level Select with no Consecutive Battle box, a level never cleared, until a battle on it is won.
+# One set each: the model empties its own as a win clears the level.
+STATES = {"thread": {"bonuses": 2}, "thread_two_levels": {"bonuses": 0}, "thread_frozen": {"frozen": True},
+          **{name: {"unboxed": {"thread", "levels"}} for name in ("unboxed_daily", "unboxed_x3", "unboxed_lose")},
+          "unboxed_card": {"unboxed": {"thread"}}}  # only the card: its Level Select has a box
 
 
 def test_thread_luxcavation_is_a_task_of_the_interface():
@@ -86,6 +93,35 @@ def test_thread_consecutive_is_set_on_the_card_and_carries_into_the_level_select
     assert title_taps(o, "level") == []  # the Level Select already shows x3
     assert o["fights"] == [3] and len(level_enters(o)) == 1 and o["done"] == "Thread Luxcavation: 3 won"
     assert o["nodes"].count("LuxTeamSelect") == 1  # Chain To Battle! on the team page
+
+
+@pytest.mark.parametrize("scenario", ["unboxed_daily", "unboxed_x3"])
+def test_a_thread_level_with_no_box_is_fought_one_battle_then_the_rest_as_one_once_it_shows(scenario):
+    # #900, option a (the user, 2026-11-22), as EXP's (#886), in daily mode (the day's 3 bonuses left) and in count mode (3):
+    # the card and its Level Select have no box. One battle at x1; the win clears the level, so the next Enter finds the
+    # box and sets x2 for the two left.
+    o = run_child(__file__)[scenario]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [1, 2] and o["done"] == "Thread Luxcavation: 3 won" and o["nodes"].count("LuxTeamSelect") == 2
+    # the first Enter finds no box on the card and none on the Level Select (nothing opened, nothing pressed); the second
+    # sets the card's box to x2 (opened, +, closed) and the Level Select starts from it
+    assert o["presses"] == ["plus"] and len(title_taps(o, "thread")) == 2 and title_taps(o, "level") == []
+    assert len(level_enters(o)) == 2 and len([xy for xy in o["clicks"] if inside(CARD_ENTER, *xy)]) == 2
+
+
+def test_the_level_selects_box_decides_the_battle_where_only_the_card_has_none():
+    # #900: each Enter sets what its own page shows. The card has no box (x1, nothing pressed), the Level Select has one:
+    # it is set to x3, and the 3 are fought at once.
+    o = run_child(__file__)["unboxed_card"]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [3] and o["presses"] == ["plus", "plus"] and len(title_taps(o, "level")) == 2
+
+
+def test_a_defeat_on_a_thread_level_with_no_box_plays_it_again_at_one_battle():
+    # #900: no win, no clear: the retry finds no box again and fights x1; the win after it clears the level, the other two go as x2
+    o = run_child(__file__)["unboxed_lose"]
+    assert o["succeeded"], o["nodes"]
+    assert o["fights"] == [1, 1, 2] and o["done"] == "Thread Luxcavation: 3 won"
 
 
 if __name__ == "__main__":

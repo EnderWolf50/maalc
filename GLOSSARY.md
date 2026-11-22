@@ -174,7 +174,7 @@ _Avoid_: 每日次數、daily count
 Charge Enkephalin 視窗 Use Lunacy 分頁的 `n/10`，n 是當天已用 Lunacy 換腦啡肽的次數，一天最多 10 次（[spec 03 第 16 節](docs/spec/03-decisions.md)）。不是紐本的 Daily Bonuses。
 
 **連戰**：
-經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。沒通關過的關，卡片上沒有這個框，只能單場打（由遊戲提示 `Clear Stage once to unlock Consecutive Battle` 與截圖推得，#886，見 spec 01）。
+經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。沒通關過的關，卡片上沒有這個框，只能單場打（由遊戲提示 `Clear Stage once to unlock Consecutive Battle` 與截圖推得，#886，見 spec 01）。最難的關沒有框時，先打 1 場，通關後框出現，剩下的場數一次連戰打完（使用者 2026-11-22 選定，#900，[spec 03 第 15 節](docs/spec/03-decisions.md)）。
 _Avoid_: 連打、連續戰鬥（程式裡寫 `consecutive`）
 
 **每日模式**：
