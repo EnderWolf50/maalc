@@ -102,9 +102,9 @@ def test_a_flag_on_a_deleted_or_disabled_team_is_ignored_and_logged_and_the_task
 
 
 def test_a_flag_on_a_team_enabled_again_works_again(context, monkeypatch):
-    start(context, monkeypatch, settings=lambda data: data["teams"][1].update(enabled=False), difficulty="hard",
-          start_team="b")
-    assert "start_team" not in actions.TASK
+    ok, _ = start(context, monkeypatch, settings=lambda data: data["teams"][1].update(enabled=False), difficulty="hard",
+                  start_team="b")
+    assert ok is True and "start_team" not in actions.TASK
     entry_page(context, difficulty="hard", start_team="b")  # the next task, b enabled again
     assert plan_run(context)["team"]["id"] == "b" and queue() == ["b", "a"]
 
