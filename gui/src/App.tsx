@@ -144,9 +144,17 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   // the run this page took up was under way when it did (the backend's word, not the phase of the moment: its messages come
   // one by one); a run this page starts carries its own list, so this stays as it is for good
   const [takenUp, setTakenUp] = useState(false);
+  // whether the backend answered if this page took up a run, and whether it handed out the scheduled starts this window opened
+  // for, the first of them begun: until both, the Run tab does not know whether a run is under way or starting as it opens (#876)
+  const [attached, setAttached] = useState(false);
+  const [startsBegun, setStartsBegun] = useState(false);
   useEffect(() => {
     let live = true; // the development build starts an effect twice: the first channel's messages are dropped
-    api.attachRun((m) => { if (live) dispatch(m); }).then((active) => { if (live && active) setTakenUp(true); }, () => {});
+    api.attachRun((m) => { if (live) dispatch(m); }).then((underWay) => {
+      if (!live) return;
+      if (underWay) { dispatch({ type: "attached" }); setTakenUp(true); } // running now: the run's messages come after the answer
+      setAttached(true);
+    }, () => { if (live) setAttached(true); });
     return () => { live = false; };
   }, []);
   // the run's list follows the settings' task list (runner.ts listed): a run under way a page took up takes it, and after a
@@ -326,9 +334,16 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   useEffect(() => {
     if (!ready) return;
     let queue: Promise<unknown> = Promise.resolve();
-    // taken before a StrictMode double start drops the first effect: the backend hands each start out once
+    // taken before a StrictMode double start drops the first effect: the backend hands each start out once. startsBegun once
+    // the first start has begun (a run's start marks the window busy at once, startRun), or none came
     const take = () => {
-      queue = queue.then(() => api.takeScheduled()).then(async (all) => { for (const r of all) await scheduledRef.current(r); }).catch(() => {});
+      queue = queue.then(() => api.takeScheduled()).then(async (all) => {
+        for (const r of all) {
+          const done = scheduledRef.current(r);
+          setStartsBegun(true);
+          await done;
+        }
+      }).catch(() => {}).then(() => setStartsBegun(true));
     };
     take();
     return api.onScheduled(take);
@@ -508,6 +523,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     stop: () => { api.stopRun().catch(() => {}); },
     blocked: starting ? "saving" : problems.length ? "problems" : s.tasks.some((x) => x.enabled) ? null : "no_task",
     reveal, revealed: () => setReveal(false),
+    settled: attached && startsBegun,
   };
 
   /** The window closes; a failed close (no permission to) says why, and the editor stays as it was. */

@@ -20,7 +20,7 @@ const back = vi.hoisted(() => ({
   text: "", saved: [] as string[], starts: [] as string[][], send: undefined as ((m: Message) => void) | undefined,
   scheduled: [] as { id: string; opened: boolean; update_unfinished?: boolean }[], more: undefined as (() => void) | undefined,
   logged: [] as string[], syncs: [] as unknown[], syncFail: "", syncErrors: [] as string[], closed: 0,
-  update: null as UpdateOutcome | null,
+  update: null as UpdateOutcome | null, scans: 0,
 }));
 vi.mock("./api", async (original) => ({
   ...(await original<typeof import("./api")>()),
@@ -33,6 +33,7 @@ vi.mock("./api", async (original) => ({
     return Promise.resolve();
   },
   attachRun: () => Promise.resolve(false),
+  scanDevices: () => { back.scans++; return Promise.resolve([]); },
   onCloseRequested: () => () => {},
   takeScheduled: () => { const all = back.scheduled; back.scheduled = []; return Promise.resolve(all); },
   onScheduled: (more: () => void) => { back.more = more; return () => {}; },
@@ -75,6 +76,7 @@ beforeEach(() => {
   back.syncErrors = [];
   back.closed = 0;
   back.update = null;
+  back.scans = 0;
 });
 
 /** The window, on the Run tab it opens on, once the settings are read. */
@@ -199,6 +201,20 @@ describe("a scheduled run's start (--run <id>)", () => {
     send({ type: "event", event: "end", result: "succeeded" }, exit(0, true));
     await waitFor(() => expect(back.closed).toBe(1));
     expect(logged("[schedule] s1: the run ended; the window closes")).toBe(true);
+  });
+
+  test("the window a schedule opened starts its run and scans for no device: the tab opens during a run (#876)", async () => {
+    back.scheduled = [{ id: "s1", opened: true }];
+    await open();
+    await waitFor(() => expect(back.starts).toEqual([["ClaimMail", "MirrorDungeon"]]));
+    // the button says 偵測 once the window knows of the start: no scan began, none will
+    expect(await screen.findByRole("button", { name: zh["emu.scan"] })).toBeDisabled();
+    expect(back.scans).toBe(0);
+  });
+
+  test("a window that opens with no scheduled start scans once (#876)", async () => {
+    await open();
+    await waitFor(() => expect(back.scans).toBe(1));
   });
 
   test("a scheduled run brings the live log and Stop into view, once", async () => {
