@@ -301,6 +301,70 @@ describe("a box drawn from empty space in the lanes", () => {
   });
 });
 
+// A lane of 20 packs or more shows them under difficulty titles (#742): the 0 lane here holds every pack but The Outcast.
+describe("picks in a lane grouped by difficulty", () => {
+  /** The packs under each title of the lane with weight `w`, in the order it shows them. */
+  const groupsOf = (w: string) => [...laneAt(w).querySelectorAll("section")].map((s) =>
+    [...s.querySelectorAll(".pk .nm")].map((n) => n.textContent!));
+  const titleOf = (w: string, i: number) => laneAt(w).querySelectorAll("section h3")[i] as HTMLElement;
+
+  test("a Shift click's range runs on past a group's title, in the order the lane shows; a title is never picked", async () => {
+    const r = await open();
+    const [both, hard] = groupsOf("0");
+    const last = both[both.length - 1];
+    await ctrlClick(r.user, last);
+    await r.user.keyboard("{Shift>}");
+    await r.user.click(chipOf(hard[1]));
+    await r.user.keyboard("{/Shift}");
+    expect(picked()).toEqual([last, hard[0], hard[1]]);
+    expect(laneAt("0").querySelector("h3[aria-pressed], h3 [aria-pressed], h3[data-pk]")).toBeNull();
+  });
+
+  test("a click on a title picks nothing: with Ctrl the picks stay, without it they go, as on empty space", async () => {
+    const r = await open();
+    const [both] = groupsOf("0");
+    await ctrlClick(r.user, both[0], both[1]);
+    await r.user.keyboard("{Control>}");
+    await r.user.click(titleOf("0", 1));
+    await r.user.keyboard("{/Control}");
+    expect(picked()).toEqual([both[0], both[1]]);
+    await r.user.click(titleOf("0", 1));
+    expect(picked()).toEqual([]);
+  });
+
+  test("picks from two groups drag out together, and dropped on a title they go back to its lane, each under its own group", async () => {
+    const r = await open();
+    const [both, , extreme] = groupsOf("0");
+    await ctrlClick(r.user, both[0], extreme[0]);
+    dragOnto(chipOf(extreme[0]), laneAt("-1"));
+    expect(r.weights()).toEqual({ "The Outcast": -1, [both[0]]: -1, [extreme[0]]: -1 });
+    expect(picked()).toEqual([both[0], extreme[0]]);
+    const held = dragHeld(chipOf(both[0]), titleOf("0", 0)); // the title is part of its lane's drop target, not one of its own
+    expect(laneAt("0")).toHaveClass("lit");
+    held.end();
+    dragOnto(chipOf(both[0]), titleOf("0", 0));
+    expect(r.weights()).toEqual({ "The Outcast": -1, [both[0]]: 0, [extreme[0]]: 0 });
+    expect(groupsOf("0")[0]).toContain(both[0]);
+    expect(groupsOf("0")[2]).toContain(extreme[0]);
+  });
+
+  test("Alt+↓ and Alt+↑ move picks of two groups out of the lane and back, the focus staying on the pack under its title", async () => {
+    const r = await open();
+    const [, hard, extreme] = groupsOf("0");
+    await ctrlClick(r.user, hard[0], extreme[0]);
+    chipOf(extreme[0]).focus();
+    await r.user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(r.weights()).toEqual({ "The Outcast": -1, [hard[0]]: -1, [extreme[0]]: -1 });
+    expect(chipOf(extreme[0])).toHaveFocus();
+    await r.user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+    expect(r.weights()).toEqual({ "The Outcast": -1, [hard[0]]: 0, [extreme[0]]: 0 });
+    expect(chipOf(extreme[0])).toHaveFocus();
+    expect(chipOf(extreme[0]).closest("section")).toBe(laneAt("0").querySelectorAll("section")[2]);
+    expect(groupsOf("0")[1]).toContain(hard[0]);
+    expect(picked()).toEqual([hard[0], extreme[0]]);
+  });
+});
+
 describe("what the picks hold", () => {
   test("only packs on screen: a search that hides a picked pack drops it, and clearing the search does not bring it back", async () => {
     const r = await open();
