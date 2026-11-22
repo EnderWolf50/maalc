@@ -10,6 +10,7 @@ import libRs from "../src-tauri/src/lib.rs?raw";
 import actionsPy from "../../agent/actions.py?raw";
 import luxActionsPy from "../../agent/lux_actions.py?raw";
 import reasonsPy from "../../agent/reasons.py?raw";
+import guiRunPy from "../../tools/live/gui_run.py?raw";
 import sessionPy from "../../runner/session.py?raw";
 import cases from "../../tests/runner_cases.json";
 import App from "./App";
@@ -1030,4 +1031,73 @@ describe("the runner's events as the page folds them (tests/runner_cases.json, w
 
 test("the window keeps as many log lines of a run for a page that attaches later as the page shows (lib.rs LOG_KEEP)", () => {
   expect(libRs).toContain(`const LOG_KEEP: usize = ${LOG_LINES};`);
+});
+
+// tools/live/gui_run.py drives this tab over DevTools with selectors it keeps as text (#835, #880): it reads the page with the
+// script it holds, on the markup this build draws, wide and narrow, so a class or attribute a redesign moves fails here
+// and not in a live run.
+describe("tools/live/gui_run.py reads this page (#880)", () => {
+  const pyString = (name: string) => (([, triple, single]) => triple ?? single)(new RegExp(`^${name} = (?:"""(.*?)"""|"(.*?)")$`, "ms").exec(guiRunPy)!);
+  const read = () => new Function(`return ${pyString("STATE_JS")}`)() as {
+    phase: string; status: string; start: boolean; alerts: string[];
+    rows: { id: string; state: string | null; name: string; reason: string | null }[];
+  };
+  const target = (selector: string) => {
+    const js = selector.startsWith("js:") ? selector.slice(3) : `document.querySelector(${JSON.stringify(selector)})`;
+    return new Function(`return ${js}`)() as HTMLButtonElement;
+  };
+
+  test.each([["wide", false], ["narrow", true]])("%s: the status, the run's rows, Start and Stop", async (_, narrow) => {
+    if (narrow) vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.includes("max-width: 1180px"), addEventListener() {}, removeEventListener() {} }));
+    try {
+      const user = await open();
+      expect(read()).toMatchObject({ phase: "idle", start: true, alerts: [] });
+      expect(read().rows.map((r) => [r.id, r.state])).toEqual(
+        ["ClaimMail", "MirrorDungeon", "ChargeEnkephalin", "AssembleModules", "ExpLuxcavation", "ThreadLuxcavation", "AssembleModules", "ClaimPassMissions"]
+          .map((id) => [id, null]));
+      expect(target(pyString("START"))).toBe(startButton());
+      expect(target(pyString("STOP"))).toBe(stopButton());
+      await user.click(tick("經驗本"));
+      await started(user);
+      send(task(0, "ClaimMail", "succeeded"), task(1, "MirrorDungeon", "failed", "no emulator"), task(2, "ExpLuxcavation", "running"));
+      const state = read();
+      expect(state).toMatchObject({ phase: "running", start: false });
+      // every row says whether the run took it; the ticked ones, in the list's order, are the run's tasks
+      expect(state.rows.map((r) => [r.id, r.state])).toEqual([["ClaimMail", "succeeded"], ["MirrorDungeon", "failed"],
+        ["ChargeEnkephalin", "off"], ["AssembleModules", "off"], ["ExpLuxcavation", "running"], ["ThreadLuxcavation", "off"],
+        ["AssembleModules", "off"], ["ClaimPassMissions", "off"]]);
+      expect(state.rows[0].name).toBe(zh["task.ClaimMail"]);
+      expect(state.rows[1].reason).toBe("no emulator");
+      expect(state.rows[0].reason).toBeNull();
+      // a coded reason: its English text, not the sentence the row shows (#881)
+      send({ type: "event", event: "task", index: 2, entry: "ExpLuxcavation", state: "failed", reason: "x: defeated with the 2 retries used up",
+        reason_code: "LuxDefeated", reason_params: { retries: 2 } } as Message);
+      expect(read().rows[4].reason).toBe("x: defeated with the 2 retries used up");
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  test("the alerts: why Start is off, a refused start, a runner killed", async () => {
+    const s = settings();
+    s.tasks = s.tasks.map((x) => ({ ...x, enabled: false }));
+    back.text = fileOf(s);
+    const user = await open();
+    expect(read()).toMatchObject({ start: false, alerts: [zh["runner.blocked_no_task"]] });
+    await user.click(tick("領信"));
+    back.startFail = "a run is under way";
+    await user.click(startButton());
+    await waitFor(() => expect(read().alerts).toEqual([fill(zh["runner.refused"], { error: "Error: a run is under way" })]));
+    back.startFail = "";
+    await started(user);
+    send({ type: "stopping" }, { type: "killed", reason: "the runner cannot stop MaaFramework" }, exit(1, false));
+    expect(read().alerts).toEqual([fill(zh["runner.killed"], { reason: "the runner cannot stop MaaFramework" })]);
+  });
+
+  test("a runner that ended unexpectedly is an alert, its last lines with it", async () => {
+    const user = await open();
+    await started(user);
+    send(exit(3, false, ["Fatal Python error: access violation"]));
+    expect(read().alerts).toHaveLength(1);
+    expect(read().alerts[0]).toContain(fill(zh["runner.crash"], { code: 3 }));
+    expect(read().alerts[0]).toContain("Fatal Python error: access violation");
+  });
 });

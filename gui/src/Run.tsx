@@ -249,7 +249,7 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
             // stays as it was (#871, round 4 item 5), so a running row does not read as the picked one, nor a failed one as a
             // wrong one
             <span className="task-row" title={fill(t("tasks.row_tip"), { name, id: x.id })}
-              data-state={states ? task?.state ?? "off" : undefined}>
+              data-task={x.id} data-state={states ? task?.state ?? "off" : undefined}>
               {/* the tick's own hit area, the first line and the row's padding; a click there ticks and leaves the picked task as
                   it is */}
               <label className="tick" onClick={(e) => e.stopPropagation()}>
