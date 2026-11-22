@@ -39,6 +39,7 @@ NAMED = {
     "ClaimNoBonusDialog.png": "ClaimDialog",
     "ClaimBonusDialog.png": "ClaimDialog",
     "MainWindow.png": "HomeReached",
+    "EntryNewRun.png": "MirrorEntryNewRun",  # the entry page a give-up from there ends on (#908)
     "Drive.png": None,
 }
 
@@ -102,7 +103,7 @@ def test_claim_is_never_tapped():
 def test_the_probe_names_only_screens_with_a_node():
     nodes = load_nodes()
     assert not set(gu.DIALOG_NODES) & set(nodes) and gu.PROBE not in nodes  # the probe's own nodes override no pipeline node
-    assert set(gu.STEPS) - set(gu.DIALOG_NODES) <= set(nodes)
+    assert (set(gu.STEPS) | set(gu.ENDS)) - set(gu.DIALOG_NODES) <= set(nodes)
 
 
 class Game:
@@ -203,3 +204,14 @@ def test_a_screen_that_stays_after_its_taps_stops():
     game = Game(["ProgressPanel"])
     assert game.run() == 1
     assert game.taps == [gu.FORFEIT] * gu.STEPS["ProgressPanel"].tries and game.shots[-1] == "stuck-ProgressPanel"
+
+
+def test_a_give_up_from_the_entry_page_ends_on_the_entry_page():
+    # #908: GiveUpRewards from a run begun on the entry page lands there, not on the main window.
+    game = Game(["ExplorationReward", "GiveUpDialog", None, "MirrorEntryNewRun"])
+    assert game.run() == 0 and game.shots[-1] == "end"
+
+
+def test_the_entry_page_before_any_give_up_is_no_run_to_end():
+    game = Game(["MirrorEntryNewRun"])
+    assert game.run() == 1 and game.taps == []

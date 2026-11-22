@@ -8,8 +8,8 @@ import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill, localName } from "./i18n";
 import {
-  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, addTeam, defaultStarlight, freeName, newId, newTeam, teamEnum, toggleGift,
-  type GiftRef, type SearchGift, type Team,
+  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, addTeam, defaultStarlight, freeName, newId, newTeam, setTeamEnabled, teamEnum,
+  toggleGift, type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid } from "./Deployment";
 import { SkillPanel } from "./SkillReplacement";
@@ -160,7 +160,9 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
           <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
         </Field>
         <Mark as="label" className="check" path={`${path}/enabled`}>
-          <Input type="checkbox" checked={team.enabled} onChange={(e) => set({ enabled: e.target.checked })} />{t("team.enabled")}
+          {/* switched off, it takes the start team's flag with it (#878) */}
+          <Input type="checkbox" checked={team.enabled} onChange={(e) => update((d) => setTeamEnabled(d, i, e.target.checked))} />
+          {t("team.enabled")}
         </Mark>
         <span className="spacer" />
         <button type="button" onClick={() => setAskReset(true)}>{t("resetTimes")}</button>

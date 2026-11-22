@@ -249,12 +249,18 @@ def child():
                 for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell
                     image = screen_with(case)
                     cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
-                    started = time.perf_counter()
-                    actions.ocr(context, image, shop_actions.OFFER_GRID)  # one det+rec pass over the page, for the bound of the plate time
-                    out["page_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
-                    started = time.perf_counter()
-                    plates = shop_actions.read_plates(context, image, cells)
-                    out["plate_ms"].append((time.perf_counter() - started) * 1000 / len(cells))
+                    # Best of three, each pass of the page and of the plates back to back: a busy machine only adds time, so
+                    # the fastest pass is the one it disturbed least (#908).
+                    page_ms, plate_ms = [], []
+                    for _ in range(3):
+                        started = time.perf_counter()
+                        actions.ocr(context, image, shop_actions.OFFER_GRID)  # one det+rec pass over the page, for the bound of the plate time
+                        page_ms.append((time.perf_counter() - started) * 1000 / len(cells))
+                        started = time.perf_counter()
+                        plates = shop_actions.read_plates(context, image, cells)
+                        plate_ms.append((time.perf_counter() - started) * 1000 / len(cells))
+                    out["page_ms"].append(min(page_ms))
+                    out["plate_ms"].append(min(plate_ms))
                     out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
                 for name in GET_WINDOWS:  # the GET! window's plate (#623)
                     image = np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1])

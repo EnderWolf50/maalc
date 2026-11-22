@@ -7,7 +7,7 @@
 // and running. A narrow window
 // (NARROW) puts the console's Start line on top and its emulator and log under the options. Each control writes the settings
 // key the runner or the agent reads at a task's start, and shows that key after its label while the pointer is over the field
-// or the field draws a focus ring: the agent's stop lines name an option by it ("run/start_team: team 'x' was deleted ...").
+// or the field draws a focus ring: the agent's stop lines name an option by it ("luxcavation/exp/team: team 'x' was deleted ...").
 // A team pick lists the settings' teams as they are now. During a run the settings it reads are locked (LockContext): a task
 // still shows its options when clicked.
 import {
@@ -225,18 +225,14 @@ function DiffPlate({ d }: { d: Difficulty }) {
 /** Whether the next runs name two teams, one a difficulty: then each mark names its difficulty with its plate. */
 const splitRuns = (next: NextRun[]) => next.length === 2 && next[0].team !== next[1].team;
 
-/** What run.start_team amounts to: none set; an enabled team, whose flag stays in the file ("kept"); a disabled or a deleted
- * team, which stops the task at its start (task_options.py start_team_errors). */
-type StartTeam = "none" | "kept" | "off" | "gone";
-function startTeamOf(s: Settings): StartTeam {
-  if (s.run.start_team === null) return "none";
-  const team = s.teams.find((x) => x.id === s.run.start_team);
-  return !team ? "gone" : team.enabled ? "kept" : "off";
-}
+/** Whether run.start_team counts: it names an enabled team, whose flag stays in the file. A flag on a disabled team, or on
+ * a team deleted since (the next save drops it, App.tsx), has no effect: the task follows the queue as with no flag
+ * (task_options.py start_team_ignored_line, #878). */
+const startTeamApplies = (s: Settings) => s.teams.some((x) => x.id === s.run.start_team && x.enabled);
 
 /** The next Mirror Dungeon run on the task's row (spec #871 「隊伍佇列」): 「下一局」, then each difficulty's plate and its team,
  * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while an enabled
- * start team is set (one that stops the task is said under the queue). One line: where the names do not fit, it leaves the
+ * start team is set (a flag on a disabled or deleted team has no effect, so none). One line: where the names do not fit, it leaves the
  * row, and a screen reader, rather than take a second line (the queue's own marks still say it); the row is then one line
  * high, as the others. */
 function NextTeams() {
@@ -250,7 +246,7 @@ function NextTeams() {
       {splitRuns(next)
         ? next.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
         : <span className="nt-team">{name(next[0].team)}</span>}
-      {startTeamOf(s) === "kept" && (
+      {startTeamApplies(s) && (
         <span className="flag-on" title={t("queue.flag_on")}><Glyph d={FLAG} filled /><span className="sr-only">{t("queue.flag_on")}</span></span>
       )}
     </span>
@@ -723,8 +719,10 @@ function MirrorOptions() {
  * them). Every row on the list's own columns (index.css): its place, the team's name (cut short), its slot, its usage when kept
  * to one difficulty, the next-run mark against the flag, and the flag. A disabled team is struck through in its place; an id
  * that names no team (a hand edit, which the check names) is a row of its own. The flag writes run.start_team: on, off, one
- * team at most, none on a disabled team but to clear it. How the queue turns is the list's tooltip; under it, while a flag is
- * set, what it costs or why the task will stop. A run locks the order and the flags (LockContext). */
+ * team at most. A disabled team is never the start team (disabling one takes its flag off, model.ts setTeamEnabled): its
+ * flag sets nothing, its words saying why, and one already there (a hand edit, an old file) has no effect, dimmed as the
+ * row is, and only clears. How the queue turns is the list's tooltip; under it, while a flag that counts is set, what it
+ * costs. A run locks the order and the flags (LockContext). */
 function MirrorTeams() {
   const { s, update, t, tv, bad } = useEditor();
   const locked = useContext(LockContext);
@@ -735,8 +733,6 @@ function MirrorTeams() {
   const next = nextRuns(s), split = splitRuns(next);
   const start = s.run.start_team;
   const setStart = (id: string | null) => update((d) => { d.run.start_team = id; });
-  // under the queue: what a lit flag costs, or why the task will stop; a deleted team has no row whose flag clears it
-  const startTeam = startTeamOf(s);
   return (
     <fieldset className="mirror-teams" data-path="team_queue">
       <legend>{t("queue.title")}</legend>
@@ -748,6 +744,8 @@ function MirrorTeams() {
             render={(x, j) => {
               const team = byId.get(x.id), first = x.first;
               const on = first && start === x.id, off = team !== undefined && !team.enabled;
+              const setsNothing = off && !on; // a disabled team is never the start team: its flag only clears one already there
+              const tip = setsNothing ? "queue.flag_tip_off" : off ? "queue.flag_tip_off_on" : on ? "queue.flag_tip_on" : "queue.flag_tip";
               const name = team ? team.name || "—" : `? ${x.id}`;
               // the runs this row's team plays next, on its first row
               const marks = first ? next.filter((p) => p.team === x.id) : [];
@@ -765,11 +763,14 @@ function MirrorTeams() {
                   </span>
                   {team ? (
                     // its words are drawn over it (index.css .start-flag::after). title="" keeps the list's own tooltip (how
-                    // the queue turns, and how to drag, over every row) from showing over them; the list keeps it
+                    // the queue turns, and how to drag, over every row) from showing over them; the list keeps it. One that
+                    // sets nothing is aria-disabled, not disabled: the keyboard's focus still reaches it, to show why, and a
+                    // screen reader hears why on a disabled team (aria-description). A run disables every flag (locked).
                     <button type="button" className={"start-flag" + (on ? " on" : "")} aria-pressed={on}
                       aria-label={fill(t(on ? "queue.flag_clear" : "queue.flag_set"), { name })} title=""
-                      data-tip={t(on ? "queue.flag_tip_on" : "queue.flag_tip")} disabled={locked || (off && !on)}
-                      onClick={(e) => { e.stopPropagation(); setStart(on ? null : x.id); }}>
+                      data-tip={t(tip)} aria-description={off ? t(tip) : undefined}
+                      aria-disabled={(setsNothing && !locked) || undefined} disabled={locked}
+                      onClick={(e) => { e.stopPropagation(); if (!setsNothing) setStart(on ? null : x.id); }}>
                       <Glyph d={FLAG} filled={on} size={16} />
                     </button>
                   ) : <span />}
@@ -778,14 +779,7 @@ function MirrorTeams() {
             }} />
         )}
       </div>
-      {startTeam === "kept" && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
-      {startTeam === "off" && <p className="caution mt-note">{t("queue.flag_off_note")}</p>}
-      {startTeam === "gone" && (
-        <p className="caution mt-note">
-          {fill(t("queue.flag_gone_note"), { id: start! })}{" "}
-          <button type="button" disabled={locked} onClick={() => setStart(null)}>{t("queue.flag_clear_gone")}</button>
-        </p>
-      )}
+      {startTeamApplies(s) && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
     </fieldset>
   );
 }

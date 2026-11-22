@@ -46,9 +46,10 @@ def toggles(context, image):
     return out
 
 
-# The prompts after floors 5 and 10 (ParallelModePrompt, ExtremeModePrompt; the pipeline's roi of their buttons). No
-# live capture shows where they sit (#852, #854): wide enough for the help sheet's picture of them (buttons at y 440-466)
-# and for the game's other two-button dialogs (DIALOG_CANCEL, DIALOG_CONFIRM at y 493).
+# The prompts after floors 5 and 10 (ParallelModePrompt, ExtremeModePrompt; the pipeline's roi of their buttons). Live
+# (#852) the floor 5 one's buttons sit at y 452-490; the floor 10 one is seen only on the help sheet (#854). Wide enough
+# for both, for the help sheet's picture of them (buttons at y 440-466) and for the game's other two-button dialogs
+# (DIALOG_CANCEL, DIALOG_CONFIRM at y 493).
 PROMPT_BUTTONS = [360, 420, 560, 100]
 
 
@@ -58,9 +59,9 @@ class ParallelPrompt(CustomAction):
     param {"after": 5 or 10}: Confirm takes the run on to the next floor, Cancel ends it there (#434). Confirm only
     towards a target floor past it (settlement.goes_on): target 5 cancels both, 10 confirms the first, 15 both.
 
-    The button is found by its text, not tapped at a fixed place, until a live capture shows where it sits (#852). One
+    The button is found by its text, not tapped at a fixed place: the floor 10 prompt has no live capture yet (#854). One
     that does not read is left for the hub's next look. The screen is kept in logs/dismissed/ (run.keep_dismissed_screens,
-    once a minute, GAPPED) either way: the first live prompts are the fixtures #852 and #854 wait for.
+    once a minute, GAPPED) either way: #852's live floor 5 prompt came from there, and #854 waits for the floor 10 one.
     """
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
