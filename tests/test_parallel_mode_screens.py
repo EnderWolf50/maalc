@@ -1,9 +1,10 @@
 """The entry switch's floor read and the floor 5/10 prompts' buttons on the captures, through the real OCR (#434).
 
 ParallelSwitch reads the paused run's floor in the entry page's Exploring field; ParallelPrompt finds Confirm or Cancel
-by their text, as no live capture shows where the prompts sit yet (#852, #854). They run inside a real MaaFramework
-task (resource bundle loaded, a still controller); the pytest process holds MaaFramework in AgentServer mode, so the
-task runs in a child process: this file run as a script, as test_module_count.py does.
+by their text: the floor 5 prompt on a live capture (#852), the floor 10 one only on the help sheet and a synthetic
+capture until #854. They run inside a real MaaFramework task (resource bundle loaded, a still controller); the pytest
+process holds MaaFramework in AgentServer mode, so the task runs in a child process: this file run as a script, as
+test_module_count.py does.
 """
 
 import json
@@ -16,12 +17,13 @@ from daily_child import probe_child, run_child, screen
 # The entry page captures: a new run, and two runs paused at floor 1 (the switch OFF, ON).
 ENTRY = ["EntryNewRun.png", "EntryPaused.png", "EntryParallelOn.png"]
 # The prompt captures and the floor after which each comes; where Cancel and Confirm sit on each, as (x0, x1, y0, y1),
-# by eye on the help sheet and moved as the synthetic ones moved its dialog (-64 / -10 px in x, +21 px in y).
+# by eye on the help sheet, moved as the synthetic one moved its dialog (-10 px in x, +21 px in y), and on the
+# live floor 5 prompt over the map (#852: the bot tapped Cancel at 539, 469 there).
 PROMPTS = {"ParallelModePrompt.png": 5, "ParallelModeExtreme.png": 10,
-           "ParallelModePromptOverMap.synthetic.png": 5, "ParallelModeExtremeOverMap.synthetic.png": 10}
+           "ParallelModePromptOverMap.png": 5, "ParallelModeExtremeOverMap.synthetic.png": 10}
 BUTTONS = {"ParallelModePrompt.png": ((522, 684, 434, 470), (705, 865, 434, 470)),
            "ParallelModeExtreme.png": ((469, 630, 434, 470), (651, 811, 434, 470)),
-           "ParallelModePromptOverMap.synthetic.png": ((458, 620, 455, 491), (641, 801, 455, 491)),
+           "ParallelModePromptOverMap.png": ((450, 627, 452, 490), (652, 830, 452, 490)),
            "ParallelModeExtremeOverMap.synthetic.png": ((459, 620, 455, 491), (641, 801, 455, 491))}
 TARGETS = (5, 10, 15)
 

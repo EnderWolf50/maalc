@@ -73,7 +73,7 @@ PROMPT_READS = [("XCancel", (522, 440, 160, 26)), ("✓Confirm", (705, 440, 158,
     (5, 15, (784, 453)), (10, 15, (784, 453)),  # target 15: on both times
 ])
 def test_the_prompt_after_floor_5_or_10_presses_confirm_or_cancel_by_the_target(context, clock, monkeypatch, after, target, pressed):
-    # #434: the buttons are found by their text: no live capture shows where the prompt sits (#852)
+    # #434: the buttons are found by their text: the floor 10 prompt has no live capture yet (#854)
     monkeypatch.setitem(actions.TASK, "options", {"target_floor": target, "keep_dismissed_screens": False})
     page(context, {tuple(settle_actions.PROMPT_BUTTONS): PROMPT_READS})
     assert settle_actions.ParallelPrompt().run(context, argv({"after": after}, node="ParallelModePrompt"))
@@ -89,7 +89,7 @@ def test_a_prompt_whose_button_does_not_read_is_left_for_the_next_look(context, 
 
 
 def test_the_prompt_is_kept_in_the_dismissed_screens(context, clock, monkeypatch, tmp_path):
-    # #847: the first live prompts are the fixtures #852 and #854 wait for
+    # #847: the live prompts are the fixtures: #852's floor 5 one came from there, #854 waits for the floor 10 one
     monkeypatch.setitem(actions.TASK, "options", {"target_floor": 15, "keep_dismissed_screens": True})
     page(context, {tuple(settle_actions.PROMPT_BUTTONS): PROMPT_READS})
     settle_actions.ParallelPrompt().run(context, argv({"after": 10}, node="ExtremeModePrompt"))
@@ -113,7 +113,7 @@ def test_the_two_prompts_are_two_nodes_that_read_the_buttons_where_the_agent_doe
 
 
 def test_a_prompt_looked_at_again_keeps_one_screen_a_minute(context, clock, monkeypatch, tmp_path):
-    # a button that does not read brings the prompt back every 1.5 s: it must not push #852's first capture out
+    # a button that does not read brings the prompt back every 1.5 s: it must not push a prompt's first capture out
     monkeypatch.setitem(actions.TASK, "options", {"target_floor": 10, "keep_dismissed_screens": True})
     patch_all(monkeypatch, "DISMISSED_AT", {})
     page(context, {tuple(settle_actions.PROMPT_BUTTONS): PROMPT_READS[:1]})  # Confirm does not read
