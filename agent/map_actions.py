@@ -67,6 +67,10 @@ MAP_LOOKS = 4  # looks, 1 s apart, for a linked slot before the fallback taps
 MAP_NEAR = 650
 BAR_BOTTOM = 60  # the resource bar's border: y 59-60 on the map captures
 MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first screen shows four, a floor ~7 and the boss
+# search_bus's drags across (#907): x 240 to 1040, on the map band left of the buttons; at most that many each way. Live
+# 2026-11-22 the bus was ~900 px off the screen's left, and on HARD floor 5's map the screen went 1350 px or more right
+# of where it shows the bus at the far left (both measured on the recording, from search_bus's drags).
+SEARCH_DRAG, SEARCH_DRAGS = 800, 4
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
 MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
@@ -77,6 +81,11 @@ MAP_PAN_LIMIT = 8  # s find_bus drags a fresh NORMAL map again that took none of
 # the finger by 126 px at most on the 108 taken ones. A shorter pan, taken, may not have moved yet: it rests as before.
 PAN_LOOK_MIN = 300
 BUS_JITTER = 3  # px the bus's match moves on a map that did not move
+# px that change by more than 8 levels between two screenshots of a map the game draws anew (drew, #907). The bus' flame
+# and glows flicker every frame (recovery.same_screen). On recordings, frames 0.1 s apart: 393-3974 px before each
+# find_bus pan of the 2026-11-22 run (17 pans, floors 1-5), 495-4098 px at the finger's stop of the four pans the game
+# ignored on 2026-11-13; 0 px over the 0.5 s the game drew nothing on 2026-11-22 floor 5.
+FLICKER = 100
 # #473: back on the map from a fight's loading screen or its reward pages, the game ignores taps on the still map for a
 # time that differs by run, with no sign on screen (over 1.46 s after the fade-in on 2026-11-07, under 1.32 s on
 # 2026-11-06). Recordings of 5 runs, recovery.same_screen's blocks: a node tap the game took moved 52.4% of them or more,
@@ -84,6 +93,11 @@ BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # next touch, at most 2.6 s later, was always taken.
 MAP_ANSWER = 0.7  # s a tap on the map has to answer (its node panel, or the screen moving) before follow taps again
 MAP_TAP_LIMIT = 4  # s follow taps its node again, and find_bus drags the map again (#486), while the map ignores touches
+
+
+def drew(before, after):
+    """Whether the game drew the screen anew between two screenshots: FLICKER px or more changed by over 8 levels."""
+    return int((np.abs(after.astype(np.int16) - before.astype(np.int16)).max(axis=2) > 8).sum()) >= FLICKER
 
 
 def node_marks(context, image, cx, cy):
@@ -314,7 +328,11 @@ class RouteMap(CustomAction):
             slots = self.read_slots(context, image, bx, by) if bus else {}
             if slots:
                 break
-            time.sleep(1)  # kept (#58): the bus and links come after the map stands still; MAP_LOOKS looks 1 s apart
+            look = time.monotonic() + 1  # kept (#58): the bus and links come after the map stands still; MAP_LOOKS looks 1 s apart
+            # #907: a window over the map hides the bus or its links (live 2026-11-22, the floor 5 prompt: 7.7 s of looks
+            # and search_bus before the guard in its first drag saw it); the guard hands it to MirrorHub at once.
+            page_guard(context, "MirrorMap", image=image)
+            time.sleep(max(0.0, look - time.monotonic()))
         if not bus and self.search_bus(context):  # #61: the map dragged off by hand
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST
@@ -466,10 +484,15 @@ class RouteMap(CustomAction):
         while); on a floor's fresh NORMAL map (no node entered since the theme pack) for up to MAP_PAN_LIMIT s: live
         2026-10-19, a new map took no drag for its first seconds. Once a pan has moved the bus, one that does not is
         the map's edge. On a pan of PAN_LOOK_MIN px or more, a screenshot as the finger stops that shows the bus where
-        it was lifts the finger at once and is the next look: no rest, no 0.5 s wait (#486).
+        it was lifts the finger at once and is the next look: no rest, no 0.5 s wait (#486). Only while the game draws:
+        a screenshot taken right after it that the game has not drawn anew (drew) may hide a drag taken late, and a
+        finger lifted at once flings the map (#907), so that pan rests as one the map took.
         """
         def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
             return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
+
+        def ignored(im):  # the map left the bus where it was, as the game drew on
+            return stays(seen(context, im, "MapBus"), last) and drew(im, screen(context))
 
         limit = MAP_PAN_LIMIT if RUN.get("fresh_floor") and not RUN.get("floor_hard") else MAP_TAP_LIMIT  # a HARD map does not pan (#129)
         end, pans, last, moved = time.monotonic() + limit, 0, None, False
@@ -500,28 +523,41 @@ class RouteMap(CustomAction):
             last = (bx, by)
             look = max(abs(dx), abs(dy)) >= PAN_LOOK_MIN
             image = scroll(context, min(bx + SLOT[0] + map_route.COLUMN_DX // 2, 1100), by + SLOT[1] + 106, dx, dy,
-                           ignored=(lambda im: stays(seen(context, im, "MapBus"), last)) if look else None)
+                           ignored=ignored if look else None)
             if image is None:
                 time.sleep(0.5)  # kept (#58): the map coasts on after the lift; the look after the pan reads it at rest
                 image = screen(context)
 
     @staticmethod
     def search_bus(context):
-        """Drag the map about, looking for the bus after each drag; whether it showed (#61).
+        """Drag the map about, looking for the bus after each drag; whether it showed (#61, #907).
 
-        Live 2026-10-16: a map dragged by hand left the bus off the top of the screen. The drags go
-        250 px down and up, 400 px right and left of where the map was, then back.
+        Live 2026-10-16: a map dragged by hand left the bus off the top of the screen: the drags go 250 px down and up
+        of where the map was, then back. Live 2026-11-22 (#907): find_bus's pans left the bus ~900 px off the screen's
+        left, past a 400 px drag: the map then goes SEARCH_DRAG px right a drag until a drag leaves the screen as it was
+        (the map's left edge), then left the same way to its right edge, up to SEARCH_DRAGS drags each way.
         """
-        at = (0, 0)
-        for to in ((0, 250), (0, -250), (400, 0), (-400, 0), (0, 0)):
-            dx, dy = to[0] - at[0], to[1] - at[1]
-            page_guard(context, "MirrorMap")
+        at = [0, 0]
+
+        def drag(dx, dy):  # the screenshots before and after the drag, and whether the bus showed after it
+            before = page_guard(context, "MirrorMap")
             scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
             time.sleep(0.5)  # kept (#58): the map coasts on after the lift
-            at = to
-            if seen(context, screen(context), "MapBus"):
-                log(f"map: the bus showed after dragging the map {to}")
-                return True
+            at[:] = at[0] + dx, at[1] + dy
+            after = screen(context)
+            if found := bool(seen(context, after, "MapBus")):
+                log(f"map: the bus showed after dragging the map {tuple(at)}")
+            return before, after, found
+
+        if any(drag(0, dy)[2] for dy in (250, -500, 250)):
+            return True
+        for dx in (SEARCH_DRAG, -SEARCH_DRAG):
+            for _ in range(SEARCH_DRAGS):
+                before, after, found = drag(dx, 0)
+                if found:
+                    return True
+                if recovery.same_screen(recovery.thumb(before), recovery.thumb(after)):
+                    break  # the map's edge
         return False
 
     @staticmethod

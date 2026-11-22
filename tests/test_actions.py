@@ -203,6 +203,7 @@ def map_world(context, nodes, links, bus_x, width=1800):
     nodes: {(column, row): marks}, column 1 next to the bus; links: ((column, row), (column, row)) pairs.
     The bus's chevrons lead to the first column's nodes; a tap on anything but Enter opens a node panel.
     The bus stands on a node already entered (no tap on it first, #88). Returns the screen's offsets after each drag.
+    Each screenshot differs from the last in a corner, as the bus' flame flickers on every frame the game draws (#907).
     """
     actions.RUN["map_entered"] = True
     bx, by = 446, map_actions.BUS_HOME[1]  # on the map; the screen starts at 446 - bus_x
@@ -230,7 +231,14 @@ def map_world(context, nodes, links, bus_x, width=1800):
         return MagicMock()
     ctl = context.tasker.controller
     ctl.post_touch_down.side_effect, ctl.post_touch_move.side_effect, ctl.post_touch_up.side_effect = down, move, up
-    ctl.post_screencap.return_value.wait.return_value.get.side_effect = lambda: world[:, off[0]:off[0] + 1280].copy()
+    shots = [0]
+
+    def shot():
+        image = world[:, off[0]:off[0] + 1280].copy()
+        shots[0] += 1
+        image[:20, -20:] = 255 * (shots[0] % 2)  # 400 px: past map_actions.FLICKER, under recovery.same_screen's share
+        return image
+    ctl.post_screencap.return_value.wait.return_value.get.side_effect = shot
     marks = {(at(c, r)[0], at(c, r)[1], m) for (c, r), ms in nodes.items() for m in ms}
 
     def run_recognition(name, image, override=None):
