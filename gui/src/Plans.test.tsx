@@ -20,8 +20,10 @@ const mine = (want: number[]): GiftList => ({
 const settings = (patch: Partial<Settings> = {}): Settings => ({ ...newSettings(), language: "zh_tw", ...patch });
 
 // A pack's English name: the chip's name, or under its Chinese name in the Chinese UI (#899).
-const NAME = ".nm, .nm .en";
-const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: NAME })).closest(".pk") as HTMLElement;
+const EN_NAME = ".nm, .nm .en";
+/** The English name of a chip's `.nm`. */
+const englishOf = (nm: Element) => (nm.querySelector(".en") ?? nm).textContent;
+const chipNamed = async (pack: string) => (await screen.findByText(pack, { selector: EN_NAME })).closest(".pk") as HTMLElement;
 
 // #739: the plan screen shows nothing of what the gift lists want (the user, 2026-11-14: the two are not directly related,
 // and a mark for it confuses). A team of the default plan wants The Outcast's first own gift; the default list's materials
@@ -59,7 +61,7 @@ describe("finding a pack by name", () => {
     await r.user.click(await screen.findByText("Mine"));
     return r;
   };
-  const names = () => [...document.querySelectorAll(".pk .nm")].map((x) => (x.querySelector(".en") ?? x).textContent);
+  const names = () => [...document.querySelectorAll(".pk .nm")].map(englishOf);
   const search = () => screen.getByRole("searchbox", { name: zh["packs.search"] });
 
   test("the search shows only the packs whose name holds what is typed, any case; Esc clears it", async () => {
@@ -94,7 +96,7 @@ describe("a pack's weight, typed in place (no prompt dialog)", () => {
     await r.user.click(await screen.findByText("Mine"));
     return { ...r, asked, weights: () => r.settings().theme_pack_plans[0].weights };
   }
-  const chipOf = async (name: string) => (await screen.findByText(name, { selector: NAME })).closest(".pk") as HTMLElement;
+  const chipOf = async (name: string) => (await screen.findByText(name, { selector: EN_NAME })).closest(".pk") as HTMLElement;
   const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
   /** The + lanes, the one above the lanes and the one below, while neither has a box open. */
   const addLanes = () => screen.getAllByText(new RegExp(zh["packs.newLane"])).map((x) => x.closest(".lane")!);
@@ -319,8 +321,8 @@ describe("dragging a pack chip", () => {
     const plan = { id: "p1", name: "Mine", weights: { "The Outcast": -1 }, threshold: 0, unlisted: 0, event_packs: "weight" };
     const r = renderEditor(<ThemePackTab />, settings({ theme_pack_plans: [plan] }));
     await r.user.click(await screen.findByText("Mine"));
-    const chip = (await screen.findByText("The Forgotten", { selector: NAME })).closest(".pk")!;
-    const lane = (await screen.findByText("The Outcast", { selector: NAME })).closest(".lane")!;
+    const chip = (await screen.findByText("The Forgotten", { selector: EN_NAME })).closest(".pk")!;
+    const lane = (await screen.findByText("The Outcast", { selector: EN_NAME })).closest(".lane")!;
     const dataTransfer = { setData() {}, effectAllowed: "", dropEffect: "" };
     fireEvent.dragStart(chip, { dataTransfer });
     fireEvent.dragOver(lane, { dataTransfer });
@@ -338,8 +340,8 @@ describe("a pack's Chinese name", () => {
     await r.user.click(await screen.findByText("Mine"));
     return r;
   };
-  const english = () => [...document.querySelectorAll(".pk:not(.unlisted) .nm")].map((x) => (x.querySelector(".en") ?? x).textContent);
-  const search = (r: Awaited<ReturnType<typeof open>>, text: string) => r.user.type(screen.getByRole("searchbox"), text);
+  const english = () => [...document.querySelectorAll(".pk:not(.unlisted) .nm")].map(englishOf);
+  const typeIn = (r: Awaited<ReturnType<typeof open>>, text: string) => r.user.type(screen.getByRole("searchbox"), text);
 
   test("in Chinese a pack shows its Chinese name, its English name under it in small type", async () => {
     await open("zh_tw");
@@ -369,16 +371,16 @@ describe("a pack's Chinese name", () => {
 
   test("the search finds a pack by its Chinese name and by its English name", async () => {
     const r = await open("zh_tw");
-    await search(r, "歸屬");
+    await typeIn(r, "歸屬");
     expect(english()).toEqual(["The Outcast"]);
     await r.user.clear(screen.getByRole("searchbox"));
-    await search(r, "OUTCAST");
+    await typeIn(r, "OUTCAST");
     expect(english()).toEqual(["The Outcast"]);
   });
 
   test("in English the search goes by the English name alone, as before", async () => {
     const r = await open("en_us");
-    await search(r, "歸屬");
+    await typeIn(r, "歸屬");
     expect(english()).toEqual([]);
   });
 
@@ -392,7 +394,7 @@ describe("a pack's Chinese name", () => {
 
   test("in English picture mode a card has no name under it, as before", async () => {
     const r = await open("en_us");
-    await r.user.click(screen.getByRole("button", { name: "Images" }));
+    await r.user.click(screen.getByRole("button", { name: TEXT.en_us["packs.images"] }));
     expect(screen.getByRole("img", { name: "The Outcast" }).closest(".pk")!.querySelector(".nm")).toBeNull();
   });
 });
