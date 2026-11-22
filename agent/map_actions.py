@@ -84,8 +84,9 @@ BUS_JITTER = 3  # px the bus's match moves on a map that did not move
 # px that change by more than 8 levels between two screenshots of a map the game draws anew (drew, #907). The bus' flame
 # and glows flicker every frame (recovery.same_screen). On recordings, frames 0.1 s apart: 393-3974 px before each
 # find_bus pan of the 2026-11-22 run (17 pans, floors 1-5), 495-4098 px at the finger's stop of the four pans the game
-# ignored on 2026-11-13; 0 px over the 0.5 s the game drew nothing on 2026-11-22 floor 5.
-FLICKER = 100
+# ignored on 2026-11-13; 0 px over the 0.5 s the game drew nothing on 2026-11-22 floor 5. find_bus takes its second
+# screenshot DRAW_GAP s after the first at the soonest, as far apart as those frames.
+FLICKER, DRAW_GAP = 100, 0.1
 # #473: back on the map from a fight's loading screen or its reward pages, the game ignores taps on the still map for a
 # time that differs by run, with no sign on screen (over 1.46 s after the fade-in on 2026-11-07, under 1.32 s on
 # 2026-11-06). Recordings of 5 runs, recovery.same_screen's blocks: a node tap the game took moved 52.4% of them or more,
@@ -328,11 +329,11 @@ class RouteMap(CustomAction):
             slots = self.read_slots(context, image, bx, by) if bus else {}
             if slots:
                 break
-            look = time.monotonic() + 1  # kept (#58): the bus and links come after the map stands still; MAP_LOOKS looks 1 s apart
+            next_look = time.monotonic() + 1  # kept (#58): the bus and links come after the map stands still; MAP_LOOKS looks 1 s apart
             # #907: a window over the map hides the bus or its links (live 2026-11-22, the floor 5 prompt: 7.7 s of looks
             # and search_bus before the guard in its first drag saw it); the guard hands it to MirrorHub at once.
             page_guard(context, "MirrorMap", image=image)
-            time.sleep(max(0.0, look - time.monotonic()))
+            time.sleep(max(0.0, next_look - time.monotonic()))
         if not bus and self.search_bus(context):  # #61: the map dragged off by hand
             image, bus = self.find_bus(context)
             bx, by = bus or BUS_REST
@@ -491,8 +492,12 @@ class RouteMap(CustomAction):
         def stays(hit, at):  # a MapBus hit within BUS_JITTER of at: the map has not moved
             return hit is not None and at is not None and abs(hit.box[0] - at[0]) <= BUS_JITTER and abs(hit.box[1] - at[1]) <= BUS_JITTER
 
-        def ignored(im):  # the map left the bus where it was, as the game drew on
-            return stays(seen(context, im, "MapBus"), last) and drew(im, screen(context))
+        def ignored(im):  # the map left the bus where it was, as the game drew on (a second look DRAW_GAP s on)
+            shot = time.monotonic()
+            if not stays(seen(context, im, "MapBus"), last):
+                return False
+            time.sleep(max(0.0, shot + DRAW_GAP - time.monotonic()))  # live, MapBus' match alone takes ~0.1 s
+            return drew(im, screen(context))
 
         limit = MAP_PAN_LIMIT if RUN.get("fresh_floor") and not RUN.get("floor_hard") else MAP_TAP_LIMIT  # a HARD map does not pan (#129)
         end, pans, last, moved = time.monotonic() + limit, 0, None, False
@@ -539,7 +544,7 @@ class RouteMap(CustomAction):
         """
         at = [0, 0]
 
-        def drag(dx, dy):  # the screenshots before and after the drag, and whether the bus showed after it
+        def drag(dx, dy):  # whether the bus showed after the drag, and whether the drag changed the screen
             before = page_guard(context, "MirrorMap")
             scroll(context, 640 - dx // 2, 340 - dy // 2, dx, dy)
             time.sleep(0.5)  # kept (#58): the map coasts on after the lift
@@ -547,16 +552,18 @@ class RouteMap(CustomAction):
             after = screen(context)
             if found := bool(seen(context, after, "MapBus")):
                 log(f"map: the bus showed after dragging the map {tuple(at)}")
-            return before, after, found
+            return found, not recovery.same_screen(recovery.thumb(before), recovery.thumb(after))
 
-        if any(drag(0, dy)[2] for dy in (250, -500, 250)):
-            return True
+        for dy in (250, -500, 250):
+            found, _ = drag(0, dy)
+            if found:
+                return True
         for dx in (SEARCH_DRAG, -SEARCH_DRAG):
             for _ in range(SEARCH_DRAGS):
-                before, after, found = drag(dx, 0)
+                found, moved = drag(dx, 0)
                 if found:
                     return True
-                if recovery.same_screen(recovery.thumb(before), recovery.thumb(after)):
+                if not moved:
                     break  # the map's edge
         return False
 

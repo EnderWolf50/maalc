@@ -197,6 +197,27 @@ def button_taps(context):
     return [c for c in context.tasker.controller.post_click.call_args_list if c.args == event_actions.EVENT_BUTTON]
 
 
+def pan_over(context, width, left):
+    """Touches drag the screen's left edge, from left, over a map `width` px wide: across only, stopping at its ends.
+    Returns ([the left edge, as it moves], [the left edge after each drag])."""
+    off, start, offsets = [left], [], []
+
+    def down(x, y):
+        start[:] = [x, off[0]]
+        return MagicMock()
+
+    def move(x, y):
+        off[0] = min(max(0, start[1] + start[0] - x), width - 1280)
+        return MagicMock()
+
+    def up():
+        offsets.append(off[0])
+        return MagicMock()
+    ctl = context.tasker.controller
+    ctl.post_touch_down.side_effect, ctl.post_touch_move.side_effect, ctl.post_touch_up.side_effect = down, move, up
+    return off, offsets
+
+
 def map_world(context, nodes, links, bus_x, width=1800):
     """A map wider than the screen, the bus at (bus_x, BUS_HOME's y) on screen; drags move the screen over it.
 
@@ -216,21 +237,8 @@ def map_world(context, nodes, links, bus_x, width=1800):
         for t in np.linspace(0, 1, 600):
             x, y = int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t)
             world[y - 2:y + 3, x - 2:x + 3] = 200
-    off, start, offsets = [bx - bus_x], [], []  # the screen's left edge on the map; where the touch went down
-
-    def down(x, y):
-        start[:] = [x, off[0]]
-        return MagicMock()
-
-    def move(x, y):
-        off[0] = min(max(0, start[1] + start[0] - x), width - 1280)
-        return MagicMock()
-
-    def up():
-        offsets.append(off[0])
-        return MagicMock()
+    off, offsets = pan_over(context, width, bx - bus_x)
     ctl = context.tasker.controller
-    ctl.post_touch_down.side_effect, ctl.post_touch_move.side_effect, ctl.post_touch_up.side_effect = down, move, up
     shots = [0]
 
     def shot():
