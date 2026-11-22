@@ -348,3 +348,32 @@ def test_only_an_app_from_the_main_install_is_the_users_window(two_maalc_windows
     monkeypatch.setattr(gr, "apps_running", lambda exe: (seen.append(exe), [])[1])
     assert gr.users_window(two_maalc_windows[0]) is False
     assert seen == [tmp_path / "install" / gr.APP]
+
+
+# --- the Run tab's rows -------------------------------------------------------------------------------------------
+
+def row(task, state, name=None, reason=None):
+    return {"id": task, "state": state, "name": name or task, "reason": reason}
+
+
+def test_run_tasks_lists_only_the_rows_the_run_took_in_the_lists_order():
+    rows = [row("ClaimMail", "succeeded", "領信"), row("ChargeEnkephalin", "off"), row("MirrorDungeon", "failed", "鏡像迷宮", "no emulator"),
+            row("ExpLuxcavation", "off"), row("AssembleModules", "off"), row("ClaimPassMissions", "pending")]
+    assert gr.run_tasks(rows) == [
+        {"id": "ClaimMail", "name": "領信", "state": "succeeded", "reason": None},
+        {"id": "MirrorDungeon", "name": "鏡像迷宮", "state": "failed", "reason": "no emulator"},
+        {"id": "ClaimPassMissions", "name": "ClaimPassMissions", "state": "pending", "reason": None}]
+
+
+def test_run_tasks_is_empty_before_a_run_and_after_an_edit_ended_the_lists_reading_with_it():
+    assert gr.run_tasks([row("ClaimMail", None), row("MirrorDungeon", None)]) == []
+    assert gr.run_tasks([]) == []
+
+
+def test_run_state_keeps_the_pages_fields_and_swaps_its_rows_for_the_runs_tasks(monkeypatch):
+    page = {"phase": "running", "status": "執行中", "start": False, "alerts": [],
+            "rows": [row("ClaimMail", "running"), row("MirrorDungeon", "off")]}
+    monkeypatch.setattr(gr, "evaluate", lambda port, js: page)
+    state = gr.run_state(9333)
+    assert state == {"phase": "running", "status": "執行中", "start": False, "alerts": [],
+                     "tasks": [{"id": "ClaimMail", "name": "ClaimMail", "state": "running", "reason": None}]}

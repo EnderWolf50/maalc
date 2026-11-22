@@ -37,8 +37,8 @@ options go to screen-record as they are; `--height` defaults to 720 (the maalc-l
 **stop** presses Stop. With `--root DIR --on TEXT` it first waits for TEXT in the run's log under
 `DIR/logs/runner/` (the newest log when a run is under way, else the next new one), then --delay seconds (default 0);
 a run that ends first, or a --limit (default 600 s) that passes, is exit 1. **state** prints the status line, the phase
-(idle, running, stopping, ended), each posted task's state (pending, running, succeeded, failed, stopped, cancelled) and
-the page's alerts as JSON; `--until` waits for one of those phases (--timeout, default 600 s; exit 1 when it passes).
+(idle, running, stopping, ended), the run's tasks (id, name, reason and state: pending, running, succeeded, failed,
+stopped, cancelled) read from the task list's rows, and the page's alerts as JSON; `--until` waits for one of those phases (--timeout, default 600 s; exit 1 when it passes).
 The page commands go through `tools/gui_devtools.mjs` on the port open printed. Windows only.
 """
 from __future__ import annotations
@@ -69,15 +69,18 @@ UNDER_WAY = {"running", "stopping"}
 START = ".runner-bar button.primary"
 STOP = "js:document.querySelectorAll('.runner-bar button')[1]"
 RUN_END = "[run] end "  # runner/session.py: the run's last line
-# The Run tab's state, from the page (gui/src/Run.tsx RunnerSection)
+# The Run tab's state, from the page (gui/src/Run.tsx RunControls, TaskList, RunLog). `rows` is every row of the task list
+# with the run's state the page writes on it (data-state, absent before a run, "off" on a row the run left out) and its
+# task id (data-task); run_tasks() keeps the run's. One markup wide and narrow: the run console is drawn in one place or the
+# other, with the same classes.
 STATE_JS = """(() => { const s = document.querySelector(".runner-status");
   if (!s) return null;
   const text = (el) => el ? el.textContent.trim() : null;
   return { phase: s.dataset.phase, status: text(s),
-    tasks: [...document.querySelectorAll(".run-tasks li")].map((li) => ({ name: text(li.querySelector("span")),
-      state: li.dataset.state, reason: text(li.querySelector("small")) })),
+    rows: [...document.querySelectorAll(".task-list .task-row")].map((row) => ({ id: row.dataset.task, state: row.dataset.state ?? null,
+      name: text(row.querySelector(".tr-name")), reason: text(row.querySelector(".tr-reason")) })),
     start: !document.querySelector(".runner-bar button.primary")?.disabled,
-    alerts: [...document.querySelectorAll(".runner [role=alert], .runner .caution")].map(text) }; })()"""
+    alerts: [...document.querySelectorAll(".run-notes p, .crash[role=alert] p")].map(text) }; })()"""
 RENDERED_JS = """(() => { const main = document.querySelector("main");
   if (!main) return null;
   if (main.classList.contains("load-error")) return { loadError: main.innerText.slice(0, 300) };
@@ -320,11 +323,19 @@ def press(port: int, target: str) -> None:
         raise Refused(f"the press did not go through: {(r.stderr or r.stdout).strip()}")
 
 
+def run_tasks(rows: list[dict]) -> list[dict]:
+    """The run's tasks from the task list's rows, in the list's order, which is the run's: the page writes a state on each
+    row while it shows a run, "off" on a row the run left out (unticked), and none before a run or once an edit ended the
+    list's reading with the run."""
+    return [{"id": r["id"], "name": r["name"], "state": r["state"], "reason": r["reason"]}
+            for r in rows if r["state"] not in (None, "off")]
+
+
 def run_state(port: int) -> dict:
     state = evaluate(port, STATE_JS)
     if state is None:
         raise Refused("the page shows no Run tab runner (.runner-status): open the 執行 tab")
-    return state
+    return {**{k: v for k, v in state.items() if k != "rows"}, "tasks": run_tasks(state["rows"])}
 
 
 def wait_phase(port: int, phases: set[str], timeout: float, every: float = 0.5, past: dict | None = None) -> dict:
