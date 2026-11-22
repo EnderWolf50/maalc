@@ -615,7 +615,7 @@ describe("each field's settings key, as the agent's stop lines name it", () => {
     // the key first, then how the field works where its tooltip says it (#876, #879)
     for (const [control, path, help] of fields) {
       expect(control).not.toHaveAccessibleName(new RegExp(path));
-      expect(control).toHaveAccessibleDescription(help ? `${path} ${help}` : path);
+      expect(control).toHaveAccessibleDescription(help ? described(path, help) : path);
     }
     await show(r, "經驗本");
     expect(screen.getByRole("combobox", { name: new RegExp(`^${zh["lux.team"]}`) }))

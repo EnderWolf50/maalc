@@ -75,8 +75,8 @@ function KeyLabel({ path, text }: { path: string; text?: string }) {
 }
 /** The controls inside take settings key `path` as their description, so a screen reader reads the field's label as its name and
  * the key after it, whether or not the key shows; then how the field works, its tooltip (the field's `help`, ui.tsx Mark).
- * Every field of the tab that shows a key is one of the three below, and each takes a `note` and a `help` (spec #871 「說明文字」):
- * the note, on the page under it, only for what warns of a cost or a risk; how it works is its help. */
+ * Every field of the tab that shows a key is one of the three below; each takes a `help`, how it works, and KeyField and Switch
+ * a `note`, on the page under it, only for what warns of a cost or a risk (spec #871 「說明文字」). */
 const DescribedByKey = ({ path, children }: { path: string; children: ReactNode }) => (
   <DescribeContext.Provider value={keyId(path)}>{children}</DescribeContext.Provider>
 );
@@ -670,7 +670,7 @@ function MirrorOptions() {
   const pastFive = run.target_floor > 5;
   const set = (patch: Partial<Settings["run"]>) => update((d) => { Object.assign(d.run, patch); });
   type Pick = "difficulty" | "weekly_bonus_use" | "weekly_bonus_amount" | "starlight_unaffordable" | "after_retries" | "theme_pack_refresh";
-  const pick = (k: Pick, note?: string, help?: string) => (
+  const pick = (k: Pick, { note, help }: { note?: string; help?: string } = {}) => (
     <KeyField path={`run/${k}`} note={note} help={help}>
       <Select value={run[k]} options={runEnum(k)} label={(v) => tv(k, v)} onChange={(v) => set({ [k]: v })} />
     </KeyField>
@@ -689,13 +689,13 @@ function MirrorOptions() {
             {pastFive && <small>{t("run.target_floor_entry_note")}</small>}
           </KeyField>
           <KeyToggleNum path="run/runs" value={run.runs} on={1} min={1} help={t("run.runs_note")} onChange={(v) => set({ runs: v })} />
-          {pick("theme_pack_refresh", undefined, t("run.theme_pack_refresh_note"))}
+          {pick("theme_pack_refresh", { help: t("run.theme_pack_refresh_note") })}
         </div>
       </fieldset>
       <fieldset>
         <legend>{t("run.group_weekly")}</legend>
         <div className="grid">
-          {pick("weekly_bonus_use", run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined)}
+          {pick("weekly_bonus_use", { note: run.weekly_bonus_use === "normal" ? t("run.weekly_bonus_normal_note") : undefined })}
           {pick("weekly_bonus_amount")}
           <Switch path="run/stop_when_weekly_bonus_out" checked={run.stop_when_weekly_bonus_out}
             onChange={(on) => set({ stop_when_weekly_bonus_out: on })} />
@@ -709,7 +709,9 @@ function MirrorOptions() {
             <Num value={run.wipe_retries} min={0} onChange={(v) => set({ wipe_retries: v })} />
           </KeyField>
           {/* what forfeiting costs, while it is picked; how both choices go, the tooltip */}
-          {pick("after_retries", run.after_retries === "forfeit" ? t("run.after_retries_forfeit") : undefined, t("run.after_retries_note"))}
+          {pick("after_retries", {
+            note: run.after_retries === "forfeit" ? t("run.after_retries_forfeit") : undefined, help: t("run.after_retries_note"),
+          })}
         </div>
       </fieldset>
     </div>
