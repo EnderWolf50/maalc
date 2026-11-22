@@ -1074,6 +1074,34 @@ small.fl.inf { color: var(--fl-i); background: none; border: 1px dashed var(--fl
 small.fl.ext { --c: var(--fl-x); --ink: var(--fl-x-ink); box-shadow: inset 0 0 0 1px var(--ink); }
 .floorkey { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .pk.unlisted { border-style: dashed; color: var(--muted); }
+/* Several packs picked at once (#743). The bar above the lanes is one line high picked or not, so a Ctrl click never moves the
+ * packs under the next one, and while packs are picked it stays at the top of the scrolling page (top -16 px: main's padding,
+ * as nav.sections). A pack's marks sit on its corners, out of the flow, for the same reason; the box drawn from empty space
+ * and a lane's drop label are drawn over the lanes, never in their flow. */
+.pickbar { display: flex; align-items: center; gap: 12px; min-height: 30px; padding: 0 12px; font-size: 12.5px; border: 1px solid transparent; border-radius: 4px; corner-shape: bevel; }
+.pickbar.on { position: sticky; top: -16px; z-index: 4; border-color: var(--accent-line); background: var(--accent-soft); }
+.pickbar b { color: var(--accent-ink); white-space: nowrap; }
+/* a narrow window shortens the names first, then the keys, never wrapping to a second line */
+.pickbar .names, .pickbar .keys, .pickbar > .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-2); }
+.pickbar .names { flex: 1 1 0; min-width: 4em; }
+.pickbar .keys { flex: 0 1 auto; }
+.pickbar button { flex: none; padding: 1px 10px; font-size: 12.5px; white-space: nowrap; }
+.lanes, .lane, .pk { position: relative; }
+.lanes.boxing { user-select: none; }
+.marquee { position: absolute; z-index: 3; pointer-events: none; border: 1px solid var(--accent-line); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.pk.picked { border-color: var(--accent-line); background: var(--sel); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.pk .tick, .pk .count {
+  position: absolute; top: -7px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; pointer-events: none;
+  background: var(--accent); color: var(--on-accent); font: 700 11px/16px var(--font-display); text-align: center;
+}
+.pk .tick { left: -6px; }
+.pk .count { right: 2px; } /* inside the corner: the next pack's tick sits 6 px past this edge */
+.pk.lifted { opacity: 0.45; }
+.lane.lit { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.lane .droplabel {
+  position: absolute; top: 6px; right: 8px; padding: 2px 8px; pointer-events: none; white-space: nowrap; font-size: 12.5px; font-weight: 700;
+  color: var(--accent-ink); background: var(--panel); border: 1px solid var(--accent-line); border-radius: 4px;
+}
 /* a pack's weight typed in place */
 .weigh { display: inline-flex; align-items: center; gap: 4px; }
 .weigh input { width: 4.5em; padding: 0 4px; }

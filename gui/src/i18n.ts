@@ -100,6 +100,12 @@ const zh_tw = {
   "packs.threshold": "刷新門檻 {n}：最好的包低於這條線就刷新（可上下拖曳，放到最下面就不刷新）",
   "packs.unlisted": "沒列出的包（新一季的包、讀不出名稱的包）",
   "packs.newLane": "拖到這裡，輸入新的分數",
+  // several packs picked at once (#743): the bar above the lanes, what the lanes show during a drag, what a screen reader says
+  "packs.pickHint": "一次選好幾個包：Ctrl／Shift＋點選、從空白處拖出方框，或按空白鍵。",
+  "packs.picked": "已選 {n} 個包",
+  "packs.pickedKeys": "拖其中一個就全部一起移・Alt＋↑↓ 換欄・Enter 輸入分數",
+  "packs.unpick": "取消選取", "packs.unpicked": "已取消選取",
+  "packs.many": "{n} 個包", "packs.drop": "放下 {n} 個包 → {w}", "packs.moved": "{n} 個包移到 {w} 欄",
   "packs.floorsNormal": "普通", "packs.floorsHard": "困難", "packs.floorSep": "、", "packs.floorsKey": "數字＝會出現的樓層",
   "packs.floorsInfinity": "無限", "packs.floorsExtreme": "極限", // the user's words, 2026-11-14; en_us keeps the game's
   // a long lane's groups by difficulty (#742): titles and notes as the user chose them on 2026-11-22
@@ -612,6 +618,11 @@ const en_us: typeof zh_tw = {
   "packs.threshold": "Refresh threshold {n}: the bot refreshes while the best pack is below this line (drag it, or put it at the bottom for no refresh)",
   "packs.unlisted": "Unlisted packs (a new season's pack, or a pack whose title does not read)",
   "packs.newLane": "Drop here to type a new weight",
+  "packs.pickHint": "Pick several packs: Ctrl+click or Shift+click, drag a box from empty space, or press Space.",
+  "packs.picked": "Picked: {n}",
+  "packs.pickedKeys": "Drag one to move them all · Alt+↑↓ moves a lane · Enter types a weight",
+  "packs.unpick": "Clear", "packs.unpicked": "No packs picked",
+  "packs.many": "{n} packs", "packs.drop": "Drop {n} packs → {w}", "packs.moved": "Moved to {w}: {n}",
   "packs.floorsNormal": "NORMAL", "packs.floorsHard": "HARD", "packs.floorSep": ", ", "packs.floorsKey": "numbers = the floors it appears on",
   "packs.floorsInfinity": "INFINITY", "packs.floorsExtreme": "EXTREME",
   "packs.groupBoth": "On NORMAL and HARD", "packs.groupHard": "HARD only", "packs.groupHardNote": "most also on INFINITY",
