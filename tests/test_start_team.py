@@ -4,7 +4,7 @@ of team_queue and writes it there once the run opens, as a claim moves one to th
 start plays the team of the queue as it was before the move. A flag on a team disabled or deleted has no effect (#878):
 the task follows the queue as with no flag, logs that it ignored the flag, and the flag stays in the file. The settings
 GUI leaves no such flag (it takes it off with the team it disables, its save drops one on a team deleted): a hand edit
-does, or a save while the task runs.
+does, a file read back from MXU, or a save while the task runs.
 
 Every task here starts on settings_cases' valid file: team a (any) then team b (hard_only), the list and the queue in
 that order; gone is a team since deleted.

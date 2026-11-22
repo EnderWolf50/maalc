@@ -80,8 +80,8 @@ def start_team_ignored_line(team, teams):
     teams. A flag on a disabled team, or on an id not in teams (a deleted team), has no effect: the task follows the
     queue as with no flag, and the flag stays in the file, counting again once the team is enabled (#878). The settings
     GUI leaves no such flag (it takes the flag off with the team it disables, and its save drops one on a team deleted),
-    so it comes from a hand edit, or from a save made while a task ran. The line for the log that says so, None for a
-    flag that counts or no flag."""
+    so it comes from a hand edit, a file read back from MXU (on a disabled team), or a save made while a task ran. The
+    line for the log that says so, None for a flag that counts or no flag."""
     if team is None:
         return None
     found = next((t for t in teams if t["id"] == team), None)

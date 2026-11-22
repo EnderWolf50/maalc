@@ -593,10 +593,12 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .start-flag.on { color: var(--accent); }
 .start-flag.on:hover:not(:disabled) { color: var(--accent-hi); }
 .start-flag:disabled { opacity: 0.3; cursor: not-allowed; }
-/* on a disabled team (#878) the flag sets nothing: faint, the no-entry pointer, unlit under it, its words saying why. One
- * already there (a hand edit) has no effect: dimmed with the row's struck-through name, filled but muted, not amber; it
- * lights up under the pointer, as a press clears it */
-.start-flag[aria-disabled="true"] { opacity: 0.3; cursor: not-allowed; }
+/* on a disabled team (#878) the flag sets nothing: the icon faint (not the button, whose opacity would fade the words drawn
+ * on it), the no-entry pointer, unlit under it, its words saying why. One already there (a hand edit, an old file) has no
+ * effect: dimmed with the row's struck-through name, filled but muted, not amber; it lights up under the pointer, as a press
+ * clears it */
+.start-flag[aria-disabled="true"] { cursor: not-allowed; }
+.start-flag[aria-disabled="true"] svg { opacity: 0.3; }
 .start-flag[aria-disabled="true"]:hover:not(:disabled) { color: var(--muted); }
 .start-flag[aria-disabled="true"]:active:not(:disabled) svg { transform: none; }
 .mt-row.off .start-flag.on { opacity: 0.5; }

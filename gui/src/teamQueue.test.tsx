@@ -322,14 +322,20 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     await r.user.click(flag("Tb"));
     expect(r.settings().run.start_team).toBeNull();
     expect(flag("Tb")).toHaveAttribute("aria-pressed", "false");
-    expect([cssValueOf(css, flag("Tb"), "opacity"), cssValueOf(css, flag("Tb"), "cursor")]).toEqual(["0.3", "not-allowed"]);
-    expect(cssValueOf(css, flag("Ta"), "opacity")).toBeUndefined(); // an enabled team's, undimmed
+    // the icon faint, not the button: the button's opacity would fade the words drawn on it too
+    const icon = (b: HTMLElement) => b.querySelector("svg")!;
+    expect([cssValueOf(css, icon(flag("Tb")), "opacity"), cssValueOf(css, flag("Tb"), "cursor")]).toEqual(["0.3", "not-allowed"]);
+    expect(cssValueOf(css, icon(flag("Ta")), "opacity")).toBeUndefined(); // an enabled team's, undimmed
     expect(cssValueOf(css, flag("Tb"), "color", flag("Tb"))).toBe("var(--muted)"); // the pointer does not light it
-    // its words still float over it, under the pointer and under the keyboard's focus, which still reaches it
+    // its words float over it at full ink, under the pointer and under the keyboard's focus, which still reaches it
     expect(flag("Tb")).toHaveAttribute("data-tip", zh["queue.flag_tip_off"]);
-    expect(cssValueOf(css, flag("Tb"), "opacity", flag("Tb"), "::after")).toBe("1");
-    expect(cssValueOf(css, flag("Tb"), "opacity", { focus: flag("Tb") }, "::after")).toBe("1");
+    for (const at of [flag("Tb"), { focus: flag("Tb") }]) {
+      expect(cssValueOf(css, flag("Tb"), "opacity", at, "::after")).toBe("1");
+      expect(cssValueOf(css, flag("Tb"), "opacity", at)).toBeUndefined();
+    }
     expect(flag("Tb")).toBeEnabled();
+    expect(flag("Tb")).toHaveAttribute("aria-description", zh["queue.flag_tip_off"]); // why, for a screen reader
+    expect(flag("Ta")).not.toHaveAttribute("aria-description");
     expect(zh["queue.flag_tip_off"]).toBe("隊伍停用中，不能從這支開始");
   });
 
@@ -356,13 +362,14 @@ describe("the start team's flag on each queue row (#878, run.start_team)", () =>
     expect(zh["queue.flag_kept"]).toBe("旗子會存進設定檔，每次開始都會再排一次，用完記得改回。");
   });
 
-  test("a flag already on a disabled team (a hand edit) has no effect, dimmed and muted; a press clears it, and then sets nothing", async () => {
+  test("a flag already on a disabled team (a hand edit, an old file) has no effect, dimmed and muted; a press clears it, and then sets nothing", async () => {
     const s = queue("a", "b");
     s.teams[1].enabled = false;
     s.run.start_team = "b";
     const r = await mirror(s);
     expect(flag("Tb", true)).not.toHaveAttribute("aria-disabled");
     expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
+    expect(flag("Tb", true)).toHaveAttribute("aria-description", zh["queue.flag_tip_off_on"]);
     expect([cssValueOf(css, flag("Tb", true), "opacity"), cssValueOf(css, flag("Tb", true), "color")]).toEqual(["0.5", "var(--muted)"]);
     expect(cssValueOf(css, flag("Tb", true), "opacity", flag("Tb", true))).toBe("1"); // lit under the pointer: a press does something
     expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull(); // the flag has no effect, so it costs nothing
