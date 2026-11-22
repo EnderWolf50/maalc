@@ -21,7 +21,7 @@ INFINITY 打完第 10 層後再跳 EXTREME 提示，按 Confirm 進入第 11 層
 第 11–15 層在 Adversity 頁（標題 `Set Adversities`）自己選的負面效果，每層 6 個可選、最多選 5 個，每個有分數（1–5）；選了的層通過後才多拿星光與 Mirror of Sisyphe Pass 的 Projection。bot 一個都不選，直接按 `Challenge`（使用者 2026-11-20 定案，#851）；選 N 個留在 #388。和 Boss 後選的 Mounting Trials（試煉）不同。
 
 **Hidden Battle（隱藏戰鬥）**：
-第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `HIDDEN_BATTLE`；機率是 `hiddenBattleInfo` 的 `probInfo`）。它不在地圖上：地圖上看起來就是一般戰鬥節點，點了之後才轉變成 Hidden Battle，跳出確認視窗（使用者 2026-11-22，#868）。視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850）。按 Skip 之後是進原本的戰鬥還是回到地圖，待探路局確認（#855）。
+第 11–15 層每層 10% 機率出現的額外戰鬥（遊戲資料 `HIDDEN_BATTLE`；機率是 `hiddenBattleInfo` 的 `probInfo`）。它不在地圖上：地圖上看起來就是一般事件節點，點了事件節點（不是戰鬥節點）之後才跳出確認視窗（使用者 2026-11-22，#868）。視窗的標題是 `Dimension Reversal Zone - COGNITION ERROR WARNING`，按鈕 `Skip`／`Enter`；進去就要打完，打完全員回滿 HP 並復活陣亡者。v2 一律按 Skip，沒有設定（使用者 2026-11-20 定案，#847、#850）。按 Skip 之後是進原本的節點還是回到地圖，待探路局確認（#855）。
 _Avoid_: 隱藏戰、隱藏關、Hidden Battle 節點
 
 **可領（`claim_ok`）**：
@@ -174,7 +174,7 @@ _Avoid_: 每日次數、daily count
 Charge Enkephalin 視窗 Use Lunacy 分頁的 `n/10`，n 是當天已用 Lunacy 換腦啡肽的次數，一天最多 10 次（[spec 03 第 16 節](docs/spec/03-decisions.md)）。不是紐本的 Daily Bonuses。
 
 **連戰**：
-經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。
+經驗本與紐本卡片上的 `Consecutive Battle ×N`，N 是 1–10。一場打完算 N 場，獎勵與腦啡肽模組消耗都是 ×N；離開 Luxcavation 或結算後會回到 ×1（[spec 01](docs/spec/01-architecture.md)）。沒通關過的關，卡片上沒有這個框，只能單場打（由遊戲提示 `Clear Stage once to unlock Consecutive Battle` 與截圖推得，#886，見 spec 01）。
 _Avoid_: 連打、連續戰鬥（程式裡寫 `consecutive`）
 
 **每日模式**：

@@ -5,7 +5,8 @@
 # so it ranks after every fight it can recognise and before unknown, on both difficulties.
 # The game's names (EN_BattleUIText): battle Regular, focused Focused (AB_BATTLE), risky Risky (HARD_BATTLE),
 # abno Abnormality (HARD_AB_BATTLE).
-# hidden (#849) is unread since #868: Hidden Battle never shows on the map, a battle node turns into it once tapped.
+# hidden (#849) is unread since #868: Hidden Battle never shows on the map, its window comes after an event node is
+# tapped.
 # The key is kept so the field structure of data format 2 holds (FORMAT in agent/resource_package.py, ADR 0012).
 # A node's kind by the number by its Cost coin, per difficulty (#91; spec 05 section 6): unique within one,
 # from the wiki and the CN client's table; the live node panels' Costs agree.

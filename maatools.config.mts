@@ -113,17 +113,21 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-10-26 (#366): Luxcavation as it opens on the EXP tab (stages 7-9), swiped right to the locked 10th (KEEP
   // OUT, no Enter: the rightmost Enter is stage 9 in the middle), and the Thread tab, which the EXP tab is tapped from.
   // The lit tab is its orange frame (LuxExpLit); LuxExpEnter's box is the rightmost Enter (test_exp_luxcavation.py).
-  ['LuxExp.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon']],
-  ['LuxExpLocked.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon']],
-  ['LuxThread.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
+  // LuxConsecLabel (#886): a Consecutive Battle box's words on any card or the Level Select; the bot reads it on one card.
+  ['LuxExp.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon', 'LuxConsecLabel']],
+  ['LuxExpLocked.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon', 'LuxConsecLabel']],
+  // Live 2026-11-22 (#886): stage 10 open at the right (stages 8-10), never cleared: its card has no Consecutive Battle box,
+  // stages 8 and 9 have theirs. LuxExpEnter's box is stage 10's Enter.
+  ['LuxExpStage10.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpLit', 'LuxExpEnter', 'LuxThreadTab', 'ModuleIcon', 'LuxConsecLabel']],
+  ['LuxThread.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],
   // Live 2026-10-26 (#368, Monday): the Thread tab as Thread Luxcavation finds it. LuxThreadLust.png: Lust's card open at
   // the left, LuxThread.png's way on another day (the lit Enter is the open card's, the others' read 0.6 at most).
   // LuxThreadScrolled.png: scrolled right, no card open on show. LuxThreadSwipe reads any Thread tab: the hub lists
   // LuxThreadEnter ahead of it, so it acts on the tab with no open card only. LuxThreadLevels.png: Lust's Level Select
   // (Lv40/50/60, -2 Modules each, the list at its bottom), the page dimmed behind it.
-  ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
+  ['LuxThreadLust.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadEnter', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],
   ['LuxThreadScrolled.png', ['LuxPanel', 'MirrorFromLux', 'LuxExpTab', 'LuxThreadLit', 'LuxThreadSwipe', 'ModuleIcon', 'ThreadBonuses']],
-  ['LuxThreadLevels.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses']],  // the Daily Bonuses read through the dimming
+  ['LuxThreadLevels.png', ['LuxPanel', 'MirrorFromLux', 'LuxThreadLevel', 'ModuleIcon', 'ThreadBonuses', 'LuxConsecLabel']],  // the Daily Bonuses read through the dimming
   // Live 2026-10-26 (#371): the Limbus Pass page on its Battle Pass tab (the Pass Missions tab unlit), then Pass Missions
   // on the Daily tab (every row claimed) and the Weekly tab (one row under way, 3/5). The tab lit is the one on.
   // The rows to claim are read by the agent (PassClaimable, tests/test_pass_missions.py), which this test cannot run.

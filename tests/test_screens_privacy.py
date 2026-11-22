@@ -28,7 +28,7 @@ IDENTITY = {
     "MainWindow": [UID_PLATE, NAME_PLATE], "MainWindowFadeIn": [UID_PLATE, NAME_PLATE],
     "Drive": [NAME_PLATE], "DriveWalpurgis": [NAME_PLATE], "SinnersTab": [NAME_PLATE], "WindowTabPressed": [NAME_PLATE],  # a recording frame (#496)
     # Luxcavation's narrower LV panel: the LV label sits elsewhere (#366)
-    "LuxExp": [NAME_PLATE], "LuxExpLocked": [NAME_PLATE], "LuxThread": [NAME_PLATE],
+    "LuxExp": [NAME_PLATE], "LuxExpLocked": [NAME_PLATE], "LuxExpStage10": [NAME_PLATE], "LuxThread": [NAME_PLATE],  # #886
     "LuxThreadScrolled": [NAME_PLATE], "LuxThreadLust": [NAME_PLATE], "LuxThreadLevels": [NAME_PLATE],  # #368
     **{n: [NAME_PLATE] for n in LUX_CONSEC},  # #375: the Consecutive Battle box on the EXP, Thread and Level Select pages
     # the main window dimmed under the Mailbox and the popup: the Copy button and LV label do not match
@@ -82,7 +82,7 @@ def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     shown = {p.stem for p in SCREENS.glob("*.png") if NAME_PLATE in required_boxes(p)}
     assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "DriveWalpurgis", "SinnersTab", "WindowTabPressed", "ServerErrorRetry", "ServerErrorRetryCountdown",
                      "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
-                     "LuxExp", "LuxExpLocked", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
+                     "LuxExp", "LuxExpLocked", "LuxExpStage10", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
                      *LUX_CONSEC, "EnkephalinAssembled", "MailParcelReceived", "EnkephalinModulesArrowAsFour", "EnkephalinModulesNoArrow"}
 
 

@@ -15,8 +15,8 @@ LINE_CONTRAST = 15  # live: drawn links 22-173, no link -14-4
 # A node with no link read onward takes its brightest one from this (#212): faint links over a bright
 # background read 13-14.4, the background alone up to 12.5 (a purple pack's grid), so no one bar parts them.
 FAINT_LINK = 8
-# Nodes taken only when nothing else is linked: the boss. Hidden Battle is no map node (#868): a battle node turns into
-# it once tapped, and its window is answered over the map (HiddenBattle, #850).
+# Nodes taken only when nothing else is linked: the boss. Hidden Battle is no map node (#868): its window comes after an
+# event node is tapped (floors 11-15), and is answered over the map (HiddenBattle, #850).
 LAST_RESORT = ("boss",)
 SHIFT_CLEAR = 0.6  # shift: the best shift's difference, at most this share of the median (a drag 0.46, other maps 0.77+)
 
