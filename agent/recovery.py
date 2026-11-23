@@ -63,7 +63,7 @@ L3_PER_TASK = L3_PER_RUN  # restarts outside the Ladder (restart_game) that went
 # it waited out its 20 s timeout before L3 (#439; mid-battle live 2026-10-17, #70). An event's back key opens the panel too,
 # but the hub's ProgressPanel closes it before the next stuck. AALC's back_init_menu takes To Window from these two only.
 L2_SCREENS = {"MirrorMap", "ProgressPanel"}
-BATTLE_LIMIT = 20 * 60  # a wave's: battle_limit
+BATTLE_LIMIT = 20 * 60  # s a battle may take; a Consecutive Battle's, this for each of its waves (battle_limit)
 RUN_LIMIT_DEFAULT, RUN_LIMIT_MIN_RUNS = 60 * 60, 10
 FLOOR_LIMIT = 45 * 60  # live (#34): a HARD floor took up to ~25 min of real progress
 
@@ -400,8 +400,9 @@ def floor_limit(lines, team_id, target):
 def battle_limit(waves):
     """Seconds a battle of `waves` waves may take before it is stuck (spec 06 單場戰鬥超時): BATTLE_LIMIT a wave.
 
-    A Luxcavation battle entered at Consecutive Battle xN is one battle of N waves, each starting at turn 1 again (live
-    2026-11-23, #914: about 3 min a wave at x10, stopped in wave 8 by the 20 min of one); any other battle has one.
+    A Luxcavation battle entered at Consecutive Battle xN is one battle of N waves (its menu's Progress: n/N, not the
+    stage's own WAVE n/m), each starting at turn 1 again (live 2026-11-23, #914: about 3 min a wave at x10, stopped in
+    wave 8 by the 20 min of one); any other battle has one.
     """
     return BATTLE_LIMIT * waves
 
