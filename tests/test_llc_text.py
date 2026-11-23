@@ -1,4 +1,5 @@
 import json
+import re
 import zipfile
 from pathlib import Path
 
@@ -7,12 +8,15 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {"gift_search": ROOT / "assets/resource/base/data/gift_search.json",
          "gift_recipes": ROOT / "assets/resource/base/data/gift_recipes.json", "graces": ROOT / "assets/resource/base/data/graces.json",
-         "gift_effects": ROOT / "assets/resource/base/data/gift_effects.json"}
+         "gift_effects": ROOT / "assets/resource/base/data/gift_effects.json",
+         "theme_pack_names": ROOT / "assets/resource/base/data/theme_pack_names.json"}
 DATA = {k: json.loads(p.read_text(encoding="utf-8")) for k, p in FILES.items()}
 
 
 def gifts(data):
-    return data["gifts"] + data.get("materials", [])
+    """Every gift of gift_search.json or gift_recipes.json, each list the GUI names gifts from."""
+    import llc_text
+    return [g for k in llc_text.GIFT_LISTS for g in data.get(k, [])]
 
 
 def test_every_gift_and_grace_has_a_chinese_name_and_the_graces_their_effects_in_english_and_chinese():
@@ -108,8 +112,8 @@ def test_each_gift_carries_the_sin_the_game_colours_its_name_by():
     assert {i: effects[str(i)]["sin"] for i in shown} == shown
 
 
-def ego_gift_tables(root, tables):
-    """A static data folder of ego-gift tables under `root`: {"<folder>/<file>": [records]}."""
+def static_tables(root, tables):
+    """The client's static data tables under `root` (ego-gift, buff): {"<folder>/<file>": [records]}."""
     import llc_text
     for name, records in tables.items():
         path = root / llc_text.STATIC / name
@@ -121,7 +125,7 @@ def ego_gift_tables(root, tables):
 def test_a_gift_s_sin_is_its_mirror_dungeon_record_s_attribute_type(tmp_path):
     # three gifts carry another attributeType in the plain ego-gift tables (9038, 9111, 9195): the mirror dungeon's record wins
     import llc_text
-    unpack = ego_gift_tables(tmp_path, {
+    unpack = static_tables(tmp_path, {
         "ego-gift-mirrordungeon/ego-gift-mirrordungeon.json": [{"id": 9038, "attributeType": "AZURE", "tag": ["TIER_3"]}],
         "ego-gift/ego-gift.json": [{"id": 9038, "attributeType": "VIOLET"}, {"id": 9006, "attributeType": "AMBER"}],
         "ego-gift-mirrordungeon/hidden-ego-gift-mirrordungeon.json": [{"id": 990001}]})
@@ -132,14 +136,14 @@ def test_a_gift_s_sin_is_its_mirror_dungeon_record_s_attribute_type(tmp_path):
 def test_a_gift_the_gui_shows_with_no_sin_stops_the_tool(tmp_path, record):
     # every gift of client 1.118.1 and 1.119.0 has one; the GUI would have no plate for one that has not
     import llc_text
-    unpack = ego_gift_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}, record]})
+    unpack = static_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}, record]})
     with pytest.raises(ValueError, match="9500"):
         llc_text.gift_sins(unpack, [9001, 9500])
 
 
 def test_two_mirror_dungeon_records_of_a_gift_that_disagree_stop_the_tool(tmp_path):
     import llc_text
-    unpack = ego_gift_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
+    unpack = static_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
                                         "ego-gift-mirrordungeon/b.json": [{"id": 9001, "attributeType": "AZURE"}]})
     with pytest.raises(ValueError, match="9001"):
         llc_text.gift_sins(unpack, [9001])
@@ -182,7 +186,7 @@ def test_the_chinese_is_converted_run_by_run_and_must_read_as_the_text_converted
     assert llc_text.effect_runs("使[Sinking]层数增加<i><color=#a16a3b>铜钱</color></i>", {"Sinking": "沉沦"}, llc_text.to_traditional) == [
         "使", {"kw": "Sinking"}, "層數增加", {"text": "銅錢", "i": True, "colour": "Neutral"}]
 
-    def convert(text):  # reads "AB" as one phrase, as s2twp might read a phrase across a keyword's edge
+    def convert(text):  # reads "AB" as one phrase, as OpenCC's phrase table might read one across a keyword's edge
         return text.replace("AB", "X")
     with pytest.raises(ValueError, match="run by run"):
         llc_text.effect_runs("A[K]", {"K": "B"}, convert)
@@ -211,6 +215,80 @@ def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_t
     assert len({d["zh_release"] for d in DATA.values()}) == 1
 
 
+def test_every_file_names_the_one_conversion_it_was_written_with():
+    # #899: all LLC text by s2tw and the 松肉 fix
+    import llc_text
+    assert llc_text.CONVERSION_NOTE.startswith("OpenCC s2tw ") and llc_text.CONVERSION_NOTE.endswith("松肉->鬆肉")
+    for key, data in DATA.items():
+        assert re.findall(r"OpenCC (\w+)", data["note"]) == ["s2tw"] and llc_text.CONVERSION_NOTE in data["note"], key
+
+
+def chinese_strings(value, under_zh=False):
+    """Every string of a data file's Traditional Chinese: the text under a key `zh` or `*_zh`, however deep."""
+    if isinstance(value, dict):
+        for k, v in value.items():
+            yield from chinese_strings(v, under_zh or k == "zh" or k.endswith("_zh"))
+    elif isinstance(value, list):
+        for v in value:
+            yield from chinese_strings(v, under_zh)
+    elif isinstance(value, str) and under_zh:
+        yield value
+
+
+# s2t's Traditional glyphs that Taiwan writes otherwise (s2tw): 爲 為, 着 著, 羣 群, 祕 秘, 污 汙, 痹 痺, 泄 洩
+NOT_TAIWAN = "爲着羣祕污痹泄"
+
+
+@pytest.mark.parametrize("name", ["gift_search", "gift_recipes", "graces", "gift_effects", "theme_pack_names", "event_text",
+                                  "gift_text", "trial_text"])
+def test_no_traditional_text_keeps_a_glyph_taiwan_writes_otherwise(name):
+    # #899: every LLC text in Taiwan's glyphs, whichever tool wrote it
+    data = json.loads((ROOT / "assets/resource/base/data" / f"{name}.json").read_text(encoding="utf-8"))
+    texts = list(chinese_strings(data))
+    assert texts
+    assert [t for t in texts if set(t) & set(NOT_TAIWAN)] == []
+
+
+def llc_zip(tmp_path, files):
+    """A release zip whose LLC_zh-CN folder holds `files`: {file name: its dataList}."""
+    import llc_text
+    path = tmp_path / "release.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        for name, rows in files.items():
+            z.writestr(llc_text.LANG + name, json.dumps({"dataList": rows}, ensure_ascii=False))
+    return zipfile.ZipFile(path)
+
+
+def test_a_gift_s_name_keeps_llc_s_words_in_taiwan_s_glyphs(tmp_path):
+    # #899, gifts of release 2026111401: Taiwan's wording (s2twp) would write 石版字元 and 行動式; s2t alone 羣 and 污
+    import llc_text
+    z = llc_zip(tmp_path, {"EGOgift_a.json": [{"id": 9017, "name": "石版字符"}, {"id": 9076, "name": "便携式急救包"},
+                                              {"id": 9007, "name": "朱红蛾群"}, {"id": 9415, "name": "污秽"}]})
+    assert llc_text.gift_names(z) == {9017: "石版字符", 9076: "便攜式急救包", 9007: "硃紅蛾群", 9415: "汙穢"}
+
+
+def test_a_status_word_reads_the_same_in_a_gift_s_effect_and_in_a_grace(tmp_path):
+    # #899: one conversion for all LLC text. Paralysis is 麻痹 in LLC's Bufs: 麻痺 in a gift's effect and in a grace's alike,
+    # and LLC's 信息 stays 信息 in both (Taiwan's wording would make it 資訊).
+    import llc_text
+    z = llc_zip(tmp_path, {"Bufs_a.json": [{"id": "Paralysis", "name": "麻痹"}],
+                           "EGOgift_a.json": [{"id": 9001, "name": "饰品", "desc": "施加[Paralysis]，获得信息素"}],
+                           "DungeonStartBuffs_MD7.json": [{"id": "Give", "description": "获得{2}层{1}"}],
+                           "MirrorDungeonUI_5.json": [{"id": "title_1", "content": "信息之星"}]})
+    unpack = static_tables(tmp_path / "unpack", {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
+                                                   "buff/a.json": [{"id": "Paralysis", "buffType": "Negative"}]})
+    en = unpack / "raw/Localize/en"
+    en.mkdir(parents=True)
+    (en / "EN_EGOgift_a.json").write_text(json.dumps({"dataList": [{"id": 9001, "desc": "Inflict [Paralysis]"}]}), encoding="utf-8")
+    (en / "EN_Bufs_a.json").write_text(json.dumps({"dataList": [{"id": "Paralysis", "name": "Paralyze"}]}), encoding="utf-8")
+    keywords, effects = llc_text.gift_effects(z, unpack, [9001])
+    assert keywords == {"Paralysis": {"colour": "Negative", "icon": "Paralysis", "en": "Paralyze", "zh": "麻痺"}}
+    assert effects["9001"]["zh"] == ["施加", {"kw": "Paralysis"}, "，獲得信息素"]
+    static = {"list": [{"buffs": [{"baseId": 1, "localizeId": "title_1", "level": 1,
+                                   "effects": [{"type": "Give", "referenceData": {"buffKeyword": "Paralysis", "stack": 2, "turn": 0}}]}]}]}
+    assert llc_text.grace_texts(z, static) == ({1: "信息之星"}, {1: {"base": [[{"text": "獲得2層麻痺", "up": False}]]}})
+
+
 def test_the_data_matches_the_llc_release_when_it_is_downloaded():
     import llc_text
     from local_dir import local_dir
@@ -227,30 +305,37 @@ def plain(text):
     return [{"text": text, "up": False}]
 
 
-def test_traditional_conversion_keeps_the_game_s_words():
+def test_llc_text_keeps_the_localizers_words_in_taiwan_s_glyphs():
+    # the user's call of 2026-11-23 (#899): 「保留都市零協會的用詞，單純把簡體翻譯為繁體，如果有字形差異可以交由你 normalize」:
+    # OpenCC s2tw, Simplified characters to Traditional in Taiwan's glyphs, no Taiwan wording (s2twp)
     import llc_text
-    assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 松肉锤") == "生鏽的指針 通過階層 鏡像迷宮 刷新 鬆肉錘"
-    assert llc_text.effect_lines("<color=#627eff>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == [plain("初始經費 +150(最多100)")]
-    assert llc_text.effect_lines("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == [plain("獲得2層 守護")]
+    assert llc_text.to_traditional("软件 鼠标 保存的信念 循环呼吸 刷新") == "軟件 鼠標 保存的信念 循環呼吸 刷新"  # s2twp: 軟體 滑鼠 儲存 迴圈 重新整理
+    assert llc_text.to_traditional("通过 激活 概率 对象 生锈的指针 镜像迷宫") == "通過 激活 概率 對象 生鏽的指針 鏡像迷宮"  # s2twp: 透過 啟用 機率 物件 指標 映象
+    # s2t alone writes 爲 着 羣 祕 污 痹 泄 and 裏 衆; Taiwan writes these
+    assert llc_text.to_traditional("为 着 群 秘 污 痹 泄 里面 众人 定义为恶") == "為 著 群 秘 汙 痺 洩 裡面 眾人 定義為惡"
+    # 松 is both 松 (pine) and 鬆 (loose) in Traditional: s2tw keeps the pine, the fix table makes the hammer's 鬆
+    assert llc_text.to_traditional("松肉锤") == "鬆肉錘"
+    assert llc_text.effect_lines("<color=#627eff>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}, llc_text.to_traditional) == [plain("初始經費 +150(最多100)")]
+    assert llc_text.effect_lines("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}, llc_text.to_traditional) == [plain("獲得2層 守護")]
 
 
 def test_an_effect_marks_up_what_its_template_colours_yellow_and_shows_the_keywords_blue_plain():
     # #733: the game prints what a + or ++ level changed in its yellow, <color=#f8c200>; the template says which words
     import llc_text
-    assert llc_text.effect_lines("初始<color=#627eff>经费</color> <color=#f8c200>+{0}</color>", {"value": 250}, {}) == [
+    assert llc_text.effect_lines("初始<color=#627eff>经费</color> <color=#f8c200>+{0}</color>", {"value": 250}, {}, llc_text.to_traditional) == [
         [{"text": "初始經費 ", "up": False}, {"text": "+250", "up": True}]]
     # a yellow span across a line break marks the text on both lines
-    assert llc_text.effect_lines("获得1件<color=#627eff>饰品</color>\n<color=#f8c200>· 第5层：1~3级\n· 第6层：2~3级</color>", {}, {}) == [
+    assert llc_text.effect_lines("获得1件<color=#627eff>饰品</color>\n<color=#f8c200>· 第5层：1~3级\n· 第6层：2~3级</color>", {}, {}, llc_text.to_traditional) == [
         plain("獲得1件飾品"), [{"text": "· 第5層：1~3級", "up": True}], [{"text": "· 第6層：2~3級", "up": True}]]
     # colours nest: the inner one holds until its own closing tag (TextMeshPro's colour stack)
-    assert llc_text.effect_lines("获得<color=#627eff>黯淡的残影、<color=#f8c200>微茫的残影</color></color>各1个", {}, {}) == [
+    assert llc_text.effect_lines("获得<color=#627eff>黯淡的残影、<color=#f8c200>微茫的残影</color></color>各1个", {}, {}, llc_text.to_traditional) == [
         [{"text": "獲得黯淡的殘影、", "up": False}, {"text": "微茫的殘影", "up": True}, {"text": "各1個", "up": False}]]
 
 
 def test_a_template_colour_other_than_the_game_s_yellow_and_blue_is_an_error():
     import llc_text
     with pytest.raises(ValueError, match="#5bffde"):
-        llc_text.effect_lines("<color=#5bffde>初始经费</color> +{0}", {"value": 150}, {})
+        llc_text.effect_lines("<color=#5bffde>初始经费</color> +{0}", {"value": 150}, {}, llc_text.to_traditional)
 
 
 def test_a_rerun_without_a_release_keeps_the_one_the_data_carries(tmp_path, monkeypatch):
@@ -264,7 +349,7 @@ def test_a_rerun_without_a_release_keeps_the_one_the_data_carries(tmp_path, monk
 def test_an_effect_missing_a_value_its_template_needs_is_an_error():
     import llc_text
     with pytest.raises(ValueError):
-        llc_text.effect_lines("获得{0}层", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"})
+        llc_text.effect_lines("获得{0}层", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}, llc_text.to_traditional)
 
 
 def test_the_gift_effects_match_the_llc_release_and_the_client_text_when_both_are_there():
@@ -293,3 +378,39 @@ def test_the_graces_match_the_llc_release_and_the_client_values_when_both_are_th
         pytest.skip("the client's English text missing")
     names, english = llc_text.english_grace_texts(local_dir("unpack"), static)
     assert {g["en"]: g["effects"]["en"] for g in DATA["graces"]["graces"]} == {names[i]: english[i] for i in names}
+
+
+# #899: the settings GUI shows each theme pack's Chinese name, by its id in theme_packs.yaml's pack_ids.
+def theme_packs():
+    import yaml
+    return yaml.safe_load((ROOT / "assets/resource/base/data/theme_packs.yaml").read_text(encoding="utf-8"))
+
+
+def test_every_theme_pack_has_a_chinese_name_or_is_listed_as_one_llc_lacks():
+    table, names = theme_packs(), DATA["theme_pack_names"]
+    missing = set(names["missing"])
+    for name in table["packs"]:
+        i = table["pack_ids"][name]
+        row = names["packs"].get(str(i))
+        assert (row is None) == (i in missing), f"{name} ({i}): named and listed as missing, or neither"
+        assert row is None or row == {"en": name, "zh": row["zh"]} and row["zh"], f"{name} ({i}): {row}"
+    assert sorted(names["packs"], key=int) == sorted(str(i) for i in table["pack_ids"].values() if i not in missing)
+
+
+def test_a_theme_pack_s_chinese_name_is_llc_s_name_of_its_id_and_a_pack_llc_lacks_is_listed():
+    import llc_text
+    packs, missing = llc_text.pack_rows({1001: "被遗忘者们", 1015: "定义为恶", 1500: ""},
+                                        {"The Forgotten": 1001, "The Evil Defining": 1015, "New Pack": 1500, "Newer": 1501})
+    # a pack's name keeps LLC's words in Taiwan's glyphs (#899): 為, not s2t's 爲
+    assert packs == {"1001": {"en": "The Forgotten", "zh": "被遺忘者們"}, "1015": {"en": "The Evil Defining", "zh": "定義為惡"}}
+    assert missing == [1500, 1501]
+
+
+def test_the_theme_pack_names_match_the_llc_release_when_it_is_downloaded():
+    import llc_text
+    from local_dir import local_dir
+    path = local_dir("llc") / f"{DATA['theme_pack_names']['zh_release']}.zip"
+    if not path.is_file():
+        pytest.skip("release zip not downloaded (tools/llc_text.py)")
+    packs, missing = llc_text.pack_names(zipfile.ZipFile(path), theme_packs()["pack_ids"])
+    assert (packs, missing) == (DATA["theme_pack_names"]["packs"], DATA["theme_pack_names"]["missing"])

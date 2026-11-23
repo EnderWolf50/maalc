@@ -42,6 +42,13 @@ export async function altMove(user: UserEvent, row: HTMLElement, key: "ArrowUp" 
   await user.keyboard(`{Alt>}{${key}}{/Alt}`);
 }
 
+/** Where a theme pack chip holds its English name: its `.nm`, or in the Chinese UI the small `.en` under the Chinese name
+ * (#899). A `getByText` selector. */
+export const PACK_EN = ".pk .nm, .pk .nm .en";
+/** The English name in a chip's `.nm` in name mode (the unlisted packs' chip: its label). A card with a cover holds the
+ * Chinese name alone there. */
+export const englishOf = (nm: Element) => (nm.querySelector(".en") ?? nm).textContent;
+
 const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
 
 /** Pick up row `from` of a sortable list and hold it over row `to`, not dropped: what the rows show during a drag. Returns

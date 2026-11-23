@@ -4,9 +4,9 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, onTestFinished, test, vi } from "vitest";
 import { TEXT, fill } from "./i18n";
-import { newSettings, type Settings, type ThemePackPlan } from "./model";
+import { GROUP_MIN, newSettings, packZh, type Settings, type ThemePackPlan } from "./model";
 import { ThemePackTab } from "./ThemePacks";
-import { dragHeld, dragOnto, pickInList, renderEditor } from "./testing";
+import { PACK_EN, dragHeld, dragOnto, englishOf, pickInList, renderEditor } from "./testing";
 
 const zh = TEXT.zh_tw;
 // The data file's first packs, in the order the 0 lane shows them (theme_packs.yaml): The Outcast sits in the -1 lane.
@@ -22,10 +22,11 @@ async function open(plans = [planOf()]) {
   return { ...r, weights: () => r.settings().theme_pack_plans[0].weights, plan: () => r.settings().theme_pack_plans[0] };
 }
 
-const chipOf = (name: string) => screen.getByText(name, { selector: ".pk .nm" }).closest(".pk") as HTMLElement;
+// The Chinese UI shows each pack's Chinese name with its English one under it (#899): a pack goes by its English name here.
+const chipOf = (name: string) => screen.getByText(name, { selector: PACK_EN }).closest(".pk") as HTMLElement;
 const laneOf = (name: string) => chipOf(name).closest(".lane") as HTMLElement;
 const laneAt = (w: string) => [...document.querySelectorAll(".lane:not(.add)")].find((l) => l.querySelector(".w")!.textContent === w) as HTMLElement;
-const picked = () => [...document.querySelectorAll(".pk[aria-pressed='true'] .nm")].map((n) => n.textContent);
+const picked = () => [...document.querySelectorAll(".pk[aria-pressed='true'] .nm")].map(englishOf);
 const bar = () => document.querySelector(".pickbar") as HTMLElement;
 const box = () => screen.getByRole("spinbutton", { name: zh["packs.weightPrompt"] });
 const said = () => document.querySelector(".lanes ~ [aria-live]")!.textContent;
@@ -246,7 +247,8 @@ describe("a box drawn from empty space in the lanes", () => {
     const rect = (x: number, y: number, w: number, h: number) => ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h, toJSON() {} }) as DOMRect;
     const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
       if (this.classList.contains("lanes")) return rect(0, 0, 1200, 800);
-      const name = this.querySelector(".nm")?.textContent;
+      const nm = this.querySelector(".nm");
+      const name = nm && englishOf(nm);
       const xy = this.classList.contains("pk") && name ? at.get(name) : undefined;
       return xy ? rect(xy[0], xy[1], 90, 24) : rect(0, 0, 0, 0);
     });
@@ -317,7 +319,7 @@ describe("picks in a lane grouped by difficulty", () => {
   const groupOf = (w: string, title: string) => [...laneAt(w).querySelectorAll("section")]
     .find((s) => s.querySelector("h3 .t")!.textContent === title) as HTMLElement;
   /** The packs of that group, in the order it shows them. */
-  const packsOf = (w: string, title: string) => [...groupOf(w, title).querySelectorAll(".pk .nm")].map((n) => n.textContent!);
+  const packsOf = (w: string, title: string) => [...groupOf(w, title).querySelectorAll(".pk .nm")].map((n) => englishOf(n)!);
   const titleOf = (w: string, title: string) => groupOf(w, title).querySelector("h3") as HTMLElement;
 
   test("a Shift click's range runs on past a group's title, in the order the lane shows; the title is not picked", async () => {
@@ -374,6 +376,55 @@ describe("picks in a lane grouped by difficulty", () => {
   });
 });
 
+// #899 with #742 and #743: the Chinese names hold in a grouped lane, in the search that ungroups it and on what picks show.
+describe("Chinese names in a grouped lane and on the picks", () => {
+  const zhName = (en: string) => packZh(en, true)!;
+  /** The name a chip's `.nm` shows first: in the Chinese UI its Chinese name, before the small English one. */
+  const firstName = (nm: Element) => nm.firstChild!.textContent;
+  const firstNameOf = (en: string) => firstName(chipOf(en).querySelector(".nm")!);
+  /** Each chip of the 0 lane's groups as [the name it shows first, the small English one under it]. */
+  const grouped = () => [...laneAt("0").querySelectorAll(".pg .pk .nm")].map((nm) => [firstName(nm), nm.querySelector(".en")?.textContent]);
+
+  test("a grouped lane shows each pack's Chinese name, its English name under it", async () => {
+    await open();
+    expect(laneAt("0").querySelector(".packs")).toHaveClass("grouped");
+    const names = grouped();
+    expect(names.length).toBeGreaterThanOrEqual(GROUP_MIN);
+    const english = names.map(([, en]) => en!);
+    expect(english).toEqual(expect.arrayContaining(FIRST));
+    expect(names).toEqual(english.map((en) => [zhName(en), en]));
+  });
+
+  test("a search by a Chinese name that leaves fewer than 20 packs shows the lane ungrouped, the pack still in Chinese", async () => {
+    const r = await open();
+    await r.user.type(screen.getByRole("searchbox", { name: zh["packs.search"] }), zhName("The Forgotten"));
+    const packs = laneAt("0").querySelector(".packs")!;
+    expect(packs).not.toHaveClass("grouped");
+    expect(packs.querySelector("section")).toBeNull();
+    expect(firstNameOf("The Forgotten")).toBe(zhName("The Forgotten"));
+  });
+
+  test("picks dragged as one are named in Chinese on the bar; the drop and ＋ hints count them", async () => {
+    const r = await open();
+    const picks = [FIRST[1], FIRST[4]];
+    await ctrlClick(r.user, ...picks);
+    expect(within(bar()).getByText(picks.map(zhName).join(zh["packs.floorSep"]))).toHaveClass("names");
+    expect(picks.map(firstNameOf)).toEqual(picks.map(zhName));
+    const held = dragHeld(chipOf(FIRST[1]), laneAt("-1"));
+    expect(laneAt("-1")).toHaveTextContent(fill(zh["packs.drop"], { n: 2, w: "-1" }));
+    held.end();
+    const [top] = addLanes();
+    dragOnto(chipOf(FIRST[4]), top);
+    expect(top).toHaveTextContent(new RegExp(`^＋ ${fill(zh["packs.many"], { n: 2 })}$`));
+  });
+
+  test("the unlisted packs' chip is named by its label on the bar", async () => {
+    const r = await open();
+    await ctrlClick(r.user, FIRST[1], zh["packs.unlisted"]);
+    expect(within(bar()).getByText([zhName(FIRST[1]), zh["packs.unlisted"]].join(zh["packs.floorSep"]))).toHaveClass("names");
+  });
+});
+
 describe("what the picks hold", () => {
   test("only packs on screen: a search that hides a picked pack drops it, and clearing the search does not bring it back", async () => {
     const r = await open();
@@ -396,7 +447,7 @@ describe("what the picks hold", () => {
   test("the locked default plan picks nothing and shows no bar", async () => {
     const r = renderEditor(<ThemePackTab />, settings([]));
     await r.user.keyboard("{Control>}");
-    await r.user.click(await screen.findByText(FIRST[1], { selector: ".pk .nm" }));
+    await r.user.click(await screen.findByText(FIRST[1], { selector: PACK_EN }));
     await r.user.keyboard("{/Control}");
     expect(document.querySelector(".pickbar, .pk[aria-pressed]")).toBeNull();
   });

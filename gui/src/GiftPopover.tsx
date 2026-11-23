@@ -164,6 +164,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
   const buy = queue(list), at = buy.indexOf(id) + 1;
   const forFusion = at ? null : purchases(list).find(([i]) => i === id)?.[1]; // a wanted fusion's material, bought after the wants
   const packs = g.kind === "buyable" ? packsOf(id) : []; // the only packs a pack's own gift shows in (#626)
+  const packList = (ids: number[]) => ids.map((p) => packName(p, zh)).join(t("gl.sep")); // in Chinese in the Chinese UI (#899)
 
   /** A material of the recipe; locked (tinted, padlock) while the fusion is wanted. */
   const chip = (m: number) => (
@@ -191,7 +192,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
       <div className="gl-tip-rows">
         <Row label={t("gl.tip_cat")}>
           <span>{fill(t("gl.tip_cat_line"), { kw: t(`kw.${g.keyword}` as Key), tier: TIERS[g.tier] })}{g.kind === "fusion" && t("gl.tip_cat_fusion")}
-            {packs.length > 0 && fill(t("gl.tip_cat_pack"), { packs: packs.map(packName).join(t("gl.sep")) })}</span>
+            {packs.length > 0 && fill(t("gl.tip_cat_pack"), { packs: packList(packs) })}</span>
         </Row>
         {locked && (
           <Row label={t("gl.tip_lock")}>
@@ -203,7 +204,7 @@ export function GiftPopover({ id, anchor }: { id: number; anchor: HTMLElement })
                   <div key={f} className="gl-tip-acts">
                     <button type="button" onClick={() => goto(f)}>{fill(t("gl.tip_goto"), { name: name(f) })}</button>
                     <button type="button" className="warn" onClick={() => apply(f, "drop")}>{t("gl.tip_unwant")}</button>
-                    {specific && <small>{fill(t("gl.tip_pack"), { packs: packs!.map(packName).join(t("gl.sep")) })}</small>}
+                    {specific && <small>{fill(t("gl.tip_pack"), { packs: packList(packs!) })}</small>}
                   </div>
                 );
               })}

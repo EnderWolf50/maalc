@@ -4,7 +4,7 @@ import { Fragment, useEffect, useId, useRef, useState, type DragEvent, type Keyb
 import { fill, type Key } from "./i18n";
 import {
   EVENT_MODES, MODE_BANDS, MODE_KEYS, THEME_PACKS, WEIGHT_MAX, WEIGHT_MIN, floorBadges, lanesOf, lineAt, newPackPlan, onFloor,
-  packGroups, weightOf, type PackGroup, type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
+  packGroups, packZh, weightOf, type PackGroup, type PackMode, type PackPlanValues, type ThemePackPlan, type ThemePacks,
 } from "./model";
 import { PlanTab } from "./Plans";
 import { Field, Select, useEditor, useSlashFocus, withBreaks } from "./ui";
@@ -86,17 +86,20 @@ function WeightBox({ value, onDone }: { value?: number; onDone: (w: number | nul
 function PackPlanEditor({ data, plan, path, onChange }: {
   data: ThemePacks; plan: PackPlanValues; path: string; onChange?: (p: PackPlanValues) => void;
 }) {
-  const { t, tv, bad } = useEditor();
+  const { t, tv, bad, zh } = useEditor();
+  const zhOf = (n: string) => packZh(n, zh); // the Chinese UI's name of a pack (#899)
+  /** A pack, or the unlisted packs' chip, named in a line of text: the + lane's, the pick bar's. */
+  const packName = (n: string) => (n === UNLISTED ? t("packs.unlisted") : zhOf(n) ?? n);
   const [difficulty, setDifficulty] = useState<PackMode>("");
   const [floor, setFloor] = useState(0);
   const [images, setImages] = useState(false);
-  const [query, setQuery] = useState(""); // a part of a pack's name: only the packs that hold it show
+  const [query, setQuery] = useState(""); // a part of a pack's name, English or Chinese: only the packs that hold it show
   const searchBox = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const lanes = lanesOf(plan);
   const line = lineAt(lanes, plan.threshold);
   const extra = Object.keys(plan.weights).filter((n) => !(n in data.packs)); // weighed, gone from the data file
-  const matchesQuery = (n: string) => n.toLowerCase().includes(query.trim().toLowerCase());
+  const matchesQuery = (n: string) => [n, zhOf(n)].some((x) => x?.toLowerCase().includes(query.trim().toLowerCase()));
   const shown = [...Object.keys(data.packs).filter((n) => onFloor(data.packs[n], difficulty, floor)), ...extra].filter(matchesQuery);
   useSlashFocus(searchBox); // as on the gift list tab
   const set = (patch: Partial<PackPlanValues>) => onChange?.({ ...plan, ...patch });
@@ -198,12 +201,17 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const chip = (name: string) => {
     const floors = data.packs[name] === undefined ? undefined : floorBadges(data.packs[name], t("packs.floorSep"));
     const cover = images ? coverOf(name) : undefined; // the card has its title printed on it: the name moves to the tooltip
+    // In Chinese the Chinese name, the English one under it in small type; under a card, which prints the English title, the
+    // Chinese name alone (#899).
+    const zhName = zhOf(name);
+    const label = !cover ? <span className="nm">{zhName ?? name}{zhName && <small className="en" lang="en">{name}</small>}</span>
+      : zhName && <span className="nm">{zhName}</span>;
     return (
       <span key={name} className={"pk" + (path && bad(`${path}/weights/${name}`) ? " bad" : "") + pickClass(name)} data-path={path && `${path}/weights/${name}`}
         data-pk={name} {...dragged(name)} {...clickable(name)} title={cover ? name : undefined}>
         {pickMarks(name)}
         {cover ? <img className="img" src={cover} alt={name} draggable={false} /> : images && <span className="img" aria-hidden />}
-        {!cover && <span className="nm">{name}</span>}
+        {label}
         {floors
           ? floors.map((f) => {
             const label = `${t(BADGES[f.mode][0])} ${f.text}`;
@@ -231,7 +239,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
   const addLane = (at: AddAt) => onChange && (
     <div className="lane add" {...target(drag !== null && drag !== LINE, at)}>
       {typing?.lane === at
-        ? <>＋ {typing.what === PICKS ? fill(t("packs.many"), { n: picks.picks.length }) : typing.what === UNLISTED ? t("packs.unlisted") : typing.what} {box(typing.what, nextScore(at))}</>
+        ? <>＋ {typing.what === PICKS ? fill(t("packs.many"), { n: picks.picks.length }) : packName(typing.what)} {box(typing.what, nextScore(at))}</>
         : <>＋ {t("packs.newLane")}</>}
     </div>
   );
@@ -265,7 +273,7 @@ function PackPlanEditor({ data, plan, path, onChange }: {
       <div className={"pickbar" + (picks.picks.length ? " on" : "")}>
         {picks.picks.length ? <>
           <b>{fill(t("packs.picked"), { n: picks.picks.length })}</b>
-          <span className="names">{picks.picks.map((n) => (n === UNLISTED ? t("packs.unlisted") : n)).join(t("packs.floorSep"))}</span>
+          <span className="names">{picks.picks.map(packName).join(t("packs.floorSep"))}</span>
           <span className="keys">{t("packs.pickedKeys")}</span>
           <button type="button" onClick={picks.clear}>{t("packs.unpick")}</button>
         </> : <span className="muted">{t("packs.pickHint")}</span>}

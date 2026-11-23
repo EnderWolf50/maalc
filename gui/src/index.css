@@ -1055,6 +1055,7 @@ ol.skill-sinners > li[data-dragging] { opacity: 0.4; } /* and the line where it 
   border-radius: 4px; corner-shape: bevel; padding: 4px 6px 4px 9px; font-size: 12.5px; line-height: 1.35; cursor: default; color: var(--fg);
 }
 .pk .nm { margin-right: 4px; } /* the name stands apart from its badges */
+.pk .nm .en { display: block; font-weight: 400; } /* the English name under the Chinese one (#899) */
 .pk[draggable="true"] { cursor: grab; }
 .pk[role="button"]:hover { border-color: var(--accent-line); }
 .pk small { color: var(--muted); font-size: 11.5px; }

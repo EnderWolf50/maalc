@@ -52,7 +52,7 @@ SOFTWARE.
 
 ## 都市零漢化組（LLC）的中文名稱與效果文字
 
-飾品與星之恩惠的繁體中文名稱取自 [都市零漢化組（Localize Limbus Company，LLC）](https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany) 的簡體中文在地化，版權屬於 Copyright (c) 2024 to now Localize Limbus Company 與其貢獻者，採 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（非商用、姓名標示、相同方式共享）授權。本專案使用 release [2026111401](https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/tag/2026111401)（2026-11-14）的內容：
+飾品、星之恩惠與主題包的繁體中文名稱取自 [都市零漢化組（Localize Limbus Company，LLC）](https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany) 的簡體中文在地化，版權屬於 Copyright (c) 2024 to now Localize Limbus Company 與其貢獻者，採 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)（非商用、姓名標示、相同方式共享）授權。本專案使用 release [2026111401](https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/tag/2026111401)（2026-11-14）的內容：
 
 - `assets/resource/base/data/gift_search.json` 與 `assets/resource/base/data/gift_recipes.json` 的飾品中文名稱：`LLC_zh-CN/EGOgift_*.json` 的 `name`，依飾品 id 對應。
 - `assets/resource/base/data/graces.json` 的星之恩惠名稱：`LLC_zh-CN/MirrorDungeonUI_5.json` 的 `mirror_dungeon_5_buffs_title_<id>`。效果文字：`LLC_zh-CN/DungeonStartBuffs_MD7.json` 的句型，填入遊戲客戶端 1.119.0 靜態資料（`mirrordungeon-start-buffs-08`）的效果數值與 `LLC_zh-CN/Bufs*.json`、`BattleKeywords*.json` 的狀態名稱。英文名稱與英文效果文字見上一節。
@@ -60,8 +60,9 @@ SOFTWARE.
 - `assets/resource/base/data/event_text.json` 的事件與頁面中文文字：`LLC_zh-CN/` 的事件檔（遊戲客戶端事件在地化檔名去掉 `EN_` 的那個檔）裡每個事件的 `desc`（`eventDesc`）與各選項的 `message`、`messageDesc`，依事件 id 對應；簡體原文留在 `story_cn`、`text_cn`、`hint_cn`，繁體在 `story_zh`、`text_zh`、`hint_zh`。同檔的英文故事與選項全文取自客戶端的英文在地化，屬於 © Project Moon。
 - `assets/resource/base/data/gift_text.json` 的飾品中文名稱與效果：`LLC_zh-CN/EGOgift_*.json` 的 `name`（簡體留在 `cn`，繁體在 `zh`）與 `desc`（簡體在 `desc_cn`，繁體在 `desc_zh`，強化後的效果在 `plus_cn`、`plus_zh`，取 id + 10000 的飾品），狀態標籤換成 `LLC_zh-CN/Bufs*.json` 的狀態名稱，以「」框起。
 - `assets/resource/base/data/trial_text.json` 的試煉中文名稱與效果：`LLC_zh-CN/Bufs_Mirror*.json` 的 `name` 與 `desc`，依試煉的 buff id 對應（簡體在 `cn`、`desc_cn`，繁體在 `zh`、`desc_zh`）。
+- `assets/resource/base/data/theme_pack_names.json` 的主題包中文名稱（`zh`）：`LLC_zh-CN/MirrorDungeonTheme*.json` 的 `name`，依 `theme_packs.yaml` 的 `pack_ids` 以主題包 id 對應；release 沒有的包列在 `missing`，設定介面顯示英文名稱。同檔的英文名稱（`en`）是 `theme_packs.yaml` 的名稱，屬於 © Project Moon。
 
-修改：以 OpenCC `s2twp` 由簡體轉成繁體，再改五個用詞（「指標」改回「指針」、「重新整理」改回「刷新」、「映象」改為「鏡像」、「透過階層」改為「通過階層」、「松肉」改為「鬆肉」）；星之恩惠的效果文字填入數值，黃色標籤改成每段文字的 `up` 標記，其餘顏色標籤去掉；飾品的效果文字存成一段段文字：狀態標籤存成狀態詞的代號（名稱另列），斜體與上色的文字保留斜體與顏色的名稱，其餘標記去掉；中文逐段轉換。事件、飾品與試煉的文字（`event_text.json`、`gift_text.json`、`trial_text.json`）另外去掉標記（`<...>` 標籤）；飾品的效果文字再把 `[狀態]` 換成狀態名稱（簡體原文換成簡體的狀態名稱）；簡轉繁一律經過同一份 `s2twp` 轉換與修正表（`tools/llc_text.py` 的 `to_traditional`），由 `tools/text_tables.py` 寫入。轉換由 `tools/llc_text.py` 與 `tools/text_tables.py` 完成，所用 release 記在各資料檔的 `zh_release`。這七個資料檔的中文名稱與效果文字（含這三個檔的簡體原文）同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱、英文效果文字與數值仍是 © Project Moon。
+修改：所有取自 LLC 的中文都用同一種轉換（使用者 2026-11-23 決定，#899）：以 OpenCC `s2tw` 把簡體字轉成繁體字，字形是臺灣的標準字形（例如「為」「群」，不是「爲」「羣」），用詞照 LLC 原文、不改成臺灣用語（例如「软件」轉成「軟件」，不是「軟體」；「通过」轉成「通過」，不是「透過」），再把「松肉」改為「鬆肉」（「松」在繁體是「松」與「鬆」兩個字，`s2tw` 留「松」）；各資料檔的 `note` 寫明這個轉換。星之恩惠的效果文字填入數值，黃色標籤改成每段文字的 `up` 標記，其餘顏色標籤去掉；飾品的效果文字存成一段段文字：狀態標籤存成狀態詞的代號（名稱另列），斜體與上色的文字保留斜體與顏色的名稱，其餘標記去掉；中文逐段轉換。事件、飾品與試煉的文字（`event_text.json`、`gift_text.json`、`trial_text.json`）另外去掉標記（`<...>` 標籤）；飾品的效果文字再把 `[狀態]` 換成狀態名稱（簡體原文換成簡體的狀態名稱）；簡轉繁同樣經過上面那份 `s2tw` 轉換與修正表（`tools/llc_text.py` 的 `to_traditional`），由 `tools/text_tables.py` 寫入。轉換由 `tools/llc_text.py` 與 `tools/text_tables.py` 完成，所用 release 記在各資料檔的 `zh_release`。這八個資料檔的中文名稱與效果文字（含這三個檔的簡體原文）同樣以 CC BY-NC-SA 4.0 授權；檔內的 id、英文名稱、英文效果文字與數值仍是 © Project Moon。
 
 ## 發佈 zip 內附的第三方程式
 

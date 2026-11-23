@@ -42,17 +42,19 @@ async function open(lists: GiftList[], language?: Settings["language"], select =
 type Opened = Awaited<ReturnType<typeof open>>;
 const list = (r: Opened) => r.settings().gift_lists[0];
 
-const getTile = (id: number) => screen.getByRole("button", { name: new RegExp("^" + escape(GIFT_BY_ID.get(id)!.zh) + "，") });
-async function tile(r: Opened, id: number) {
-  await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + zh[`kw.${GIFT_BY_ID.get(id)!.keyword}` as Text]) }));
-  return getTile(id);
+/** A gift's tile, by its name in the UI's language. */
+const getTile = (id: number, en = false) =>
+  screen.getByRole("button", { name: new RegExp("^" + escape(en ? GIFT_BY_ID.get(id)!.en + ", " : GIFT_BY_ID.get(id)!.zh + "，")) });
+async function tile(r: Opened, id: number, en = false) {
+  await r.user.click(screen.getByRole("tab", { name: new RegExp("^" + TEXT[en ? "en_us" : "zh_tw"][`kw.${GIFT_BY_ID.get(id)!.keyword}` as Text]) }));
+  return getTile(id, en);
 }
 /** The hover popover, or null while none is open. */
 const popover = () => screen.queryByRole("dialog", { name: /./ });
-/** Open the gift's keyword tab, hover its tile, and return the popover's queries. */
-async function hover(r: Opened, id: number) {
-  await tile(r, id);
-  await r.user.hover(getTile(id));
+/** Open the gift's keyword tab, hover its tile, and return the popover's queries; `en` in a window in English. */
+async function hover(r: Opened, id: number, en = false) {
+  await tile(r, id, en);
+  await r.user.hover(getTile(id, en));
   return within(popover()!);
 }
 
@@ -199,10 +201,10 @@ describe("hover popover: what it says", () => {
     expect(q.getByText(say(zh["gl.tip_cat_line"], { kw: zh[`kw.${fixed.keyword}` as Text], tier: "IV" }) + zh["gl.tip_cat_fusion"])).toBeInTheDocument();
   });
 
-  test("a gift only a theme pack's own pool holds names that pack; another one does not (#626)", async () => {
+  test("a gift only a theme pack's own pool holds names that pack, in Chinese (#899); another one does not (#626)", async () => {
     const r = await open([mine()]);
-    const p = await hover(r, 9302); // The Measure of Frost: pack 1005's specificEgoGiftPool
-    expect(p.getByText(say(zh["gl.tip_cat_line"], { kw: zh["kw.Keywordless"], tier: "III" }) + say(zh["gl.tip_cat_pack"], { packs: packName(1005) }))).toBeInTheDocument();
+    const p = await hover(r, 9302); // The Measure of Frost: pack 1005's specificEgoGiftPool, The Unloving
+    expect(p.getByText(say(zh["gl.tip_cat_line"], { kw: zh["kw.Keywordless"], tier: "III" }) + say(zh["gl.tip_cat_pack"], { packs: "無法去愛" }))).toBeInTheDocument();
     const q = await hover(r, 9070);
     expect(q.getByText(say(zh["gl.tip_cat_line"], { kw: zh["kw.Poise"], tier: "IV" }))).toBeInTheDocument();
   });
@@ -221,16 +223,28 @@ describe("hover popover: what it says", () => {
     expect(list(r).want).toEqual([]);
   });
 
-  test("a pack-specific fusion locks its materials, and the popover says which pack makes it count", async () => {
+  test("a pack-specific fusion locks its materials, and the popover says which pack makes it count, in Chinese (#899)", async () => {
     const r = await open([mine({ want: [specific.id] })]);
-    const p = await hover(r, specific.recipes![0][0]);
-    expect(p.getByText(say(zh["gl.tip_pack"], { packs: specific.packs!.map(packName).join(zh["gl.sep"]) }))).toBeInTheDocument();
+    const p = await hover(r, specific.recipes![0][0]); // The End of all Evil: pack 1014, Crawling Abyss
+    expect(specific.packs).toEqual([1014]);
+    expect(p.getByText(say(zh["gl.tip_pack"], { packs: "伏行深淵" }))).toBeInTheDocument();
+  });
+
+  test("in English the popover names a pack in English, as before (#899)", async () => {
+    const en = TEXT.en_us;
+    const r = await open([mine({ want: [specific.id] })], "en_us");
+    const p = await hover(r, 9302, true);
+    expect(p.getByText(say(en["gl.tip_cat_line"], { kw: en["kw.Keywordless"], tier: "III" }) + say(en["gl.tip_cat_pack"], { packs: "The Unloving" }))).toBeInTheDocument();
+    const q = await hover(r, specific.recipes![0][0], true);
+    expect(q.getByText(say(en["gl.tip_pack"], { packs: "Crawling Abyss" }))).toBeInTheDocument();
+    expect(popover()).not.toHaveTextContent("伏行深淵");
   });
 
   test("every pack a recipe names shows by its name: the re-run copies and the Extreme-only packs too", () => {
     expect(recipes.gifts.flatMap((g) => g.packs ?? []).filter((p) => packName(p).startsWith("#"))).toEqual([]);
-    expect([1004, 1113, 1507].map(packName)).toEqual(["Automated Factory", "Miracle in District 20 BokGak", "Who Couldn't be Bloodfiends"]);
-    expect(packName(1)).toBe("#1"); // an id the file does not know stays an id
+    expect([1004, 1113, 1507].map((p) => packName(p))).toEqual(["Automated Factory", "Miracle in District 20 BokGak", "Who Couldn't be Bloodfiends"]);
+    expect([1004, 1113, 1507].map((p) => packName(p, true))).toEqual(["自動工廠", "20區的奇蹟 復刻", "無法成為血魔的人們"]); // in Chinese, LLC's words in Taiwan's glyphs (為, #899)
+    expect([packName(1), packName(1, true)]).toEqual(["#1", "#1"]); // an id the file does not know stays an id
   });
 
   test("a wanted fusion says its recipe's gifts are all locked", async () => {
