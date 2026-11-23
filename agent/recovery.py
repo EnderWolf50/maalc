@@ -401,8 +401,6 @@ def floor_limit(lines, team_id, target):
 def battle_limit(waves):
     """Seconds a battle of `waves` waves may take before it is stuck (spec 06 單場戰鬥超時).
 
-    max(BATTLE_LIMIT, WAVE_LIMIT * waves).
-
     A Luxcavation battle entered at Consecutive Battle xN is one battle of N waves (its menu's Progress: n/N, not the
     stage's own WAVE n/m), each starting at turn 1 again. Live 2026-11-23 (#914): x10 stage 10 (Lv 63) took about 25 min
     of play for 10 waves (2.5 min a wave, turns 57 s on average, 93 s at most), and the 20 min of one battle stopped an
