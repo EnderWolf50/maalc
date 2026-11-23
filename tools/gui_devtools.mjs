@@ -53,7 +53,7 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
                                      for --keep S (10), then is cancelled, as Esc cancels a drag. Each --via point is
                                      gone over first, in turn, and held MS ms, dragover sent again every 100 ms as the
                                      browser does while a drag is held still: a drag held at a page's edge (#916). --watch
-                                     prints EXPR's value every 500 ms of a hold, and at its start and end
+                                     (with --via) prints EXPR's value every 500 ms of a hold, and at its start and end
   a11y <target>                      the accessibility node: role, name, description, value and its states
   console [--reload] [--seconds S]   the page's console messages and errors for S (5) seconds, one JSON line each
 
@@ -120,6 +120,10 @@ const pair = (text, name) => {
   if (!m) usage(`${name} takes DX,DY, as 0,40`);
   return { x: Number(m[1]), y: Number(m[2]) };
 };
+// A drag held at a --via point: dragover again every HOLD_TICK ms, as the browser sends it while a drag stays still, and
+// --watch's value printed every WATCH_MS.
+const HOLD_TICK = 100;
+const WATCH_MS = 500;
 const VIA = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*:\s*(\d+)\s*$/; // "x,y:ms": a point in CSS px, held ms
 const viaPoint = (text) => {
   const m = VIA.exec(text);
@@ -214,6 +218,7 @@ export function parseCommand(argv) {
       targets(1, 2, "a target to drag");
       if (options.steps !== undefined) number(options.steps, "--steps", { min: 1, integer: true });
       out.via = (options.via ?? []).map(viaPoint);
+      if (options.watch !== undefined && !out.via.length) usage("--watch prints a value while a --via point is held: name one");
       inAir = args.length === 1 || !!options.cancel;
       break;
     case "console":
@@ -725,9 +730,9 @@ const STEPS = {
       const until = Date.now() + v.ms;
       for (let n = 1; ; n++) {
         await dragAt(v);
-        await sleep(100);
+        await sleep(HOLD_TICK);
         if (Date.now() >= until) break;
-        if (n % 5 === 0) await watch();
+        if (n % (WATCH_MS / HOLD_TICK) === 0) await watch();
       }
       await watch();
     }

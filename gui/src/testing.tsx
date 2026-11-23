@@ -49,7 +49,8 @@ export const PACK_EN = ".pk .nm, .pk .nm .en";
  * Chinese name alone there. */
 export const englishOf = (nm: Element) => (nm.querySelector(".en") ?? nm).textContent;
 
-const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
+/** The DataTransfer a test's drag event carries: what the lists set on it (jsdom has none). */
+export const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
 
 /** Pick up row `from` of a sortable list and hold it over row `to`, not dropped: what the rows show during a drag. Returns
  * the pointer leaving `to` and the drag's end (cancelled). */

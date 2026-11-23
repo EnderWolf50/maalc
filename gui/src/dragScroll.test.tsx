@@ -4,8 +4,9 @@ import { createEvent, fireEvent, render, screen, waitFor } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { EDGE_SPEED, EDGE_ZONE, edgeSpeed, useDragScroll } from "./dragScroll";
+import { useDragSort } from "./dragSort";
 import { newSettings, type Settings } from "./model";
-import { PACK_EN, pickInList } from "./testing";
+import { PACK_EN, dt, pickInList } from "./testing";
 import userEvent from "@testing-library/user-event";
 
 const file = vi.hoisted(() => ({ text: "" }));
@@ -15,8 +16,6 @@ vi.mock("./api", async (original) => ({
   saveSettings: () => Promise.resolve(),
   rootDir: () => Promise.resolve("root"),
 }));
-
-const dt = () => ({ setData() {}, effectAllowed: "", dropEffect: "" });
 
 /** A drag event at `el` with the pointer's height and the element it went into, as the browser's carry them: jsdom has no
  * DragEvent, so fireEvent's plain Event would drop clientY and relatedTarget. */
@@ -57,20 +56,28 @@ describe("the speed at a height", () => {
 });
 
 describe("a drag held near an edge", () => {
+  // the page with a pack, a lane and a bar over its top; a gift list's tiles (useDragSort keeps its drag events to itself);
+  // and a dialog drawn over the page, its body a box of its own
   function Page({ refuse = false }: { refuse?: boolean }) {
     useDragScroll();
+    const tile = useDragSort(() => {}, () => true);
     return (
       <main data-testid="page" style={{ overflowY: "auto" }}>
         <div data-testid="bar">picked: 2</div>
         <span data-testid="item" draggable onDragStart={(e) => { if (refuse) e.preventDefault(); }}>a pack</span>
         <div data-testid="lane">a lane</div>
+        <span data-testid="tile" {...tile("a", "g")}>a</span><span data-testid="tile2" {...tile("b", "g")}>b</span>
+        <div role="dialog" aria-modal="true">
+          <div data-testid="dialog-body" style={{ overflowY: "auto" }}><span data-testid="row" draggable>a row</span></div>
+        </div>
       </main>
     );
   }
   const page = () => screen.getByTestId("page");
-  /** Pick up the item and hold it at height `y` over `over` (the lane unless named), as the browser's dragover says. */
+  /** Hold the drag at height `y` over `over` (the lane unless named), as the browser's dragover says. */
   const hold = (y: number, over = "lane") => dragAt("dragOver", screen.getByTestId(over), { clientY: y });
-  const start = () => fireEvent.dragStart(screen.getByTestId("item"), { dataTransfer: dt() });
+  /** Pick up `what` (the pack unless named) in the middle of the page, away from its edges. */
+  const start = (what = "item") => { fireEvent.dragStart(screen.getByTestId(what), { dataTransfer: dt() }); hold(400, what); };
   const wait = (ms: number) => vi.advanceTimersByTime(ms);
 
   beforeEach(() => { vi.useFakeTimers(); });
@@ -154,6 +161,54 @@ describe("a drag held near an edge", () => {
     wait(500);
     expect(page().scrollTop).toBe(0);
   });
+
+  test("a drag picked up at an edge waits until the pointer goes nearer that edge, or leaves and comes back", () => {
+    setUp({}, 1000);
+    fireEvent.dragStart(screen.getByTestId("item"), { dataTransfer: dt() });
+    hold(BOTTOM - 40); // a pack in the last row, half under the edge
+    wait(500);
+    hold(BOTTOM - 50); // up, away from the edge
+    wait(500);
+    expect(page().scrollTop).toBe(1000);
+    hold(BOTTOM - 30);
+    wait(300);
+    expect(page().scrollTop).toBeGreaterThan(1000);
+    fireEvent.dragEnd(screen.getByTestId("item"), { dataTransfer: dt() });
+
+    const at = page().scrollTop;
+    fireEvent.dragStart(screen.getByTestId("item"), { dataTransfer: dt() });
+    hold(TOP + 20, "bar"); // a pack under the bar held at the top
+    wait(500);
+    hold(400);
+    hold(TOP + 40);
+    wait(300);
+    expect(page().scrollTop).toBeLessThan(at);
+  });
+
+  test("a list that keeps its drag events to itself (useDragSort) scrolls the page all the same", () => {
+    setUp();
+    start("tile");
+    hold(BOTTOM - 5, "tile2");
+    wait(300);
+    expect(page().scrollTop).toBeGreaterThan(0);
+  });
+
+  test("a drag in a dialog scrolls the dialog's body, never the page behind it", () => {
+    setUp();
+    start("row");
+    hold(BOTTOM - 5); // the body fits: nothing to scroll
+    wait(300);
+    expect(page().scrollTop).toBe(0);
+    fireEvent.dragEnd(screen.getByTestId("row"), { dataTransfer: dt() });
+
+    const body = screen.getByTestId("dialog-body");
+    layOut(body, 200, 400, 1500);
+    start("row");
+    hold(595, "row");
+    wait(300);
+    expect(body.scrollTop).toBeGreaterThan(0);
+    expect(page().scrollTop).toBe(0);
+  });
 });
 
 describe("in the window", () => {
@@ -174,6 +229,7 @@ describe("in the window", () => {
     layOut(main, TOP, BOTTOM - TOP, 3000);
     const pack = screen.getByText("The Outcast", { selector: PACK_EN }).closest<HTMLElement>("[data-pk]")!;
     fireEvent.dragStart(pack, { dataTransfer: dt() });
+    dragAt("dragOver", pack, { clientY: 400 });
     dragAt("dragOver", main.querySelector(".lane")!, { clientY: BOTTOM - 5 });
     await waitFor(() => expect(main.scrollTop).toBeGreaterThan(0));
     fireEvent.drop(main.querySelector(".lane")!, { dataTransfer: dt() });

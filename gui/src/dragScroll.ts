@@ -9,9 +9,11 @@
 // lists: useDragSort stops its drag events from going up, and a bar held over a box's top edge (the theme packs' pick bar)
 // passes the dragover on as any element under the pointer does.
 //
-// What a drag holds (`Held`): the event that started it, the box it scrolls, the pointer's height at the last dragover and
-// the part of a pixel the last frame moved short. It begins at a dragstart a list did not refuse, scrolls from the first
-// dragover at an edge, one step a frame, and ends at the drop or the dragend.
+// What a drag holds (`Held`): the event that started it, the box it scrolls, the pointer's height at the last dragover, the
+// speed of the edge zone it was picked up in, and the part of a pixel the last frame moved short. It begins at a dragstart a
+// list did not refuse, scrolls from a dragover at an edge, one step a frame, and ends at the drop or the dragend. A pack
+// picked up in an edge zone (the last row, half under the edge; one under the theme packs' pick bar) does not scroll the page
+// away from under the pointer: that zone waits until the pointer goes nearer its edge, or leaves it.
 import { useEffect } from "react";
 
 /** How far in from a box's visible top or bottom edge, CSS px, a held drag scrolls it: a quarter of a box shorter than 320. */
@@ -35,12 +37,17 @@ export function edgeSpeed(y: number, top: number, bottom: number) {
 
 const SCROLLS = new Set(["auto", "scroll", "overlay"]);
 
+/** What a dialog drawn over the page is: a drag in it never scrolls the page behind (the gift list's purchase order). */
+const DIALOG = "dialog, [role=dialog]";
+
 /** The box a drag from `from` scrolls: the nearest around it that scrolls up and down (the page, `main`; a dialog's body),
- * else the document. Not the ones outside it: the page behind a dialog stays. */
+ * else the document. Not one outside a dialog: a drag in a dialog whose body fits scrolls nothing. */
 function boxOf(from: EventTarget | null): HTMLElement | null {
   const start = from instanceof Element ? from : from instanceof Node ? from.parentElement : null; // a text selection: a Text
-  for (let x = start; x; x = x.parentElement)
+  for (let x = start; x; x = x.parentElement) {
     if (x instanceof HTMLElement && SCROLLS.has(getComputedStyle(x).overflowY) && x.scrollHeight > x.clientHeight) return x;
+    if (x.matches(DIALOG)) return null;
+  }
   return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
 }
 
@@ -54,7 +61,9 @@ function bandOf(box: HTMLElement): [number, number] {
 /** Whether `box` has room to scroll at speed `v`. */
 const hasRoom = (box: HTMLElement, v: number) => (v < 0 ? box.scrollTop > 0 : box.scrollTop + box.clientHeight < box.scrollHeight - 1);
 
-type Held = { start: DragEvent; box: HTMLElement; y: number | null; carry: number };
+/** `picked`: the speed where the first dragover found the pointer, while it waits (0 once it does not: picked up away from
+ * the edges, or moved nearer the edge or out of the zone since); undefined before that dragover. */
+type Held = { start: DragEvent; box: HTMLElement; y: number | null; picked?: number; carry: number };
 
 /** Scroll the box a drag is held near the edge of, for every drag the page starts. Mounted once, by App. */
 export function useDragScroll() {
@@ -67,7 +76,7 @@ export function useDragScroll() {
     const step = (now: number) => {
       frame = 0;
       const h = held;
-      const v = h && h.y !== null ? edgeSpeed(h.y, ...bandOf(h.box)) : 0;
+      const v = h && h.y !== null && !h.picked ? edgeSpeed(h.y, ...bandOf(h.box)) : 0;
       if (!h || !v || !hasRoom(h.box, v)) return halt();
       const move = (v * (last ? Math.min(now - last, MAX_FRAME) : 1000 / 60)) / 1000 + h.carry;
       last = now;
@@ -86,6 +95,9 @@ export function useDragScroll() {
         if (!held) return;
         if (held.start.defaultPrevented) return end(); // a list refused the drag (useDragSort's canDrag): none is under way
         held.y = e.clientY;
+        const v = edgeSpeed(e.clientY, ...bandOf(held.box));
+        if (held.picked === undefined) held.picked = v;
+        else if (held.picked && !(Math.sign(v) === Math.sign(held.picked) && Math.abs(v) <= Math.abs(held.picked))) held.picked = 0;
         if (!frame) frame = requestAnimationFrame(step);
       },
       // into another element, the one it enters is relatedTarget; out of the window, none: still until the next dragover
