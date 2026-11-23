@@ -139,7 +139,9 @@ class Reader {
   team(path: string, id: unknown) {
     if (id === null || (typeof id === "string" && NO_TEAM.has(id))) return this.put(path, null);
     if (typeof id !== "string") return this.missed.push({ kind: "value", path, value: shown(id) });
-    if (this.data.teams.some((t) => t.id === id)) return this.put(path, id);
+    const team = this.data.teams.find((t) => t.id === id);
+    // the start flag never sits on a disabled team (#878): it is dropped, not listed, as the team is still there
+    if (team) return this.put(path, path === "run/start_team" && !team.enabled ? null : id);
     this.missed.push({ kind: "team", path, id, label: this.labels.get(id) ?? null });
   }
 

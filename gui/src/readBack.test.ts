@@ -145,6 +145,24 @@ describe("from MXU's config file", () => {
     ]);
   });
 
+  test("a start team flag on a disabled team is dropped, on an enabled team kept, on a deleted team dropped and listed (#878)", () => {
+    const text = (id: string) => mxu([{ taskName: "MirrorDungeon", enabled: true, optionValues: { MirrorStartTeam: select(id) } }]);
+    const data = migrated();
+    data.teams.find((t) => t.id === "b")!.enabled = false;
+    const startTeam = (id: string) => readBack(data, 22, files(text(id)));
+    const off = startTeam("b");
+    expect(off.data.run.start_team).toBeNull();
+    expect(off.report.read.map((r) => r.path)).not.toContain("run/start_team");
+    expect(off.report.missed).toEqual([]);
+    expect(startTeam("a").data.run.start_team).toBe("a");
+    const gone = startTeam("gone");
+    expect(gone.data.run.start_team).toBeNull();
+    expect(gone.report.missed).toEqual([{ kind: "team", path: "run/start_team", id: "gone", label: null }]);
+    // a Luxcavation task's team is not a flag: a disabled team stays picked there
+    const lux = readBack(data, 22, files(mxu([{ taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpTeam: select("b") } }])));
+    expect(lux.data.luxcavation.exp.team).toBe("b");
+  });
+
   test("an encrypted webhook does not come back and is listed; one MXU kept as plain text does", () => {
     const sealed = mxu([], { WebhookUrl: input({ url: "" }, { url: "c2VjcmV0" }) });
     const a = readBack(migrated(), 22, files(sealed));
