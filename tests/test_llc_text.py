@@ -110,8 +110,8 @@ def test_each_gift_carries_the_sin_the_game_colours_its_name_by():
     assert {i: effects[str(i)]["sin"] for i in shown} == shown
 
 
-def ego_gift_tables(root, tables):
-    """A static data folder of ego-gift tables under `root`: {"<folder>/<file>": [records]}."""
+def static_tables(root, tables):
+    """The client's static data tables under `root` (ego-gift, buff): {"<folder>/<file>": [records]}."""
     import llc_text
     for name, records in tables.items():
         path = root / llc_text.STATIC / name
@@ -123,7 +123,7 @@ def ego_gift_tables(root, tables):
 def test_a_gift_s_sin_is_its_mirror_dungeon_record_s_attribute_type(tmp_path):
     # three gifts carry another attributeType in the plain ego-gift tables (9038, 9111, 9195): the mirror dungeon's record wins
     import llc_text
-    unpack = ego_gift_tables(tmp_path, {
+    unpack = static_tables(tmp_path, {
         "ego-gift-mirrordungeon/ego-gift-mirrordungeon.json": [{"id": 9038, "attributeType": "AZURE", "tag": ["TIER_3"]}],
         "ego-gift/ego-gift.json": [{"id": 9038, "attributeType": "VIOLET"}, {"id": 9006, "attributeType": "AMBER"}],
         "ego-gift-mirrordungeon/hidden-ego-gift-mirrordungeon.json": [{"id": 990001}]})
@@ -134,14 +134,14 @@ def test_a_gift_s_sin_is_its_mirror_dungeon_record_s_attribute_type(tmp_path):
 def test_a_gift_the_gui_shows_with_no_sin_stops_the_tool(tmp_path, record):
     # every gift of client 1.118.1 and 1.119.0 has one; the GUI would have no plate for one that has not
     import llc_text
-    unpack = ego_gift_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}, record]})
+    unpack = static_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}, record]})
     with pytest.raises(ValueError, match="9500"):
         llc_text.gift_sins(unpack, [9001, 9500])
 
 
 def test_two_mirror_dungeon_records_of_a_gift_that_disagree_stop_the_tool(tmp_path):
     import llc_text
-    unpack = ego_gift_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
+    unpack = static_tables(tmp_path, {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
                                         "ego-gift-mirrordungeon/b.json": [{"id": 9001, "attributeType": "AZURE"}]})
     with pytest.raises(ValueError, match="9001"):
         llc_text.gift_sins(unpack, [9001])
@@ -181,7 +181,7 @@ def test_text_the_game_does_not_parse_is_printed_as_written():
 
 def test_the_chinese_is_converted_run_by_run_and_must_read_as_the_text_converted_whole():
     import llc_text
-    assert llc_text.effect_runs("使[Sinking]层数增加<i><color=#a16a3b>铜钱</color></i>", {"Sinking": "沉沦"}, llc_text.to_traditional) == [
+    assert llc_text.effect_runs("使[Sinking]层数增加<i><color=#a16a3b>铜钱</color></i>", {"Sinking": "沉沦"}, llc_text.GIFT_AND_PACK_ZH) == [
         "使", {"kw": "Sinking"}, "層數增加", {"text": "銅錢", "i": True, "colour": "Neutral"}]
 
     def convert(text):  # reads "AB" as one phrase, as OpenCC's phrase table might read one across a keyword's edge
@@ -213,10 +213,52 @@ def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_t
     assert len({d["zh_release"] for d in DATA.values()}) == 1
 
 
-def test_every_file_names_the_conversion_it_was_written_with():
-    # s2tw, the characters alone (#899)
-    for key, data in DATA.items():
-        assert re.search(r"\bOpenCC s2tw\b", data["note"]) and "s2twp" not in data["note"], key
+def test_every_file_names_the_conversion_its_kind_of_text_was_written_with():
+    # #899: the gifts' names and effects and the theme packs' names by s2t, the graces by s2twp
+    kinds = {"gift_search": "s2t", "gift_recipes": "s2t", "gift_effects": "s2t", "theme_pack_names": "s2t", "graces": "s2twp"}
+    assert set(kinds) == set(DATA)
+    for key, config in kinds.items():
+        assert re.findall(r"OpenCC (\w+)", DATA[key]["note"]) == [config], key
+
+
+def llc_zip(tmp_path, files):
+    """A release zip whose LLC_zh-CN folder holds `files`: {file name: its dataList}."""
+    import llc_text
+    path = tmp_path / "release.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        for name, rows in files.items():
+            z.writestr(llc_text.LANG + name, json.dumps({"dataList": rows}, ensure_ascii=False))
+    return zipfile.ZipFile(path)
+
+
+def test_a_gift_s_name_keeps_llc_s_words_its_characters_converted(tmp_path):
+    # #899, gifts of release 2026111401: s2twp would write 石版字元 and 行動式, s2tw 汙 and 群
+    import llc_text
+    z = llc_zip(tmp_path, {"EGOgift_a.json": [{"id": 9017, "name": "石版字符"}, {"id": 9076, "name": "便携式急救包"},
+                                              {"id": 9007, "name": "朱红蛾群"}, {"id": 9415, "name": "污秽"}]})
+    assert llc_text.gift_names(z) == {9017: "石版字符", 9076: "便攜式急救包", 9007: "硃紅蛾羣", 9415: "污穢"}
+
+
+def test_a_status_word_reads_as_the_text_it_is_in(tmp_path):
+    # #899: a gift's effect and its status words keep LLC's words (s2t), a grace's text, the status words it names included,
+    # reads as Taiwan Traditional (s2twp). Paralysis is 麻痹 in LLC's Bufs: 麻痹 in a gift's effect, 麻痺 in a grace's.
+    import llc_text
+    z = llc_zip(tmp_path, {"Bufs_a.json": [{"id": "Paralysis", "name": "麻痹"}],
+                           "EGOgift_a.json": [{"id": 9001, "name": "饰品", "desc": "施加[Paralysis]，获得信息素"}],
+                           "DungeonStartBuffs_MD7.json": [{"id": "Give", "description": "获得{2}层{1}"}],
+                           "MirrorDungeonUI_5.json": [{"id": "title_1", "content": "信息之星"}]})
+    unpack = static_tables(tmp_path / "unpack", {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
+                                                   "buff/a.json": [{"id": "Paralysis", "buffType": "Negative"}]})
+    en = unpack / "raw/Localize/en"
+    en.mkdir(parents=True)
+    (en / "EN_EGOgift_a.json").write_text(json.dumps({"dataList": [{"id": 9001, "desc": "Inflict [Paralysis]"}]}), encoding="utf-8")
+    (en / "EN_Bufs_a.json").write_text(json.dumps({"dataList": [{"id": "Paralysis", "name": "Paralyze"}]}), encoding="utf-8")
+    keywords, effects = llc_text.gift_effects(z, unpack, [9001])
+    assert keywords == {"Paralysis": {"colour": "Negative", "icon": "Paralysis", "en": "Paralyze", "zh": "麻痹"}}
+    assert effects["9001"]["zh"] == ["施加", {"kw": "Paralysis"}, "，獲得信息素"]
+    static = {"list": [{"buffs": [{"baseId": 1, "localizeId": "title_1", "level": 1,
+                                   "effects": [{"type": "Give", "referenceData": {"buffKeyword": "Paralysis", "stack": 2, "turn": 0}}]}]}]}
+    assert llc_text.grace_texts(z, static) == ({1: "資訊之星"}, {1: {"base": [[{"text": "獲得2層麻痺", "up": False}]]}})
 
 
 def test_the_data_matches_the_llc_release_when_it_is_downloaded():
@@ -235,15 +277,25 @@ def plain(text):
     return [{"text": text, "up": False}]
 
 
-def test_traditional_conversion_changes_the_characters_and_keeps_the_words():
-    # the user's call of 2026-11-23 (#899): Simplified characters to Traditional ones (OpenCC s2tw), no Taiwan wording (s2twp)
+def test_gift_and_theme_pack_text_has_its_characters_converted_and_keeps_llc_s_words():
+    # the user's call of 2026-11-23 (#899): Simplified characters to Traditional ones and no more (OpenCC s2t)
     import llc_text
-    assert llc_text.to_traditional("软件 鼠标 信息 内存") == "軟件 鼠標 信息 內存"  # s2twp: 軟體 滑鼠 資訊 記憶體
-    assert llc_text.to_traditional("生锈的指针 通过阶层 镜像迷宫 刷新 保存的信念 循环呼吸") == "生鏽的指針 通過階層 鏡像迷宮 刷新 保存的信念 循環呼吸"
-    # 松 is both 松 (pine) and 鬆 (loose) in Traditional: s2tw keeps the pine, the fix table makes the hammer's 鬆
-    assert llc_text.to_traditional("松肉锤") == "鬆肉錘"
+    assert llc_text.GIFT_AND_PACK_ZH("软件 鼠标 保存的信念 循环呼吸 刷新") == "軟件 鼠標 保存的信念 循環呼吸 刷新"  # s2twp: 軟體 滑鼠 儲存 迴圈 重新整理
+    assert llc_text.GIFT_AND_PACK_ZH("里面 为了 众人") == "裏面 爲了 衆人"  # s2tw's Taiwan forms: 裡面 為了 眾人
+    # 松 is both 松 (pine) and 鬆 (loose) in Traditional: s2t keeps the pine, the fix table makes the hammer's 鬆
+    assert llc_text.GIFT_AND_PACK_ZH("松肉锤") == "鬆肉錘"
+
+
+def test_other_llc_text_reads_as_taiwan_traditional_with_the_game_s_words():
+    # events, graces, trials (#899): Taiwan's forms and wording (OpenCC s2twp), and the fix table where s2twp's word is not the
+    # game's (指標 for its 指針, 重新整理 for its 刷新, ...)
+    import llc_text
+    assert llc_text.OTHER_ZH("软件 鼠标 里面 为了") == "軟體 滑鼠 裡面 為了"
+    assert llc_text.OTHER_ZH("生锈的指针 通过阶层 镜像迷宫 刷新 松肉锤") == "生鏽的指針 通過階層 鏡像迷宮 刷新 鬆肉錘"
     assert llc_text.effect_lines("<color=#627eff>初始经费</color> +{0}(最多{1})", {"value": 150, "value2": 100}, {}) == [plain("初始經費 +150(最多100)")]
     assert llc_text.effect_lines("获得{2}层 {1}", {"referenceData": {"buffKeyword": "K", "stack": 2, "turn": 0}}, {"K": "守护"}) == [plain("獲得2層 守護")]
+    assert llc_text.effect_lines("刷新{2}次 {1}", {"referenceData": {"buffKeyword": "K", "stack": 1, "turn": 0}}, {"K": "软件"}) == [
+        plain("刷新1次 軟體")]  # a grace's status word reads as the grace's text does
 
 
 def test_an_effect_marks_up_what_its_template_colours_yellow_and_shows_the_keywords_blue_plain():
@@ -326,9 +378,10 @@ def test_every_theme_pack_has_a_chinese_name_or_is_listed_as_one_llc_lacks():
 
 def test_a_theme_pack_s_chinese_name_is_llc_s_name_of_its_id_and_a_pack_llc_lacks_is_listed():
     import llc_text
-    packs, missing = llc_text.pack_rows({1001: "被遗忘者们", 1119: "憎恶与绝望", 1500: ""},
-                                        {"The Forgotten": 1001, "Walpurgis Night: Hatred and Despair": 1119, "New Pack": 1500, "Newer": 1501})
-    assert packs == {"1001": {"en": "The Forgotten", "zh": "被遺忘者們"}, "1119": {"en": "Walpurgis Night: Hatred and Despair", "zh": "憎惡與絕望"}}
+    packs, missing = llc_text.pack_rows({1001: "被遗忘者们", 1015: "定义为恶", 1500: ""},
+                                        {"The Forgotten": 1001, "The Evil Defining": 1015, "New Pack": 1500, "Newer": 1501})
+    # a pack's name keeps LLC's words, its characters converted (#899): s2t's 爲, not s2tw's 為
+    assert packs == {"1001": {"en": "The Forgotten", "zh": "被遺忘者們"}, "1015": {"en": "The Evil Defining", "zh": "定義爲惡"}}
     assert missing == [1500, 1501]
 
 

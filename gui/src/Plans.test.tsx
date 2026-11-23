@@ -672,7 +672,7 @@ describe("a grace card at each level", () => {
   test("a count is marked with its unit, as the game marks it", () => {
     show({ 1: "plus2", 6: "plus" });
     expect(marked(1)).toEqual(["+250", "2次"]);
-    expect(marked(6)).toEqual(["2件", "特殊商店出現概率 +10%"]);
+    expect(marked(6)).toEqual(["2件", "特殊商店出現機率 +10%"]); // a grace's text in Taiwan's wording (#899)
   });
 
   test("at + Chance Comet marks its new detail lines, indented, the floor it adds and 所選關鍵詞, not the 的 after it", () => {
