@@ -243,7 +243,7 @@ describe("hover popover: what it says", () => {
   test("every pack a recipe names shows by its name: the re-run copies and the Extreme-only packs too", () => {
     expect(recipes.gifts.flatMap((g) => g.packs ?? []).filter((p) => packName(p).startsWith("#"))).toEqual([]);
     expect([1004, 1113, 1507].map((p) => packName(p))).toEqual(["Automated Factory", "Miracle in District 20 BokGak", "Who Couldn't be Bloodfiends"]);
-    expect([1004, 1113, 1507].map((p) => packName(p, true))).toEqual(["自動工廠", "20區的奇蹟 復刻", "無法成爲血魔的人們"]); // in Chinese, LLC's characters converted alone (s2t's 爲, #899)
+    expect([1004, 1113, 1507].map((p) => packName(p, true))).toEqual(["自動工廠", "20區的奇蹟 復刻", "無法成為血魔的人們"]); // in Chinese, LLC's words in Taiwan's glyphs (為, #899)
     expect([packName(1), packName(1, true)]).toEqual(["#1", "#1"]); // an id the file does not know stays an id
   });
 

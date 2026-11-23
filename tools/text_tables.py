@@ -8,10 +8,9 @@ the Localize Limbus Company (LLC) release's `LLC_zh-CN` files, and writes three 
   gift_text.json   gift id -> names, keyword and tier, effect and enhanced effect (the id + 10000 gift) in the same three languages
                    (desc_*, plus_*)
   trial_text.json  trial buff id -> the trial's English text, Simplified name and text, and Traditional name and text
-Every Traditional field is the Simplified one with markup dropped, converted as maalc's data files convert that kind of text
-(#899): a gift's names and effects by `llc_text.GIFT_AND_PACK_ZH` (OpenCC s2t, LLC's words kept), the events and trials by
-`llc_text.OTHER_ZH` (OpenCC s2twp, Taiwan's wording), each with its fix table. LLC is CC BY-NC-SA 4.0 (NOTICE.md). Written for
-the lc-helper (#759).
+Every Traditional field is the Simplified one with markup dropped, converted by `llc_text.to_traditional` (OpenCC s2tw, Taiwan's
+glyphs and LLC's words, and its fix table, #899): the one conversion maalc's data files and lc-helper share. LLC is CC BY-NC-SA
+4.0 (NOTICE.md). Written for the lc-helper (#759).
 """
 
 import argparse
@@ -21,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from llc_text import GIFT_AND_PACK_ZH, OTHER_ZH, credit, current_release, files, read, release_zip
+from llc_text import CONVERSION_NOTE, credit, current_release, files, read, release_zip, to_traditional
 from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
@@ -38,14 +37,9 @@ def plain(text):
     return re.sub(r"<[^>]*>", "", text or "").strip()
 
 
-def gift_zh(text):
-    """LLC's Simplified gift text (a name, an effect), markup dropped, as Traditional: the characters alone (GIFT_AND_PACK_ZH)."""
-    return GIFT_AND_PACK_ZH(plain(text))
-
-
-def other_zh(text):
-    """LLC's Simplified event or trial text, markup dropped, as Taiwan Traditional (OTHER_ZH)."""
-    return OTHER_ZH(plain(text))
+def zh(text):
+    """LLC's Simplified `text`, markup dropped, as Traditional (the shared s2tw conversion and fix table)."""
+    return to_traditional(plain(text))
 
 
 def gift_text(text, names):
@@ -69,7 +63,7 @@ def gift_info(ids, static, en_names, cn_names):
             row["tier"] = tier
     for i, row in info.items():
         row["en"] = en_names.get(i, "").replace("’", "'")
-        row["zh"] = gift_zh(cn_names[i]) if i in cn_names else ""
+        row["zh"] = zh(cn_names[i]) if i in cn_names else ""
     return info
 
 
@@ -81,9 +75,9 @@ def gift_rows(base, en_rows, cn_rows, cn_names, en_buffs, cn_buffs):
         return gift_text(rows[i].get("desc"), buffs) if i in rows else ""
 
     return {i: {"en": g["en"].replace("’", "'"), "zh": g["zh"], "cn": cn_names.get(i, ""), "keyword": g["keyword"], "tier": g["tier"],
-                "desc_en": desc(en_rows, i, en_buffs), "desc_cn": desc(cn_rows, i, cn_buffs), "desc_zh": gift_zh(desc(cn_rows, i, cn_buffs)),
+                "desc_en": desc(en_rows, i, en_buffs), "desc_cn": desc(cn_rows, i, cn_buffs), "desc_zh": zh(desc(cn_rows, i, cn_buffs)),
                 "plus_en": desc(en_rows, i + ENHANCED, en_buffs), "plus_cn": desc(cn_rows, i + ENHANCED, cn_buffs),
-                "plus_zh": gift_zh(desc(cn_rows, i + ENHANCED, cn_buffs))}
+                "plus_zh": zh(desc(cn_rows, i + ENHANCED, cn_buffs))}
             for i, g in sorted(base.items())}
 
 
@@ -110,10 +104,10 @@ def event_text(table, md8, llc_event_rows):
         for i, o in enumerate(e["options"]):
             text_cn, hint_cn = option_text(row, i)
             theirs = src["options"][i] if i < len(src["options"]) else {}
-            options.append({"text": plain(theirs.get("text")) or o["text"], "text_cn": text_cn, "text_zh": other_zh(text_cn),
-                            "hint_cn": hint_cn, "hint_zh": other_zh(hint_cn)})
+            options.append({"text": plain(theirs.get("text")) or o["text"], "text_cn": text_cn, "text_zh": zh(text_cn),
+                            "hint_cn": hint_cn, "hint_zh": zh(hint_cn)})
         out[str(e["id"])] = {"title": plain(src.get("title")), "story": plain(src.get("desc")), "story_cn": story_cn,
-                             "story_zh": other_zh(story_cn), "options": options}
+                             "story_zh": zh(story_cn), "options": options}
     return out
 
 
@@ -124,7 +118,7 @@ def trial_rows(table, en_rows, cn_rows):
     for t in table["trials"].values():
         c = cn_rows.get(t["id"], {})
         out[t["id"]] = {"desc_en": plain((en_rows.get(t["id"]) or {}).get("desc")), "cn": plain(c.get("name")),
-                        "desc_cn": plain(c.get("desc")), "zh": other_zh(c.get("name")), "desc_zh": other_zh(c.get("desc"))}
+                        "desc_cn": plain(c.get("desc")), "zh": zh(c.get("name")), "desc_zh": zh(c.get("desc"))}
     return out
 
 
@@ -195,15 +189,14 @@ def base_gifts(unpack, ids_wanted, en_names, cn_names):
 
 
 def notes(client, release):
-    def common(conversion):
-        return (f"the game client {client}'s English text and the Localize Limbus Company release's LLC_zh-CN files (Simplified Chinese, in "
-                "the _cn fields and cn), the Traditional Chinese (_zh fields and zh) converted from it with " + conversion.note + " "
-                "(tools/llc_text.py), markup tags dropped. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/text_tables.py.")
-    return {"event_text.json": "Text of each event and page of event_table.json by event id (the table has the keys, hints and effects): " + common(OTHER_ZH),
+    common = (f"the game client {client}'s English text and the Localize Limbus Company release's LLC_zh-CN files (Simplified Chinese, in the "
+              "_cn fields and cn), the Traditional Chinese (_zh fields and zh) converted from it with " + CONVERSION_NOTE + " "
+              "(tools/llc_text.py), markup tags dropped. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/text_tables.py.")
+    return {"event_text.json": "Text of each event and page of event_table.json by event id (the table has the keys, hints and effects): " + common,
             "gift_text.json": ("Names, keyword, tier, effect (desc_*) and enhanced effect (plus_*, the gift of id + 10000) of each gift of "
                                "gift_search.json and gift_recipes.json and of each gift an event option gives, by gift id; a [BuffId] in an effect "
-                               "is named, as 「name」. From " + common(GIFT_AND_PACK_ZH)),
-            "trial_text.json": "Text of each trial of trials.yaml by its buff id (the table has the pools and scores): " + common(OTHER_ZH)}
+                               "is named, as 「name」. From " + common),
+            "trial_text.json": "Text of each trial of trials.yaml by its buff id (the table has the pools and scores): " + common}
 
 
 def main():

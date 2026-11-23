@@ -12,19 +12,16 @@ gift the settings GUI shows (catalog_ids), English from the client's `EN_EGOgift
 keywords they name: their names in the `Bufs*.json` and `BattleKeywords*.json` of each, their colour and icon from the client's
 static buff data (#764; tools/buf_icons.py draws the icons). And data/theme_pack_names.json: each theme pack's Chinese
 name by its id in data/theme_packs.yaml's `pack_ids` (`LLC_zh-CN/MirrorDungeonTheme*.json`), and the packs the release names
-none of, which the GUI shows in English (#899). Simplified to Traditional by the kind of text (#899): gift text and theme
-pack names character by character, LLC's words kept (`GIFT_AND_PACK_ZH`, OpenCC s2t); the graces, as all other LLC text,
-in Taiwan's forms and wording (`OTHER_ZH`, OpenCC s2twp); each with its fix table. Fails on a gift or grace the release
-lacks; gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
+none of, which the GUI shows in English (#899). All of it Simplified to Traditional characters in Taiwan's glyphs, LLC's
+words kept (`to_traditional`, OpenCC s2tw and its fix table, #899). Fails on a gift or grace the release lacks;
+gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
 """
 
 import argparse
-import functools
 import json
 import re
 import urllib.request
 import zipfile
-from dataclasses import dataclass
 from pathlib import Path
 
 import opencc
@@ -61,46 +58,30 @@ TMP_TAGS = {"align", "allcaps", "alpha", "b", "br", "color", "cspace", "font", "
             "voffset", "width"}
 
 
-@functools.cache
-def _opencc(config):
-    return opencc.OpenCC(config)
+# The user's call of 2026-11-23 (#899), for all LLC text: the localizers' own words, Simplified characters to Traditional
+# ones, glyphs in Taiwan's forms. OpenCC s2tw is s2t (STPhrases, STCharacters) and then Taiwan's variant glyphs (TWVariants:
+# 爲 -> 為, 裏 -> 裡); s2twp would add Taiwan's wording (TWPhrases: 軟件 -> 軟體, 通過 -> 透過), which is not used.
+_S2TW = opencc.OpenCC("s2tw")
+# where s2tw's character is not the game's: 松 is both 松 (pine) and 鬆 (loose) in Traditional, and s2tw keeps the pine
+FIXES = {"松肉": "鬆肉"}
 
 
-@dataclass(frozen=True)
-class Conversion:
-    """LLC's Simplified text to Traditional for one kind of text: OpenCC's `config` (`description`: what it makes of the
-    text), then `fixes`, wrong -> right in order, where the config's word is not the game's."""
-    config: str
-    description: str
-    fixes: tuple
-
-    def __call__(self, text):
-        text = _opencc(self.config).convert(text)
-        for wrong, right in self.fixes:
-            text = text.replace(wrong, right)
-        return text
-
-    @property
-    def note(self):
-        """The conversion as a data file's note names it."""
-        return f"OpenCC {self.config} ({self.description}), then " + ", ".join(f"{a}->{b}" for a, b in self.fixes)
+def to_traditional(text):
+    """LLC's Simplified `text` as Traditional: s2tw, then FIXES."""
+    text = _S2TW.convert(text)
+    for wrong, right in FIXES.items():
+        text = text.replace(wrong, right)
+    return text
 
 
-# The user's call of 2026-11-23 (#899): gift text (names, effect text and the status words in it, wherever the data files
-# carry it) and theme pack names keep the localizers' own words, Simplified characters to Traditional ones and no more: s2t,
-# not s2tw's Taiwan forms (裏 -> 裡) or s2twp's Taiwan wording (軟件 -> 軟體). 松 is both 松 (pine) and 鬆 (loose) in
-# Traditional, and s2t keeps the pine.
-GIFT_AND_PACK_ZH = Conversion("s2t", "the characters alone, LLC's words kept", (("松肉", "鬆肉"),))
-# All other LLC text (events, graces, trials) reads as Taiwan Traditional, its forms and wording (s2twp), the game's word put
-# back where Taiwan's is not it.
-OTHER_ZH = Conversion("s2twp", "Taiwan's forms and wording", (("指標", "指針"), ("重新整理", "刷新"), ("映象", "鏡像"),
-                                                            ("透過階層", "通過階層"), ("松肉", "鬆肉")))
+# the conversion as a data file's note names it
+CONVERSION_NOTE = "OpenCC s2tw (Taiwan's glyphs, LLC's words kept), then " + ", ".join(f"{a}->{b}" for a, b in FIXES.items())
 NOTE_ZH = ("Chinese names: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json by gift id (Simplified Chinese), "
-           "converted with " + GIFT_AND_PACK_ZH.note + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
+           "converted with " + CONVERSION_NOTE + ". Chinese names licensed CC BY-NC-SA 4.0 (see NOTICE.md).")
 def note_graces(client):
     return ("Effect text in each language under effects.en and effects.zh. Chinese names and effect text: the Localize Limbus Company "
             "release (Simplified Chinese): MirrorDungeonUI_5 titles and DungeonStartBuffs_MD7 templates filled with the client's "
-            "start-buff values, converted with " + OTHER_ZH.note + ". English names and effect text: the game client "
+            "start-buff values, converted with " + CONVERSION_NOTE + ". English names and effect text: the game client "
             f"{client}'s EN_MirrorDungeonUI_5.json titles and EN_DungeonStartBuffs_MD7.json templates filled with the same values, "
             "keywords named by its EN_Bufs*.json and EN_BattleKeywords*.json. Each effect line is a list of runs, `up` on the text the "
             "template colours the game's yellow (" + YELLOW + "), what a + or ++ level changed. Chinese text licensed CC BY-NC-SA 4.0 "
@@ -118,14 +99,14 @@ def note_effects(client):
             "keywords: each keyword the texts name: its name in each language (Bufs*.json, BattleKeywords*.json of each), its "
             "colour as the client's ColorCode table names it (its buff's buffType in the static data buff/*.json) and its icon "
             "(data/buf_icons/<icon>.webp, tools/buf_icons.py). A bracketed note that names no keyword stays as written. The "
-            "Chinese, keyword names included, converted run by run with " + GIFT_AND_PACK_ZH.note + ". Chinese text licensed CC BY-NC-SA 4.0 (see "
+            "Chinese, keyword names included, converted run by run with " + CONVERSION_NOTE + ". Chinese text licensed CC BY-NC-SA 4.0 (see "
             "NOTICE.md). Written by tools/llc_text.py.")
 
 
 def note_packs():
     return ("Each theme pack's Chinese name by its id (data/theme_packs.yaml's pack_ids; en: the pack's name there): the "
             "Localize Limbus Company release's LLC_zh-CN/MirrorDungeonTheme*.json name (Simplified Chinese), converted with "
-            + GIFT_AND_PACK_ZH.note + ". missing: the ids of the packs of pack_ids the release names none of; the "
+            + CONVERSION_NOTE + ". missing: the ids of the packs of pack_ids the release names none of; the "
             "settings GUI shows their English name. The agent does not read this file. Chinese names licensed CC BY-NC-SA 4.0 "
             "(see NOTICE.md). Written by tools/llc_text.py.")
 
@@ -157,7 +138,7 @@ def gift_names(z):
     names = {}
     for f in files(z, "EGOgift_"):
         for x in read(z, f):
-            names.setdefault(x["id"], GIFT_AND_PACK_ZH(x["name"]))
+            names.setdefault(x["id"], to_traditional(x["name"]))
     return names
 
 
@@ -166,7 +147,7 @@ def pack_rows(cn, pack_ids):
     the id (id -> LLC's Simplified name), markup dropped and converted}, in the order of `pack_ids`; missing: the ids `cn` has
     no name for, in the same order."""
     names = {i: re.sub(r"<[^>]*>", "", cn.get(i) or "").strip() for i in pack_ids.values()}
-    packs = {str(i): {"en": n, "zh": GIFT_AND_PACK_ZH(names[i])} for n, i in pack_ids.items() if names[i]}
+    packs = {str(i): {"en": n, "zh": to_traditional(names[i])} for n, i in pack_ids.items() if names[i]}
     return packs, [i for i in pack_ids.values() if not names[i]]
 
 
@@ -323,13 +304,13 @@ def gift_effects(z, unpack, ids):
     zh_names = keyword_names(z)
     sins = gift_sins(unpack, ids)
     effects = {str(i): {"sin": sins[i], "en": effect_runs(en[i]["desc"].strip(), en_names),
-                        "zh": effect_runs(zh[i]["desc"].strip(), zh_names, GIFT_AND_PACK_ZH)} for i in ids}
+                        "zh": effect_runs(zh[i]["desc"].strip(), zh_names, to_traditional)} for i in ids}
     used = sorted({r["kw"] for e in effects.values() for runs in (e["en"], e["zh"]) for r in runs if isinstance(r, dict) and "kw" in r})
     buffs = buff_records(unpack)
     missing = [k for k in used if k not in buffs or k not in en_names or k not in zh_names]
     if missing:
         raise ValueError(f"keywords with no buff record or no name in a language: {missing}")
-    return {k: keyword_entry(buffs[k], en_names[k], GIFT_AND_PACK_ZH(zh_names[k])) for k in used}, effects
+    return {k: keyword_entry(buffs[k], en_names[k], to_traditional(zh_names[k])) for k in used}, effects
 
 
 def dump_effects(data):
@@ -401,11 +382,11 @@ def _start_buffs(static, titles, templates, keywords, convert):
 
 
 def grace_texts(z, static):
-    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, LLC's Chinese in
-    Taiwan's forms and wording (OTHER_ZH), and the game's yellow marks (effect_lines)."""
+    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in LLC's Chinese
+    wording (to_traditional) and the game's yellow marks (effect_lines)."""
     templates = {x["id"]: x["description"] for x in read(z, "DungeonStartBuffs_MD7.json")}
     titles = {x["id"]: x["content"] for x in read(z, "MirrorDungeonUI_5.json")}
-    return _start_buffs(static, titles, templates, keyword_names(z), OTHER_ZH)
+    return _start_buffs(static, titles, templates, keyword_names(z), to_traditional)
 
 
 def english_grace_texts(unpack, static):

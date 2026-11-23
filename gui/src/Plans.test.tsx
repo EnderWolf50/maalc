@@ -5,7 +5,7 @@ import { describe, expect, onTestFinished, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
 import { TEXT, fill } from "./i18n";
 import {
-  GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, type GiftList, type Settings,
+  GIFT_KEYWORDS, GRACES, SINNERS, defaultGorder, defaultStarlight, newSettings, newTeam, packZh, type GiftList, type Settings,
 } from "./model";
 import css from "./index.css?raw";
 import { DeploymentTab } from "./Deployment";
@@ -375,6 +375,13 @@ describe("a pack's Chinese name", () => {
     expect(english()).toEqual(["The Outcast"]);
   });
 
+  test("the search finds a pack by a Taiwan glyph of its name: 為 finds the packs whose LLC name has 为 (#899, s2tw)", async () => {
+    const r = await open("zh_tw");
+    await typeIn(r, "為");
+    expect(english()).toEqual(["The Evil Defining", "Tyrannical Pride", "Who Couldn't be Bloodfiends"]);
+    expect(english().map((en) => packZh(en, true))).toEqual(["定義為惡", "自以為是的傲慢", "無法成為血魔的人們"]);
+  });
+
   test("in English the search goes by the English name alone, as before", async () => {
     const r = await open("en_us");
     await typeIn(r, "歸屬");
@@ -672,7 +679,7 @@ describe("a grace card at each level", () => {
   test("a count is marked with its unit, as the game marks it", () => {
     show({ 1: "plus2", 6: "plus" });
     expect(marked(1)).toEqual(["+250", "2次"]);
-    expect(marked(6)).toEqual(["2件", "特殊商店出現機率 +10%"]); // a grace's text in Taiwan's wording (#899)
+    expect(marked(6)).toEqual(["2件", "特殊商店出現概率 +10%"]); // LLC's 概率, not Taiwan's 機率 (#899)
   });
 
   test("at + Chance Comet marks its new detail lines, indented, the floor it adds and 所選關鍵詞, not the 的 after it", () => {
