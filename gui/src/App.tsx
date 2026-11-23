@@ -5,6 +5,7 @@
 import { Fragment, useEffect, useMemo, useReducer, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import * as api from "./api";
 import { DeploymentTab } from "./Deployment";
+import { useDragScroll } from "./dragScroll";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
 import { newSettings, parseSettings, rebase, withoutGoneStart, type Settings } from "./model";
@@ -301,6 +302,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => api.onMaximized(setMaximized), []);
+  useDragScroll(); // a drag held near the page's top or bottom edge scrolls it, on every tab (#916)
   useEffect(() => {
     if (asking || !focusBefore.current) return;
     (focusBefore.current as HTMLElement).focus?.();
