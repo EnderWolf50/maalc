@@ -47,6 +47,8 @@ BUFFS = STATIC + "/buff"  # the client's buff records
 # The gift records that carry a gift's sin (attributeType): the mirror dungeon's own first, then the plain ones; 9038, 9111
 # and 9195 carry another sin in the plain tables (client 1.118.1).
 GIFT_TABLES = ("ego-gift-mirrordungeon", "ego-gift")
+# The lists of gifts gift_search.json (gifts) and gift_recipes.json (all four) carry, in the GUI catalog's order.
+GIFT_LISTS = ("gifts", "materials", "extra_gifts", "vestiges")
 YELLOW = "#f8c200"  # the game's yellow in a grace's effect text: what a + or ++ level changed (#733)
 BLUE = "#627eff"  # the game's blue of a keyword in a grace's effect text; the GUI shows it plain
 # The colours of a gift's effect text by their names in the game's ColorCode table (static data ui/ColorCode.json, client
@@ -66,10 +68,10 @@ def _opencc(config):
 
 @dataclass(frozen=True)
 class Conversion:
-    """LLC's Simplified text to Traditional for one kind of text: OpenCC's `config` (`reads`: what it makes of the text), then
-    `fixes`, wrong -> right in order, where the config's word is not the game's."""
+    """LLC's Simplified text to Traditional for one kind of text: OpenCC's `config` (`description`: what it makes of the
+    text), then `fixes`, wrong -> right in order, where the config's word is not the game's."""
     config: str
-    reads: str
+    description: str
     fixes: tuple
 
     def __call__(self, text):
@@ -81,7 +83,7 @@ class Conversion:
     @property
     def note(self):
         """The conversion as a data file's note names it."""
-        return f"OpenCC {self.config} ({self.reads}), then " + ", ".join(f"{a}->{b}" for a, b in self.fixes)
+        return f"OpenCC {self.config} ({self.description}), then " + ", ".join(f"{a}->{b}" for a, b in self.fixes)
 
 
 # The user's call of 2026-11-23 (#899): gift text (names, effect text and the status words in it, wherever the data files
@@ -305,7 +307,7 @@ def catalog_ids():
     gift_recipes.json's fusion gifts, materials, extra gifts and vestiges."""
     recipes = json.loads((DATA / "gift_recipes.json").read_text(encoding="utf-8"))
     return [g["id"] for g in json.loads((DATA / "gift_search.json").read_text(encoding="utf-8"))["gifts"]] + [
-        g["id"] for k in ("gifts", "materials", "extra_gifts", "vestiges") for g in recipes[k]]
+        g["id"] for k in GIFT_LISTS for g in recipes[k]]
 
 
 def gift_effects(z, unpack, ids):
@@ -345,7 +347,7 @@ def needed(value, template):
     return value
 
 
-def effect_lines(template, values, keyword_names, convert=OTHER_ZH):
+def effect_lines(template, values, keyword_names, convert):
     """One effect's text as the game prints it: its lines, each a list of runs {"text", "up"}, `up` where the template colours
     the text YELLOW. Colour tags nest, the inner one holding until its own closing tag (TextMeshPro's colour stack); a colour
     other than YELLOW and BLUE is an error, since it might be a new mark. Each run goes through `convert` on its own (LLC's
@@ -399,8 +401,8 @@ def _start_buffs(static, titles, templates, keywords, convert):
 
 
 def grace_texts(z, static):
-    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in LLC's Chinese wording
-    and the game's yellow marks (effect_lines)."""
+    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, LLC's Chinese in
+    Taiwan's forms and wording (OTHER_ZH), and the game's yellow marks (effect_lines)."""
     templates = {x["id"]: x["description"] for x in read(z, "DungeonStartBuffs_MD7.json")}
     titles = {x["id"]: x["content"] for x in read(z, "MirrorDungeonUI_5.json")}
     return _start_buffs(static, titles, templates, keyword_names(z), OTHER_ZH)
@@ -462,7 +464,7 @@ def main():
     names = gift_names(z)
     for name, dump in (("gift_search.json", dump_search), ("gift_recipes.json", lambda d: json.dumps(d, ensure_ascii=False, indent=1) + "\n")):
         data = json.loads((DATA / name).read_text(encoding="utf-8"))
-        lists = [data["gifts"]] + [data[k] for k in ("materials", "extra_gifts", "vestiges") if k in data]
+        lists = [data[k] for k in GIFT_LISTS if k in data]
         missing = [g["id"] for gifts in lists for g in gifts if g["id"] not in names]
         assert not missing, f"{name}: not in the release: {missing}"
         for gifts in lists:
