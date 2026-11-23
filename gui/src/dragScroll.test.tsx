@@ -19,7 +19,8 @@ vi.mock("./api", async (original) => ({
 
 /** A drag event at `el` with the pointer's height and the element it went into, as the browser's carry them: jsdom has no
  * DragEvent, so fireEvent's plain Event would drop clientY and relatedTarget. */
-function dragAt(type: "dragOver" | "dragLeave", el: Element, init: { clientY?: number; relatedTarget?: EventTarget | null }) {
+function dragAt(type: "dragStart" | "dragOver" | "dragLeave", el: Element,
+  init: { clientY?: number; relatedTarget?: EventTarget | null }) {
   const e = createEvent[type](el, { dataTransfer: dt() });
   for (const [key, value] of Object.entries(init)) Object.defineProperty(e, key, { value });
   fireEvent(el, e);
@@ -33,12 +34,13 @@ function layOut(box: HTMLElement, top: number, height: number, content: number) 
   Object.defineProperty(box, "scrollHeight", { configurable: true, value: content });
 }
 
-// The page that scrolls: from 100 to 700 in the window (jsdom's is 768 tall), 3000 px of content.
-const TOP = 100, BOTTOM = 700;
+// The page that scrolls: from 100 to 700 in the window (jsdom's is 768 tall), 3000 px of content; its middle, away from both
+// edge zones.
+const TOP = 100, BOTTOM = 700, MIDDLE = 400;
 
 describe("the speed at a height", () => {
   test("nothing away from the edges; inside the zone it grows toward the edge, the edge's speed at it and past it", () => {
-    expect(edgeSpeed(400, TOP, BOTTOM)).toBe(0);
+    expect(edgeSpeed(MIDDLE, TOP, BOTTOM)).toBe(0);
     expect(edgeSpeed(BOTTOM - EDGE_ZONE, TOP, BOTTOM)).toBe(0);
     const half = edgeSpeed(BOTTOM - EDGE_ZONE / 2, TOP, BOTTOM), near = edgeSpeed(BOTTOM - 5, TOP, BOTTOM);
     expect(half).toBeGreaterThan(0);
@@ -76,8 +78,9 @@ describe("a drag held near an edge", () => {
   const page = () => screen.getByTestId("page");
   /** Hold the drag at height `y` over `over` (the lane unless named), as the browser's dragover says. */
   const hold = (y: number, over = "lane") => dragAt("dragOver", screen.getByTestId(over), { clientY: y });
-  /** Pick up `what` (the pack unless named) in the middle of the page, away from its edges. */
-  const start = (what = "item") => { fireEvent.dragStart(screen.getByTestId(what), { dataTransfer: dt() }); hold(400, what); };
+  /** Pick up `what` (the pack unless named) at height `y`, the middle of the page unless named: the browser's dragstart
+   * carries the press. */
+  const start = (what = "item", y = MIDDLE) => { dragAt("dragStart", screen.getByTestId(what), { clientY: y }); hold(y, what); };
   const wait = (ms: number) => vi.advanceTimersByTime(ms);
 
   beforeEach(() => { vi.useFakeTimers(); });
@@ -112,14 +115,14 @@ describe("a drag held near an edge", () => {
   test("away from the edges the page stays, and it stops when the pointer leaves the edge", () => {
     setUp();
     start();
-    hold(400);
+    hold(MIDDLE);
     wait(500);
     expect(page().scrollTop).toBe(0);
     hold(BOTTOM - 5);
     wait(300);
     const at = page().scrollTop;
     expect(at).toBeGreaterThan(0);
-    hold(400);
+    hold(MIDDLE);
     wait(500);
     expect(page().scrollTop).toBe(at);
   });
@@ -164,8 +167,7 @@ describe("a drag held near an edge", () => {
 
   test("a drag picked up at an edge waits until the pointer goes nearer that edge, or leaves and comes back", () => {
     setUp({}, 1000);
-    fireEvent.dragStart(screen.getByTestId("item"), { dataTransfer: dt() });
-    hold(BOTTOM - 40); // a pack in the last row, half under the edge
+    start("item", BOTTOM - 40); // a pack in the last row, half under the edge
     wait(500);
     hold(BOTTOM - 50); // up, away from the edge
     wait(500);
@@ -176,13 +178,21 @@ describe("a drag held near an edge", () => {
     fireEvent.dragEnd(screen.getByTestId("item"), { dataTransfer: dt() });
 
     const at = page().scrollTop;
-    fireEvent.dragStart(screen.getByTestId("item"), { dataTransfer: dt() });
-    hold(TOP + 20, "bar"); // a pack under the bar held at the top
+    start("item", TOP + 20); // a pack under the bar held at the top
     wait(500);
-    hold(400);
+    expect(page().scrollTop).toBe(at);
+    hold(MIDDLE);
     hold(TOP + 40);
     wait(300);
     expect(page().scrollTop).toBeLessThan(at);
+  });
+
+  test("where the drag was picked up decides, not where the first dragover finds the pointer", () => {
+    setUp();
+    dragAt("dragStart", screen.getByTestId("item"), { clientY: MIDDLE });
+    hold(BOTTOM - 5); // a flick to the edge before the browser's first dragover
+    wait(300);
+    expect(page().scrollTop).toBeGreaterThan(0);
   });
 
   test("a list that keeps its drag events to itself (useDragSort) scrolls the page all the same", () => {
@@ -228,8 +238,7 @@ describe("in the window", () => {
     main.style.overflowY = "auto"; // index.css: `main { overflow: auto }`, which jsdom does not load
     layOut(main, TOP, BOTTOM - TOP, 3000);
     const pack = screen.getByText("The Outcast", { selector: PACK_EN }).closest<HTMLElement>("[data-pk]")!;
-    fireEvent.dragStart(pack, { dataTransfer: dt() });
-    dragAt("dragOver", pack, { clientY: 400 });
+    dragAt("dragStart", pack, { clientY: MIDDLE });
     dragAt("dragOver", main.querySelector(".lane")!, { clientY: BOTTOM - 5 });
     await waitFor(() => expect(main.scrollTop).toBeGreaterThan(0));
     fireEvent.drop(main.querySelector(".lane")!, { dataTransfer: dt() });

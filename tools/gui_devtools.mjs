@@ -12,6 +12,11 @@ import { parseArgs } from "node:util";
 
 import { Cdp } from "./cdp.mjs";
 
+// A drag held at a --via point: dragover again every HOLD_TICK_MS (the HTML standard has a browser repeat it every
+// 350 +- 200 ms while a drag lasts, its drag-and-drop processing model), and --watch's value printed every WATCH_MS.
+const HOLD_TICK_MS = 100;
+const WATCH_MS = 500;
+
 const USAGE = `node tools/gui_devtools.mjs <command> ...
 
   open --root <dir> [--exe EXE] [--settings FILE] [--port N] [--timeout S]
@@ -51,9 +56,10 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
                                      drags <from> onto <to> and drops it, through the page's own drag-and-drop; with no
                                      <to>, or --cancel, the drag stays in the air (over <to>, else the last --via point)
                                      for --keep S (10), then is cancelled, as Esc cancels a drag. Each --via point is
-                                     gone over first, in turn, and held MS ms, dragover sent again every 100 ms as the
-                                     browser does while a drag is held still: a drag held at a page's edge (#916). --watch
-                                     (with --via) prints EXPR's value every 500 ms of a hold, and at its start and end
+                                     gone over first, in turn, and held MS ms, dragover sent again every ${HOLD_TICK_MS} ms
+                                     (a browser repeats it while a drag lasts): a drag held at a page's edge (#916).
+                                     --watch (with --via) prints EXPR's value every ${WATCH_MS} ms of a hold, and at its
+                                     start and end
   a11y <target>                      the accessibility node: role, name, description, value and its states
   console [--reload] [--seconds S]   the page's console messages and errors for S (5) seconds, one JSON line each
 
@@ -120,10 +126,6 @@ const pair = (text, name) => {
   if (!m) usage(`${name} takes DX,DY, as 0,40`);
   return { x: Number(m[1]), y: Number(m[2]) };
 };
-// A drag held at a --via point: dragover again every HOLD_TICK ms, as the browser sends it while a drag stays still, and
-// --watch's value printed every WATCH_MS.
-const HOLD_TICK = 100;
-const WATCH_MS = 500;
 const VIA = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*:\s*(\d+)\s*$/; // "x,y:ms": a point in CSS px, held ms
 const viaPoint = (text) => {
   const m = VIA.exec(text);
@@ -730,9 +732,9 @@ const STEPS = {
       const until = Date.now() + v.ms;
       for (let n = 1; ; n++) {
         await dragAt(v);
-        await sleep(HOLD_TICK);
+        await sleep(HOLD_TICK_MS);
         if (Date.now() >= until) break;
-        if (n % (WATCH_MS / HOLD_TICK) === 0) await watch();
+        if (n % (WATCH_MS / HOLD_TICK_MS) === 0) await watch();
       }
       await watch();
     }
