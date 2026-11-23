@@ -100,7 +100,8 @@ export function useDragScroll() {
         else if (held.picked && !(Math.sign(v) === Math.sign(held.picked) && Math.abs(v) <= Math.abs(held.picked))) held.picked = 0;
         if (!frame) frame = requestAnimationFrame(step);
       },
-      // into another element, the one it enters is relatedTarget; out of the window, none: still until the next dragover
+      // Blink names the element a drag enters as relatedTarget, and none when the drag leaves the page (event_handler.cc,
+      // UpdateDragAndDrop and CancelDragAndDrop): out of the window, still until the next dragover
       dragleave: (e) => { if (held && e.relatedTarget === null) { held.y = null; halt(); } },
       drop: end,
       dragend: end,
