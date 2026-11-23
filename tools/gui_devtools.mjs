@@ -12,8 +12,8 @@ import { parseArgs } from "node:util";
 
 import { Cdp } from "./cdp.mjs";
 
-// A drag held at a --via point: dragover again every HOLD_TICK_MS (the HTML standard has a browser repeat it every
-// 350 +- 200 ms while a drag lasts, its drag-and-drop processing model), and --watch's value printed every WATCH_MS.
+// A drag held at a --via point: dragover again every HOLD_TICK_MS, as a browser repeats it while a drag lasts
+// (docs/agents/gui-driving.md, "Input"), and --watch's value printed every WATCH_MS.
 const HOLD_TICK_MS = 100;
 const WATCH_MS = 500;
 

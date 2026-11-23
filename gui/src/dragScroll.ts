@@ -98,8 +98,10 @@ export function useDragScroll() {
         if (!held) return;
         if (held.start.defaultPrevented) return end(); // a list refused the drag (useDragSort's canDrag): none is under way
         held.y = e.clientY;
-        const v = edgeSpeed(e.clientY, ...bandOf(held.box)), w = held.pickupSpeed;
-        if (w && !(Math.sign(v) === Math.sign(w) && Math.abs(v) <= Math.abs(w))) held.pickupSpeed = 0; // nearer the edge, or out
+        const v = edgeSpeed(e.clientY, ...bandOf(held.box));
+        const { pickupSpeed } = held;
+        const stillThere = Math.sign(v) === Math.sign(pickupSpeed) && Math.abs(v) <= Math.abs(pickupSpeed);
+        if (pickupSpeed && !stillThere) held.pickupSpeed = 0; // nearer the edge, or out of its zone
         if (!frame) frame = requestAnimationFrame(step);
       },
       // Blink names the element a drag enters as relatedTarget, and none when the drag leaves the page (event_handler.cc,
