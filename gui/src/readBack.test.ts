@@ -154,6 +154,7 @@ describe("from MXU's config file", () => {
     expect(off.data.run.start_team).toBeNull();
     expect(off.report.read.map((r) => r.path)).not.toContain("run/start_team");
     expect(off.report.missed).toEqual([]);
+    expect(off.report.same).toBe(0);
     expect(startTeam("a").data.run.start_team).toBe("a");
     const gone = startTeam("gone");
     expect(gone.data.run.start_team).toBeNull();
@@ -235,6 +236,15 @@ describe("from MXU's config file", () => {
 });
 
 describe("without MXU's file", () => {
+  test("settings.v20.json's start flag on a disabled team is dropped too (#878)", () => {
+    const data = migrated();
+    data.teams.find((t) => t.id === "b")!.enabled = false;
+    const v20 = JSON.stringify(olderFile(20, [{ set: "run/start_team", value: "b" }]));
+    const { data: out, report } = readBack(data, 22, { ...none, v20 });
+    expect(out.run.start_team).toBeNull();
+    expect(report.missed).toEqual([]);
+  });
+
   test("settings.v20.json's run options come back, a team deleted since and a value broken by hand listed", () => {
     const v20 = JSON.stringify(olderFile(20, [
       { set: "run/difficulty", value: "hard" }, { set: "run/runs", value: null }, { set: "run/wipe_retries", value: -1 },
