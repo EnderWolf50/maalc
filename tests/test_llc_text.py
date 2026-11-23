@@ -217,8 +217,10 @@ def test_the_chinese_text_credits_llc_under_its_non_commercial_license_and_not_t
 
 def test_every_file_names_the_one_conversion_it_was_written_with():
     # #899: all LLC text by s2tw and the 松肉 fix
+    import llc_text
+    assert llc_text.CONVERSION_NOTE.startswith("OpenCC s2tw ") and llc_text.CONVERSION_NOTE.endswith("松肉->鬆肉")
     for key, data in DATA.items():
-        assert re.findall(r"OpenCC (\w+)", data["note"]) == ["s2tw"] and "松肉->鬆肉" in data["note"], key
+        assert re.findall(r"OpenCC (\w+)", data["note"]) == ["s2tw"] and llc_text.CONVERSION_NOTE in data["note"], key
 
 
 def chinese_strings(value, under_zh=False):

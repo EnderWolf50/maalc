@@ -382,8 +382,8 @@ def _start_buffs(static, titles, templates, keywords, convert):
 
 
 def grace_texts(z, static):
-    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, in LLC's Chinese
-    wording (to_traditional) and the game's yellow marks (effect_lines)."""
+    """(base id -> title, base id -> {base, plus, plus2} -> [effect lines]) of the start-buff graces, LLC's Chinese in
+    its own wording and Taiwan's glyphs (to_traditional), and the game's yellow marks (effect_lines)."""
     templates = {x["id"]: x["description"] for x in read(z, "DungeonStartBuffs_MD7.json")}
     titles = {x["id"]: x["content"] for x in read(z, "MirrorDungeonUI_5.json")}
     return _start_buffs(static, titles, templates, keyword_names(z), to_traditional)

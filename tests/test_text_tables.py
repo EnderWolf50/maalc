@@ -22,7 +22,7 @@ def test_every_table_names_the_one_conversion_it_was_written_with():
     # #899: all LLC text by s2tw and the 松肉 fix, as the settings GUI's data files
     for name in ("event_text.json", "gift_text.json", "trial_text.json"):
         note = json.loads((tt.DATA / name).read_text(encoding="utf-8"))["note"]
-        assert re.findall(r"OpenCC (\w+)", note) == ["s2tw"] and "松肉->鬆肉" in note, name
+        assert re.findall(r"OpenCC (\w+)", note) == ["s2tw"] and tt.CONVERSION_NOTE in note, name
 
 
 def test_gift_text_names_the_buff_tags_squeezes_blank_lines_and_drops_markup():
