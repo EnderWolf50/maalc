@@ -335,8 +335,9 @@ class PlayTurn(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         x, y = argv.box[0], argv.box[1]
         dx, dy = x + START_DISC[0], y + START_DISC[1]
-        if time.time() - RUN.setdefault("battle_start", time.time()) > recovery.BATTLE_LIMIT:
-            return stuck(f"battle over {recovery.BATTLE_LIMIT // 60} min", level=2)  # skips L1 (spec 06)
+        limit = recovery.battle_limit(RUN["lux"]["size"] if "lux" in RUN else 1)  # the Consecutive Battle's N (#914)
+        if time.time() - RUN.setdefault("battle_start", time.time()) > limit:
+            return stuck(f"battle over {limit // 60} min", level=2)  # skips L1 (spec 06)
         # Live 2026-10-17: the Win Rate label also matches in the first frames of a turn playing out (the
         # screen moving), and a tap in the turn's opening can do nothing: act on a still HUD only. Live
         # 2026-10-21 (#229): a swarm of enemies kept the battlefield moving for good; turn 3 waited 18 min, twice.

@@ -33,6 +33,35 @@ def test_a_missed_victory_does_not_carry_the_battle_clock_into_the_next_battle(c
     assert actions.STUCK["flag"] is None
 
 
+def turn_after(context, monkeypatch, minutes, waves=None):
+    """PlayTurn `minutes` into a battle: a Luxcavation one entered at Consecutive Battle x`waves`, or with None a Mirror
+    Dungeon one. The stuck it flags (None: none)."""
+    now = 50_000.0
+    monkeypatch.setattr(actions.time, "time", lambda: now)
+    patch_all(monkeypatch, "still", lambda *a, **k: None)  # the HUD still moving: PlayTurn hands back after its clock
+    if waves is not None:
+        actions.RUN["lux"] = {"name": "EXP Luxcavation", "size": waves}
+    actions.RUN["battle_start"] = now - minutes * 60
+    battle_actions.PlayTurn().run(context, SimpleNamespace(box=[600, 400, 40, 20]))
+    return actions.STUCK["flag"]
+
+
+@pytest.mark.parametrize("minutes, flag", [
+    (25, None),  # #914: 7 of the 10 waves done at about 3 min each, wave 8 under way when 20 min stopped it
+    (199, None),
+    (201, (None, 2, "battle over 200 min")),
+])
+def test_a_consecutive_luxcavation_battle_has_the_battle_limit_once_a_wave(context, monkeypatch, minutes, flag):
+    # The game plays Consecutive Battle x10 as one battle of 10 waves (live 2026-11-23, #914).
+    assert turn_after(context, monkeypatch, minutes, waves=10) == flag
+
+
+@pytest.mark.parametrize("waves", [1, None], ids=["luxcavation x1", "mirror"])
+@pytest.mark.parametrize("minutes, flag", [(19, None), (21, (None, 2, "battle over 20 min"))])
+def test_a_single_luxcavation_battle_and_a_mirror_battle_keep_20_minutes(context, monkeypatch, waves, minutes, flag):
+    assert turn_after(context, monkeypatch, minutes, waves) == flag
+
+
 def test_a_formation_page_still_fading_in_is_read_once_it_is_still(context, monkeypatch):
     # Live (#58): read mid-fade, Total Participants gave 3 alive of 12.
     actions.RUN.update(team={"min_alive": 5, "name": "t", "id": "t"}, settings={})
