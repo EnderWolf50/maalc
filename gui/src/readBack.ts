@@ -135,11 +135,14 @@ class Reader {
     this.read.add(path);
   }
 
-  /** A team id: none picked, one of the teams, or one deleted since, which is noted and picks none. */
+  /** A team id: none picked, one of the teams, or one deleted since, which is noted and picks none. The start flag on a
+   * disabled team picks none too (#878), unnoted and not counted as read. */
   team(path: string, id: unknown) {
     if (id === null || (typeof id === "string" && NO_TEAM.has(id))) return this.put(path, null);
     if (typeof id !== "string") return this.missed.push({ kind: "value", path, value: shown(id) });
-    if (this.data.teams.some((t) => t.id === id)) return this.put(path, id);
+    const team = this.data.teams.find((t) => t.id === id);
+    if (team?.enabled === false && path === "run/start_team") return setAt(this.data, path, null);
+    if (team) return this.put(path, id);
     this.missed.push({ kind: "team", path, id, label: this.labels.get(id) ?? null });
   }
 
