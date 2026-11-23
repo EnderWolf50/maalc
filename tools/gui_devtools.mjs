@@ -12,6 +12,11 @@ import { parseArgs } from "node:util";
 
 import { Cdp } from "./cdp.mjs";
 
+// A drag held at a --via point: dragover again every HOLD_TICK_MS, as a browser repeats it while a drag lasts
+// (docs/agents/gui-driving.md, "Input"), and --watch's value printed every WATCH_MS.
+const HOLD_TICK_MS = 100;
+const WATCH_MS = 500;
+
 const USAGE = `node tools/gui_devtools.mjs <command> ...
 
   open --root <dir> [--exe EXE] [--settings FILE] [--port N] [--timeout S]
@@ -47,16 +52,20 @@ const USAGE = `node tools/gui_devtools.mjs <command> ...
                                      key presses to the focused element: Shift+Tab, Ctrl+S, Alt+F4, F5, Enter, Escape,
                                      PageDown, a, 7 ...; --ime reports the key as an input method's "Process"; prints
                                      what has the focus after
-  drag <from> [<to>] [--steps N] [--cancel]
+  drag <from> [<to>] [--steps N] [--via X,Y:MS]... [--watch EXPR] [--cancel]
                                      drags <from> onto <to> and drops it, through the page's own drag-and-drop; with no
-                                     <to>, or --cancel, the drag stays in the air (over <to>) for --keep S (10), then is
-                                     cancelled
+                                     <to>, or --cancel, the drag stays in the air (over <to>, else the last --via point)
+                                     for --keep S (10), then is cancelled, as Esc cancels a drag. Each --via point is
+                                     gone over first, in turn, and held MS ms, dragover sent again every ${HOLD_TICK_MS} ms
+                                     (a browser repeats it while a drag lasts): a drag held at a page's edge (#916).
+                                     --watch (with --via) prints EXPR's value every ${WATCH_MS} ms of a hold, and at its
+                                     start and end
   a11y <target>                      the accessibility node: role, name, description, value and its states
   console [--reload] [--seconds S]   the page's console messages and errors for S (5) seconds, one JSON line each
 
   A target is a point "x,y" (CSS px), a CSS selector (its first match) or "js:<expression>" for an element. An element
-  is scrolled into view only when its centre is outside the page; the output names what is under the point ("hit") and
-  whether that is something over the target ("covered").
+  is scrolled into view only when its centre is outside the page, and the output then says "scrolled": true; it names
+  what is under the point ("hit") and whether that is something over the target ("covered").
   Session options of every page command: --scheme light|dark, --viewport WxH (the page laid out at that size, drawn
   at the window's top left) and --scale N (N device px a CSS px; the window's own without it) for the command's
   session; --keep S|forever holds the session, and what it emulates, that long after the steps; --then <expression> is
@@ -94,7 +103,7 @@ const COMMANDS = {
   press: { page: true, options: { hold: str, move: str, steps: str, button: str, with: str } },
   hover: { page: true, holds: true, options: { force: flag } },
   key: { page: true, options: { ime: flag, delay: str } },
-  drag: { page: true, options: { steps: str, cancel: flag } },
+  drag: { page: true, options: { steps: str, cancel: flag, via: { type: "string", multiple: true }, watch: str } },
   a11y: { page: true },
   console: { page: true, options: { reload: flag, seconds: str } },
 };
@@ -116,6 +125,12 @@ const pair = (text, name) => {
   const m = POINT.exec(text ?? "");
   if (!m) usage(`${name} takes DX,DY, as 0,40`);
   return { x: Number(m[1]), y: Number(m[2]) };
+};
+const VIA = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*:\s*(\d+)\s*$/; // "x,y:ms": a point in CSS px, held ms
+const viaPoint = (text) => {
+  const m = VIA.exec(text);
+  if (!m) usage(`--via takes X,Y:MS, a point and how long the drag stays there, as 700,835:3000, not ${JSON.stringify(text)}`);
+  return { x: Number(m[1]), y: Number(m[2]), ms: Number(m[3]) };
 };
 const element = (text, name) => {
   const t = parseTarget(text);
@@ -204,6 +219,8 @@ export function parseCommand(argv) {
     case "drag":
       targets(1, 2, "a target to drag");
       if (options.steps !== undefined) number(options.steps, "--steps", { min: 1, integer: true });
+      out.via = (options.via ?? []).map(viaPoint);
+      if (options.watch !== undefined && !out.via.length) usage("--watch prints a value while a --via point is held: name one");
       inAir = args.length === 1 || !!options.cancel;
       break;
     case "console":
@@ -541,9 +558,11 @@ async function pointOf(cdp, t) {
     if (!el) return null;
     const centre = () => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
     let [x, y] = centre();
-    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) { el.scrollIntoView({ block: "center", inline: "nearest" }); [x, y] = centre(); }
+    // said in the output: the tool brought it into view, not the page (a drag's target a held drag should have scrolled to)
+    const scrolled = x < 0 || y < 0 || x >= innerWidth || y >= innerHeight;
+    if (scrolled) { el.scrollIntoView({ block: "center", inline: "nearest" }); [x, y] = centre(); }
     const hit = document.elementFromPoint(x, y);
-    return { x: round(x), y: round(y), hit: describe(hit), covered: !(hit && el.contains(hit)) };
+    return { x: round(x), y: round(y), hit: describe(hit), covered: !(hit && el.contains(hit)), ...(scrolled && { scrolled }) };
   })()`);
   if (!at) throw new Error(`nothing matches ${targetText(t)}`);
   return at;
@@ -694,13 +713,35 @@ const STEPS = {
     let over = null;
     let inAir = true;
     undo.push(async () => { if (inAir) await cdp.send("Input.dispatchDragEvent", { type: "dragCancel", x: last.x, y: last.y, data: drag.data }); });
-    if (toText) {
-      over = await pointOf(cdp, parseTarget(toText)); // after the drag began: the page may have moved the target since
-      for (const type of ["dragEnter", "dragOver"]) {
-        await cdp.send("Input.dispatchDragEvent", { type, x: over.x, y: over.y, data: drag.data });
+    let entered = false;
+    const dragAt = async (at) => {
+      if (!entered) {
+        await cdp.send("Input.dispatchDragEvent", { type: "dragEnter", x: at.x, y: at.y, data: drag.data });
+        entered = true;
         await sleep(120);
       }
-      last = over;
+      await cdp.send("Input.dispatchDragEvent", { type: "dragOver", x: at.x, y: at.y, data: drag.data });
+      last = at;
+    };
+    const began = Date.now();
+    const watch = async () => { if (c.options.watch) print({ ms: Date.now() - began, watch: await cdp.evaluate(c.options.watch) }); };
+    const via = [];
+    for (const v of c.via) {
+      via.push({ ...(await pointOf(cdp, { kind: "point", x: v.x, y: v.y })), ms: v.ms });
+      await watch();
+      const until = Date.now() + v.ms;
+      for (let n = 1; ; n++) {
+        await dragAt(v);
+        await sleep(HOLD_TICK_MS);
+        if (Date.now() >= until) break;
+        if (n % (WATCH_MS / HOLD_TICK_MS) === 0) await watch();
+      }
+      await watch();
+    }
+    if (toText) {
+      over = await pointOf(cdp, parseTarget(toText)); // after the drag began: the page may have moved the target since
+      await dragAt(over);
+      await sleep(120);
       if (!c.options.cancel) {
         await cdp.send("Input.dispatchDragEvent", { type: "drop", x: over.x, y: over.y, data: drag.data });
         inAir = false;
@@ -709,7 +750,7 @@ const STEPS = {
         down = false;
       }
     }
-    return { from, ...(over ? { to: over } : {}), dropped: !inAir };
+    return { from, ...(via.length ? { via } : {}), ...(over ? { to: over } : {}), dropped: !inAir };
   },
 
   async a11y(cdp, c) {

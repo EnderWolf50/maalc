@@ -67,6 +67,9 @@ def test_an_unknown_command_exits_2_and_names_it():
     (["open", "--root", "r", "--port", "70000"], "--port"),
     (["close"], "--root"),
     (["drag", ".a", "--port", "9333", "--keep", "forever"], "seconds"),  # a drag in the air ends by itself
+    (["drag", ".a", "--port", "9333", "--via", "700,835"], "X,Y:MS"),     # a via point says how long the drag stays
+    (["drag", ".a", "--port", "9333", "--via", ".lane:300"], "X,Y:MS"),   # a point in the window, not an element
+    (["drag", ".a", ".b", "--port", "9333", "--watch", "1"], "--via"),     # a value watched while a point is held
 ])
 def test_a_bad_command_line_exits_2_and_says_what_is_wrong(argv, words):
     r = run(*argv)
@@ -103,6 +106,13 @@ def test_a_drag_with_nowhere_to_drop_stays_in_the_air_ten_seconds_unless_told():
     assert call("parseCommand", ["drag", ".a", "--port", "1"])["keepMs"] == 10000
     assert call("parseCommand", ["drag", ".a", "--port", "1", "--keep", "4"])["keepMs"] == 4000
     assert call("parseCommand", ["drag", ".a", ".b", "--port", "1"])["keepMs"] == 0
+
+
+def test_each_via_point_reads_as_a_point_and_the_ms_the_drag_stays_there():
+    """A drag held at a page's edge (#916): the pointer stays there while the page scrolls, then goes on."""
+    got = call("parseCommand", ["drag", ".a", ".b", "--port", "1", "--via", "700,835:3000", "--via", "700, 600.5:250"])
+    assert got["via"] == [{"x": 700, "y": 835, "ms": 3000}, {"x": 700, "y": 600.5, "ms": 250}]
+    assert call("parseCommand", ["drag", ".a", ".b", "--port", "1"])["via"] == []
 
 
 # --- targets and keys ---------------------------------------------------------------------------------------------
