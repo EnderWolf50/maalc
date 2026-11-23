@@ -47,16 +47,21 @@ def turn_after(context, monkeypatch, minutes, waves=None):
 
 
 @pytest.mark.parametrize("minutes, flag", [
-    (25, None),  # #914: 7 of the 10 waves done at about 3 min each, wave 8 under way when 20 min stopped it
-    (199, None),
-    (201, (None, 2, "battle over 200 min")),
+    (25, None),  # #914: live 2026-11-23, x10 stage 10 took about 25 min of play (2.5 min a wave); 20 min had stopped it
+    (59, None),
+    (61, (None, 2, "battle over 60 min")),
 ])
-def test_a_consecutive_luxcavation_battle_has_the_battle_limit_once_a_wave(context, monkeypatch, minutes, flag):
+def test_a_consecutive_luxcavation_x10_battle_has_6_minutes_a_wave(context, monkeypatch, minutes, flag):
     # The game plays Consecutive Battle x10 as one battle of 10 waves (live 2026-11-23, #914).
     assert turn_after(context, monkeypatch, minutes, waves=10) == flag
 
 
-@pytest.mark.parametrize("waves", [1, None], ids=["luxcavation x1", "mirror"])
+@pytest.mark.parametrize("minutes, flag", [(23, None), (25, (None, 2, "battle over 24 min"))])
+def test_a_consecutive_luxcavation_x4_battle_has_24_minutes(context, monkeypatch, minutes, flag):
+    assert turn_after(context, monkeypatch, minutes, waves=4) == flag
+
+
+@pytest.mark.parametrize("waves", [1, 3, None], ids=["luxcavation x1", "luxcavation x3", "mirror"])
 @pytest.mark.parametrize("minutes, flag", [(19, None), (21, (None, 2, "battle over 20 min"))])
 def test_a_single_luxcavation_battle_and_a_mirror_battle_keep_20_minutes(context, monkeypatch, waves, minutes, flag):
     assert turn_after(context, monkeypatch, minutes, waves) == flag
