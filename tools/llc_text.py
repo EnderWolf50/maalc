@@ -462,7 +462,7 @@ def main():
     names = gift_names(z)
     for name, dump in (("gift_search.json", dump_search), ("gift_recipes.json", lambda d: json.dumps(d, ensure_ascii=False, indent=1) + "\n")):
         data = json.loads((DATA / name).read_text(encoding="utf-8"))
-        lists = [data["gifts"]] + ([data["materials"]] if "materials" in data else [])
+        lists = [data["gifts"]] + [data[k] for k in ("materials", "extra_gifts", "vestiges") if k in data]
         missing = [g["id"] for gifts in lists for g in gifts if g["id"] not in names]
         assert not missing, f"{name}: not in the release: {missing}"
         for gifts in lists:

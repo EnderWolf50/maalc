@@ -14,7 +14,8 @@ DATA = {k: json.loads(p.read_text(encoding="utf-8")) for k, p in FILES.items()}
 
 
 def gifts(data):
-    return data["gifts"] + data.get("materials", [])
+    """Every gift of gift_search.json or gift_recipes.json, each list the GUI names gifts from."""
+    return data["gifts"] + [g for k in ("materials", "extra_gifts", "vestiges") for g in data.get(k, [])]
 
 
 def test_every_gift_and_grace_has_a_chinese_name_and_the_graces_their_effects_in_english_and_chinese():
