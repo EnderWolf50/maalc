@@ -100,6 +100,7 @@
 - 入口頁的 `Parallel Superposition Mode` 點兩次 `INFINITY MIRROR` 仍讀不回目標層數要的那一邊：目標 5 仍是 ON，目標 10、15 仍是 OFF（[02-screens.md](02-screens.md)）。（#94、#434）
 - 遇到維護公告。（#14）
 - 遊戲用戶端過舊（標題畫面的 `Game client is not up to date`）：不按 Go to Store。（#86）
+- 模擬器開了 root（遊戲啟動時的 `Warning [50025]`，`DeviceRooted`）：L3 等標題畫面時第一個看它，認出就停止，不再重開（`Recover`、`restart_game`、`AcceptUpdate` 在 `RecoverL3` 之後看 `STUCK["halted"]`）。第三次重開沒有出現這個視窗（實機 2026-11-08），沒出現時照原本的 L3 上限。（#648）
 - 全滅後重打次數用完，且全域選項為「停止」（預設是「放棄這局」，#95）。（#16）
 - 隊伍設定的「存活少於 K 人時結束這局」成立，且全域選項為「停止」。（#16、#137）
 - 結算時 Claim 要花的腦啡肽模組不夠（[03-decisions.md](03-decisions.md) 第 14 節）。（#19）
@@ -124,7 +125,7 @@
 2. 執行期間必須開著 `SaveOnError`（`Toolkit.init_option` 的 `save_on_error`），讓辨識失敗的繪圖一併留下。（#13、#14）這是執行任務那一方的選項（執行器與 `tools/live/bot.py` 用 `Tasker.set_save_on_error`；v1.0.0 的 MXU 寫在 `config/maa_option.json`），Agent 設不到。（#31）
 3. 在 `<root>/logs/runs.jsonl` 寫入這局，結果為「停止」。（#14、#19）鏡牢任務停止時寫這一行。Agent 這次啟動後還沒碰過這局（例如一啟動就卡住）時，和接續的局一樣從設定與隊伍佇列補出這局的計畫來寫（[03-decisions.md](03-decisions.md) 第 1 節）：這時還沒讀到畫面，遊戲裡沒有進行中的局也照寫。這個任務已經結算完一局（領獎或放棄）、還沒開下一局時停止，不寫；設定讀不到時不寫。其他任務（Luxcavation、日常）的停止不寫。（#31、#436）
 4. 若使用者設定了 webhook，送出失敗通知（見下節）。（#14）
-5. 結束任務。帳號層級的停止（維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新、`auto_accept_terms` 關閉時遇到使用者協議）之後的任務都會撞上同一個畫面，所以再呼叫 `post_stop` 清空 tasker 的任務佇列，並記住這次啟動有過它（之後的任務在入口就失敗）；一次把整串送進 tasker 時整串因此結束，一次送一個時只結束這個任務（v1.0.0 的 MXU 是前者、MFAAvalonia 是後者），不論怎麼送，之後的任務都在入口失敗，見 [spec 01「帳號層級的停止與任務清單」](01-architecture.md)。其他停止只結束這個任務，清單繼續。（#364）
+5. 結束任務。帳號層級的停止（維護公告、用戶端過舊、模擬器開了 root、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新、`auto_accept_terms` 關閉時遇到使用者協議）之後的任務都會撞上同一個畫面，所以再呼叫 `post_stop` 清空 tasker 的任務佇列，並記住這次啟動有過它（之後的任務在入口就失敗）；一次把整串送進 tasker 時整串因此結束，一次送一個時只結束這個任務（v1.0.0 的 MXU 是前者、MFAAvalonia 是後者），不論怎麼送，之後的任務都在入口失敗，見 [spec 01「帳號層級的停止與任務清單」](01-architecture.md)。其他停止只結束這個任務，清單繼續。（#364）
 
 ## 失敗通知
 

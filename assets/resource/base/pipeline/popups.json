@@ -83,6 +83,19 @@
         "custom_action": "Halt",
         "custom_action_param": "the game client is out of date: update it from the Play Store, then start the bot again"
     },
+    // Root on in the emulator (#648, live 2026-11-08, tests/screens/RootWarning.png): the game refuses to start. Its window
+    // over the launcher, `Warning` / `[50025]` and a sentence in the device's language, closes the game after 10 s. Only
+    // the code is read, the one part no language changes; a whole text box that is that number is no page of the game
+    // (maa-tools test runs it on every screen of tests/screens). The user's to switch off: stop, the webhook says why.
+    // Also first in the next of every start of the game (RecoverStartApp, HomeGameAway), where no hub looks while it is up.
+    "DeviceRooted": {
+        "recognition": "OCR",
+        "roi": [350, 230, 580, 200],
+        "expected": "^\\W*50025\\W*$",
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "the game refuses to run while root is on in the emulator (Warning [50025]): switch root off in the emulator's settings, restart the emulator, then start the bot again"
+    },
     // The game's own update notices mid-run (strings of the client, EN_MainUIText; no capture, so both ROIs are wide):
     // "A new download has been added. The game will be closed ..." / "... Returning to the title screen." and
     // "Version update available. Please download new resources and try again.". Before PopupButton, which would press
@@ -258,6 +271,7 @@
                 "RetryPopup",
                 "MaintenanceNotice",
                 "ClientOutdated",
+                "DeviceRooted",
                 "UpdateDialog",
                 "UserAgreement",
                 "DownloadDialog",

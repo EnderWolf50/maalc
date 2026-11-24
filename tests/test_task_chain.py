@@ -312,7 +312,7 @@ def test_plan_run_backs_out_to_read_the_modules_when_the_trip_skipped_drive(cont
 
 
 @pytest.mark.parametrize("action, run", [
-    ("Halt", {}),  # MaintenanceNotice, ClientOutdated
+    ("Halt", {}),  # MaintenanceNotice, ClientOutdated, DeviceRooted
     ("ConfirmDownload", {"auto_download": False}),
     ("AcceptUpdate", {"auto_download": False}),
     ("AcceptTerms", {"auto_accept_terms": False}),

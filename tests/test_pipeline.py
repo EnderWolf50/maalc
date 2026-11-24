@@ -289,7 +289,7 @@ def test_the_daily_pages_wait_for_screens_not_for_delays():
     # The game started: up to the old 10 s and GoHome's 60 s for a screen GoHome knows, then GoHomeLost as GoHome's own
     # timeout has it.
     away = nodes["HomeGameAway"]
-    assert away.get("post_delay") == 0 and away["next"] == ["HomeGameUp"] and away["timeout"] >= 70000
+    assert away.get("post_delay") == 0 and away["next"] == ["DeviceRooted", "HomeGameUp"] and away["timeout"] >= 70000
     assert away["on_error"] == ["GoHomeLost"]
     assert set(nodes["HomeGameUp"]["any_of"]) >= {"RecoverTitle", "HomeReached", "HomeWindowTab", "Connecting"}
     # An action that ends the task (MailEmpty) or waits in itself (AssembleMain, ChargeMain: the window) sleeps nothing.

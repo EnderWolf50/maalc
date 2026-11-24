@@ -484,8 +484,8 @@ def stop(context, reason, line=None, whole_list=False):
 
     line is this run's line when the caller knows it better (Settle); otherwise one is made up from the run plan, in a
     Mirror Dungeon task that stops before it touched the run too, unless it ended one already (#436). whole_list: an account-level stop (maintenance,
-    an outdated client, a download or the terms with their auto setting off, an update that keeps coming back), which
-    every later task would meet too: post_stop then empties the client's queue (#364). Returns False, for the action to
+    an outdated client, root on in the emulator, a download or the terms with their auto setting off, an update that keeps
+    coming back), which every later task would meet too: post_stop then empties the client's queue (#364). Returns False, for the action to
     return: that ends the task.
     """
     log(f"stop: {reason}")
@@ -715,7 +715,8 @@ def restart_game(context, reason, kind=None):
     the task's L3_PER_TASK that went through (one that did not is not counted, as Ladder.failed uncharges the run) and the
     launch's Restarts, then GoHome's back keys, game starts and Window tab taps count afresh and the game state is
     forgotten. kind: the screen type the game is stuck on; None for HomeLost, which no hub read. True once RecoverL3
-    ran, through or not (GoHome goes on from wherever it left the game); False after the stop procedure."""
+    ran, through or not (GoHome goes on from wherever it left the game); False after the stop procedure, its own or the
+    one of a Halt inside RecoverL3 (DeviceRooted)."""
     if TASK.get("l3", 0) >= recovery.L3_PER_TASK:
         return stop(context, Reason(f"{reason}; game restarted {recovery.L3_PER_TASK} times this task", "Stuck"))
     if why := STUCK["restarts"].attempt(kind):
@@ -723,6 +724,8 @@ def restart_game(context, reason, kind=None):
     log(f"recovery L3: {reason} (restart {STUCK['restarts'].in_a_row} of {recovery.L3_FAILED_IN_A_ROW} in a row, "
         f"{TASK.get('l3', 0) + 1} of {recovery.L3_PER_TASK} this task)")
     detail = context.run_task("RecoverL3")
+    if STUCK["halted"]:  # as Recover's
+        return False
     if detail and detail.status.succeeded:
         TASK["l3"] = TASK.get("l3", 0) + 1
     else:
@@ -854,6 +857,8 @@ class Recover(CustomAction):
                 return stop(context, Reason(f"{reason}; {why}", "Stuck"))
             log(f"recovery L{level}: {reason}")
             detail = context.run_task(f"RecoverL{level}")
+            if STUCK["halted"]:  # the restarted game showed what ends the list (DeviceRooted's Halt): it has run stop()
+                return False
             if detail and detail.status.succeeded:
                 break
             log(f"L{level} did not go through")
@@ -1051,6 +1056,8 @@ class AcceptUpdate(CustomAction):
         log("game update accepted: restarting the game")
         time.sleep(3)  # kept (#58): the game takes the tap before it is stopped; once per game update, nothing to time
         detail = context.run_task("RecoverL3")
+        if STUCK["halted"]:  # as Recover's
+            return False
         if not (detail and detail.status.succeeded):
             log("the restart after the update did not reach the title")
         forget_game_state()
@@ -1093,8 +1100,8 @@ class AcceptTerms(CustomAction):
 
 @AgentServer.custom_action("Halt")
 class Halt(CustomAction):
-    """Stop on a screen the bot must not act on (the maintenance notice, a client too old for the server); the reason
-    goes to the log and the webhook. An account-level stop: the whole task list ends."""
+    """Stop on a screen the bot must not act on (the maintenance notice, a client too old for the server, the root
+    warning); the reason goes to the log and the webhook. An account-level stop: the whole task list ends."""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return stop(context, of_node(argv.node_name, f"{argv.node_name}: {param(argv.custom_action_param, '')}"),

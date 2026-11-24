@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 import actions
+import reasons
 from test_pipeline import hub_entries, load_nodes
 from agent_patch import patch_all
 
@@ -70,7 +71,7 @@ def test_sweep_where_both_boxes_read_ticked():
                     "LuxConsecExp9Open.png", "LuxConsecThread1.png", "LuxConsecThread10Open.png", "LuxConsecThread2Open.png",
                     "LuxConsecThread3Open.png", "LuxExp.png", "LuxExpLocked.png", "LuxExpStage10.png",
                     "LuxThread.png", "LuxThreadLust.png", "LuxThreadNoBox.synthetic.png", "LuxThreadScrolled.png", "Mailbox.png", "MailboxEmpty.png",
-                    "RunVictory.png", "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png",
+                    "RootWarning.png", "RunVictory.png", "SinnersTab.png", "SystemNotices.png", "TeamSelect.png", "Title.png",
                     "UserAgreementTicked.png"]
 
 
@@ -155,3 +156,33 @@ def test_a_client_too_old_for_the_server_stops_the_bot_without_a_tap(game):
     argv = SimpleNamespace(node_name="ClientOutdated", custom_action_param=json.dumps(node["custom_action_param"]))
     assert not actions.Halt().run(game.ctx, argv)
     assert game.taps == [] and "Play Store" in game.stops[0]
+
+
+def test_the_root_warning_stops_the_bot_without_a_tap_and_the_reason_says_root(game):
+    # #648 live 2026-11-08: root on in the emulator, the game shows `Warning [50025]` and closes itself.
+    nodes = load_nodes()
+    node = nodes["DeviceRooted"]
+    assert node["action"] == "Custom" and node["custom_action"] == "Halt"
+    assert "DeviceRooted" in hub_entries(nodes, "HubText")
+    argv = SimpleNamespace(node_name="DeviceRooted", custom_action_param=json.dumps(node["custom_action_param"]))
+    assert not actions.Halt().run(game.ctx, argv)
+    assert game.taps == [] and "root" in game.stops[0] and "50025" in game.stops[0]
+    assert game.stops[0].code == "DeviceRooted"
+    assert all("root" in text.lower() for text in reasons.CODES["DeviceRooted"].values())
+
+
+def test_the_root_warning_is_looked_for_first_after_each_start_of_the_game():
+    # It closes itself after 10 s: a wait for the title that does not list it would run out on the launcher.
+    nodes = load_nodes()
+    starts = [n for n, spec in nodes.items() if spec.get("action") == "StartApp"]
+    assert sorted(starts) == ["HomeGameAway", "RecoverStartApp"]
+    assert all(nodes[n]["next"][0] == "DeviceRooted" for n in starts)
+    # The window is up 10 s from when it shows, after the start: a longer wait before the first look could miss it.
+    assert nodes["RecoverStartApp"]["post_delay"] <= 10000
+
+
+def test_an_update_restart_into_the_root_warning_ends_there(game, monkeypatch):
+    monkeypatch.setitem(actions.STUCK, "halted", None)
+    game.ctx.run_task.side_effect = lambda name: actions.STUCK.update(halted="DeviceRooted: root is on") or MagicMock()
+    assert actions.AcceptUpdate().run(game.ctx, SimpleNamespace(box=[600, 460, 80, 20])) is False
+    game.ctx.run_task.assert_called_once_with("RecoverL3")

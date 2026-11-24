@@ -610,6 +610,40 @@ def test_a_force_stop_that_fails_three_times_in_a_row_stops(hub, stops):
     assert actions.STUCK["ladder"].counts[3] == 0
 
 
+@pytest.fixture
+def rooted(hub, monkeypatch):
+    """L3 meets the Warning [50025] window (#648): its Halt stops the whole list inside RecoverL3, which MaaFramework ends
+    as succeeded (#514) or failed."""
+    monkeypatch.setitem(actions.STUCK, "halted", None)
+
+    def meets(succeeded):
+        def run_task(name):
+            actions.STUCK["halted"] = "DeviceRooted: root is on"
+            return MagicMock(**{"status.succeeded": succeeded})
+        hub.run_task.side_effect = run_task
+        return hub
+    return meets
+
+
+@pytest.mark.parametrize("succeeded", [True, False])
+def test_the_root_warning_in_a_restart_ends_the_recovery_there(rooted, stops, succeeded):
+    # Live 2026-11-08: three L3 in a row, each waiting 180 s for a title that could not come, and a stop that named L3.
+    ctx = rooted(succeeded)
+    actions.STUCK["flag"] = ("MirrorMap", 3, "the game is not in front (app.lawnchair)")
+    assert actions.Recover().run(ctx, None) is False
+    assert [c.args for c in ctx.run_task.call_args_list] == [("RecoverL3",)]
+    assert stops == []  # the window's Halt ran the stop procedure; no second stop over it
+
+
+@pytest.mark.parametrize("succeeded", [True, False])
+def test_the_root_warning_in_a_daily_restart_ends_the_task_there(rooted, stops, succeeded):
+    ctx = rooted(succeeded)
+    actions.STUCK["flag"] = FROZEN
+    assert actions.DailyRecover().run(ctx, PASS_STUCK) is False
+    assert [c.args for c in ctx.run_task.call_args_list] == [("RecoverL3",)]
+    assert stops == []
+
+
 FROZEN = ("PassBanner", 3, "PassBanner: the main window took none of 2 taps, the same picture after each: the game is frozen")
 PASS_STUCK = SimpleNamespace(node_name="PassStuck", custom_action_param=None)
 

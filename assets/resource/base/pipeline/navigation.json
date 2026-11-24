@@ -165,7 +165,7 @@
     },
     // Not the game in front (the launcher, the Play Store, no focus): start it; the title and its dialogs follow. Its
     // next waits for the first screen GoHome knows (HomeGameUp), up to the 10 s post_delay and GoHome's 60 s it had
-    // before (#362); none by then: GoHomeLost, as GoHome's own timeout.
+    // before (#362); none by then: GoHomeLost, as GoHome's own timeout. The root warning (DeviceRooted, #648) stops there.
     "HomeGameAway": {
         "recognition": "Custom",
         "custom_recognition": "GameAway",
@@ -176,6 +176,7 @@
         "timeout": 70000,
         "rate_limit": 500,
         "next": [
+            "DeviceRooted",
             "HomeGameUp"
         ],
         "on_error": [

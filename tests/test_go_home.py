@@ -21,7 +21,8 @@ TITLE_TAP = (540, 300, 200, 120)
 # screen name -> tests/screens image (None: black, the game is not up)
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "sinners": "SinnersTab.png", "mailbox": "Mailbox.png",
            "settings": "SettingsMenu.png", "entry": "EntryNewRun.png", "title": "Title.png", "black": None,
-           "battle": "LuxBattleTurn.png", "event": "LuxEventStory.png", "pressed": "WindowTabPressed.png"}
+           "battle": "LuxBattleTurn.png", "event": "LuxEventStory.png", "pressed": "WindowTabPressed.png",
+           "rooted": "RootWarning.png"}
 # where a tap moves: (screens it works on, its box, the screen it shows)
 TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE, "main"),
         (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main")]
@@ -51,7 +52,7 @@ class SleptClock:
 
 # The GoHome scenarios whose back key changes nothing keep the real clock: each of their waits runs out, and on a
 # SleptClock it would last its timeout in sleeps alone, its screenshots on top. Their tests count keys, not seconds.
-WALL = ("stuck", "restart", "restarts_used", "event")
+WALL = ("stuck", "restart", "restarts_used", "event", "rooted_restart")
 
 
 def child():
@@ -177,6 +178,9 @@ def child():
         "tab_stuck": ("drive", GAME),
         # the same, with a game restart left: the restarted game opens on the Drive page and takes the Window tab's tap again
         "tab_restart": ("drive", GAME),
+        # #648: root on in the emulator. Each start of the game brings the Warning [50025] window: GoHome's own start, a
+        # restart (L3) from a page the back key does not leave, and the window already up; each ends the list (post_stop)
+        "rooted": ("black", "com.android.launcher"), "rooted_restart": ("entry", GAME), "rooted_up": ("rooted", GAME),
         # J2 (live 2026-10-28): the last task stopped mid-battle; it ends the task list (post_stop): last
         "battle": ("battle", GAME),
     }.items():
@@ -187,7 +191,7 @@ def child():
             game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "on_key", Game.on_key.__get__(game)))[0]
             game.on_tap = lambda x, y, game=game: (setattr(game, "screen", "entry") if game.screen == "title" else Game.on_tap(game, x, y)) or True
         # stuck: the restarts in a row that L3 allows were used up before; restart: none were.
-        in_a_row = 0 if scenario in ("restart", "tab_restart") else recovery.L3_FAILED_IN_A_ROW
+        in_a_row = 0 if scenario in ("restart", "tab_restart", "rooted_restart") else recovery.L3_FAILED_IN_A_ROW
         actions.ROOT.joinpath("logs").mkdir(exist_ok=True)
         stops = len(list(actions.ROOT.joinpath("logs").rglob("agent.log")))
         override = {"GoHome": {"timeout": 4000}}
@@ -203,6 +207,10 @@ def child():
         if scenario == "restarts_used":  # one restart left, and the restarted game is as stuck as before
             in_a_row = recovery.L3_FAILED_IN_A_ROW - 1
             game.start_app = lambda intent, game=game: (setattr(game, "focus", GAME), setattr(game, "screen", "entry"), True)[-1]
+        if scenario.startswith("rooted"):  # the warning after every start; the back key does nothing
+            game.on_key = lambda keycode: True
+            game.start_app = lambda intent, game=game: (Game.start_app(game, intent), setattr(game, "screen", "rooted"))[0]
+            override["RecoverStartApp"] = {"timeout": 3000}
         actions.STUCK["restarts"] = recovery.Restarts()
         for _ in range(in_a_row):
             actions.STUCK["restarts"].attempt(None)
@@ -316,6 +324,16 @@ def test_go_home_in_a_battle_ends_the_task_list_without_a_back_key():
     assert o["stopped"] == 1 and o["halted"].startswith("HomeInBattle: "), json.dumps(o)
 
 
+def test_go_home_into_the_root_warning_ends_the_task_list_and_restarts_nothing_more():
+    # #648: live, three L3 in a row ran and failed. The first look at the window stops: after GoHome's own start of the
+    # game, inside an L3, and with the window already up (GoHome's HomeText).
+    for name, starts, stops in (("rooted", 1, 0), ("rooted_restart", 1, 1), ("rooted_up", 0, 0)):
+        o = run_child(__file__)[name]
+        assert (o["starts"], o["stops"], o["stopped"], o["clicks"]) == (starts, stops, 1, []), f"{name}: {json.dumps(o)}"
+        assert (o["halted"] or "").startswith("DeviceRooted: ") and "root" in o["halted"], f"{name}: {json.dumps(o)}"
+        assert any("stop code: DeviceRooted" in line for line in o["log"]), f"{name}: {json.dumps(o)}"
+
+
 def test_a_task_step_that_runs_go_home_hears_whether_the_main_window_was_reached():
     # #514: MaaFramework ends a sub-task that stopped its tasker as succeeded, so GoHome halted in a battle read as home.
     o = run_child(__file__)["go_home_main"]
@@ -327,10 +345,10 @@ def test_a_task_step_that_runs_go_home_hears_whether_the_main_window_was_reached
 def test_a_scenario_after_an_account_level_stop_posts_once_the_tasker_has_stopped():
     # #564: MaaFramework ignores a post while the tasker still stops (task id 0, no detail); on CI 2026-11-08 the
     # scenario after finish_battle posted while its stop task still ran, and the child died on the missing detail.
-    # go_home_battle, finish_battle, lux_home_battle and battle each end in an account-level stop whose stop task the
-    # child holds, and the scenario after each of the first three ran.
+    # go_home_battle, finish_battle, lux_home_battle, the three rooted ones and battle each end in an account-level stop
+    # whose stop task the child holds, and the scenario after each but the last ran.
     out = run_child(__file__)
-    assert out["held"] == 4, out["held"]
+    assert out["held"] == 7, out["held"]
     assert out["finish_battle"]["nodes"] and out["lux_home_battle"]["nodes"] and out["drive"]["nodes"], json.dumps(out)
 
 
