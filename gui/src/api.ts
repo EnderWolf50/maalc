@@ -29,8 +29,9 @@ export const GAME_FOLDERS = ["gift_icons", "keyword_icons", "buf_icons", "grace_
 const DATA = "../../assets/resource/base/data/";
 const under = (key: string) => key.slice(key.indexOf("/data/") + "/data/".length);
 
-/** A plain browser (`pnpm dev`, the tests): the repo's own data folder. Only the dev server and the tests get here: in a
- * build `import.meta.env.DEV` is false, so none of these files reaches the bundle. */
+/** A plain browser (`pnpm dev`, the tests): the repo's own data folder. Only the dev server, the tests and a
+ * `NODE_ENV=development` build (tools/gui_shots.mjs) get here: in a production build `import.meta.env.DEV` is false, so none
+ * of these files reaches the bundle. */
 async function browserFiles(): Promise<GameFiles> {
   if (!import.meta.env.DEV) throw new Error("the game data can be read only by the app (no Tauri here)");
   const raw = import.meta.glob(["../../assets/resource/base/data/*.{json,yaml}", "../../assets/resource/base/data/*/{index,plates}.json"], { query: "?raw", import: "default" });

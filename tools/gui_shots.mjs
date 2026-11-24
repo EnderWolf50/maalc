@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Stills of the settings GUI (gui/) rendered in a headless Edge or Chrome, for a design review or a PR's before/after.
 //
-//   pnpm --dir gui exec vite build; pnpm --dir gui exec vite preview --port 1420   (another shell: the built app)
+//   NODE_ENV=development pnpm --dir gui exec vite build; pnpm --dir gui exec vite preview --port 1420   (another shell: the built app)
 //   node tools/gui_shots.mjs --out <dir> [--scheme light|dark|both] [--only teams,gifts] [--lang en_us]
 //                            [--settings FILE] [--url URL] [--width W --height H] [--scale 2] [--browser EXE]
 //   node tools/gui_shots.mjs --hold teams-full [--port 9222]   (keep that still's page open for a DevTools client)
@@ -9,7 +9,10 @@
 //
 // The page is the real app: in a plain browser gui/src/api.ts reads and writes settings.json in localStorage, which this
 // seeds before each still with the `valid` case of tests/settings_cases.json (or --settings), so no file on disk is read
-// or written and the header shows "(browser)" for the folder. The built app, not `pnpm dev`: the dev server hands the settings
+// or written and the header shows "(browser)" for the folder. The game data (gift icons, theme pack covers, grace cards) is read
+// from the repo's assets/resource/base/data only by a development build (gui/src/api.ts browserFiles: `import.meta.env.DEV`
+// bundles it), hence NODE_ENV=development: a production build reads it only inside the Tauri app, and every still of it would
+// say "Cannot read the game data" (#798), so a still with that page, or an image that did not load, fails. The built app, not `pnpm dev`: the dev server hands the settings
 // validator's Ajv helpers to the browser as CommonJS modules, and loading the `valid` case there fails ("func3 is not a function"). Each still starts from a fresh load, at the window size of
 // gui/src-tauri/tauri.conf.json, in the colour scheme asked for. A still named *-full is as tall as its page.
 // Writes <out>/<scheme>/<name>.png and prints one line per still. Needs Node 22 or later (global WebSocket), no packages.
@@ -123,6 +126,16 @@ const PAGE_HELPERS = `window.$ = {
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set.call(el, value);
     el.dispatchEvent(new Event("change", { bubbles: true }));
     await this.settle();
+  },
+  /** Why this page shows no game data, or null: the start error page (the data cannot be read) or an image that did not load. */
+  noData() {
+    const alert = document.querySelector("[role=alert]");
+    if (alert && alert.textContent.includes("Cannot read the game data")) {
+      return "the page cannot read the game data; build the app with NODE_ENV=development (a production build reads it only inside Tauri): " + alert.textContent.replace(/\\s+/g, " ").slice(0, 200);
+    }
+    const broken = [...document.images].filter((i) => i.complete && i.naturalWidth === 0);
+    if (broken.length) return broken.length + " image(s) did not load, e.g. " + broken[0].src.slice(0, 120);
+    return null;
   },
   openAll() { document.querySelectorAll("main details").forEach((d) => { d.open = true; }); },
   async images() {
@@ -253,9 +266,11 @@ async function open(cdp, scheme, shot, texts) {
     await cdp.send("Page.navigate", { url: opt.url }, s);
     await loaded;
     await evaluate(cdp, s, `(async () => { for (let i = 0; i < 100 && !document.querySelector("[role=tablist]"); i++) await $.sleep(100);
-      if (!document.querySelector("[role=tablist]")) throw new Error("the app did not render: " + (document.body?.innerText.slice(0, 300) || "(empty page)"));
+      if (!document.querySelector("[role=tablist]")) throw new Error($.noData() ?? "the app did not render: " + (document.body?.innerText.slice(0, 300) || "(empty page)"));
       await $.settle(); })()`);
     await evaluate(cdp, s, `(async () => { ${shot.steps} await $.images(); })()`);
+    const missing = await evaluate(cdp, s, "$.noData()");
+    if (missing) throw new Error(missing);
     if (shot.hover) {
       // The first selector that matches: the wanted gift of the fixture's list, else any tile.
       const box = await evaluate(cdp, s, `(() => { const el = ${JSON.stringify(shot.hover)}.map((q) => document.querySelector(q)).find(Boolean);
