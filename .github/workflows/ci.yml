@@ -200,19 +200,27 @@ jobs:
       - run: pnpm test
       # tauri's generate_context! needs the built frontend in gui/dist.
       - run: pnpm exec vite build
-      # tools/gui_shots.mjs shoots a development build with the game's data, and fails a still that shows none (#798).
+      # tools/gui_shots.mjs shoots a development build with the game's data and fails a still that shows none; a production
+      # build reads that data only inside Tauri, so the tool must refuse it (#798).
       - name: gui_shots stills carry the game data
         shell: pwsh
-        env:
-          NODE_ENV: development
         run: |
-          pnpm exec vite build --outDir "$env:RUNNER_TEMP/shots-app" --emptyOutDir
-          $preview = Start-Process cmd -ArgumentList '/c',"pnpm exec vite preview --outDir `"$env:RUNNER_TEMP/shots-app`" --host 127.0.0.1 --port 1420 --strictPort" -PassThru -WindowStyle Hidden
-          try {
-            for ($i = 0; $i -lt 100 -and -not (Test-NetConnection 127.0.0.1 -Port 1420 -InformationLevel Quiet -WarningAction SilentlyContinue); $i++) { Start-Sleep -Milliseconds 300 }
-            node ../tools/gui_shots.mjs --url http://127.0.0.1:1420/ --out "$env:RUNNER_TEMP/shots" --only gifts,starlight,themepacks-images
-            if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          } finally { taskkill /T /F /PID $preview.Id | Out-Null }
+          function Shoot($development, $out) {
+            $env:NODE_ENV = $development
+            pnpm exec vite build --outDir "$env:RUNNER_TEMP/$out-app" --emptyOutDir | Out-Host
+            $preview = Start-Process cmd -ArgumentList '/c',"pnpm exec vite preview --outDir `"$env:RUNNER_TEMP/$out-app`" --host 127.0.0.1 --port 1420 --strictPort" -PassThru -WindowStyle Hidden
+            try {
+              $up = $false; $code = 1
+              for ($i = 0; $i -lt 100 -and -not $up; $i++) { $up = Test-NetConnection 127.0.0.1 -Port 1420 -InformationLevel Quiet -WarningAction SilentlyContinue; if (-not $up) { Start-Sleep -Milliseconds 300 } }
+              if (-not $up) { throw 'vite preview did not start' }
+              node ../tools/gui_shots.mjs --url http://127.0.0.1:1420/ --out "$env:RUNNER_TEMP/$out" | Out-Host
+              $code = $LASTEXITCODE
+            } finally { taskkill /T /F /PID $preview.Id | Out-Null }
+            return $code
+          }
+          if ((Shoot 'development' 'shots') -ne 0) { throw 'a development build was not shot with its game data' }
+          if ((Shoot 'production' 'shots-prod') -eq 0) { throw 'a production build has no game data, yet gui_shots shot it' }
+          exit 0
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: gui/src-tauri
