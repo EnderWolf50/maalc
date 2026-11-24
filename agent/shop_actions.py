@@ -1414,7 +1414,7 @@ class Shop(CustomAction):
             shown = [s for s in shown if offer_whole(s["y"]) and not any(shop.same_offer(s, k) for k in known)]
         for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
             slot["plate"] = plate
-            if not shop.on_sale(slot) and not (shop.skill_slot(slot["name"]) or shop.skill_slot(plate["text"])):
+            if not shop.on_sale(slot) and not (shop.any_skill_slot(slot["name"]) or shop.any_skill_slot(plate["text"])):
                 log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
                     + (gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}) if plate["id"] else "unknown"))
         on_sale = [s for s in shown if shop.on_sale(s)]

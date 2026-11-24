@@ -225,8 +225,8 @@ def id_skill_slot(name):
     return has(name, "ID " + SKILL_STEM)
 
 
-def skill_slot(name):
-    """Whether a slot name is a skill replacement or ID Skill Search slot (#610): not a gift offer.
+def any_skill_slot(name):
+    """Whether a slot name is any skill offer (Replace <sinner>'s Skill or ID Skill Search, #610): not a gift offer.
 
     Wider than replace_slot on purpose: any Replace name is no gift, even when OCR clips the tail past SKILL_STEM.
     """
@@ -532,7 +532,7 @@ def same_offer(a, b):
 
 def on_sale(slot):
     """Whether a shop slot is a gift on sale for Cost, affordable or not: not bought, not a skill, not "??"."""
-    return slot["price"] is not None and not slot["purchased"] and not skill_slot(slot["name"])
+    return slot["price"] is not None and not slot["purchased"] and not any_skill_slot(slot["name"])
 
 
 def buy_plan(offers, cost, reserve, sold):

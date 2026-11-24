@@ -285,8 +285,8 @@ def test_a_clipped_skill_slot_is_never_on_sale():
     ("Rusted Muzzle", False),
     ("", False),
 ])
-def test_skill_slot_recognises_replace_and_id_search_offers_only(name, is_skill):
-    assert s.skill_slot(name) is is_skill
+def test_any_skill_slot_recognises_replace_and_id_search_offers_only(name, is_skill):
+    assert s.any_skill_slot(name) is is_skill
 
 
 def test_skill_plan_opens_one_slot_a_sinner():
