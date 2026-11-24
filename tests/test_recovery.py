@@ -627,7 +627,7 @@ def rooted(hub, monkeypatch):
 
 @pytest.mark.parametrize("succeeded", [True, False])
 def test_the_root_warning_in_a_restart_ends_the_recovery_there(rooted, stops, succeeded):
-    # Live 2026-11-08: three L3 in a row, each waiting 180 s for a title that could not come, and a stop that named L3.
+    # Live 2026-11-08: three L3 in a row, each waiting 180 s for a title that could not come.
     ctx = rooted(succeeded)
     actions.STUCK["flag"] = ("MirrorMap", 3, "the game is not in front (app.lawnchair)")
     assert actions.Recover().run(ctx, None) is False
@@ -799,8 +799,8 @@ def test_a_hub_handing_out_screens_never_reads_the_foreground(hub, clock):
 
 
 def test_a_game_that_never_comes_back_stops_after_three_restarts_in_a_row(hub, clock, stops):
-    # Live 2026-11-08: the emulator's root switched on, the game showed Warning [50025] and closed after every restart, the
-    # launcher in front each time; no restart got the bot past it, so #520's failed-in-a-row cap ends it.
+    # Live 2026-11-08: the emulator's root switched on, the game closed after every restart (after the first two with
+    # Warning [50025] up for 10 s, #648), the launcher in front each time; no restart got the bot past it, so #520's failed-in-a-row cap ends it.
     assert hub_passes(hub, clock, 60, lambda t: LAUNCHER) == AWAY_POLL + AWAY_AFTER
     hub.run_task.return_value.status.succeeded = False  # RecoverStartApp: no title within 180 s
     assert actions.Recover().run(hub, None) is False

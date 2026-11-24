@@ -100,7 +100,7 @@
 - 入口頁的 `Parallel Superposition Mode` 點兩次 `INFINITY MIRROR` 仍讀不回目標層數要的那一邊：目標 5 仍是 ON，目標 10、15 仍是 OFF（[02-screens.md](02-screens.md)）。（#94、#434）
 - 遇到維護公告。（#14）
 - 遊戲用戶端過舊（標題畫面的 `Game client is not up to date`）：不按 Go to Store。（#86）
-- 模擬器開了 root（遊戲啟動時的 `Warning [50025]`，`DeviceRooted`）：L3 等標題畫面時第一個看它，認出就停止，不再重開（`Recover`、`restart_game`、`AcceptUpdate` 在 `RecoverL3` 之後看 `STUCK["halted"]`）。第三次重開沒有出現這個視窗（實機 2026-11-08），沒出現時照原本的 L3 上限。（#648）
+- 模擬器開了 root（遊戲啟動時的 `Warning [50025]`，`DeviceRooted`）：L3 等標題畫面時第一個看它，認出就停止，不再重開（`Recover`、`restart_game`、`AcceptUpdate` 在 `RecoverL3` 之後看 `STUCK["halted"]`）。視窗沒出現的重開（實機 2026-11-08 的第三次）照原本的 L3 上限。（#648）
 - 全滅後重打次數用完，且全域選項為「停止」（預設是「放棄這局」，#95）。（#16）
 - 隊伍設定的「存活少於 K 人時結束這局」成立，且全域選項為「停止」。（#16、#137）
 - 結算時 Claim 要花的腦啡肽模組不夠（[03-decisions.md](03-decisions.md) 第 14 節）。（#19）

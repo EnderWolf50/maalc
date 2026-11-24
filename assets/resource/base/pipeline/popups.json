@@ -85,8 +85,8 @@
     },
     // Root on in the emulator (#648, live 2026-11-08, tests/screens/RootWarning.png): the game refuses to start. Its window
     // over the launcher, `Warning` / `[50025]` and a sentence in the device's language, closes the game after 10 s. Only
-    // the code is read, the one part no language changes; a whole text box that is that number is no page of the game
-    // (maa-tools test runs it on every screen of tests/screens). The user's to switch off: stop, the webhook says why.
+    // the code is read, the one part no language changes; a whole text box that is that number is no page of the game: over
+    // the 246 screens of tests/screens it hits RootWarning.png alone (tests/test_root_warning.py). The user's to switch off: stop, the webhook says why.
     // Also first in the next of every start of the game (RecoverStartApp, HomeGameAway), where no hub looks while it is up.
     "DeviceRooted": {
         "recognition": "OCR",
