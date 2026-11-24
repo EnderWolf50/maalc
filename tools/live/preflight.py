@@ -2,7 +2,7 @@
 
     uv run --group probe python tools/live/preflight.py screen [--install DIR] [--port 16384] [--shot OUT.png]
     uv run python tools/live/preflight.py recording --out DIR [--seconds 15]
-    uv run python tools/live/preflight.py plan --log run.log [--within 60]
+    uv run python tools/live/preflight.py plan --log run.log [--within 60] [--resumed]
 
 **screen** screenshots the emulator and names the screen with the pipeline's own nodes (the install's resource/base):
 `ok` the main screen (exit 0); `accept` an update, download or User Agreement dialog, which the user allowed the bot
@@ -19,7 +19,8 @@ without `ended` whose `ffmpeg_pid` still runs (the state format is `save()` of t
 **plan** waits up to `--within` seconds for the bot's `new run:` line (a run it planned itself) in `--log`. A
 `no run plan in memory` line, or none in time, means the bot continues a leftover run with no plan (weekly bonuses,
 Modules and the team are then not its own choice): exit 1, stop it. For a task that plans no Mirror run pass
-`--pattern`.
+`--pattern`. `--resumed` is for a bot started to pick a run up again (give_way.py): the `no run plan in memory` line with the
+team read from the team queue is then the one wanted, and a `new run:` line, or a team only assumed, is exit 1.
 """
 from __future__ import annotations
 
@@ -151,16 +152,22 @@ def recording_check(out: Path, seconds: float, say=print, sleep=time.sleep, cloc
 
 NEW_RUN = r"\[maalc\] new run: \S+, team "  # the plan line (agent/run_start_actions.py); the other `new run:` lines are Module reads
 NO_PLAN = re.compile(r"no run plan in memory")
+RESUMED = re.compile(r"no run plan in memory: team .* from the team queue, ")  # agent/actions.py current_run, the team known
 BOT_START = "[run] child pid"  # tools/live/bot.py writes it when it starts the agent; the log is appended to across runs
 
 
-def plan_line(log: Path, within: float, pattern: str = NEW_RUN, say=print, clock=time.monotonic, sleep=time.sleep) -> int:
-    want, deadline = re.compile(pattern), clock() + within
+def plan_line(log: Path, within: float, pattern: str = NEW_RUN, say=print, clock=time.monotonic, sleep=time.sleep,
+              resumed: bool = False) -> int:
+    """resumed: the bot is to pick a run up again, so RESUMED is the line wanted and a planned new run is the wrong one."""
+    want, deadline = RESUMED if resumed else re.compile(pattern), clock() + within
     while True:
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines() if log.exists() else []
         starts = [i for i, l in enumerate(lines) if BOT_START in l]
         lines = lines[starts[-1]:] if starts else lines  # only the bot run that just started
-        if bad := next((l for l in lines if NO_PLAN.search(l)), None):
+        if resumed and (bad := next((l for l in lines if re.search(NEW_RUN, l) or NO_PLAN.search(l) and not RESUMED.search(l)), None)):
+            say(f"stop: the bot did not pick the run up ({bad.strip()[:140]}). Stop the run tree and look at the screen")
+            return 1
+        if not resumed and (bad := next((l for l in lines if NO_PLAN.search(l)), None)):
             say(f"stop: the bot has no run plan ({bad.strip()[:140]}); it continues a leftover run. Stop the run tree and look at the screen")
             return 1
         if hit := next((l for l in lines if want.search(l)), None):
@@ -185,13 +192,15 @@ def main(argv=None) -> int:
     p = sub.add_parser("plan")
     p.add_argument("--log", type=Path, required=True)
     p.add_argument("--within", type=float, default=60)
-    p.add_argument("--pattern", default=NEW_RUN)
+    which = p.add_mutually_exclusive_group()
+    which.add_argument("--pattern", default=NEW_RUN)
+    which.add_argument("--resumed", action="store_true", help="the bot is to pick up a run in progress")
     a = ap.parse_args(argv)
     if a.command == "screen":
         return screen(a.install.resolve(), a.port, a.shot)
     if a.command == "recording":
         return recording_check(a.out, a.seconds)
-    return plan_line(a.log, a.within, a.pattern)
+    return plan_line(a.log, a.within, a.pattern, resumed=a.resumed)
 
 
 if __name__ == "__main__":
