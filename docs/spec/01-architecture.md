@@ -82,7 +82,7 @@
 - MXU（`5e923e8`）：一次送整串。`start_tasks_impl`（`src-tauri/src/commands/maa_agent.rs:554`）在 `maa_agent.rs:776-784` 的迴圈裡對每個勾選的任務呼叫 `tasker.post_task`，全部進了 tasker 才開始跑。`post_stop` 清掉的就是清單剩下的任務，整串結束。
 - MFAAvalonia（`098fe84`）：一次送一個。`ExecuteTasks`（`MFAAvalonia/Extensions/MaaFW/MaaProcessor.cs:3704-3728`）從自己的 `TaskQueue` 取一個任務，`TryRunTasksAsync`（`MaaProcessor.cs:4424-4431`）`AppendTask` 後等它結束才取下一個。`post_stop` 只結束目前這個任務（狀態不是 Succeeded，`MFAAvalonia/Helper/ValueType/MFATask.cs:92-113` 記為失敗）；「任務失敗後是否繼續」開著（預設，`MaaProcessor.cs:4469`）時清單照樣跑下一個，後面每個任務各自撞上同一個畫面、各自走停止程序。關掉這個選項時，第一個失敗就結束整串。
 - 所以 agent 也記住「這次啟動遇過帳號層級的停止」（`STUCK["halted"]`，停止的理由；像遊戲重啟次數一樣只在記憶體、不隨 `TaskStart` 清掉）：之後每個任務的入口（`TaskStart` 與它的子類別 `LuxStart`、`ChargeStart`）一看到就以失敗結束，不點任何東西、不存證據、不寫 `runs.jsonl`、不送 webhook，只 log 一行 `skip: account-level stop earlier this launch`。不論怎麼送都適用，不靠 `post_stop`。（#362 D8）
-- 帳號層級的停止：`GoHome` 遇到戰鬥（`HomeInBattle`，live-4 J2）、維護公告、用戶端過舊、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新（每次啟動重啟 2 次之後又出現，#362 D1）、`auto_accept_terms` 關閉時遇到使用者協議（#362 D2，維持原樣）。
+- 帳號層級的停止：`GoHome` 遇到戰鬥（`HomeInBattle`，live-4 J2）、維護公告、用戶端過舊、模擬器開了 root、`auto_download` 關閉時遇到下載或更新、遊戲一直要求更新（每次啟動重啟 2 次之後又出現，#362 D1）、`auto_accept_terms` 關閉時遇到使用者協議（#362 D2，維持原樣）。
 
 ### 日常任務的骨架
 

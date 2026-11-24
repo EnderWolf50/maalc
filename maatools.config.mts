@@ -17,6 +17,9 @@ const screens: [image: string, hits: string[]][] = [
   // (`Game client is not up to date`, Close / Go to Store) stops the bot, no button pressed.
   ['TitleDownload.png', ['DownloadDialog', 'GoToMirrorEntry', 'NavTitle']],
   ['TitleClientOutdated.png', ['ClientOutdated', 'GoToMirrorEntry', 'NavTitle']],
+  // Live 2026-11-08 (#648): root on in the emulator. The game refuses to start: `Warning` / `[50025]` in its own window
+  // over the launcher, which closes itself after 10 s. The code stops the bot.
+  ['RootWarning.png', ['DeviceRooted']],
   // Synthetic (#86): the one-button notice window (live) as a one-button error box on the title; its one button.
   ['TitleErrorConfirm.png', ['PopupButton', 'GoToMirrorEntry', 'NavTitle']],
   // Synthetic, no capture: TitleErrorConfirm.png with the client's own mid-run update text (EN_MainUIText

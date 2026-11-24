@@ -8,11 +8,13 @@ import pytest
 import resource_package as rp
 
 
-def test_the_program_knows_format_3_and_template_6():
+def test_the_program_knows_format_3_and_template_7():
     # format 3 (#899): theme_pack_names.json, the theme packs' Chinese names the settings GUI reads, a file format 2's data
     # lacks.
     # format 2 (#849): map_weights.yaml weighs Hidden Battle (hidden), a field format 1's data lacks. Nothing reads it
     # since #868 (Hidden Battle is no map node), and the field stays.
+    # template 7 (#648): the root warning's Halt (DeviceRooted) sits inside RecoverL3, after which an agent for
+    # template 6 would run RecoverL3 again, its stop procedure too: it does not read STUCK["halted"] there.
     # template 6 (#886): the agent tells a card with no Consecutive Battle box by LuxConsecLabel, a node template 5's
     # pipeline lacks.
     # template 5 (#434): the entry switch and the prompts after floors 5 and 10 act through ParallelModeSwitch,
@@ -22,7 +24,7 @@ def test_the_program_knows_format_3_and_template_6():
     # template 4 (#840): the agent matches the map's shop with MapNodeShopIconFlame too, a node template 3's pipeline lacks.
     # template 3 (#813, ADR 0015): the pipeline without the global options' node, as the agent reads the task options
     # from the settings file; template 2's agent read them from the attach of that node and of the entry nodes (#782)
-    assert (rp.FORMAT, rp.TEMPLATE) == (3, 6)
+    assert (rp.FORMAT, rp.TEMPLATE) == (3, 7)
 
 
 def test_versions_compare_as_tuples_of_ints():

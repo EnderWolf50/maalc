@@ -3,6 +3,7 @@
   "codes": {
     "MaintenanceNotice": {"zh_tw": "遊戲正在維護。", "en_us": "The game is under maintenance."},
     "ClientOutdated": {"zh_tw": "遊戲版本過舊。到 Play 商店更新遊戲，再按「開始」。", "en_us": "The game client is out of date. Update it from the Play Store, then press Start again."},
+    "DeviceRooted": {"zh_tw": "模擬器開了 root，遊戲不肯執行。到模擬器的設定關掉 root，重開模擬器，再按「開始」。", "en_us": "Root is on in the emulator, and the game refuses to run. Switch root off in the emulator's settings, restart the emulator, then press Start again."},
     "HomeInBattle": {"zh_tw": "遊戲正在戰鬥中。手動結束戰鬥，再按「開始」。", "en_us": "A battle is on. End it by hand, then press Start again."},
     "DownloadOff": {"zh_tw": "遊戲要下載資料，但「自動接受下載與更新」是關閉的。", "en_us": "The game asks to download data, but \"Accept downloads and updates\" is off."},
     "UpdateOff": {"zh_tw": "遊戲有更新，但「自動接受下載與更新」是關閉的。", "en_us": "The game has an update, but \"Accept downloads and updates\" is off."},

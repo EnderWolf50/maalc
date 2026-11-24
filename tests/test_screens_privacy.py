@@ -22,6 +22,7 @@ LUX_CONSEC = ['LuxConsecExp1', 'LuxConsecExp1Open', 'LuxConsecExp2Open', 'LuxCon
 
 IDENTITY = {
     "TryAgain": [TITLE_EMAIL], "RetryCountdown": [TITLE_EMAIL], "MaintenanceNotice": [TITLE_EMAIL],
+    "RootWarning": [UID_PLATE, TITLE_EMAIL, NAME_PLATE],  # no game screen: the launcher under the window (#648)
     "TitleDownload": [TITLE_EMAIL], "TitleClientOutdated": [TITLE_EMAIL], "TitleErrorConfirm": [TITLE_EMAIL],
     "UserAgreement": [TITLE_EMAIL], "UserAgreementTicked": [TITLE_EMAIL], "UpdateDialog.synthetic": [TITLE_EMAIL],
     "Title": [TITLE_EMAIL_SMALL], "TitleConnecting": [TITLE_EMAIL_SMALL], "TitleFading": [TITLE_EMAIL_SMALL],
@@ -81,7 +82,7 @@ def test_every_listed_fixture_exists():
 
 def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     shown = {p.stem for p in SCREENS.glob("*.png") if NAME_PLATE in required_boxes(p)}
-    assert shown == {"MainWindow", "MainWindowFadeIn", "Drive", "DriveWalpurgis", "SinnersTab", "WindowTabPressed", "ServerErrorRetry", "ServerErrorRetryCountdown",
+    assert shown == {"RootWarning", "MainWindow", "MainWindowFadeIn", "Drive", "DriveWalpurgis", "SinnersTab", "WindowTabPressed", "ServerErrorRetry", "ServerErrorRetryCountdown",
                      "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
                      "LuxExp", "LuxExpLocked", "LuxExpStage10", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
                      "LuxThreadNoBox.synthetic", "LuxThreadLevelsNoBox.synthetic",

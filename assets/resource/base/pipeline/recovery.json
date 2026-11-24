@@ -91,12 +91,17 @@
     // that took more than ~30 s to reach the title failed L3, 33.5 s in an offline run, #86). The 10 s stay (#58): in the
     // 6 archived restarts that reached it, the title came 3.5-11.4 s after them (13.5-21.4 s after the start), so they
     // cost nothing, and they keep the start's splash screens away from RecoverTitle's PopupButton OCR.
+    // The root warning (DeviceRooted, #648) shows after the start and closes itself after 10 s, so it is still up at the
+    // first look after these 10 s: on the recording of 2026-11-08 it came about 3.5 and 6.2 s after the start and stayed
+    // 9.9 and 10.0 s, so about 3.4 and 6.2 s of it were left for the looks, one a second. Its Halt ends the list, so whoever ran RecoverL3 reads
+    // STUCK["halted"] after it, not the status.
     "RecoverStartApp": {
         "action": "StartApp",
         "package": "com.ProjectMoon.LimbusCompany",
         "post_delay": 10000,
         "timeout": 180000,
         "next": [
+            "DeviceRooted",
             "RecoverTitle"
         ]
     },
