@@ -100,6 +100,36 @@ def test_chunks_before_the_first_offset_are_fitted_around_it():
     assert segs[0].offset is None and segs[0].corr < 0.8 and segs[1].offset is not None
 
 
+def test_fit_with_partial_log_anchors_inside_the_log_span():
+    # Two identical 120 s halves of video; the log covers only the second half (true offset +1.0 s).
+    # Anchoring from chunk 0 with a wide max_lost locks chunk 0 onto the second half's log (+121 s).
+    pts = np.arange(0, 240, 0.1)
+    pulses_120 = [(5, 7), (18, 20), (41, 43), (73, 75), (96, 98)]
+    def up(x):
+        return any(a <= x % 120 <= b for a, b in pulses_120)
+    vt = STARTED + pts
+    vs = {"Victory": np.array([0.9 if up(p) else 0.1 for p in pts])}
+    bt = np.arange(STARTED + 120, STARTED + 242, 0.37)
+    bot = {"Victory": (bt, np.array([0.85 if up(x - STARTED - 1.0) else 0.15 for x in bt]))}
+    segs = va.fit(vt, vs, bot, chunk=60, max_lost=600)
+    second_half = [s for s in segs if s.v0 >= STARTED + 120]
+    assert second_half and all(s.offset is not None and abs(s.offset - 1.0) <= 0.25 for s in second_half), segs
+
+
+def test_chunk_offset_rejects_tail_overlap_running_off_partial_log():
+    # Periodic pulses every 5 s with a short partial log ending at 26 s: at offset +6.25 s the window [16, 29]
+    # runs off the end of the log (12 samples vs 30 at +1.0 s) and scored 1.0 on a single pulse edge under median/2.
+    def up(pts):
+        return (pts % 5.0) < 1.5
+
+    vt = np.arange(1.0, 29.0, 0.2)
+    vs = {"Marker": np.array([0.9 if up(p) else 0.1 for p in vt])}
+    bt = np.arange(11.0, 26.0, 0.3)
+    bot = {"Marker": (bt, np.array([0.9 if up(t - 1.0) else 0.1 for t in bt]))}
+    seg = va.chunk_offset(vt, vs, bot, 16.0, 29.0, max_lost=10.0, min_corr=0.8)
+    assert seg.offset is not None and abs(seg.offset - 1.0) <= 0.25, seg
+
+
 def test_parse_log_sorts_the_bot_samples():
     lines = [LOG[1].replace("00.200", "00.900"), LOG[1]]
     _, _, bot = va.parse_log(lines, ["Victory"], "MirrorHub")
@@ -177,6 +207,39 @@ def test_on_frame_gets_every_frame_of_a_window_scored_or_not(tmp_path):
     assert len(vt) == 20  # 10 a second of the 2 s clip
     assert [t for t, _ in got] == [round(i / 30, 3) for i in range(15, 31)]  # every frame 0.5 s to 1.0 s in
     assert {s for _, s in got} == {(720, 1280, 3)}  # at the bot's size, as the scored frames
+
+
+def test_video_scores_seeks_to_start_and_stops_at_end(tmp_path, monkeypatch):
+    import cv2
+
+    path = tmp_path / "rec.avi"
+    out = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10, (320, 180))
+    for i in range(200):  # 20 s at 10 fps
+        out.write(np.full((180, 320, 3), i % 256, np.uint8))
+    out.release()
+
+    grabs = 0
+    real_cap = cv2.VideoCapture
+
+    class CountingCap:
+        def __init__(self, *args, **kwargs):
+            self._cap = real_cap(*args, **kwargs)
+
+        def grab(self):
+            nonlocal grabs
+            grabs += 1
+            return self._cap.grab()
+
+        def __getattr__(self, name):
+            return getattr(self._cap, name)
+
+    monkeypatch.setattr(cv2, "VideoCapture", CountingCap)
+    tpl = va.RESOURCE / "image/Screen/Connecting.png"
+    vt, _, _ = va.video_scores(path, {"Connecting": (tpl, (995, 45, 250, 60), 0.8)},
+                               started=1000.0, fps=10, start=1010.0, end=1013.0)
+    assert len(vt) == 31  # 10.0 s through 13.0 s inclusive at 10 fps
+    assert round(vt[0] - 1000.0, 2) == 10.0 and round(vt[-1] - 1000.0, 2) == 13.0
+    assert grabs <= 40  # sought near 10 s and stopped past 13 s, not all 200 frames
 
 
 def test_unaligned_frames_end_an_interval():

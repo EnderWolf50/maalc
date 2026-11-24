@@ -12,7 +12,9 @@ again, so look minus tap is the wait (a `tap(wait=)` shows as its seconds and ab
 skips the screenshots, so the look is the action's next controller call that is no screenshot (a click, swipe, touch,
 key or shell command) or its end: where the bot went on, and `settled` is read against the screen it went on from
 (#567). The video is aligned with the log as `tools/video_align.py` aligns it, with the same `--started`, `--node` and
-fitting options. Every frame from 0.5 s before a tap to its look is scored with the bot's own `recovery.thumb` (32x18,
+fitting options, except `--from`/`--to` (and the log's own time span) seek and stop video decoding so only that
+slice is read, `--max-lost` defaults to `MARGIN` (3 s) so a partial log cannot silently lock hours off, and an
+unaligned fit exits with an error. Every frame from 0.5 s before a tap to its look is scored with the bot's own `recovery.thumb` (32x18,
 one block per 40x40 pixels):
 
 - **moved**: the first frame after the tap with any block more than 8 levels off the last frame before it, the test of
@@ -126,6 +128,25 @@ def table(rows) -> str:
     return "\n".join(out)
 
 
+def video_range(lo: float | None, hi: float | None, bot: dict, found: list[Tap],
+                max_lost: float) -> tuple[float, float]:
+    """Wall-time (start, end) to decode: the requested --from/--to range intersected with the log's own span,
+    padded for tap windows and clock offsets in [-2, max_lost]. Raises ValueError when the log has no alignment
+    samples or does not overlap [--from, --to]."""
+    bot_lo = min((float(bt[0]) for bt, _ in bot.values() if len(bt)), default=None)
+    bot_hi = max((float(bt[-1]) for bt, _ in bot.values() if len(bt)), default=None)
+    if bot_lo is None or bot_hi is None:
+        raise ValueError("log has no TemplateMatcher scores for any --node")
+    log_lo = min([bot_lo, *(t.at for t in found)])
+    log_hi = max([bot_hi, *(t.look for t in found)])
+    win_lo = max(lo, log_lo) if lo is not None else log_lo
+    hi_cap = max([hi, *(t.look for t in found)]) if hi is not None else None
+    win_hi = min(hi_cap, log_hi) if hi_cap is not None else log_hi
+    if win_lo > win_hi:
+        raise ValueError("log has no samples in the requested --from/--to range")
+    return win_lo - max(BEFORE + MARGIN, max_lost), win_hi + MARGIN
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("video", type=Path)
@@ -140,23 +161,30 @@ def main(argv=None) -> None:
     ap.add_argument("--to", dest="hi", help="log time, ISO")
     ap.add_argument("--fps", type=float, default=10.0, help="video frames scored a second for the fit")
     ap.add_argument("--chunk", type=float, default=60.0)
-    ap.add_argument("--max-lost", type=float, default=7200.0)
+    ap.add_argument("--max-lost", type=float, default=MARGIN,
+                    help=f"max positive clock offset in s (default: {MARGIN:g}, matching the margin kept around each tap)")
     ap.add_argument("--min-corr", type=float, default=0.8)
     ap.add_argument("--drift", type=float, default=2.0)
     ap.add_argument("-o", "--out", type=Path)
     a = ap.parse_args(argv)
     nodes = {n: (va.RESOURCE / f if (va.RESOURCE / f).exists() else Path(f), tuple(map(int, roi.split(","))), float(th))
              for n, f, roi, th in a.node}
-    lo, hi = stamp(a.lo) if a.lo else 0.0, stamp(a.hi) if a.hi else float("inf")
-    found = [t for t in taps(log_lines(a.log), set(a.actions), a.until) if lo <= t.at <= hi]
+    lo, hi = stamp(a.lo) if a.lo else None, stamp(a.hi) if a.hi else None
+    found = [t for t in taps(log_lines(a.log), set(a.actions), a.until)
+             if (lo is None or t.at >= lo) and (hi is None or t.at <= hi)]
     _, _, bot = va.parse_log(log_lines(a.log), list(nodes), a.hub)
+    try:
+        v_start, v_end = video_range(lo, hi, bot, found, a.max_lost)
+    except ValueError as exc:
+        sys.exit(f"error: {exc}")
     kt, kthumbs = [], []
 
     def on_frame(t, im):
         kt.append(t)
         kthumbs.append(recovery.thumb(im))
     windows = [(t.at - BEFORE - MARGIN, t.look + MARGIN) for t in found]
-    vt, vs, still = va.video_scores(a.video, nodes, stamp(a.started), a.fps, windows, on_frame)
+    vt, vs, still = va.video_scores(a.video, nodes, stamp(a.started), a.fps, windows, on_frame,
+                                    start=v_start, end=v_end)
     frozen = va.freezes(vt, still, bot, blip=max(1.0, 3 / a.fps))
     segs = va.fit(vt, vs, bot, a.chunk, a.max_lost, a.min_corr, a.drift, frozen)
     for s in segs:
@@ -165,6 +193,9 @@ def main(argv=None) -> None:
         if s.offset is not None and abs(s.offset) > MARGIN - BEFORE:
             print(f"warning: offset {s.offset:+.3f} s is past the {MARGIN:g} s kept around each tap: rerun with a --started "
                   "nearer the first frame", file=sys.stderr)
+    if not any(s.offset is not None for s in segs):
+        sys.exit(f"error: could not align video with log in [-2, {a.max_lost:g}] s "
+                 "(no unique offset found; check --started, --from/--to, --node, or --max-lost)")
     lt = va.log_times(np.array(kt), segs, frozen)
     rows, missed = [], 0
     for t in found:
