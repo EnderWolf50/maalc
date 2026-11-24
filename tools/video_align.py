@@ -85,6 +85,29 @@ def parse_log(lines, names, hub: str):
     return starts, hits, bot
 
 
+def bot_span(bot: dict) -> tuple[float, float] | None:
+    """(earliest, latest) log timestamp across all nodes' bot scores, or None when empty."""
+    lo = min((float(bt[0]) for bt, _ in bot.values() if len(bt)), default=None)
+    hi = max((float(bt[-1]) for bt, _ in bot.values() if len(bt)), default=None)
+    return None if lo is None or hi is None else (lo, hi)
+
+
+def _seek_before(cap, target_s: float) -> bool:
+    """Seek cap to at or before target_s; returns True with the landing frame already grabbed.
+    Steps back if CAP_PROP_POS_MSEC overshoots (VFR or earlier PTS holes)."""
+    import cv2
+
+    seek = target_s
+    cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
+    while cap.grab():
+        pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        if pts <= target_s + 1e-6 or seek <= 0:
+            return True
+        seek = max(0.0, seek - max(pts - target_s, 1.0) * 2)
+        cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
+    return False
+
+
 def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, windows=(), on_frame=None,
                  start: float | None = None, end: float | None = None):
     """(wall time of each scored frame by its pts, {name: score per frame}, whether the frame is the one before
@@ -105,9 +128,9 @@ def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, wi
     vt, vs, still, prev = [], {n: [] for n in nodes}, [], None
     cap, due = cv2.VideoCapture(str(video)), 0.0
     try:
-        if start is not None and start > started:
-            cap.set(cv2.CAP_PROP_POS_MSEC, (start - started) * 1000)
-        while cap.grab():
+        first = _seek_before(cap, start - started) if start is not None and start > started else False
+        while first or cap.grab():
+            first = False
             pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
             t = started + pts
             if start is not None and t < start - 1e-6:
@@ -273,11 +296,10 @@ def fit(vt, vs, bot, chunk=60.0, max_lost=7200.0, min_corr=0.8, drift=2.0, froze
     def frozen_chunk(a, b):
         return sum(min(b, y) - max(a, x) for x, y in frozen if x < b and y > a) >= 0.9 * (b - a)
 
-    bot_lo = min((float(bt[0]) for bt, _ in bot.values() if len(bt)), default=None)
-    bot_hi = max((float(bt[-1]) for bt, _ in bot.values() if len(bt)), default=None)
+    span = bot_span(bot)
 
     def in_log(a, b):
-        return bot_lo is not None and min(b, bot_hi) - max(a, bot_lo) >= 0.5 * (b - a)
+        return span is not None and min(b, span[1]) - max(a, span[0]) >= 0.5 * (b - a)
 
     order = [c for c in chunks if in_log(*c)] + [c for c in chunks if not in_log(*c)]
     off = None

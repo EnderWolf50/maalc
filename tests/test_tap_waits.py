@@ -10,22 +10,27 @@ from maafw_timeline import stamp
 PRE = "[DBG][Px1][Tx2][X.cpp][L1]"
 
 
+def _stamp(t: str) -> str:
+    return t if " " in t else f"2026-11-08 09:38:{t}"
+
+
 def enter(t, node, action):
-    return (f"[2026-11-08 09:38:{t}]{PRE}[MaaNS::TaskNS::CustomAction::run] [context.task_id()=200000001] "
+    return (f"[{_stamp(t)}]{PRE}[MaaNS::TaskNS::CustomAction::run] [context.task_id()=200000001] "
             f"[node_name={node}] [session.action=true] [session.trans_arg=true] [param.name={action}] "
             "[param.custom_param=null] [reco_id=1] [rect=[1,2,3,4]] | enter \n")
 
 
 def leave(t, node, action):
-    return (f"[2026-11-08 09:38:{t}]{PRE}[MaaNS::TaskNS::CustomAction::run] [node_name={node}] [param.name={action}] "
+    return (f"[{_stamp(t)}]{PRE}[MaaNS::TaskNS::CustomAction::run] [node_name={node}] [param.name={action}] "
             "[session.action=true] [session.trans_arg=true] [ret=true] \n")
 
 
 def click(t, x, y):
-    return (f"[2026-11-08 09:38:{t}]{PRE}[MaaNS::AgentNS::ClientNS::AgentClient::handle_controller_post_click] "
+    ts = _stamp(t)
+    return (f"[{ts}]{PRE}[MaaNS::AgentNS::ClientNS::AgentClient::handle_controller_post_click] "
             f'[req={{"_ControllerPostClickReverseRequest":1,"contact":0,"controller_id":"0","pressure":1,"x":{x},"y":{y}}}] '
             "[ipc_addr_=ipc://x.sock] | enter \n"
-            f"[2026-11-08 09:38:{t}]{PRE}[MaaNS::AgentNS::ClientNS::AgentClient::handle_controller_post_click] | leave, 0ms \n")
+            f"[{ts}]{PRE}[MaaNS::AgentNS::ClientNS::AgentClient::handle_controller_post_click] | leave, 0ms \n")
 
 
 def shot(t):
@@ -107,16 +112,7 @@ def score_line(sec: float, node: str, score: float) -> str:
 
 
 def action_tap_lines(at_s: float, look_s: float, node: str = "WipeDialog", action: str = "Wipe") -> list[str]:
-    return [
-        f"[{iso(at_s - 0.1)}]{PRE}[MaaNS::TaskNS::CustomAction::run] [context.task_id()=200000001] "
-        f"[node_name={node}] [session.action=true] [session.trans_arg=true] [param.name={action}] "
-        "[param.custom_param=null] [reco_id=1] [rect=[1,2,3,4]] | enter \n",
-        f"[{iso(at_s)}]{PRE}[MaaNS::AgentNS::ClientNS::AgentClient::handle_controller_post_click] "
-        '[req={"_ControllerPostClickReverseRequest":1,"contact":0,"controller_id":"0","pressure":1,"x":640,"y":360}] '
-        "[ipc_addr_=ipc://x.sock] | enter \n",
-        f"[{iso(look_s)}]{PRE}[MaaNS::TaskNS::CustomAction::run] [node_name={node}] [param.name={action}] "
-        "[session.action=true] [session.trans_arg=true] [ret=true] \n",
-    ]
+    return [enter(iso(at_s - 0.1), node, action), click(iso(at_s), 640, 360), leave(iso(look_s), node, action)]
 
 
 def make_clip(tmp_path, duration: float, fps: int, up_fn, bright_fn=None):

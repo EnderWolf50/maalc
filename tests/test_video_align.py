@@ -242,6 +242,38 @@ def test_video_scores_seeks_to_start_and_stops_at_end(tmp_path, monkeypatch):
     assert grabs <= 40  # sought near 10 s and stopped past 13 s, not all 200 frames
 
 
+def test_video_scores_steps_back_when_seek_overshoots(tmp_path, monkeypatch):
+    # On VFR or recordings with earlier PTS holes, CAP_PROP_POS_MSEC can land past `start`; video_scores steps back.
+    import cv2
+
+    path = tmp_path / "rec.avi"
+    out = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10, (320, 180))
+    for i in range(200):  # 20 s at 10 fps
+        out.write(np.full((180, 320, 3), i % 256, np.uint8))
+    out.release()
+
+    real_cap = cv2.VideoCapture
+
+    class OvershootCap:
+        def __init__(self, *args, **kwargs):
+            self._cap = real_cap(*args, **kwargs)
+
+        def set(self, prop, value):
+            if prop == cv2.CAP_PROP_POS_MSEC and value > 0:
+                value += 2500.0  # simulate a 2.5 s PTS-hole overshoot
+            return self._cap.set(prop, value)
+
+        def __getattr__(self, name):
+            return getattr(self._cap, name)
+
+    monkeypatch.setattr(cv2, "VideoCapture", OvershootCap)
+    tpl = va.RESOURCE / "image/Screen/Connecting.png"
+    vt, _, _ = va.video_scores(path, {"Connecting": (tpl, (995, 45, 250, 60), 0.8)},
+                               started=1000.0, fps=10, start=1010.0, end=1013.0)
+    assert len(vt) == 31
+    assert round(vt[0] - 1000.0, 2) == 10.0 and round(vt[-1] - 1000.0, 2) == 13.0
+
+
 def test_unaligned_frames_end_an_interval():
     lt = np.array([0.0, 0.1, np.nan, 0.3, 0.4])
     rows = va.intervals(lt, np.full(5, 0.9), 0.6, hub=[], hits=[])

@@ -133,15 +133,14 @@ def video_range(lo: float | None, hi: float | None, bot: dict, found: list[Tap],
     """Wall-time (start, end) to decode: the requested --from/--to range intersected with the log's own span,
     padded for tap windows and clock offsets in [-2, max_lost]. Raises ValueError when the log has no alignment
     samples or does not overlap [--from, --to]."""
-    bot_lo = min((float(bt[0]) for bt, _ in bot.values() if len(bt)), default=None)
-    bot_hi = max((float(bt[-1]) for bt, _ in bot.values() if len(bt)), default=None)
-    if bot_lo is None or bot_hi is None:
+    span = va.bot_span(bot)
+    if span is None:
         raise ValueError("log has no TemplateMatcher scores for any --node")
-    log_lo = min([bot_lo, *(t.at for t in found)])
-    log_hi = max([bot_hi, *(t.look for t in found)])
+    log_lo = min([span[0], *(t.at for t in found)])
+    log_hi = max([span[1], *(t.look for t in found)])
     win_lo = max(lo, log_lo) if lo is not None else log_lo
-    hi_cap = max([hi, *(t.look for t in found)]) if hi is not None else None
-    win_hi = min(hi_cap, log_hi) if hi_cap is not None else log_hi
+    req_hi = max([hi, *(t.look for t in found)]) if hi is not None else None
+    win_hi = min(req_hi, log_hi) if req_hi is not None else log_hi
     if win_lo > win_hi:
         raise ValueError("log has no samples in the requested --from/--to range")
     return win_lo - max(BEFORE + MARGIN, max_lost), win_hi + MARGIN
