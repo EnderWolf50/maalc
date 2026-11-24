@@ -47,8 +47,8 @@ def plan_run_on_the_entry_page(context, monkeypatch):
 
 def sliding_dialog(context, settles_after):
     """The Enter dialog's words read from the 3rd screenshot after the tap on, the dialog still sliding in: each screenshot
-    differs from the last until the `settles_after`-th after the tap (None: it never settles, #607). Returns the screenshot
-    counts at the tap and, as a function, now."""
+    differs from the last until the `settles_after`-th after the tap (None: it never settles, #607). Returns a function: the
+    screenshots taken since the tap."""
     clicks = context.tasker.controller.post_click
     shots = context.tasker.controller.post_screencap.return_value.wait.return_value.get
     tapped = []
@@ -77,7 +77,7 @@ def test_plan_run_hands_back_only_once_the_enter_dialog_has_stopped_sliding_in(c
     looks = sliding_dialog(context, settles_after=8)
     assert run_start_actions.PlanRun().run(context, argv())
     assert taps(context) == [(1108, 494)]
-    assert looks() >= 9  # the words were up from the 3rd; it waited for the 8th, then one alike look
+    assert looks() == 9 and sum(clock) < 1.5  # words up from the 3rd; it waited for the 8th, then one alike look, not the 1.5 s limit
 
 
 def test_plan_run_hands_back_at_the_limit_when_the_enter_dialog_never_stops_moving(context, clock, monkeypatch):
@@ -85,7 +85,7 @@ def test_plan_run_hands_back_at_the_limit_when_the_enter_dialog_never_stops_movi
     plan_run_on_the_entry_page(context, monkeypatch)
     sliding_dialog(context, settles_after=None)
     assert run_start_actions.PlanRun().run(context, argv())
-    assert sum(clock) <= 5.0, clock
+    assert 2.0 <= sum(clock) <= 2.5, clock  # 0.4 s to read the words, 0.2 s, then still()'s 1.5 s limit
 
 
 @pytest.mark.parametrize(("setting", "expected"), [("auto", "normal"), ("hard", "hard")])
