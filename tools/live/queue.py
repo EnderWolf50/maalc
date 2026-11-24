@@ -16,7 +16,8 @@ and hands the command its ticket's path in MAALC_QUEUE_TICKET: a `backup.py hold
 A run whose ticket is removed while it waits (a cleared queue folder) does not start its command: it says so, leaves
 exit 1 as its result, and has to be queued again.
 `run --first` is for the daily task, which a 05:00 game reset ends (#465): its ticket goes right behind the one that
-holds the resource, ahead of every waiting one, and `status` marks it FIRST. The holder's run is not cut short; a
+holds the resource, ahead of every waiting one, and `status` marks it FIRST. The holder's run is not cut short, unless it
+runs give_way.py (#853), which leaves at a safe point and queues its next leg with `--first` too, behind the daily; a
 live-test hold that spans several bot runs ends before its next one (the maalc-live-test skill). With no holder it
 starts at once.
 `wait` blocks in the foreground until that ticket's command ends, prints its exit code and log path and exits with that
@@ -283,7 +284,8 @@ def wait(qdir: Path, name: str, timeout_s: float, is_alive=alive, poll: float = 
     return doc["exit"]
 
 
-FIRST_NOTE = " — FIRST: the daily task, due before the 05:00 reset; the holder ends its hold before its next bot run"
+FIRST_NOTE = (" — FIRST: the daily task, due before the 05:00 reset (or the next leg of a run that gave way to it); "
+              "the holder ends its hold before its next bot run")
 
 
 @dataclass(frozen=True)
@@ -387,7 +389,7 @@ def main(argv=None) -> int:
     r.add_argument("command", nargs=argparse.REMAINDER)
     r.add_argument("--log", help="the file the command's output goes to, for `wait` to print")
     r.add_argument("--first", action="store_true",
-                   help="queue right behind the run that holds the resource, ahead of the waiting ones (the daily task)")
+                   help="queue right behind the run that holds the resource, ahead of the waiting ones (the daily task, and give_way.py's next leg)")
     w = sub.add_parser("wait", help="block until a ticket's command ends; exit with its exit code")
     w.add_argument("--resource", choices=RESOURCES, required=True)
     w.add_argument("--name", required=True)

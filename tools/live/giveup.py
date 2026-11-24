@@ -227,7 +227,8 @@ def still_controller():
     return ctl
 
 
-def look_files(files: list[str], resource: Path) -> dict:
+def look_files(files: list[str], resource: Path, look=look) -> dict:
+    """Each image's screen as `look` names it (give_way.py gives its own)."""
     import numpy as np
     from PIL import Image
 

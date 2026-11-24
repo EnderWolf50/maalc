@@ -1,4 +1,4 @@
-"""Name the emulator's screen with the pipeline's own nodes: the probe of `preflight.py screen` and `giveup.py`.
+"""Name the emulator's screen with the pipeline's own nodes: the probe of `preflight.py screen`, `giveup.py` and `give_way.py`.
 
 One task runs a DirectHit probe node whose `next` lists the known screens in order, each with its action switched
 off, so the first screen node that hits names the screen and nothing is tapped. Each caller sets up its own Tasker:

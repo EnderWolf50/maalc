@@ -115,10 +115,10 @@ class Clock:
         self.t += s
 
 
-def plan(tmp_path, text, within=60):
+def plan(tmp_path, text, within=60, resumed=False):
     log, said, clock = tmp_path / "run.log", [], Clock()
     log.write_text(text, encoding="utf-8")
-    return pf.plan_line(log, within, say=said.append, clock=clock.now, sleep=clock.sleep), said, clock
+    return pf.plan_line(log, within, say=said.append, clock=clock.now, sleep=clock.sleep, resumed=resumed), said, clock
 
 
 def test_the_run_plan_line_passes(tmp_path):
@@ -151,6 +151,27 @@ def test_an_earlier_runs_no_plan_line_does_not_stop_a_planned_run(tmp_path):
 def test_only_the_plan_line_counts_not_the_other_new_run_lines(tmp_path):
     code, _, clock = plan(tmp_path, "10:00:01.000 [maalc] new run: the Modules were not read on the way here\n10:00:02.000 [maalc] new run: Modules 12 >= 5\n")
     assert code == 1 and clock.t >= 60
+
+
+RESUMED = "11:00:01.000 [maalc] no run plan in memory: team 'A' from the team queue, difficulty hard, no guard turns\n"
+
+
+def test_a_bot_that_picks_a_run_up_again_passes_with_resumed(tmp_path):
+    # tools/live/give_way.py: the second leg has no plan in memory, and its team comes from the team queue (#853)
+    code, said, _ = plan(tmp_path, OLD_RUN + "11:00:00.000 [run] child pid 2\n" + RESUMED, resumed=True)
+    assert code == 0 and said[-1].startswith("ok:")
+
+
+def test_a_resumed_bot_that_plans_a_new_run_or_only_assumes_its_team_stops(tmp_path):
+    for line in ("11:00:01.000 " + PLAN,
+                 RESUMED.replace("from the team queue", "assumed: the team queue does not tell the run's team")):
+        code, said, clock = plan(tmp_path, OLD_RUN + "11:00:00.000 [run] child pid 2\n" + line, resumed=True)
+        assert code == 1 and clock.t == 0 and "did not pick the run up" in said[-1]
+
+
+def test_the_resumed_line_is_the_bots_own():
+    source = (REPO / "agent/actions.py").read_text(encoding="utf-8")
+    assert "no run plan in memory: team {team['name']!r} {how}, " in source and 'how = "from the team queue" if known else "assumed: ' in source
 
 
 def test_screen_makes_the_folder_of_its_shot(tmp_path):
