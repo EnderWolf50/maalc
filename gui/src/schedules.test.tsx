@@ -96,9 +96,12 @@ const logLines = () => [...screen.getByRole("list", { name: zh["runner.log"] }).
 const logged = (text: string) => back.logged.some((l) => /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d /.test(l) && l.endsWith(text));
 const send = (...messages: Message[]) => act(() => { for (const m of messages) back.send!(m); });
 const exit = (code: number | null, ended: boolean): Message => ({ type: "exit", code, ended, tail: [] });
-/** A second start brings a scheduled run: the backend keeps it and fires its event. */
-const secondStart = (id: string, update_unfinished = false) =>
+/** A second start brings a scheduled run: the backend keeps it and fires its event. The window listens for it from
+ * App's effect on `ready`, which open() does not wait for. */
+const secondStart = async (id: string, update_unfinished = false) => {
+  await waitFor(() => expect(back.more).toBeDefined());
   act(() => { back.scheduled.push({ id, opened: false, update_unfinished }); back.more!(); });
+};
 
 describe("the schedules' editor", () => {
   test("a new schedule runs every day at 05:10 and wakes the PC; its days, time and switch change, and a save writes them and their task", async () => {
@@ -280,7 +283,7 @@ describe("a scheduled run's start (--run <id>)", () => {
   test("with the window open, the schedule runs there, saving the edits first as Start does, and the window stays open after", async () => {
     const user = await open();
     await user.click(within(document.querySelector(".task-list")!).getByRole("checkbox", { name: fill(zh["tasks.tick"], { name: zh["task.ClaimMail"] }) }));
-    secondStart("s1");
+    await secondStart("s1");
     await waitFor(() => expect(back.starts).toEqual([["MirrorDungeon"]]));
     expect(lastSaved().tasks.find((x) => x.id === "ClaimMail")!.enabled).toBe(false);
     expect(await screen.findByText(new RegExp(`排程 s1 開始執行`))).toBeVisible();
@@ -292,7 +295,7 @@ describe("a scheduled run's start (--run <id>)", () => {
   test("a schedule that comes while the window shows another tab runs on the Run tab", async () => {
     const user = await open();
     await user.click(screen.getByRole("tab", { name: zh["tab.teams"] }));
-    secondStart("s1");
+    await secondStart("s1");
     await waitFor(() => expect(back.starts).toHaveLength(1));
     expect(screen.getByRole("tab", { name: zh["tab.run"] })).toHaveAttribute("aria-selected", "true");
   });
@@ -301,7 +304,7 @@ describe("a scheduled run's start (--run <id>)", () => {
     const user = await open();
     await user.click(screen.getByRole("button", { name: zh["runner.start"] }));
     await waitFor(() => expect(back.starts).toHaveLength(1));
-    secondStart("s1");
+    await secondStart("s1");
     await waitFor(() => expect(logged("[schedule] s1: skipped: a run is under way")).toBe(true));
     expect(back.starts).toHaveLength(1);
     expect(logLines().some((l) => l?.endsWith("[schedule] s1: skipped: a run is under way"))).toBe(true);
@@ -324,9 +327,9 @@ describe("a scheduled run's start (--run <id>)", () => {
     // the window opened while an apply had left old/; the user then put the files back: the next start runs
     back.update = { state: "applying", from: "2.0.0", to: "2.1.0", error: null, restored: false };
     await open();
-    secondStart("s1", true);
+    await secondStart("s1", true);
     await waitFor(() => expect(logged("[schedule] s1: skipped: an update is under way or left the folder half replaced")).toBe(true));
-    secondStart("s1");
+    await secondStart("s1");
     await waitFor(() => expect(back.starts).toEqual([["ClaimMail", "MirrorDungeon"]]));
   });
 
