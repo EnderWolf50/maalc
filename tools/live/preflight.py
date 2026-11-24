@@ -174,7 +174,7 @@ def plan_line(log: Path, within: float, pattern: str = NEW_RUN, say=print, clock
             say(f"ok: {hit.strip()[:160]}")
             return 0
         if clock() >= deadline:
-            say(f"stop: no line matching /{pattern}/ in {within:.0f} s: the bot may be continuing a leftover run. Look at the screen before letting it go on")
+            say(f"stop: no line matching /{want.pattern}/ in {within:.0f} s: the bot may be continuing a leftover run. Look at the screen before letting it go on")
             return 1
         sleep(2)
 

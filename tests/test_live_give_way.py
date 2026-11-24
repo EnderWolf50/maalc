@@ -33,6 +33,7 @@ NAMED = {
     "GiftGetOverMap.png": "GiftGet",
     "DungeonProgress.png": "ProgressPanel",
     "ForfeitDialog.png": "ForfeitDialog",
+    "PauseExploration.png": "RecoverPauseConfirm",
     "MainWindow.png": "HomeReached",
     "BattleTurn.png": None,
     "Formation.png": None,
@@ -40,9 +41,9 @@ NAMED = {
 }
 
 
-def look_files(*options):
+def look_files(*options, names=tuple(NAMED)):
     done = subprocess.run([sys.executable, str(REPO / "tools/live/give_way.py"), "look", *options, "--json",
-                           *(str(SCREENS / f) for f in NAMED)], capture_output=True, text=True, timeout=240, cwd=REPO)
+                           *(str(SCREENS / f) for f in names)], capture_output=True, text=True, timeout=240, cwd=REPO)
     assert done.returncode == 0, done.stderr[-2000:]
     return json.loads(done.stdout.strip().splitlines()[-1])
 
@@ -62,6 +63,17 @@ def test_a_glance_sees_the_map_and_the_panel_and_no_battle():
 @pytest.mark.parametrize("capture", list(NAMED))
 def test_the_probe_tells_the_map_from_what_stands_over_it(named, capture):
     assert named[capture] == NAMED[capture]
+
+
+def test_over_every_capture_the_bot_is_stopped_on_the_map_alone():
+    # what the wait acts on: a glance at the bare map, then the whole look. 2026-11-25: 245 captures, 32 read as the map at a
+    # glance, 23 of them the bare map and 9 a window over it, none of which is stopped on
+    every = sorted(p.name for p in SCREENS.glob("*.png"))
+    maps = [f for f, name in look_files("--glance", names=every).items() if name == "MirrorMap"]
+    stopped = {f for f, name in look_files(names=maps).items() if name in gw.SAFE}
+    assert {f for f in stopped if not f.startswith(("Map", "MirrorMap"))} == set()
+    over = {f for f, name in NAMED.items() if name in gw.OVER_MAP}
+    assert over <= set(maps) - stopped
 
 
 def test_the_probe_names_only_screens_with_a_node_and_the_safe_ones_last_but_home():
@@ -134,17 +146,17 @@ class Game:
 
 
 def test_the_daily_gets_the_emulator_from_the_map_with_the_next_leg_right_behind_it():
-    game = Game(glances=[None, None, "MirrorMap"], looks=["MirrorMap", "MirrorMap", None, "HomeReached"])
+    game = Game(glances=[None, None, "MirrorMap"], looks=["MirrorMap", "MirrorMap", "MirrorMap", None, "HomeReached"])
     assert game.watch() == 0
     # the pause before the bot ends, the next leg's ticket before the done file that lets the daily start
-    assert game.did == ["suspend", "shot safe-point", "pause 120", "end bot", "lift", "to window", "shot main-window", "queue next",
-                        "stop recording", "done", "pause None"]
+    assert game.did == ["suspend", "shot safe-point", "pause 120", "end bot", "lift", "to window", "shot main-window",
+                        "stop recording", "queue next", "done", "pause None"]
     assert "gave way" in game.said[-1] and "leg2" in game.said[-1]
 
 
 def test_it_waits_for_the_daily_and_leaves_the_bot_alone_until_then():
     alone = [holder("leg1"), holder("other")]
-    game = Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "HomeReached"],
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "MirrorMap", "HomeReached"],
                 queue=[alone, alone, alone, [holder("leg1"), holder("daily", True)]])
     assert game.watch() == 0
     assert game.did[0] == "suspend" and game.now >= 2 * gw.DUE_POLL
@@ -152,25 +164,60 @@ def test_it_waits_for_the_daily_and_leaves_the_bot_alone_until_then():
 
 def test_a_window_over_the_map_resumes_the_bot_and_it_looks_again():
     # After floor 5 the prompt stands over the map, whose icons read through it: the glance hits, the whole look does not.
-    game = Game(glances=["MirrorMap"], looks=["ParallelModePrompt", "MirrorMap", "MirrorMap", "HomeReached"])
+    game = Game(glances=["MirrorMap"], looks=["ParallelModePrompt", "MirrorMap", "MirrorMap", "MirrorMap", "HomeReached"])
     assert game.watch() == 0
     assert game.did[:4] == ["suspend", "resume", "suspend", "shot safe-point"]
 
 
-def test_a_tap_already_sent_into_the_node_resumes_the_bot():
-    game = Game(glances=["MapNodePanel"], looks=[None, "MirrorMap", "MirrorMap", "HomeReached"])
-    assert game.watch() == 0
-    assert game.did[:3] == ["suspend", "resume", "suspend"]
+def test_a_screen_that_is_not_safe_is_let_go_at_once_and_one_that_changes_too():
+    # held past the 2 s of the bot's waits it would tap on an old screen: only a safe one is held for SETTLE
+    game = Game(glances=["MirrorMap"], looks=[None, "MirrorMap", "GiftGet", None], runs=10)
+    held, sleep = [], game.world.sleep
+    game.world.sleep = lambda s: (held.append(s), sleep(s))
+    game.watch()
+    assert game.did[:4] == ["suspend", "resume", "suspend", "resume"] and held[:3] == [gw.GLANCE_POLL, gw.SETTLE, gw.GLANCE_POLL]
+
+
+def test_the_bot_is_not_suspended_on_a_node_panel():
+    # the panel is where the bot taps Enter
+    game = Game(glances=["MapNodePanel"], looks=["MapNodePanel"], runs=10)
+    assert game.watch() == 3 and game.did == []
+
+
+def test_a_daily_that_leaves_before_the_safe_point_lets_the_run_go_on():
+    daily, alone = [holder("leg1"), holder("daily", True)], [holder("leg1")]
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap"], queue=[daily, daily, alone], runs=60)
+    assert game.watch() == 3
+    assert game.did == ["suspend", "resume"]
+
+
+def test_a_bot_that_ends_as_it_is_suspended_is_not_ended_again():
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap"], runs=gw.SETTLE)
+    assert game.watch() == 3 and "end bot" not in game.did and game.did[-1] == "resume"
+
+
+def test_an_error_before_the_bot_is_told_to_end_leaves_it_running():
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap"])
+    game.world.shot = lambda name: 1 / 0
+    assert game.watch() == 2
+    assert game.did == ["suspend", "resume"] and "the bot goes on" in game.said[-1]
+
+
+def test_an_error_after_it_keeps_the_emulator():
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap"])
+    game.world.lift_finger = lambda: 1 / 0
+    assert game.watch() == 1
+    assert "pause 120" in game.did and "pause None" not in game.did and "done" not in game.did
 
 
 def test_an_open_node_panel_is_closed_before_to_window():
-    game = Game(glances=["MapNodePanel"], looks=["MapNodePanel", "MapNodePanel", "MirrorMap", "HomeReached"])
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap", "MapNodePanel", "MapNodePanel", "MirrorMap", "HomeReached"])
     assert game.watch() == 0
     assert game.did[4:7] == ["lift", "back", "to window"]
 
 
 def test_dungeon_progress_opened_by_a_back_too_many_goes_on_to_the_window():
-    game = Game(glances=["MapNodePanel"], looks=["MapNodePanel", "MapNodePanel", "ProgressPanel", "HomeReached"])
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap", "MapNodePanel", "MapNodePanel", "ProgressPanel", "HomeReached"])
     assert game.watch() == 0 and "to window" in game.did
 
 
@@ -184,7 +231,7 @@ def test_a_bot_that_ends_by_itself_ends_the_watch_and_the_hold_stays():
     game = Game(glances=[None], looks=[None], runs=60)
     assert game.watch() == 3 and game.did == [] and "by itself" in game.said[-1]
     waiting = Game(glances=[None], looks=[None], runs=60, queue=[[holder("leg1")]])
-    assert waiting.watch() == 3 and waiting.did == [] and "no daily" in waiting.said[-1]
+    assert waiting.watch() == 3 and waiting.did == [] and "no daily waits" in waiting.said[-1]
 
 
 def test_without_the_hold_or_the_bot_it_does_not_start():
@@ -193,10 +240,10 @@ def test_without_the_hold_or_the_bot_it_does_not_start():
 
 
 @pytest.mark.parametrize("game, why", [
-    (Game(glances=["MirrorMap"], looks=["MirrorMap", "BattleTurn"]), "the map"),
+    (Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", None]), "the map"),
     (Game(glances=["MirrorMap"], looks=["MirrorMap"], to_window=False), "To Window"),
     (Game(glances=["MirrorMap"], looks=["MirrorMap"]), "main window"),
-    (Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "HomeReached"], queued=False), "leg2"),
+    (Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "MirrorMap", "HomeReached"], queued=False), "leg2"),
 ])
 def test_a_step_that_fails_after_the_bot_ended_keeps_the_emulator(game, why):
     assert game.watch() == 1 and why in game.said[-1]
@@ -210,7 +257,7 @@ def test_a_bot_that_does_not_end_stays_suspended():
 
 
 def test_a_deliberate_break_needs_no_daily_and_keeps_the_hold():
-    game = Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "HomeReached"], queue=[[holder("leg1")]])
+    game = Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "MirrorMap", "HomeReached"], queue=[[holder("leg1")]])
     assert game.watch(next_task=None) == 0
     assert game.did == ["suspend", "shot safe-point", "pause 120", "end bot", "lift", "to window", "shot main-window", "pause None"]
 
@@ -218,9 +265,9 @@ def test_a_deliberate_break_needs_no_daily_and_keeps_the_hold():
 def test_a_task_name_is_the_tickets():
     # the queue writes a name's other characters as _ (v2-853 -> v2_853)
     q = [holder("v2_853"), holder("daily", True), holder("v2_853_b", True), holder("x")]
-    assert gw.daily_waits(q, "v2-853") is True and gw.daily_waits(q[:1], "v2-853") is False and gw.daily_waits(q, "x") is None
-    assert gw.behind_the_daily(q, "v2-853-b") and not gw.behind_the_daily(q, "x") and not gw.behind_the_daily(q, "v2-853")
-    assert not gw.behind_the_daily(q, "gone")
+    assert gw.first_waits(q, "v2-853") and not gw.first_waits(q[:1], "v2-853") and not gw.first_waits(q, "x")
+    assert gw.next_in_line(q, "v2-853-b") and not gw.next_in_line(q, "x") and not gw.next_in_line(q, "v2-853")
+    assert not gw.next_in_line(q, "gone")
 
 
 @pytest.mark.parametrize("log, pending", [
@@ -239,7 +286,7 @@ def test_a_forfeit_is_under_way_from_its_line_until_it_is_done(tmp_path, log, pe
 
 def test_the_forfeit_lines_are_the_bots():
     battle = (REPO / "agent/battle_actions.py").read_text(encoding="utf-8")
-    assert ': forfeit the run")' in battle and "retries used: " in battle
+    assert ': forfeit the run")' in battle and ' retries used: {choice}")' in battle
     assert 'log("forfeited the run")' in (REPO / "agent/map_actions.py").read_text(encoding="utf-8")
 
 
@@ -259,7 +306,7 @@ def test_the_next_leg_queues_behind_the_daily_for_real(tmp_path):
         (qdir / f"{stamp}-{os.getpid()}-{name}.ticket").write_text(json.dumps({"cmd": "hold", "start": None, "first": first}))
     lq.place(qdir, "leg2", ["hold"], first=True)
     q = lq.holders(qdir)
-    assert [h.name for h in q] == ["leg1", "daily", "leg2", "other"] and gw.behind_the_daily(q, "leg2")
+    assert [h.name for h in q] == ["leg1", "daily", "leg2", "other"] and gw.next_in_line(q, "leg2")
 
 
 def test_a_used_next_name_and_a_missing_bot_are_refused_before_the_emulator_is_touched(tmp_path, monkeypatch, capsys):
