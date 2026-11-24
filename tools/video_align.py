@@ -85,10 +85,35 @@ def parse_log(lines, names, hub: str):
     return starts, hits, bot
 
 
-def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, windows=(), on_frame=None):
+def bot_span(bot: dict) -> tuple[float, float] | None:
+    """(earliest, latest) log timestamp across all nodes' bot scores, or None when empty."""
+    lo = min((float(bt[0]) for bt, _ in bot.values() if len(bt)), default=None)
+    hi = max((float(bt[-1]) for bt, _ in bot.values() if len(bt)), default=None)
+    return None if lo is None or hi is None else (lo, hi)
+
+
+def _seek_before(cap, target_s: float) -> bool:
+    """Seek cap to at or before target_s; returns True with the landing frame already grabbed.
+    Steps back if CAP_PROP_POS_MSEC overshoots (VFR or earlier PTS holes)."""
+    import cv2
+
+    seek = target_s
+    cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
+    while cap.grab():
+        pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        if pts <= target_s + 1e-6 or seek <= 0:
+            return True
+        seek = max(0.0, seek - max(pts - target_s, 1.0) * 2)
+        cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
+    return False
+
+
+def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, windows=(), on_frame=None,
+                 start: float | None = None, end: float | None = None):
     """(wall time of each scored frame by its pts, {name: score per frame}, whether the frame is the one before
     it, unchanged); `fps` frames a second are scored. on_frame(wall time, frame at 1280x720) is called with every frame
-    inside one of the (start, end) wall-time windows, scored or not."""
+    inside one of the (start, end) wall-time windows, scored or not. When `start`/`end` (wall time) are given, seeks
+    to `start` and stops past `end`."""
     import cv2  # the probe group's; the rest of the tool runs without it
 
     tpl = {n: cv2.imread(str(f)) for n, (f, _, _) in nodes.items()}
@@ -102,31 +127,41 @@ def video_scores(video: Path, nodes: dict, started: float, fps: float = 10.0, wi
     starts, ends = np.array(sorted(a for a, _ in windows)), np.array(sorted(b for _, b in windows))
     vt, vs, still, prev = [], {n: [] for n in nodes}, [], None
     cap, due = cv2.VideoCapture(str(video)), 0.0
-    while cap.grab():
-        pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
-        # as many windows start at or before the frame as end before it: it is in none
-        wanted = np.searchsorted(starts, started + pts, "right") > np.searchsorted(ends, started + pts, "left")
-        if pts < due and not wanted:
-            continue
-        ok, im = cap.retrieve()
-        if not ok:
-            break
-        if im.shape[:2] != (720, 1280):
-            im = cv2.resize(im, (1280, 720))
-        if wanted:
-            on_frame(started + pts, im)
-        if pts < due:
-            continue
-        due = pts + 1 / fps - 1e-3
-        vt.append(started + pts)
-        if len(vt) % round(600 * fps) == 0:
-            print(f"{pts / 60:.0f} min of video scored", file=sys.stderr, flush=True)
-        grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        still.append(prev is not None and not cv2.countNonZero(cv2.absdiff(grey, prev)))
-        prev = grey
-        for n, (_, (x, y, w, h), _) in nodes.items():
-            r = cv2.matchTemplate(im[y:y + h, x:x + w], tpl[n], cv2.TM_CCOEFF_NORMED, mask=masks[n])
-            vs[n].append(float(np.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0).max()))  # a flat region masked
+    try:
+        first = _seek_before(cap, start - started) if start is not None and start > started else False
+        while first or cap.grab():
+            first = False
+            pts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+            t = started + pts
+            if start is not None and t < start - 1e-6:
+                continue
+            if end is not None and t > end + 1e-6:
+                break
+            # as many windows start at or before the frame as end before it: it is in none
+            wanted = np.searchsorted(starts, t, "right") > np.searchsorted(ends, t, "left")
+            if pts < due and not wanted:
+                continue
+            ok, im = cap.retrieve()
+            if not ok:
+                break
+            if im.shape[:2] != (720, 1280):
+                im = cv2.resize(im, (1280, 720))
+            if wanted:
+                on_frame(t, im)
+            if pts < due:
+                continue
+            due = pts + 1 / fps - 1e-3
+            vt.append(t)
+            if len(vt) % round(600 * fps) == 0:
+                print(f"{pts / 60:.0f} min of video scored", file=sys.stderr, flush=True)
+            grey = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            still.append(prev is not None and not cv2.countNonZero(cv2.absdiff(grey, prev)))
+            prev = grey
+            for n, (_, (x, y, w, h), _) in nodes.items():
+                r = cv2.matchTemplate(im[y:y + h, x:x + w], tpl[n], cv2.TM_CCOEFF_NORMED, mask=masks[n])
+                vs[n].append(float(np.nan_to_num(r, nan=0.0, posinf=0.0, neginf=0.0).max()))  # a flat region masked
+    finally:
+        cap.release()
     return np.array(vt), {n: np.array(s) for n, s in vs.items()}, np.array(still)
 
 
@@ -190,12 +225,12 @@ def fine(vt, vs, bot, v0, v1, around):
 def chunk_offset(vt, vs, bot, v0, v1, max_lost, min_corr) -> Segment:
     """The chunk's offset in [-2 s, max_lost]: the best correlation, unless under min_corr or a second peak
     (2 s or more away) comes within 0.05 of it, which a chunk with only one event on screen gives. An offset that
-    sees under half the median sample count is left out: a window that runs off the end of the log holds one
+    sees under half the peak sample count is left out: a window that runs off the end of a partial log holds one
     event or two, which correlate perfectly anywhere."""
     offs, corr, cnt = scan(vt, vs, bot, v0, v1, -2.0, max_lost, 0.25)
     if not len(corr) or not (cnt > 0).any():
         return Segment(v0, v1, None, -1.0)
-    corr = np.where(cnt >= np.median(cnt[cnt > 0]) / 2, corr, -1.0)
+    corr = np.where(cnt >= cnt.max() / 2, corr, -1.0)
     i = int(corr.argmax())
     rival = corr[np.abs(offs - offs[i]) >= 2].max(initial=-1.0)
     if corr[i] < min_corr or rival > corr[i] - 0.05:
@@ -246,20 +281,29 @@ def holes(vt, min_s=HOLE) -> list[tuple[float, float]]:
 def fit(vt, vs, bot, chunk=60.0, max_lost=7200.0, min_corr=0.8, drift=2.0, frozen=()) -> list[Segment]:
     """Segments of the video, `chunk` seconds each, with their offsets.
 
-    The anchor comes from a wide search (`chunk_offset`, -2 s to `max_lost`) over two chunks, sliding on until
-    one is found; then every chunk from the start is fitted within `drift` s of the last offset found (the
-    anchor, for the chunks before it), which follows the slow drift between the recorder's clock and the log's.
-    A chunk mostly inside a freeze stays unaligned (corr -1), and so does one that shows a screen but fits no
-    offset near the last (corr under min_corr). A chunk with nothing to fit (corr -1 from the fit: no screen
-    change, too few bot samples) takes the nearest fitted offset, since the clock runs on through it."""
+    The anchor comes from a wide search (`chunk_offset`, -2 s to `max_lost`) over two chunks, preferring chunks
+    that fall inside the log's own time span so a partial log does not lock an earlier video chunk onto a large
+    offset; then every chunk from the start is fitted within `drift` s of the last offset found (the anchor, for
+    the chunks before it), which follows the slow drift between the recorder's clock and the log's. A chunk mostly
+    inside a freeze stays unaligned (corr -1), and so does one that shows a screen but fits no offset near the last
+    (corr under min_corr). A chunk with nothing to fit (corr -1 from the fit: no screen change, too few bot
+    samples) takes the nearest fitted offset, since the clock runs on through it."""
+    if not len(vt):
+        return []
     edges = list(np.arange(vt[0], vt[-1], chunk)) + [vt[-1] + 1e-6]
     chunks = list(zip(edges, edges[1:]))
 
     def frozen_chunk(a, b):
         return sum(min(b, y) - max(a, x) for x, y in frozen if x < b and y > a) >= 0.9 * (b - a)
 
+    span = bot_span(bot)
+
+    def in_log(a, b):
+        return span is not None and min(b, span[1]) - max(a, span[0]) >= 0.5 * (b - a)
+
+    order = [c for c in chunks if in_log(*c)] + [c for c in chunks if not in_log(*c)]
     off = None
-    for a, _ in chunks:
+    for a, _ in order:
         if not frozen_chunk(a, a + chunk):
             off = chunk_offset(vt, vs, bot, a, min(a + 2 * chunk, edges[-1]), max_lost, min_corr).offset
             if off is not None:
