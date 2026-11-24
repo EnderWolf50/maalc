@@ -21,7 +21,7 @@ import task_options
 from actions import (GET_CONFIRM, GET_TITLE, POPUPS, ROOT, RUN, STUCK, TASK, TO_BATTLE, back, box_centre, current_run,
                      data, dismissed_due, finish, flag_hit, get_plate, grid_moved, hands_back, keep_dismissed,
                      keep_floor_capture, log, note_got, number, ocr, on_page, option, options, page_guard,
-                     restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_then,
+                     restart_floor_clock, run_team, screen, scroll, seen, shows, still, stop, stuck, swipe, tap, tap_shown, tap_then,
                      text, until)
 from ocrtext import compact, floor_number, has
 from reasons import Reason
@@ -140,7 +140,9 @@ class PlanRun(CustomAction):
                    floor_limit=limit, guard=team["guard_turns"], packs=[])
         STUCK["ladder"] = recovery.Ladder()
         log(f"new run: {difficulty}, team {team['name']!r} (TEAMS #{team['game_team']}), weekly bonuses left {weekly}, time limit {limit / 60:.0f} min a floor")
-        tap_then(context, 1108, 494, shows(context, ENTER_DIALOG, "Will you enter"), timeout=3)
+        # tap_shown: the dialog slides in, and its words read while it still falls sit outside MirrorEnterDialog's roi on
+        # the hub's next look, which then plans the run again (#607, #531).
+        tap_shown(context, 1108, 494, shows(context, ENTER_DIALOG, "Will you enter"), timeout=3)
         return True
 
 
