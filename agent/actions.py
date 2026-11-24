@@ -29,7 +29,7 @@ import run_start
 import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
-from ocrtext import has, normalize
+from ocrtext import floor_number, has, normalize
 from reasons import Reason, code_line, of_node
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
@@ -397,6 +397,20 @@ def text(context, image, roi, only_rec=False):
     return " ".join(t for t, _ in ocr(context, image, roi, only_rec))
 
 
+MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", the map's top left
+
+
+def map_floor(context, image):
+    """The floor number the map's title shows; None when it is covered or unreadable.
+
+    Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
+    the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3". Swept 2026-11-25 over the 245 captures
+    of tests/screens (#552): a number on the 33 the map's title shows on, dimmed behind the Dungeon Progress panel
+    or a dialog too; none on the other 212.
+    """
+    return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
+
+
 def number(s):
     found = re.sub(r"\D", "", s)
     return int(found) if found else None
@@ -464,8 +478,9 @@ def done(reason):
     return True
 
 
-def run_line(run, outcome, hard, floors, bonuses=0):
-    """This run's runs.jsonl line (spec 06 執行記錄)."""
+def run_line(run, outcome, hard, floors, bonuses=0, passed=None):
+    """This run's runs.jsonl line (spec 06 執行記錄). passed: the floors passed, when floors is the floor the run stands on
+    (stop_floors); floors None: not read, and so is whether the target was reached."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
     target = option("target_floor", 5)
@@ -473,10 +488,26 @@ def run_line(run, outcome, hard, floors, bonuses=0):
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
         "difficulty": None if hard is None else "hard" if hard else "normal", "weekly_bonus": bonuses,
-        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors, target),
+        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors if passed is None else passed, target),
         "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
+
+
+def stop_floors(context):
+    """A stopped run's (floors, passed) for run_line: the floors passed, from the theme pack page's floor. A run picked
+    up before its next theme pack page (#552) has none: floors is then the floor the map's title shows, on the screen now or
+    the last map RouteMap saw, and passed the floors before it; (None, None) when neither read. A run the bot began
+    (it has a start) that saw no theme pack page passed none."""
+    if "floor" in RUN or "start" in RUN:
+        return max(RUN.get("floor", 1) - 1, 0), None
+    try:
+        shown = map_floor(context, screen(context))
+    except RuntimeError as e:  # no screenshot: the line is written all the same
+        log(f"the floor was not read: {e}")
+        shown = None
+    floor = RUN.get("map_floor") if shown is None else shown
+    return (None, None) if floor is None else (floor, floor - 1)
 
 
 def stop(context, reason, line=None, whole_list=False):
@@ -498,7 +529,8 @@ def stop(context, reason, line=None, whole_list=False):
         except SettingsError as e:
             log(f"no runs.jsonl line: {e}")
     if line is None and "settings" in RUN:
-        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
+        floors, passed = stop_floors(context)
+        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), floors, passed=passed)
     if line:
         settlement.append_run(ROOT, line)
     folder = ROOT / "logs" / "evidence" / settlement.now().replace(":", "-")

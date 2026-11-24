@@ -61,8 +61,9 @@ def claim_ok(result):
 
 
 def target_reached(floors, target):
-    """Whether a run that passed `floors` floors reached its target_floor (5, 10 or 15); only such a run toggles weekly bonuses."""
-    return floors >= target
+    """Whether a run that passed `floors` floors reached its target_floor (5, 10 or 15); only such a run toggles weekly
+    bonuses. None when floors is None (a stopped run's, not read: actions.stop_floors)."""
+    return None if floors is None else floors >= target
 
 
 def goes_on(after, target):
