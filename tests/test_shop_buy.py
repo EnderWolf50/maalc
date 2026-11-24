@@ -152,6 +152,76 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert [x for x, _ in taps] == [725 + 50]
 
 
+def offer_page(context, monkeypatch, offers, cost=500):
+    """A shop page showing offers [(name, price_text, plate_text, plate_id, purchased)] in a 4-column grid;
+    clicking an offer and PURCHASE buys it off `cost`. Returns the list of log lines captured."""
+    xs = [570, 725, 880, 1035]
+    lines, price_at = [], {}
+    for i, (name, price_text, _, _, purchased) in enumerate(offers):
+        x, dy = xs[i % 4], ROW * (i // 4)
+        if name:
+            lines.append((name, (x, 333 + dy, 130, 17)))
+        lines.append((price_text, (x + 30, 306 + dy, 40, 24)))
+        if purchased:
+            lines.append(("Purchased", (x + 10, 260 + dy, 80, 17)))
+        if price_text.isdigit():
+            price_at[(x + 50, 268 + dy)] = int(price_text)
+    costs, tapped = [cost], []
+
+    def click(x, y):
+        tapped.append((x, y))
+        if (x, y) == shop_actions.PURCHASE:
+            costs.append(costs[-1] - price_at[tapped[-2]])
+        return MagicMock()
+    context.tasker.controller.post_click.side_effect = click
+
+    def run_recognition(name, image, override=None):
+        roi = tuple((override or {}).get(name, {}).get("roi", ()))
+        shown = {tuple(shop_actions.OFFER_GRID): lines, tuple(shop_actions.SHOP_COST): [(str(costs[-1]), (560, 120, 60, 30))],
+                 tuple(shop_actions.DIALOG_TITLE): [("Purchase E.G.O Gifts", (500, 100, 260, 40))],
+                 tuple(actions.GET_TITLE): [("E.G.O Gift GET!", (560, 165, 160, 30))]}.get(roi, [])
+        results = [SimpleNamespace(text=t, box=b) for t, b in shown]
+        return SimpleNamespace(all_results=results, hit=True, best_result=None) if results else None
+    context.run_recognition.side_effect = run_recognition
+    patch_all(monkeypatch, "read_plates", lambda context, image, centres: [
+        {"text": pt, "id": pid} for _, _, pt, pid, _ in offers])
+    logged = []
+    patch_all(monkeypatch, "log", logged.append)
+    return logged
+
+
+def test_skill_slots_are_not_logged_as_unknown_when_skill_replacement_is_off(context, monkeypatch):
+    # #610: with skill replacement off, Replace slots (whole or clipped) and ID Skill Search produce no "plate ... unknown"
+    # log line; buying, Purchased gifts and genuinely unknown non-skill offers behave and log as before.
+    lines = offer_page(context, monkeypatch, [
+        ("ID Skill Search", "??", "ID Skill Search", None, False),
+        ("Replace Gregor's Skill", "??", "Replace Gregor's Skill", None, False),
+        ("Replace Meursault's Skil", "??", "Replace Meursault's Skil", None, False),
+        ("Ashes", "120", "Ashes to Ashes", 9003, False),
+        ("Gift", "100", "plate 9009", 9009, True),
+        ("Mystery Offer", "??", "Mystery Offer", None, False),
+    ])
+    cells_read(monkeypatch, ("Burn", 1, 9003))
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9003)), {"wanted": None, "sold": False}) == 1
+    assert not any("Replace" in line or "ID Skill Search" in line for line in lines)
+    assert any("9009" in line and "Purchased" in line for line in lines)
+    assert any("'Mystery Offer': not on sale, plate 'Mystery Offer' unknown" in line for line in lines)
+
+
+def test_a_skill_slot_named_only_by_its_plate_or_purchased_is_not_logged_as_unknown(context, monkeypatch):
+    # #610: a skill slot whose grid OCR missed the name (plate names it) or that is Purchased stays quiet too;
+    # a Purchased unknown non-skill offer still logs.
+    lines = offer_page(context, monkeypatch, [
+        ("", "??", "Replace Ryõshū's Skil", None, False),
+        ("Replace Gregor's Skill", "??", "Replace Gregor's Skill", None, True),
+        ("ID Skil Search", "??", "ID Skill Search", None, True),
+        ("Mystery Purchased", "100", "Mystery Purchased", None, True),
+    ])
+    cells_read(monkeypatch)
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9003)), {"wanted": None, "sold": False}) == 0
+    assert lines == ["shop: 'Mystery Purchased': Purchased, plate 'Mystery Purchased' unknown"]
+
+
 COUPLED = 9092  # Coupled Oscillation, Tremor IV: [9031, 9091, 9165], all three sold by the shop
 
 

@@ -274,6 +274,21 @@ def test_a_clipped_skill_slot_is_never_on_sale():
         assert not s.on_sale({"name": name, "price": 120, "purchased": False, "short": False})
 
 
+@pytest.mark.parametrize("name, is_skill", [
+    ("Replace Gregor's Skill", True),
+    ("Replace Meursault's Skil", True),
+    ("Replace Ryõshū's Skil", True),
+    ("Replace", True),
+    ("ID Skill Search", True),
+    ("ID Skil Search", True),
+    ("ID Skil", True),
+    ("Rusted Muzzle", False),
+    ("", False),
+])
+def test_skill_slot_recognises_replace_and_id_search_offers_only(name, is_skill):
+    assert s.skill_slot(name) is is_skill
+
+
 def test_skill_plan_opens_one_slot_a_sinner():
     # Two slots for one sinner (never seen): keyed by sinner, the second waits for the next visit.
     team = [skill_entry("Gregor", 1, 3, 2)]

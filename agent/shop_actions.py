@@ -1310,8 +1310,8 @@ class Shop(CustomAction):
         gift bought counts as owned (owned_change) for the next and after a refresh, unread owned gifts or not, so a fusion is
         bought no more than it lacks. A Not
         Enough Cost offer is dimmed (no icon read) but its plate reads: with its id it may be the first choice, so the shop
-        sells for it; it is never bought. Every cell, Purchased ones too, is logged with its id. Each purchase is checked on
-        the Cost.
+        sells for it; it is never bought. Every gift cell, Purchased ones too, is logged with its id; skill slots are left
+        to skill_step. Each purchase is checked on the Cost.
         """
         gift_list, reserve = team["list"], team["reserve_cost"]
         to_buy = buy_list(team, visit)
@@ -1407,14 +1407,14 @@ class Shop(CustomAction):
         """The offers of the grid on image as slots (shop.read_slots) with their "plate", and on-sale ones their "cell" and "short".
 
         known: the offers read off the grid before it was scrolled (#341): those are left out, and so is a cut-off one.
-        Bought ones, skills and "??" log their plate (#329).
+        Bought gifts and unknown non-skill offers ("??") log their plate (#329); skill slots do not (#610).
         """
         shown = shop.read_slots(ocr(context, image, OFFER_GRID))
         if known is not None:
             shown = [s for s in shown if offer_whole(s["y"]) and not any(shop.same_offer(s, k) for k in known)]
         for slot, plate in zip(shown, read_plates(context, image, [offer_cell(s) for s in shown]), strict=True):
             slot["plate"] = plate
-            if not shop.on_sale(slot):  # bought, a skill or "??": never bought, its plate logged (#329)
+            if not shop.on_sale(slot) and not (shop.skill_slot(slot["name"]) or shop.skill_slot(plate["text"])):
                 log(f"shop: {slot['name']!r}: {'Purchased' if slot['purchased'] else 'not on sale'}, plate {plate['text']!r} "
                     + (gift_shown({"id": plate["id"], "by_plate": True, "score": 0.0}) if plate["id"] else "unknown"))
         on_sale = [s for s in shown if shop.on_sale(s)]
