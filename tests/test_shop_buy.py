@@ -19,28 +19,42 @@ from agent_patch import patch_all
 clock, context = test_actions.clock, test_actions.context  # its fixtures
 
 
+ROW = 153  # px between the offer rows; a Super Shop's grid scrolls 150 px at most (live 2026-10-15: SuperShop.png and its scrolled capture)
+SCROLL_END = 150
+
+
 def plates_read(monkeypatch, *ids):
-    """read_plates reads the name plates of the offers as ids (None: unread); test_gift_cells reads real ones (#329)."""
+    """read_plates reads the name plates of the offers as ids (None: unread, or (text, id)); test_gift_cells reads real ones (#329)."""
     def read_plates(context, image, centres):
         assert len(centres) == len(ids)  # one plate per slot, on the slot's own cell
-        return [{"text": f"plate {i}", "id": i} for i in ids]
+        return [{"text": p[0], "id": p[1]} if isinstance(p, tuple) else {"text": f"plate {p}", "id": p} for p in ids]
     patch_all(monkeypatch, "read_plates", read_plates)
 
 
-def shelf(context, prices, cost, short=(), purchased=()):
-    """A shop showing offers priced prices (the first four in a row), `cost` Cost, those of index `short` tagged Not Enough Cost
-    and those of `purchased` Purchased;
+def shelf(context, prices, cost, short=(), purchased=(), names=None):
+    """A shop showing offers priced prices (4 a row), `cost` Cost, those of index `short` tagged Not Enough Cost
+    and those of `purchased` Purchased (`names`: per-slot OCR name, "" omits the line; default "Gift");
     a purchase takes its price off the Cost. The offer cells tapped are in the list returned."""
     xs = [570, 725, 880, 1035]
-    lines = [r for x, p in zip(xs, prices) for r in [("Gift", (x, 333, 90, 17)), (str(p), (x + 30, 306, 40, 24))]]
-    lines += [("Not Enough Cost", (xs[i] + 10, 260, 80, 17)) for i in short]
-    lines += [("Purchased", (xs[i] + 10, 260, 80, 17)) for i in purchased]
+    names = ["Gift"] * len(prices) if names is None else names
+    lines, price_at = [], {}
+    for i, (name, p) in enumerate(zip(names, prices, strict=True)):
+        x, dy = xs[i % 4], ROW * (i // 4)
+        if name:
+            lines.append((name, (x, 333 + dy, 130 if len(name) > 10 else 90, 17)))
+        lines.append((str(p), (x + 30, 306 + dy, 40, 24)))
+        if i in short:
+            lines.append(("Not Enough Cost", (x + 10, 260 + dy, 80, 17)))
+        if i in purchased:
+            lines.append(("Purchased", (x + 10, 260 + dy, 80, 17)))
+        if isinstance(p, int):
+            price_at[(x + 50, 268 + dy)] = p
     costs, tapped = [cost], []
 
     def click(x, y):
         tapped.append((x, y))
         if (x, y) == shop_actions.PURCHASE:
-            costs.append(costs[-1] - prices[max(i for i, c in enumerate(xs) if c - 30 < tapped[-2][0])])
+            costs.append(costs[-1] - price_at[tapped[-2]])
         return MagicMock()
     context.tasker.controller.post_click.side_effect = click
 
@@ -150,6 +164,36 @@ def test_every_cell_of_the_shop_is_logged_with_its_id_purchased_ones_too(context
     assert "plate 'plate 9003'" in shown and "plate 'plate 9009' 9009" in shown  # an on-sale cell's line names its plate too
     taps = [c.args for c in context.tasker.controller.post_click.call_args_list if c.args[1] == 268]
     assert [x for x, _ in taps] == [725 + 50]
+
+
+def test_skill_slots_are_not_logged_as_unknown_when_skill_replacement_is_off(context, monkeypatch):
+    # #610: with skill replacement off, Replace slots (whole or clipped) and ID Skill Search produce no "plate ... unknown"
+    # log line; buying, Purchased gifts and genuinely unknown non-skill offers behave and log as before.
+    shelf(context, ["??", "??", "??", 120, 100, "??"], 500, purchased=[4],
+          names=["ID Skill Search", "Replace Gregor's Skill", "Replace Meursault's Skil", "Ashes", "Gift", "Mystery Offer"])
+    plates_read(monkeypatch, ("ID Skill Search", None), ("Replace Gregor's Skill", None), ("Replace Meursault's Skil", None),
+                ("Ashes to Ashes", 9003), 9009, ("Mystery Offer", None))
+    cells_read(monkeypatch, ("Burn", 1, 9003))
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9003)), {"wanted": None, "sold": False}) == 1
+    assert not any("Replace" in line or "ID Skill Search" in line for line in lines)
+    assert any("9009" in line and "Purchased" in line for line in lines)
+    assert any("'Mystery Offer': not on sale, plate 'Mystery Offer' unknown" in line for line in lines)
+
+
+def test_a_skill_slot_named_only_by_its_plate_or_purchased_is_not_logged_as_unknown(context, monkeypatch):
+    # #610: a skill slot whose grid OCR missed the name (plate names it) or that is Purchased stays quiet too;
+    # a Purchased unknown non-skill offer still logs.
+    shelf(context, ["??", "??", "??", 100], 500, purchased=[1, 2, 3],
+          names=["", "Replace Gregor's Skill", "ID Skil Search", "Mystery Purchased"])
+    plates_read(monkeypatch, ("Replace Ryõshū's Skil", None), ("Replace Gregor's Skill", None),
+                ("ID Skill Search", None), ("Mystery Purchased", None))
+    cells_read(monkeypatch)
+    lines = []
+    patch_all(monkeypatch, "log", lines.append)
+    assert shop_actions.Shop.buy_offers(context, buying(wants(9003)), {"wanted": None, "sold": False}) == 0
+    assert lines == ["shop: 'Mystery Purchased': Purchased, plate 'Mystery Purchased' unknown"]
 
 
 COUPLED = 9092  # Coupled Oscillation, Tremor IV: [9031, 9091, 9165], all three sold by the shop
@@ -328,10 +372,6 @@ def test_the_shop_does_not_refresh_when_the_list_buys_nothing(context):
                                             tuple(shop_actions.REFRESH["keyword"][1]): [("90", (1110, 145, 40, 20))]})
     team = buying(wants(), shop_refresh_keyword=3)
     assert not shop_actions.Shop.buy(context, team, {"wanted": None, "sold": False, "refreshes": {"keyword": 0, "normal": 0}}) and taps == []
-
-
-ROW = 153  # px between the offer rows; a Super Shop's grid scrolls 150 px at most (live 2026-10-15: SuperShop.png and its scrolled capture)
-SCROLL_END = 150
 
 
 def super_shop(context, monkeypatch, n=10, red=True, reset_on_buy=False, cost=2000):
