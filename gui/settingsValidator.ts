@@ -17,9 +17,11 @@ export function settingsValidatorCode(): string {
   ajv.addSchema(schema);
   const code = standaloneCode(ajv, { settings: schema.$id, giftList: `${schema.$id}#/$defs/gift_list` });
   // Ajv 8 still requires its runtime helpers (ucs2length for minLength, equal for uniqueItems) in esm mode. The build
-  // bundles a require, but the dev server sends this module to the browser as is, where require does not exist.
+  // bundles a require, but the dev server sends this module to the browser as is, where require does not exist; and its
+  // pre-bundled CommonJS helper exposes the exports object ({ default: fn }) as the default export, whereas the build
+  // and vitest unwrap exports.default to fn directly (#666).
   return code.replace(/const (\w+) = require\("(ajv\/dist\/runtime\/[\w-]+)"\)\.default;/g, (_, name: string, path: string) =>
-    `import ${name} from "${path}";`);
+    `import _${name} from "${path}";const ${name} = _${name}.default ?? _${name};`);
 }
 
 export function settingsValidatorPlugin(): Plugin {
