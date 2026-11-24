@@ -10,6 +10,7 @@ import pytest
 import actions
 import map_actions
 import settle_actions
+import settlement
 import run_start_actions
 import battle_actions
 import test_actions
@@ -150,6 +151,25 @@ def test_a_resumed_run_stopped_off_the_map_writes_the_floor_of_the_last_map_it_s
     assert last_line()["floors"] == 3
 
 
+def test_a_paused_run_stopped_on_the_entry_page_writes_the_floor_it_shows(resumed):
+    # Parallel Superposition Mode stays on the wrong side: the Exploring field reads the paused run's floor.
+    page(resumed, {tuple(run_start_actions.EXPLORING): "Mirror of Sisyphe - F7"})
+    run_start_actions.ParallelSwitch().analyze(
+        resumed, SimpleNamespace(image=actions.screen(resumed), custom_recognition_param=json.dumps({"on": False})))
+    actions.stop(resumed, "Parallel Superposition Mode stays ON")
+    assert last_line()["floors"] == 7
+
+
+def test_a_resumed_run_stopped_on_the_reward_window_writes_the_floors_it_shows_passed(resumed, monkeypatch):
+    # The window reads Floor 5 6/6, a fact the map's title on that floor does not hold: five floors, the target reached.
+    actions.RUN["shown_floor"] = 5
+    page(resumed, {tuple(settle_actions.RESULT): [("Floor 5 [NORMAL] 6/6", (300, 420, 90, 20))]})
+    monkeypatch.setattr(settlement, "claim_bonuses", lambda *args: 1)
+    patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])  # a tap on one does nothing
+    assert settle_actions.Settle().run(resumed, argv()) is False
+    assert (last_line()["result"], last_line()["floors"], last_line()["target_reached"]) == ("stop", 5, True)
+
+
 def test_a_resumed_run_whose_screen_cannot_be_read_still_writes_its_stop_line(resumed, monkeypatch):
     # An emulator gone at the stop: the screenshot fails (maa's RuntimeError), for the evidence after the line as well.
     def gone():
@@ -161,7 +181,8 @@ def test_a_resumed_run_whose_screen_cannot_be_read_still_writes_its_stop_line(re
 
 
 def test_a_run_the_bot_began_and_stopped_before_its_first_theme_pack_passed_no_floor(resumed, monkeypatch):
-    # A planned grace is unaffordable, say: no floor was played, so the 0 is real and no title is read for it.
+    # A planned grace is unaffordable, say: no floor was played, so the 0 is real and a title is not read for it.
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
     actions.current_run(resumed)
     actions.RUN["start"] = "2026-11-25T00:00:00.000Z"
     actions.stop(resumed, "a planned grace is unaffordable")

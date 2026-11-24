@@ -405,8 +405,8 @@ def map_floor(context, image):
 
     Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
     the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3". Swept 2026-11-25 over the 245 captures
-    of tests/screens (#552): a number on the 33 the map's title shows on, dimmed behind the Dungeon Progress panel
-    or a dialog too; none on the other 212.
+    of tests/screens (#552), 3 of the hits synthetic: a number on the 33 the map's title shows on, dimmed behind the
+    Dungeon Progress panel or a dialog too; none on the other 212.
     """
     return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
 
@@ -479,8 +479,8 @@ def done(reason):
 
 
 def run_line(run, outcome, hard, floors, bonuses=0, passed=None):
-    """This run's runs.jsonl line (spec 06 執行記錄). passed: the floors passed, when floors is the floor the run stands on
-    (stop_floors); floors None: not read, and so is whether the target was reached."""
+    """This run's runs.jsonl line (spec 06 執行記錄). passed: the floors passed, where floors is the floor the run stands
+    on (stop_floors). floors None: not read, so target_reached is None too."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
     target = option("target_floor", 5)
@@ -495,18 +495,22 @@ def run_line(run, outcome, hard, floors, bonuses=0, passed=None):
 
 
 def stop_floors(context):
-    """A stopped run's (floors, passed) for run_line: the floors passed, from the theme pack page's floor. A run picked
-    up before its next theme pack page (#552) has none: floors is then the floor the map's title shows, on the screen now or
-    the last map RouteMap saw, and passed the floors before it; (None, None) when neither read. A run the bot began
-    (it has a start) that saw no theme pack page passed none."""
+    """A stopped run's (floors, passed) for run_line.
+
+    Both are the floors passed, from the theme pack page's floor; a run the bot began (it has a start) that saw no such
+    page passed none. A run picked up before its next theme pack page (#552): floors is the floor it stands on, read off
+    the map's title on the screen now, else the last one the map or the entry page showed (RUN["shown_floor"]), and
+    passed the floors before it; (None, None) when none read.
+    """
     if "floor" in RUN or "start" in RUN:
-        return max(RUN.get("floor", 1) - 1, 0), None
+        passed = max(RUN.get("floor", 1) - 1, 0)
+        return passed, passed
     try:
         shown = map_floor(context, screen(context))
     except RuntimeError as e:  # no screenshot: the line is written all the same
         log(f"the floor was not read: {e}")
         shown = None
-    floor = RUN.get("map_floor") if shown is None else shown
+    floor = RUN.get("shown_floor") if shown is None else shown
     return (None, None) if floor is None else (floor, floor - 1)
 
 

@@ -381,10 +381,11 @@ class RouteMap(CustomAction):
         Live 2026-10-19 (8 of 8 floors after the first): the last floor's map stayed ~3 s after the pull, its bus
         driving off to the exit; RouteMap dragged it, then read the new floor with its bus at rest.
         A title that keeps another number for MAP_LEAVING s is a misread: it is not looked at again this floor.
+        A run with no floor in memory keeps the title's as RUN["shown_floor"]: a stop off the map has no title (#552).
         """
         floor, shown = RUN.get("floor"), map_floor(context, image)
         if floor is None and shown is not None:
-            RUN["map_floor"] = shown  # a stop off the map has no title to read (stop_floors, #552)
+            RUN["shown_floor"] = shown
         if floor is None or shown in (None, floor) or RUN.get("title_off") == floor:
             return True
         log(f"map: floor {shown}'s map is up, floor {floor} next; waiting for it")

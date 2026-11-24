@@ -159,6 +159,8 @@ class ParallelSwitch(CustomRecognition):
         on = json.loads(argv.custom_recognition_param)["on"]
         # "F7" wherever it sits: OCR may join it to the dungeon's name ("Sisyphe-F7"); "of" has no number after it
         floor = floor_number(text(context, argv.image, EXPLORING), r"f")
+        if floor is not None:
+            RUN["shown_floor"] = floor  # the paused run's, for a stop before its map or theme pack page (#552)
         return flag_hit() if run_start.parallel_switch(option("target_floor", 5), floor) is on else None
 
 
