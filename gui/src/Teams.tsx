@@ -8,8 +8,8 @@ import { KeywordIcon, TIERS, kwText } from "./KeywordGrid";
 import { teamKeyword } from "./gifts";
 import { fill, localName } from "./i18n";
 import {
-  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, addTeam, defaultStarlight, freeName, newId, newTeam, setTeamEnabled, teamEnum,
-  toggleGift, type GiftRef, type SearchGift, type Team,
+  MAX_GIFTS, SEARCH_GIFTS, SEARCH_TABS, SINNERS, defaultStarlight, freeName, newId, newTeam, queueWithTeam, teamEnum, toggleGift,
+  type GiftRef, type SearchGift, type Team,
 } from "./model";
 import { SinnerGrid } from "./Deployment";
 import { SkillPanel } from "./SkillReplacement";
@@ -22,19 +22,13 @@ export function TeamsTab() {
   const { s, update, t, bad } = useEditor();
   const [i, setSel] = usePick("teams", s.teams);
   const [undoNote, removeAt] = useUndo();
-  // A team deleted leaves the queue too (#803). useUndo runs this edit for the delete and again for its Undo, which puts the
-  // team back in the queue as useUndo does in the list: before the team that followed it, as the Agent may have moved the
-  // queue meanwhile; last when none did, or at its old place when that team is gone too.
+  // A team deleted leaves the queue too, every place it has (#803, #954). useUndo runs this edit for the delete and again for
+  // its Undo, which puts each place back; the Agent may have moved the queue meanwhile.
   const remove = () => {
-    const id = s.teams[i].id, at = s.team_queue.indexOf(id), next = at < 0 ? undefined : s.team_queue[at + 1];
+    const id = s.teams[i].id, was = s.team_queue;
     removeAt(s.teams, i, (fn) => update((d) => {
       fn(d.teams);
-      const queue = d.team_queue.filter((x) => x !== id);
-      if (d.teams.some((x) => x.id === id)) {
-        const before = next === undefined ? queue.length : queue.indexOf(next);
-        queue.splice(before < 0 ? Math.min(at, queue.length) : before, 0, id);
-      }
-      d.team_queue = queue;
+      d.team_queue = d.teams.some((x) => x.id === id) ? queueWithTeam(was, d.team_queue, id) : d.team_queue.filter((x) => x !== id);
     }), setSel);
   };
   return (
@@ -51,10 +45,10 @@ export function TeamsTab() {
           <button type="button" onClick={() => {
             const n = s.teams.length + 1;
             const team = newTeam(n, `${t("teamName")} ${n}`);
-            update((d) => { addTeam(d, team); });
+            update((d) => { d.teams.push(team); });
             setSel(team.id);
           }}>+ {t("add")}</button>
-          {/* which team plays first is the queue's, in the Run tab (#878) */}
+          {/* a team plays once the user puts it in the queue, in the Run tab (#878, #954) */}
           <p className="muted">{t("teams.order_note")}</p>
         </aside>
         <section>{s.teams[i] && <><SectionIndex /><TeamEditor i={i} onRemove={remove} /></>}</section>
@@ -63,14 +57,13 @@ export function TeamsTab() {
   );
 }
 
-/** A team as a row of the team list shows it: its name, struck through in the muted ink when it is off (as the team queue's,
- * #878: no tag, the word for a screen reader), its slot as the game's TEAMS number, and its usage when kept to a difficulty. */
+/** A team as a row of the team list shows it: its name, its slot as the game's TEAMS number, and its usage when kept to a
+ * difficulty. */
 function TeamTags({ team }: { team: Team }) {
-  const { t, tv } = useEditor();
+  const { tv } = useEditor();
   return (
     <>
-      <span className={team.enabled ? undefined : "team-off"}>{team.name || "—"}</span>
-      {!team.enabled && <span className="sr-only">{t("team.off_read")}</span>} <small>TEAMS #{team.game_team}</small>
+      <span>{team.name || "—"}</span> <small>TEAMS #{team.game_team}</small>
       {team.usage !== "any" && <em className="qtag">{tv("usage", team.usage)}</em>}
     </>
   );
@@ -159,11 +152,6 @@ function TeamEditor({ i, onRemove }: { i: number; onRemove: () => void }) {
         <Field label={t("team.game_team")} path={`${path}/game_team`}>
           <Num value={team.game_team} min={1} max={40} onChange={(v) => set({ game_team: v })} />
         </Field>
-        <Mark as="label" className="check" path={`${path}/enabled`}>
-          {/* switched off, it takes the start team's flag with it (#878) */}
-          <Input type="checkbox" checked={team.enabled} onChange={(e) => update((d) => setTeamEnabled(d, i, e.target.checked))} />
-          {t("team.enabled")}
-        </Mark>
         <span className="spacer" />
         <button type="button" onClick={() => setAskReset(true)}>{t("resetTimes")}</button>
         <button type="button" className="danger" onClick={onRemove}>{t("remove")}</button>

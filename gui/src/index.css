@@ -431,9 +431,6 @@ ol.reorder .item small { font: 600 13px/1 var(--font-display); color: var(--mute
 .qtag { margin-left: 5px; padding: 0 5px; font: 600 11.5px/1.5 var(--font-ui); font-style: normal; color: var(--fg-2); background: var(--raise);
   border: 1px solid var(--line); border-radius: 2px; white-space: nowrap; }
 .teams-page { display: flex; flex-direction: column; } /* one child since the queue left (#878): kept a flex box, as measured */
-/* a disabled team, in the team list and in the team queue (#878, the user's call of 2026-11-22): its name struck through in the
- * muted ink, in its place, no tag and the row not faded, so its words keep their contrast */
-.team-list .team-off, .mt-row.off .mt-name { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 /* The Run tab (#814, #815, #875): its fields and the run console's parts; the two columns are the section at the end. */
 .run-page fieldset.emulator, .run-page details.globals, .run-page .run-log-box, .run-page .task-opts { align-items: stretch; }
 /* its notes, a cost or a risk under the field they belong to (spec #871 「說明文字」, #879): no last line of a word alone; and no
@@ -459,7 +456,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .emu-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: start; }
 .emu-fields .field:has(input.wide) { grid-column: 1 / -1; }
 .emu-fields input { width: 100%; }
-/* a field's settings key after its label, as the agent's stop lines name it (run/start_team): shown while the pointer is over
+/* a field's settings key after its label, as the agent's stop lines name it (run/target_floor): shown while the pointer is over
  * the field, its label included, or the field draws a focus ring (:focus-visible: the keyboard moved the focus in, or a text
  * or number box has it, clicked or not; a click on a switch or a choice leaves it to the pointer). Hidden, it keeps its room,
  * so nothing moves when it shows; a screen reader reads it either way, as the field's description (Run.tsx DescribedByKey). */
@@ -518,7 +515,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
   text-wrap: pretty;
 }
 .task-list ol.reorder > li:has(.task-row[data-state="off"]) { opacity: 0.55; }
-/* 「＋ 加入任務」 under the list; its menu opens over what is below and takes no room (#871, round 4 item 13). The list above the
+/* 「＋ 加入任務」 under the list and 「＋ 加入隊伍」 under the team queue; its menu opens over what is below and takes no room (#871, round 4 item 13). The list above the
  * options, so the menu covers them where it reaches past the list */
 .split > aside.task-list { z-index: 2; }
 .add-task { position: relative; display: flex; flex-direction: column; }
@@ -537,7 +534,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
   border-color: transparent; background: none;
 }
 .add-menu button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-/* the item with the focus, however the menu opened: the arrows move it, and so does the pointer (AddTask), so one is lit;
+/* the item with the focus, however the menu opened: the arrows move it, and so does the pointer (AddMenu), so one is lit;
  * the pointer's own :hover lights none, or an item it left on would stay lit as the arrows go on */
 .add-menu button:hover:not(:disabled) { background: none; border-color: transparent; }
 .add-menu button:focus, .add-menu button:focus:hover:not(:disabled) { background: var(--hov); }
@@ -554,14 +551,15 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .run-page details.globals > .grid > .toggle { flex: 1 1 0; min-width: 200px; }
 /* the run limit as the fields beside it (#878): the label on top, the switch and the number on one line under it */
 .toggle-field .tf-line { display: flex; align-items: center; gap: 8px; }
-/* The team queue at the top of the Mirror Dungeon options (#878, spec #871 「隊伍佇列」), the box's whole width. Every row on
- * the list's own columns (subgrid), so the slot, the usage, the next-run mark and the flag line up down the list whatever the
- * names and the slots' digits: the place, the name (cut short with an ellipsis), the slot, the usage, the mark (pushed against
- * the flag), the flag; the row's right edge the box's. A wrong row's cross sits in the place column's left margin. */
+/* The team queue at the top of the Mirror Dungeon options (#878, #954, spec #871 「隊伍佇列」), the box's whole width. Every row
+ * on the list's own columns (subgrid), so the slot, the usage, the next-run mark and the buttons line up down the list whatever
+ * the names and the slots' digits: the place, the name (cut short with an ellipsis), the slot, the usage, the mark (pushed
+ * against the buttons), to the top, out of the queue; the row's right edge the box's. A wrong row's cross sits in the place
+ * column's left margin. */
 .groups > .mirror-teams { grid-column: 1 / -1; align-items: stretch; }
 .mt-order { min-width: 0; }
 .mt-order ol.reorder {
-  display: grid; grid-template-columns: 1.3em minmax(0, max-content) max-content max-content minmax(max-content, 1fr) 28px;
+  display: grid; grid-template-columns: 1.3em minmax(0, max-content) max-content max-content minmax(max-content, 1fr) 26px 26px;
   gap: 4px 10px; min-width: 0;
 }
 .mt-order ol.reorder > li {
@@ -582,51 +580,14 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 }
 .dchip[data-d="hard"] { color: var(--fg); background: var(--line); }
 .mirror-teams > p.mt-note { font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
-/* a run locks the queue: the rows faded as a locked field is (input:disabled), the flags not faded twice */
+/* to the top and out of the queue: 26 px each, as the task rows' copy and remove */
+.mt-row button.icon { padding: 6px; line-height: 0; }
+.mt-row button.icon:hover:not(:disabled) { color: var(--fg); }
+.mt-row button.remove:hover:not(:disabled) { color: var(--bad); }
+/* a run locks the queue: the rows faded as a locked field is (input:disabled), the buttons not faded twice (the first row's
+ * to-the-top keeps its own fade: it is off without a run too) */
 .mt-order ol.reorder.locked > li { opacity: 0.45; }
-.mt-order ol.reorder.locked .start-flag:disabled { opacity: 1; cursor: default; }
-/* The start team's flag (#878, spec #871 round 4 items 6 and 7): the icon alone, no frame or fill, faint until the pointer
- * lights it; on the team it is set on, filled and amber; pressed, it shrinks a little. Its words float over it in the page's
- * reverse colours, their right edge at the flag's, so they never reach past the page's edge (the flag is the box's last
- * column); the pointer stays centred on the flag. */
-.start-flag {
-  position: relative; width: 28px; height: 26px; padding: 0; display: grid; place-items: center;
-  color: var(--muted); background: none; border-color: transparent;
-}
-.start-flag svg { transition: transform 0.1s ease-out; }
-.start-flag:hover:not(:disabled) { color: var(--fg); background: none; border-color: transparent; }
-.start-flag:active:not(:disabled) svg { transform: scale(0.86); }
-.start-flag.on { color: var(--accent); }
-.start-flag.on:hover:not(:disabled) { color: var(--accent-hi); }
-.start-flag:disabled { opacity: 0.3; cursor: not-allowed; }
-/* on a disabled team (#878) the flag sets nothing: the icon faint (not the button, whose opacity would fade the words drawn
- * on it), the no-entry pointer, unlit under it, its words saying why. One already there (a hand edit, an old file) has no
- * effect: dimmed with the row's struck-through name, filled but muted, not amber; it lights up under the pointer, as a press
- * clears it */
-.start-flag[aria-disabled="true"] { cursor: not-allowed; }
-.start-flag[aria-disabled="true"] svg { opacity: 0.3; }
-.start-flag[aria-disabled="true"]:hover:not(:disabled) { color: var(--muted); }
-.start-flag[aria-disabled="true"]:active:not(:disabled) svg { transform: none; }
-.mt-row.off .start-flag.on { opacity: 0.5; }
-.mt-row.off .start-flag.on:hover:not(:disabled), .mt-row.off .start-flag.on:focus-visible { opacity: 1; }
-.mt-row.off .start-flag.on, .mt-row.off .start-flag.on:hover:not(:disabled) { color: var(--muted); }
-.mt-order ol.reorder.locked .mt-row.off .start-flag:disabled { opacity: 0.5; } /* locked too, under the row's fade */
-.start-flag::before, .start-flag::after {
-  position: absolute; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.12s ease-out, translate 0.12s ease-out;
-}
-/* its words for the eye only ("/ ''": no text for the accessibility tree, where the row's name took them in, seen 2026-11-22):
- * a screen reader reads the flag's own name */
-.start-flag::after {
-  content: attr(data-tip) / ""; right: -4px; bottom: calc(100% + 7px); translate: 0 3px; padding: 4px 10px; font: 600 12.5px/1.45 var(--font-ui);
-  white-space: nowrap; color: var(--bg); background: var(--fg); border-radius: 3px; box-shadow: 0 4px 12px rgb(0 0 0 / 0.4);
-}
-.start-flag::before {
-  content: ""; left: 50%; bottom: calc(100% + 2px); translate: -50% 3px; width: 10px; height: 5px; background: var(--fg);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-}
-.start-flag:hover:not(:disabled)::before, .start-flag:focus-visible::before { opacity: 1; translate: -50% 0; }
-.start-flag:hover:not(:disabled)::after, .start-flag:focus-visible::after { opacity: 1; translate: 0 0; }
-@media (prefers-reduced-motion: reduce) { .start-flag::before, .start-flag::after, .start-flag svg { transition: none; } }
+.mt-order ol.reorder.locked > li:not(:first-child) .mt-row button.icon:disabled, .mt-order ol.reorder.locked .mt-row button.remove:disabled { opacity: 1; }
 /* the next Mirror Dungeon run on the task's row: one line under the name; where it does not fit, out of the row's flow and
  * hidden, at the same width (.tr-main holds it), so useFits measures it as it would show */
 .tr-next {
@@ -636,7 +597,6 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .tr-next.clipped { position: absolute; inset: 0 0 auto; visibility: hidden; }
 .tr-next .lbl { color: var(--muted); }
 .tr-next .nt-team { display: inline-flex; align-items: center; gap: 4px; }
-.tr-next .flag-on { display: inline-flex; color: var(--accent-ink); }
 .field small.caution { color: var(--fg); }
 /* Start, Stop and the status on the page itself, no frame of their own; Start the task rows' height, so it and the list's
  * first row start and end on one line. The status in tabular numerals, so its clock does not jitter. */

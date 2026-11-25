@@ -1,18 +1,19 @@
-// The team queue (#501, #803): team_queue in settings.json is the queue the Agent rotates, and after a claim the Agent moves
-// that team to its end. The team list is the user's to arrange: its drag and its Alt moves leave the queue alone. A team added goes
-// last in both, a team deleted leaves both. The editor takes the queue on disk, keeps the user's unsaved edits on top of it,
-// and never saves its own stale queue over the Agent's. The queue is shown and arranged in the Mirror Dungeon task's options
-// on the Run tab, where each row's flag sets run.start_team (#878, spec #871 「隊伍佇列（只在鏡牢選項裡）」).
+// The team queue (#501, #803, #954): team_queue in settings.json is the queue the Agent rotates, the teams the user put in it one
+// by one, a team as often as wanted or not at all; after a claim the Agent moves that team's first place to its end. The team list
+// is the user's to arrange: its drag and its Alt moves leave the queue alone, and a team added to it is not in the queue. A team
+// deleted leaves both. The editor takes the queue on disk, keeps the user's unsaved edits on top of it, and never saves its own
+// stale queue over the Agent's. The queue is shown and arranged in the Mirror Dungeon task's options on the Run tab (#878, spec
+// #871 「隊伍佇列（只在鏡牢選項裡）」).
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App, { TABS } from "./App";
 import { TEXT, fill } from "./i18n";
-import { addTeam, movedToEnd, newSettings, newTeam, rebase, type Settings } from "./model";
+import { moveToEnd, movedToEnd, newSettings, newTeam, queueWithTeam, rebase, type Settings } from "./model";
 import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
-import { altMove, cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
+import { addQueued, altMove, cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
 const file = vi.hoisted(() => ({ text: "" as string | null, saved: [] as string[], beforeSave: undefined as (() => void) | undefined }));
@@ -40,13 +41,16 @@ const zh = TEXT.zh_tw;
 /** Settings with teams of these ids, the list and the queue in this order. */
 const queue = (...ids: string[]): Settings => {
   const s = { ...newSettings(), language: "zh_tw" as const };
-  ids.forEach((id, n) => addTeam(s, { ...newTeam(n + 1, `T${id}`), id }));
+  ids.forEach((id, n) => addQueued(s, { ...newTeam(n + 1, `T${id}`), id }));
   return s;
 };
 const ids = (s: Settings) => s.teams.map((t) => t.id);
-const last = (order: string[], id: string) => [...order.filter((x) => x !== id), ...order.filter((x) => x === id)];
-/** What the Agent writes after team `id` claimed: the same file, that team last in the queue (agent/team_queue.py requeue). */
-const claimed = (s: Settings, id: string): Settings => ({ ...s, team_queue: last(s.team_queue, id) });
+/** What the Agent writes after team `id` claimed: the same file, that team's first place last in the queue (agent/team_queue.py
+ * requeue). */
+const claimed = (s: Settings, id: string): Settings => {
+  const at = s.team_queue.indexOf(id);
+  return { ...s, team_queue: [...s.team_queue.slice(0, at), ...s.team_queue.slice(at + 1), id] };
+};
 /** The same of a file the editor has not written back as version 22: its queue is the order of its teams. */
 const claimedOld = (s: Settings, id: string): Settings => {
   const at = s.teams.findIndex((t) => t.id === id);
@@ -66,20 +70,52 @@ async function mirror(s: Settings) {
   await showMirror(r.user);
   return r;
 }
-/** Team `name`'s start flag in the queue (its name says what a press does). */
-const flag = (name: string, on = false) =>
-  within(queueFrame()).getByRole("button", { name: fill(zh[on ? "queue.flag_clear" : "queue.flag_set"], { name }) });
+/** The buttons of the queue's place `n` (from 1), team `name`. */
+const toTop = (n: number, name: string) => within(queueFrame()).getByRole("button", { name: fill(zh["queue.to_top_row"], { n, name }) });
+const takeOut = (n: number, name: string) => within(queueFrame()).getByRole("button", { name: fill(zh["queue.remove_row"], { n, name }) });
+const addButton = () => within(queueFrame()).getByRole("button", { name: zh["queue.add"] });
+/** Add team `name` to the queue from 「加入隊伍」's menu. */
+async function addFromMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(addButton());
+  await user.click(within(queueFrame()).getByRole("menuitem", { name: new RegExp(`^${name}`) }));
+}
 
 describe("movedToEnd: the teams another writer moved to the end of the queue", () => {
   test.each([
     [["a", "b", "c"], ["b", "c", "a"], ["a"]], // the Agent after a's claim
     [["a", "b", "c"], ["a", "b", "c"], []],
-    [["a", "b", "c", "d"], ["c", "d", "a", "b"], ["a", "b"]], // two claims, the old cursor's turn or a start team put first (c)
-    [["a", "b"], ["a", "b", "n"], ["n"]], // a team added there
-    [["a", "b", "c"], ["a", "c"], null], // a team deleted there: not a move
+    [["a", "b", "c", "d"], ["c", "d", "a", "b"], ["a", "b"]], // two claims, or the old cursor's turn
+    [["a", "a", "b"], ["a", "b", "a"], ["a"]], // a's first place (#954)
+    [["a", "a", "b"], ["b", "a", "a"], ["a", "a"]], // both of them, two claims
+    [["a", "a", "b"], ["a", "a", "b"], []], // three claims: round to where it was
+    [["a", "b", "a"], ["b", "a", "a"], ["a"]],
+    [["b", "b", "a", "a"], ["b", "b", "a", "a"], []], // b passed over, a's claim moves its first place behind its second
+    [["b", "a", "b", "a"], ["b", "b", "a", "a"], ["a"]], // b passed over, its places stay
+    [["a", "b"], ["a", "b", "n"], null], // a place added there: not a move
+    [["a", "b"], ["a", "b", "a"], null], // the same, of a team it has
+    [["a", "b", "c"], ["a", "c"], null], // a team deleted there
+    [["a", "a", "b"], ["a", "b"], null], // a place taken out there
+    [["a", "b"], ["a", "c"], null], // another team there
+    [[], [], []],
   ])("%j to %j", (before, after, moved) => {
     expect(movedToEnd(before, after)).toEqual(moved);
   });
+});
+
+describe("queueWithTeam: the queue once a deleted team's Undo puts its places back (#954)", () => {
+  test.each([
+    ["as it was, nothing moved since", ["b", "a", "b"], ["a"], ["b", "a", "b"]],
+    ["the Agent's move since is made in it too", ["a", "b", "c", "b"], ["c", "a"], ["b", "c", "b", "a"]],
+    ["no place before, none after", ["a", "c"], ["c", "a"], ["c", "a"]],
+    ["a place added since stays; each place back at its old index", ["b", "a", "b"], ["a", "n"], ["b", "a", "b", "n"]],
+    ["the queue emptied since: each place back", ["a", "b", "b"], [], ["b", "b"]],
+  ])("%s", (_, was, now, after) => {
+    expect(queueWithTeam(was, now, "b")).toEqual(after);
+  });
+});
+
+test("moveToEnd moves an id's first place, and an id the queue lacks moves nothing (#954)", () => {
+  expect(moveToEnd(["a", "b", "a"], ["a", "x", "b"])).toEqual(["a", "a", "b"]);
 });
 
 describe("rebase: the editor's settings once another writer changed the file", () => {
@@ -111,17 +147,40 @@ describe("rebase: the editor's settings once another writer changed the file", (
 
   test("a team added and a team deleted, unsaved, stay beside the Agent's move", () => {
     const draft = structuredClone(base);
-    addTeam(draft, { ...newTeam(4, "Td"), id: "d" });
+    addQueued(draft, { ...newTeam(4, "Td"), id: "d" });
     draft.teams.splice(1, 1);
     draft.team_queue = draft.team_queue.filter((id) => id !== "b");
     const next = rebase(base, draft, claimed(base, "a"));
     expect([next.team_queue, ids(next)]).toEqual([["c", "d", "a"], ["a", "c", "d"]]);
   });
 
-  test("a team the bot put first to start a task from (#802) is first under an unsaved edit too", () => {
-    const draft = { ...base, teams: [base.teams[1], base.teams[0], base.teams[2]] }; // b dragged up in the list
-    const next = rebase(base, draft, { ...base, team_queue: ["c", "a", "b"] });
-    expect([next.team_queue, ids(next)]).toEqual([["c", "a", "b"], ["b", "a", "c"]]);
+  describe("a team with several places (#954)", () => {
+    const twice = { ...base, team_queue: ["a", "a", "b"] };
+
+    test("a claim moves one of its places, not both", () => {
+      const draft = structuredClone(twice);
+      draft.teams[1].name = "renamed";
+      expect(rebase(twice, draft, claimed(twice, "a")).team_queue).toEqual(["a", "b", "a"]);
+      expect(rebase(twice, draft, claimed(claimed(twice, "a"), "a")).team_queue).toEqual(["b", "a", "a"]);
+      expect(rebase(twice, draft, claimed(claimed(claimed(twice, "a"), "a"), "b")).team_queue).toEqual(["a", "a", "b"]);
+    });
+
+    test("an unsaved add, of the same team too, stays beside the claim", () => {
+      expect(rebase(twice, { ...twice, team_queue: ["a", "a", "b", "a", "c"] }, claimed(twice, "a")).team_queue)
+        .toEqual(["a", "b", "a", "c", "a"]);
+    });
+
+    test("an unsaved place taken out stays out; with another place left the claim moves that one, with none it moves nothing", () => {
+      expect(rebase(twice, { ...twice, team_queue: ["a", "b"] }, claimed(twice, "a")).team_queue).toEqual(["b", "a"]);
+      expect(rebase(twice, { ...twice, team_queue: ["b"] }, claimed(twice, "a")).team_queue).toEqual(["b"]);
+      expect(rebase(twice, { ...twice, team_queue: [] }, claimed(twice, "a")).team_queue).toEqual([]);
+    });
+
+    test("a file whose queue gained or lost a place moves nothing in the edits", () => {
+      const draft = { ...twice, team_queue: ["b", "a", "a"] };
+      expect(rebase(twice, draft, { ...twice, team_queue: ["a", "b"] }).team_queue).toEqual(["b", "a", "a"]);
+      expect(rebase(twice, draft, { ...twice, team_queue: ["a", "a", "b", "b"] }).team_queue).toEqual(["b", "a", "a"]);
+    });
   });
 });
 
@@ -138,11 +197,11 @@ describe("the team list and the queue in the teams tab", () => {
     expect([ids(r.settings()), r.settings().team_queue]).toEqual([["c", "a", "b"], ["c", "a", "b"]]);
   });
 
-  test("a team added goes last in the list and last in the queue", async () => {
+  test("a team added goes last in the list, and not into the queue (#954)", async () => {
     const r = renderEditor(<TeamsTab />, apart());
     await r.user.click(screen.getByRole("button", { name: `+ ${zh.add}` }));
     const added = r.settings().teams[3].id;
-    expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c", added], ["c", "a", "b", added]]);
+    expect([ids(r.settings()), r.settings().team_queue]).toEqual([["a", "b", "c", added], ["c", "a", "b"]]);
   });
 
   test("a team deleted leaves both, and its Undo puts it back in its place in each", async () => {
@@ -165,7 +224,7 @@ describe("the team list and the queue in the teams tab", () => {
     expect(screen.queryByRole("list", { name: zh["queue.title"] })).toBeNull();
     const note = sideList().getByText(zh["teams.order_note"]);
     expect(note).toBeVisible();
-    expect(zh["teams.order_note"]).toBe("清單順序只是顯示用。哪一支先出戰，在「執行」分頁點鏡牢，用「隊伍佇列」排。新增的隊伍排在最後。");
+    expect(zh["teams.order_note"]).toBe("清單順序只是顯示用。隊伍要自己加進佇列才會打鏡牢：在「執行」分頁點鏡牢，按「隊伍佇列」的「加入隊伍」。");
     expect(cssValueOf(css, note, "font-size")).toBe("12.5px");
   });
 });
@@ -184,7 +243,7 @@ describe("the team queue at the top of the Mirror Dungeon options (#878)", () =>
     expect(screen.queryByRole("group", { name: zh["queue.title"] })).toBeNull();
   });
 
-  test("lists every team in the queue's order: its place, name and slot, and its usage only when kept to one difficulty", async () => {
+  test("lists the queue in its order: each place's number, name and slot, and its usage only when kept to one difficulty", async () => {
     const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
     s.teams[1].game_team = 17;
     s.teams[1].usage = "normal_only";
@@ -195,7 +254,7 @@ describe("the team queue at the top of the Mirror Dungeon options (#878)", () =>
       expect.stringMatching(/^1 Tc TEAMS #3 只跑困難/), expect.stringMatching(/^2 Ta TEAMS #1(?! 只跑| 都可)/), "3 Tb TEAMS #17 只跑普通",
     ]);
     expect(queueFrame()).not.toHaveTextContent(zh["usage.any"]);
-    // the slot, the usage, the mark and the flag in columns every row shares (subgrid), the slot's numerals of one width
+    // the slot, the usage, the mark and the buttons in columns every row shares (subgrid), the slot's numerals of one width
     expect(cssValueOf(css, rows()[0], "grid-template-columns")).toBe("subgrid");
     expect(cssValueOf(css, within(rows()[2]).getByText("TEAMS #17"), "font-variant-numeric")).toBe("tabular-nums");
   });
@@ -208,44 +267,25 @@ describe("the team queue at the top of the Mirror Dungeon options (#878)", () =>
     expect(["text-overflow", "white-space", "overflow"].map((p) => cssValueOf(css, name, p))).toEqual(["ellipsis", "nowrap", "hidden"]);
   });
 
-  test("a disabled team stays in its place, struck through in the muted ink, read as off, its tooltip saying it is passed over", async () => {
-    const s = queue("a", "b", "c");
-    s.teams[1].enabled = false;
-    await mirror(s);
-    const [a, b] = rows();
-    expect(b).toHaveTextContent(/^2\s*Tb/);
-    const name = within(b).getByText("Tb");
-    expect([cssValueOf(css, name, "color"), cssValueOf(css, name, "text-decoration")]).toEqual(["var(--muted)", "line-through"]);
-    expect(cssValueOf(css, within(a).getByText("Ta"), "text-decoration")).toBeUndefined();
-    expect(within(b).getByText(zh["team.off_read"])).toHaveClass("sr-only"); // （停用） for a screen reader, no tag on the page
-    expect(a).not.toHaveTextContent(zh["team.off_read"]);
-    expect(b.querySelector(".qtag")).toBeNull();
-    expect(b.querySelector("[title]")).toHaveAttribute("title", zh["queue.off_tip"]);
-    expect(cssValueOf(css, b, "opacity")).toBeUndefined(); // the row itself is not faded: its words keep their contrast
-  });
-
-  // The next new run of each difficulty the task plays (run.difficulty; auto plays either) is the first enabled team in the
-  // queue whose usage fits it (agent/team_queue.py pick_team), counted from the start team when one is set (headed).
+  // The next new run of each difficulty the task plays (run.difficulty; auto plays either) is the first team in the queue whose
+  // usage fits it (agent/team_queue.py pick_team).
   /** The next-run mark of each row: "" for none, 下一局 alone, or with the difficulty's plate. */
   const marks = () => rows().map((li) => li.textContent!.match(new RegExp(`${zh["queue.next"]}(${zh["difficulty.normal"]}|${zh["difficulty.hard"]})?`))?.[0] ?? "");
   const NEXT = zh["queue.next"], NORMAL = NEXT + zh["difficulty.normal"], HARD = NEXT + zh["difficulty.hard"];
-  type Edit = Partial<Pick<Settings["teams"][number], "enabled" | "usage">>;
-  test.each<[string, Edit[], Partial<Settings["run"]>, string[]]>([
-    ["one team plays both: 下一局 alone", [{ enabled: false }, {}, { usage: "hard_only" }], {}, ["", NEXT, ""]],
-    ["hard and normal play different teams: 下一局 with each one's plate",
-      [{ enabled: false, usage: "any" }, { usage: "hard_only" }, { usage: "any" }], {}, ["", HARD, NORMAL]],
-    ["a team kept to Normal first, then one for both", [{ usage: "normal_only" }, {}, {}], {}, [NORMAL, HARD, ""]],
-    ["no team to play: no mark", [{ enabled: false }, { enabled: false }, { enabled: false }], {}, ["", "", ""]],
-    ["only Hard has a team: its mark says Hard", [{ usage: "hard_only" }, { enabled: false }, { usage: "hard_only" }], {}, [HARD, "", ""]],
-    ["the task plays Hard only: Hard's team alone, no plate", [{ usage: "normal_only" }, {}, {}], { difficulty: "hard" }, ["", NEXT, ""]],
-    ["the task plays Normal only: Normal's team alone, no plate", [{ usage: "hard_only" }, {}, {}], { difficulty: "normal" }, ["", NEXT, ""]],
-    ["a start team: counted from it", [{}, {}, {}], { start_team: "b" }, ["", "", NEXT]],
-    ["a start team kept to Hard: Hard from it, Normal from the queue's head",
-      [{}, {}, { usage: "hard_only" }], { start_team: "b" }, [NORMAL, "", HARD]],
-  ])("%s", async (_, edits, run, expected) => {
-    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] }; // the list's order is not the queue's
-    const inQueue = s.team_queue.map((id) => s.teams.find((x) => x.id === id)!);
-    edits.forEach((e, j) => Object.assign(inQueue[j], e));
+  type Usage = "any" | "hard_only" | "normal_only";
+  test.each<[string, string[], Record<string, Usage>, Partial<Settings["run"]>, string[]]>([
+    ["one team plays both: 下一局 alone", ["c", "a", "b"], { b: "hard_only" }, {}, [NEXT, "", ""]],
+    ["hard and normal play different teams: 下一局 with each one's plate", ["a", "b"], { a: "hard_only" }, {}, [HARD, NORMAL]],
+    ["a team kept to Normal first, then one for both", ["c", "a", "b"], { c: "normal_only" }, {}, [NORMAL, HARD, ""]],
+    ["a team twice: its first place alone is marked", ["a", "a", "b"], {}, {}, [NEXT, "", ""]],
+    ["a team twice, after one kept to Hard twice", ["b", "b", "a", "a"], { b: "hard_only" }, {}, [HARD, "", NORMAL, ""]],
+    ["only Hard has a team: its mark says Hard", ["c", "b"], { c: "hard_only", b: "hard_only" }, {}, [HARD, ""]],
+    ["the task plays Hard only: Hard's team alone, no plate", ["c", "a"], { c: "normal_only" }, { difficulty: "hard" }, ["", NEXT]],
+    ["the task plays Normal only: Normal's team alone, no plate", ["c", "a"], { c: "hard_only" }, { difficulty: "normal" }, ["", NEXT]],
+    ["no team for the task's difficulty: no mark", ["c", "c"], { c: "hard_only" }, { difficulty: "normal" }, ["", ""]],
+  ])("%s", async (_, order, usage, run, expected) => {
+    const s = { ...queue("a", "b", "c"), team_queue: order };
+    for (const team of s.teams) team.usage = usage[team.id] ?? "any";
     Object.assign(s.run, run);
     await mirror(s);
     expect(marks()).toEqual(expected);
@@ -266,14 +306,14 @@ describe("the team queue at the top of the Mirror Dungeon options (#878)", () =>
     }
   });
 
-  // tests/settings_cases.json next_run: the agent's pick_team, headed by the start team, gives the same teams
-  // (tests/test_team_queue.py).
+  // tests/settings_cases.json next_run: the agent's pick_team gives the same teams (tests/test_team_queue.py).
   test.each(cases.next_run as { name: string; edits: FileEdit[]; hard: string | null; normal: string | null }[])(
     "the marks name the teams the agent picks: $name", async ({ edits, hard, normal }) => {
       const s = applyEdits(cases.valid, edits) as unknown as Settings;
       const mark = (id: string) => (hard === id && normal === id ? NEXT : hard === id ? HARD : normal === id ? NORMAL : "");
       await mirror(s);
-      expect(marks()).toEqual(s.team_queue.map(mark));
+      if (s.team_queue.length) expect(marks()).toEqual(s.team_queue.map((id, j) => (s.team_queue.indexOf(id) === j ? mark(id) : "")));
+      else expect(queueFrame()).not.toHaveTextContent(NEXT);
     });
 
   test("Alt with an arrow in it moves a team in the queue, not in the list", async () => {
@@ -285,139 +325,150 @@ describe("the team queue at the top of the Mirror Dungeon options (#878)", () =>
     expect(shown()).toEqual([expect.stringMatching(/^1 Tc/), expect.stringMatching(/^2 Ta/), expect.stringMatching(/^3 Tb/)]);
   });
 
-  test("no 「這次從哪一支隊伍開始」 pick and no 照隊伍佇列 lines: the flags are the start team", async () => {
+  test("no start team: no flag and no 這次從哪一支隊伍開始 pick (#954)", async () => {
     await mirror(queue("a", "b"));
-    expect(screen.queryByRole("combobox", { name: new RegExp(zh["run.start_team"]) })).toBeNull();
-    for (const gone of ["照隊伍佇列開始", "改回照隊伍佇列", zh["run.start_team"]]) expect(document.body).not.toHaveTextContent(gone);
+    expect(within(queueFrame()).queryByRole("button", { pressed: true })).toBeNull();
+    for (const gone of ["起頭", "旗子", "這次從", "停用"]) expect(document.body.innerHTML).not.toContain(gone);
   });
 });
 
-describe("the start team's flag on each queue row (#878, run.start_team)", () => {
-  test("a press sets the start team, pressed and named to clear it; a second press clears it", async () => {
-    const r = await mirror(queue("a", "b"));
-    expect(flag("Ta")).toHaveAttribute("aria-pressed", "false");
-    await r.user.click(flag("Ta"));
-    expect(r.settings().run.start_team).toBe("a");
-    expect(flag("Ta", true)).toHaveAttribute("aria-pressed", "true");
-    expect(r.settings().team_queue).toEqual(["a", "b"]); // the queue itself is the Agent's to move (to_head)
-    await r.user.click(flag("Ta", true));
-    expect(r.settings().run.start_team).toBeNull();
-    expect(flag("Ta")).toHaveAttribute("aria-pressed", "false");
-  });
+describe("the queue put together one team at a time (#954)", () => {
+  const shownNames = () => queueRows().map((li) => li.textContent!.match(/T\w/)![0]);
 
-  test("one team at most: a press on another moves the flag there", async () => {
-    const r = await mirror(queue("a", "b"));
-    await r.user.click(flag("Ta"));
-    await r.user.click(flag("Tb"));
-    expect(r.settings().run.start_team).toBe("b");
-    expect(within(queueFrame()).getAllByRole("button", { pressed: true })).toEqual([flag("Tb", true)]);
-  });
-
-  test("a disabled team's flag sets nothing: unavailable, faint, the no-entry pointer, its words saying why", async () => {
-    const s = queue("a", "b");
-    s.teams[1].enabled = false;
+  test("「加入隊伍」 under the queue lists every team with its slot and how often the queue has it; a pick adds it at the end", async () => {
+    const s = queue("a", "b", "c");
+    s.teams[1].game_team = 17;
+    s.team_queue = ["b", "a", "b"];
     const r = await mirror(s);
-    expect(flag("Tb")).toHaveAttribute("aria-disabled", "true");
-    expect(flag("Ta")).not.toHaveAttribute("aria-disabled");
-    await r.user.click(flag("Tb"));
-    expect(r.settings().run.start_team).toBeNull();
-    expect(flag("Tb")).toHaveAttribute("aria-pressed", "false");
-    // the icon faint, not the button: the button's opacity would fade the words drawn on it too
-    const icon = (b: HTMLElement) => b.querySelector("svg")!;
-    expect([cssValueOf(css, icon(flag("Tb")), "opacity"), cssValueOf(css, flag("Tb"), "cursor")]).toEqual(["0.3", "not-allowed"]);
-    expect(cssValueOf(css, icon(flag("Ta")), "opacity")).toBeUndefined(); // an enabled team's, undimmed
-    expect(cssValueOf(css, flag("Tb"), "color", flag("Tb"))).toBe("var(--muted)"); // the pointer does not light it
-    // its words float over it at full ink, under the pointer and under the keyboard's focus, which still reaches it
-    expect(flag("Tb")).toHaveAttribute("data-tip", zh["queue.flag_tip_off"]);
-    for (const at of [flag("Tb"), { focus: flag("Tb") }]) {
-      expect(cssValueOf(css, flag("Tb"), "opacity", at, "::after")).toBe("1");
-      expect(cssValueOf(css, flag("Tb"), "opacity", at)).toBeUndefined();
-    }
-    expect(flag("Tb")).toBeEnabled();
-    expect(flag("Tb")).toHaveAttribute("aria-description", zh["queue.flag_tip_off"]); // why, for a screen reader
-    expect(flag("Ta")).not.toHaveAttribute("aria-description");
-    expect(zh["queue.flag_tip_off"]).toBe("隊伍停用中，不能從這支開始");
+    expect(queueFrame().querySelector("ol")!.compareDocumentPosition(addButton()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(addButton()).toHaveAttribute("aria-haspopup", "menu");
+    await r.user.click(addButton());
+    const items = within(queueFrame()).getAllByRole("menuitem").map((x) => [...x.children].map((c) => c.textContent));
+    expect(items).toEqual([["Ta", "TEAMS #1 · 已排 1 次"], ["Tb", "TEAMS #17 · 已排 2 次"], ["Tc", "TEAMS #3"]]); // the list's order
+    await r.user.click(within(queueFrame()).getByRole("menuitem", { name: /^Tc/ }));
+    expect(r.settings().team_queue).toEqual(["b", "a", "b", "c"]);
+    expect(ids(r.settings())).toEqual(["a", "b", "c"]);
+    expect(within(queueFrame()).queryByRole("menu")).toBeNull();
+    expect(addButton()).toHaveFocus();
   });
 
-  test("its words float over it while the pointer or the keyboard's focus is on it; no native tooltip of the list's under them", async () => {
-    const r = await mirror(queue("a", "b"));
-    expect(flag("Ta")).toHaveAttribute("data-tip", zh["queue.flag_tip"]);
-    expect(flag("Ta")).toHaveAttribute("title", ""); // the list's 拖曳 tooltip would show over the words
-    expect(cssValueOf(css, flag("Ta"), "opacity", false, "::after")).toBe("0");
-    expect(cssValueOf(css, flag("Ta"), "opacity", flag("Ta"), "::after")).toBe("1");
-    expect(cssValueOf(css, flag("Ta"), "opacity", { focus: flag("Ta") }, "::after")).toBe("1");
-    // drawn words only: with no alternative text, the accessibility tree took them into the row's name (the real window, UIA)
-    expect(cssValueOf(css, flag("Ta"), "content", false, "::after")).toBe('attr(data-tip) / ""');
-    await r.user.click(flag("Ta"));
-    expect(flag("Ta", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_on"]);
-    expect(zh["queue.flag_tip"]).toBe("這次從這支開始");
-    expect(zh["queue.flag_tip_on"]).toBe("這次從這支開始（再按取消）");
+  test("the same team may be added over and over, each a row of its own", async () => {
+    const r = await mirror({ ...queue("a", "b"), team_queue: [] });
+    for (const name of ["Ta", "Ta", "Tb", "Ta"]) await addFromMenu(r.user, name);
+    expect(r.settings().team_queue).toEqual(["a", "a", "b", "a"]);
+    expect(shownNames()).toEqual(["Ta", "Ta", "Tb", "Ta"]);
+    expect(queueRows().map((li) => li.querySelector(".place")!.textContent)).toEqual(["1", "2", "3", "4"]);
   });
 
-  test("lit, a line under the queue says the flag stays in the file; none while no flag is lit", async () => {
-    const r = await mirror(queue("a", "b"));
-    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull();
-    await r.user.click(flag("Tb"));
-    expect(within(queueFrame()).getByText(zh["queue.flag_kept"])).toBeVisible();
-    expect(zh["queue.flag_kept"]).toBe("旗子會存進設定檔，每次開始都會再排一次，用完記得改回。");
+  test("the menu by keyboard: the arrows go round, Enter adds, Escape closes to the button", async () => {
+    const r = await mirror({ ...queue("a", "b"), team_queue: ["a"] });
+    addButton().focus();
+    await r.user.keyboard("{Enter}{ArrowUp}");
+    expect(within(queueFrame()).getByRole("menuitem", { name: /^Tb/ })).toHaveFocus();
+    await r.user.keyboard("{Escape}");
+    expect(within(queueFrame()).queryByRole("menu")).toBeNull();
+    expect(addButton()).toHaveFocus();
+    await r.user.keyboard("{Enter}{ArrowDown}{Enter}");
+    expect(r.settings().team_queue).toEqual(["a", "b"]);
   });
 
-  test("a flag already on a disabled team (a hand edit, an old file) has no effect, dimmed and muted; a press clears it, and then sets nothing", async () => {
-    const s = queue("a", "b");
-    s.teams[1].enabled = false;
-    s.run.start_team = "b";
+  test("✕ takes out its own place alone, whichever of a team's it is; the Undo puts that place back, its words not a delete's", async () => {
+    const r = await mirror({ ...queue("a", "b"), team_queue: ["a", "b", "a"] });
+    await r.user.click(takeOut(1, "Ta"));
+    expect(r.settings().team_queue).toEqual(["b", "a"]);
+    expect(queueRows()[0]).toHaveFocus(); // the row that took its place
+    expect(within(queueFrame()).getByRole("status")).toHaveTextContent("已把「Ta」移出佇列。");
+    expect(ids(r.settings())).toEqual(["a", "b"]); // the team itself stays
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["a", "b", "a"]);
+    expect(queueRows()[0]).toHaveFocus();
+    await r.user.click(takeOut(3, "Ta"));
+    expect(r.settings().team_queue).toEqual(["a", "b"]);
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["a", "b", "a"]);
+    expect(queueRows()[2]).toHaveFocus();
+    expect(within(queueFrame()).queryByRole("button", { name: zh.undo })).toBeNull();
+  });
+
+  test("the last place taken out leaves the add button the focus, and its Undo brings the queue back", async () => {
+    const r = await mirror({ ...queue("a"), team_queue: ["a"] });
+    await r.user.click(takeOut(1, "Ta"));
+    expect(r.settings().team_queue).toEqual([]);
+    expect(addButton()).toHaveFocus();
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["a"]);
+  });
+
+  test("「排到最上面」 moves its place to the top, the rest in their order, once: nothing else is kept in the settings", async () => {
+    const s = { ...queue("a", "b", "c"), team_queue: ["a", "b", "a", "c"] };
     const r = await mirror(s);
-    expect(flag("Tb", true)).not.toHaveAttribute("aria-disabled");
-    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
-    expect(flag("Tb", true)).toHaveAttribute("aria-description", zh["queue.flag_tip_off_on"]);
-    expect([cssValueOf(css, flag("Tb", true), "opacity"), cssValueOf(css, flag("Tb", true), "color")]).toEqual(["0.5", "var(--muted)"]);
-    expect(cssValueOf(css, flag("Tb", true), "opacity", flag("Tb", true))).toBe("1"); // lit under the pointer: a press does something
-    expect(screen.queryByText(zh["queue.flag_kept"])).toBeNull(); // the flag has no effect, so it costs nothing
-    await r.user.click(flag("Tb", true));
-    expect(r.settings().run.start_team).toBeNull();
-    expect(flag("Tb")).toHaveAttribute("aria-disabled", "true");
-    await r.user.click(flag("Tb"));
-    expect(r.settings().run.start_team).toBeNull();
-    expect(zh["queue.flag_tip_off_on"]).toBe("隊伍停用中，旗子沒有作用（再按取消）");
+    await r.user.click(toTop(4, "Tc"));
+    expect(r.settings()).toEqual({ ...s, team_queue: ["c", "a", "b", "a"] });
+    expect(queueRows()[0]).toHaveFocus(); // the moved row, as an Alt move's
+    await r.user.click(toTop(4, "Ta"));
+    expect(r.settings().team_queue).toEqual(["a", "c", "a", "b"]);
   });
 
-  test("a lit flag on a team enabled again counts again: amber, its usual words, and the line under the queue", async () => {
-    const s = queue("a", "b");
-    s.teams[1].enabled = false;
-    s.run.start_team = "b";
-    await mirror(s);
-    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_off_on"]);
-    cleanup();
-    s.teams[1].enabled = true;
-    await mirror(s);
-    expect(flag("Tb", true)).toHaveAttribute("data-tip", zh["queue.flag_tip_on"]);
-    expect(cssValueOf(css, flag("Tb", true), "color")).toBe("var(--accent)");
-    expect(within(queueFrame()).getByText(zh["queue.flag_kept"])).toBeVisible();
+  test("the top row's 「排到最上面」 is off, the others' on; both buttons say what they do", async () => {
+    await mirror({ ...queue("a", "b"), team_queue: ["a", "a", "b"] });
+    expect(toTop(1, "Ta")).toBeDisabled();
+    expect([toTop(2, "Ta"), toTop(3, "Tb")].map((b) => (b as HTMLButtonElement).disabled)).toEqual([false, false]);
+    expect(toTop(2, "Ta")).toHaveAttribute("title", "排到最上面");
+    expect(takeOut(1, "Ta")).toBeEnabled();
+    expect(takeOut(1, "Ta")).toHaveAttribute("title", "移出佇列");
+    expect([zh["queue.to_top_row"], zh["queue.remove_row"]]).toEqual(["把第 {n} 位「{name}」排到最上面", "把第 {n} 位「{name}」移出佇列"]);
   });
 
-  test("disabling the start team in the Teams tab takes its flag off at once; enabling it again does not put it back", async () => {
-    const s = queue("a", "b");
-    s.run.start_team = "b";
-    const r = renderEditor(<TeamsTab />, s);
-    const enabled = () => screen.getByRole("checkbox", { name: zh["team.enabled"] });
-    await pickInList(r.user, "Ta");
-    await r.user.click(enabled()); // another team off: the flag stays
-    expect([r.settings().teams[0].enabled, r.settings().run.start_team]).toEqual([false, "b"]);
-    await pickInList(r.user, "Tb");
-    await r.user.click(enabled());
-    expect([r.settings().teams[1].enabled, r.settings().run.start_team]).toEqual([false, null]);
-    await r.user.click(enabled());
-    expect([r.settings().teams[1].enabled, r.settings().run.start_team]).toEqual([true, null]);
+  test("a drag moves the place it takes, of a team with several", async () => {
+    const r = await mirror({ ...queue("a", "b"), team_queue: ["a", "a", "b"] });
+    dragOnto(queueRows()[2], queueRows()[1]);
+    expect(r.settings().team_queue).toEqual(["a", "b", "a"]);
+    dragOnto(queueRows()[0], queueRows()[2]);
+    expect(r.settings().team_queue).toEqual(["b", "a", "a"]);
   });
 
-  test("a start team deleted since has no row and no flag: nothing under the queue, no button but the rows' flags", async () => {
-    const s = queue("a", "b");
-    s.run.start_team = "gone";
-    await mirror(s);
-    expect(within(queueFrame()).queryAllByRole("button", { pressed: true })).toEqual([]);
-    expect(queueFrame().querySelector("p")).toBeNull();
-    expect(within(queueFrame()).getAllByRole("button").map((b) => b.getAttribute("aria-label")))
-      .toEqual([fill(zh["queue.flag_set"], { name: "Ta" }), fill(zh["queue.flag_set"], { name: "Tb" })]);
+  test("Alt with an arrow moves a place past another of the same team, and the moved row keeps the focus", async () => {
+    const r = await mirror({ ...queue("a", "b"), team_queue: ["a", "a", "b"] });
+    await altMove(r.user, queueRows()[2], "Home");
+    expect(r.settings().team_queue).toEqual(["b", "a", "a"]);
+    expect(queueRows()[0]).toHaveFocus();
+    await altMove(r.user, queueRows()[1], "ArrowDown"); // the two places of a: the same queue
+    expect(r.settings().team_queue).toEqual(["b", "a", "a"]);
+    expect(queueRows()[2]).toHaveFocus();
+  });
+
+  test("an empty queue says Mirror Dungeon plays no run, and how to add a team", async () => {
+    await mirror({ ...queue("a"), team_queue: [] });
+    expect(within(queueFrame()).queryByRole("list")).toBeNull();
+    expect(within(queueFrame()).getByText(zh["queue.empty"])).toBeVisible();
+    expect(zh["queue.empty"]).toBe("佇列是空的：鏡牢不會打，任務直接結束。按「加入隊伍」加進來。");
+    expect(addButton()).toBeEnabled();
+  });
+
+  test("with no team at all the add button is off, and the words send the user to the Teams tab", async () => {
+    await mirror(queue());
+    expect(within(queueFrame()).getByText(zh["queue.empty_no_teams"])).toBeVisible();
+    expect(zh["queue.empty_no_teams"]).toContain("「隊伍」分頁");
+    expect(addButton()).toBeDisabled();
+  });
+
+  test("an id that names no team is taken out by its ✕", async () => {
+    const r = await mirror({ ...queue("a"), team_queue: ["a", "x"] });
+    await r.user.click(takeOut(2, "? x"));
+    expect(r.settings().team_queue).toEqual(["a"]);
+  });
+
+  test("in English too", async () => {
+    const en = TEXT.en_us;
+    renderEditor(<RunTab />, { ...queue("a"), language: "en_us", team_queue: ["a"] });
+    await userEvent.setup().click(within(document.querySelector(".task-list")!).getByText(en["task.MirrorDungeon"]));
+    const frame = within(screen.getByRole("group", { name: en["queue.title"] }));
+    expect(frame.getByRole("button", { name: "Move place 1, Ta, to the top" })).toBeDisabled();
+    await userEvent.setup().click(frame.getByRole("button", { name: "Add a team" }));
+    expect(frame.getByRole("menuitem")).toHaveTextContent("TEAMS #1 · in the queue: 1");
+    await userEvent.setup().click(frame.getByRole("button", { name: "Take place 1, Ta, out of the queue" }));
+    expect(frame.getByText(en["queue.empty"])).toBeVisible();
+    expect(frame.getByRole("status")).toHaveTextContent("Took “Ta” out of the queue.");
   });
 });
 // Locked during a run: runner.test.tsx 「during a run」 (a run of the real page's runner sets the lock).
@@ -443,25 +494,16 @@ describe("the next run on the task list's Mirror Dungeon row (#878)", () => {
     expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Ta$`));
     cleanup();
     const s = queue("a");
-    s.teams[0].enabled = false;
+    s.teams[0].usage = "hard_only";
+    s.run.difficulty = "normal";
     renderEditor(<RunTab />, s);
     expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*${zh["queue.no_team"]}$`));
   });
 
-  test("a start team set: counted from it, and a lit flag after the names", async () => {
-    const s = queue("a", "b");
-    s.run.start_team = "b";
-    renderEditor(<RunTab />, s);
-    const line = nextLine(mirrorRows()[0])!;
-    expect(line).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Tb\\s*${zh["queue.flag_on"]}$`));
-  });
-
-  test.each([["disabled", "b"], ["deleted", "gone"]])("a start team %s: no lit flag on the row, the queue as with no flag", async (_, id) => {
-    const s = { ...queue("a", "b", "c"), team_queue: ["c", "a", "b"] };
-    s.teams[1].enabled = id !== "b";
-    s.run.start_team = id;
-    renderEditor(<RunTab />, s);
-    expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*Tc$`));
+  test("an empty queue: the row says it plays none (#954)", async () => {
+    renderEditor(<RunTab />, { ...queue("a"), team_queue: [] });
+    expect(nextLine(mirrorRows()[0])).toHaveTextContent(new RegExp(`^${zh["queue.next"]}\\s*${zh["queue.empty_next"]}$`));
+    expect(zh["queue.empty_next"]).toBe("佇列是空的，不會打");
   });
 
   test("only on the first ticked Mirror Dungeon row; none while none is ticked", async () => {
@@ -551,53 +593,22 @@ describe("in the editor", () => {
       expect(shown()).toEqual(["Ta", "Tb", "Tc"]);
     });
 
-    test("a flag on a team deleted since goes with the next save, which leaves nothing unsaved (#878)", async () => {
-      const s = queue("a", "b", "c");
-      s.run.start_team = "b";
-      file.text = text(s);
-      const user = userEvent.setup();
-      render(<App start="teams" />);
-      await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
-      await pickInList(user, "Tb");
-      await user.click(screen.getByRole("button", { name: zh.remove }));
-      await user.click(screen.getByRole("button", { name: zh.save }));
-      await waitFor(() => expect(file.saved).toHaveLength(1));
-      const saved: Settings = JSON.parse(file.saved[0]);
-      expect([ids(saved), saved.team_queue, saved.run.start_team]).toEqual([["a", "c"], ["a", "c"], null]);
-      await waitFor(() => expect(document.querySelector(".status")).not.toHaveTextContent(zh.unsaved));
-    });
-
-    test("the start team disabled in the Teams tab is saved with no flag, and the Mirror Dungeon options show none lit (#878)", async () => {
-      const s = queue("a", "b", "c");
-      s.run.start_team = "b";
-      file.text = text(s);
-      const user = userEvent.setup();
-      render(<App start="teams" />);
-      await waitFor(() => expect(shown()).toEqual(["Ta", "Tb", "Tc"]));
-      await pickInList(user, "Tb");
-      await user.click(screen.getByRole("checkbox", { name: zh["team.enabled"] }));
-      await user.click(screen.getByRole("button", { name: zh.save }));
-      await waitFor(() => expect(file.saved).toHaveLength(1));
-      const saved: Settings = JSON.parse(file.saved[0]);
-      expect([saved.teams[1].enabled, saved.run.start_team]).toEqual([false, null]);
-      await user.click(screen.getByRole("tab", { name: new RegExp(`^${zh["tab.run"]}`) }));
-      await showMirror(user);
-      expect(within(queueFrame()).queryAllByRole("button", { pressed: true })).toEqual([]);
-      expect(flag("Tb")).toHaveAttribute("aria-disabled", "true");
-    });
-
-    test("a flag pressed is saved as run.start_team, and the queue as it was", async () => {
+    test("teams added, put on top and taken out save the queue as shown, and the team list as it was (#954)", async () => {
       const user = await openMirror();
-      await user.click(flag("Tb"));
+      await waitFor(() => expect(inQueue()).toEqual(["Ta", "Tb", "Tc"]));
+      await addFromMenu(user, "Ta");
+      await user.click(takeOut(3, "Tc"));
+      await user.click(toTop(2, "Tb"));
+      expect(inQueue()).toEqual(["Tb", "Ta", "Ta"]);
       await user.click(screen.getByRole("button", { name: zh.save }));
       await waitFor(() => expect(file.saved).toHaveLength(1));
       const saved: Settings = JSON.parse(file.saved[0]);
-      expect([saved.run.start_team, saved.team_queue]).toEqual(["b", ["a", "b", "c"]]);
+      expect([saved.team_queue, ids(saved)]).toEqual([["b", "a", "a"], ["a", "b", "c"]]);
     });
 
     test.each([
       ["the Agent moves a claimed team to the end", (s: Settings) => claimed(s, "a"), ["Tb", "Tc", "Ta"]],
-      ["a task's start team is put first (#802)", (s: Settings) => ({ ...s, team_queue: ["c", "a", "b"] }), ["Tc", "Ta", "Tb"]],
+      ["another writer put a team in twice (#954)", (s: Settings) => ({ ...s, team_queue: ["c", "a", "c"] }), ["Tc", "Ta", "Tc"]],
     ])("shows the order the file has once the editor reads it again: %s", async (_, write, expected) => {
       const user = await openMirror();
       await waitFor(() => expect(inQueue()).toEqual(["Ta", "Tb", "Tc"]));
@@ -615,6 +626,19 @@ describe("in the editor", () => {
       agentClaims("a");
       act(() => { window.dispatchEvent(new Event("focus")); });
       await waitFor(() => expect(inQueue()).toEqual(["Tc", "Tb", "Ta"]));
+    });
+
+    test("an unsaved add and the Agent's claim of a team with two places are both shown and saved (#954)", async () => {
+      file.text = text({ ...queue("a", "b", "c"), team_queue: ["a", "a", "b"] });
+      const user = await openMirror();
+      await waitFor(() => expect(inQueue()).toEqual(["Ta", "Ta", "Tb"]));
+      await addFromMenu(user, "Tc");
+      agentClaims("a");
+      act(() => { window.dispatchEvent(new Event("focus")); });
+      await waitFor(() => expect(inQueue()).toEqual(["Ta", "Tb", "Tc", "Ta"]));
+      await user.click(screen.getByRole("button", { name: zh.save }));
+      await waitFor(() => expect(file.saved).toHaveLength(1));
+      expect(JSON.parse(file.saved[0]).team_queue).toEqual(["a", "b", "c", "a"]);
     });
 
     test("an id of the queue that names no team is its own row, marked; the problem's click opens the Run tab on Mirror Dungeon and focuses it", async () => {
@@ -723,6 +747,7 @@ describe("in the editor", () => {
 
   test("an old file the Agent reorders while the editor writes its migration back shows and keeps the Agent's order", async () => {
     const { team_queue: _, ...was } = JSON.parse(file.text!); // version 22 added it (#803)
+    was.teams = was.teams.map((t: object) => ({ ...t, enabled: true })); // version 24 dropped it (#954)
     const old = { ...was, version: 20, ...cases.v20 }; // version 21 dropped these three sections (#782)
     file.text = text(old);
     file.beforeSave = () => { // the load's write-back meets the Agent's write, and a poll runs while it waits

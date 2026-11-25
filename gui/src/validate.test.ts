@@ -34,7 +34,7 @@ function everyProblem(): Settings {
   const s = structuredClone(cases.valid) as unknown as Settings;
   const team = (id: string, name: string, slot: number) => ({ ...newTeam(slot, name), id });
   s.teams = [team("a", "Ta", 1), team("b", "Tb", 1), team("a", "Tc", 3), team("d", "Td", 4), team("e", "Te", 5)];
-  s.team_queue = ["a", "b", "b", "x", "d"]; // b twice, x no team, e missing (#803)
+  s.team_queue = ["a", "b", "b", "x", "d"]; // x no team; b twice and e left out are fine (#954)
   s.teams[0].deployment_order = { plan: "gone" };
   s.teams[0].skill_replacement.sinners = [
     { sinner: "Yi Sang", target: { s1: 4, s2: 1, s3: 1 }, s1_s3_first: true },
@@ -69,18 +69,16 @@ describe("what the editor says of a problem", () => {
 
   test("two teams on one TEAMS slot are named, with the way out", () => {
     const p = problems.find((x) => x.say.key === "problem.slot")!;
-    expect(sayProblem(p, "zh_tw")).toBe("隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1：改其中一支的遊戲內隊伍欄位，或停用一支。");
-    expect(sayProblem(p, "en_us")).toBe('Teams "Ta", "Tb" are all enabled and all use TEAMS #1. Give one another slot, or disable one.');
+    expect(sayProblem(p, "zh_tw")).toBe("隊伍「Ta」、「Tb」都在隊伍佇列裡，也都用 TEAMS #1：改其中一支的遊戲內隊伍欄位，或把一支移出佇列。");
+    expect(sayProblem(p, "en_us")).toBe('Teams "Ta", "Tb" are all in the team queue and all use TEAMS #1. Give one another slot, or take one out of the queue.');
   });
 
-  test("the team queue's problems name the team or the id, and send the user to the file", () => {
-    const said = (key: string) => problems.filter((x) => x.say.key === key).map((p) => [sayProblem(p, "zh_tw"), sayProblem(p, "en_us")]);
-    expect(said("problem.queueDupe")).toEqual([["隊伍佇列列了 2 次 id「b」：到設定檔的 team_queue 刪掉多的那幾個。",
-      'The team queue lists the id "b" 2 times. In the file\'s team_queue, remove the extra ones.']]);
-    expect(said("problem.queueExtra")).toEqual([["隊伍佇列裡的 id「x」不是任何一支隊伍的：到設定檔的 team_queue 刪掉它。",
-      'The team queue lists the id "x", which no team has. In the file\'s team_queue, remove it.']]);
-    expect(said("problem.queueMissing")).toEqual([["隊伍「Te」不在隊伍佇列裡：到設定檔的 team_queue 加上它的 id「e」。",
-      'Team "Te" is not in the team queue. In the file\'s team_queue, add its id "e".']]);
+  test("the team queue's problem names the id and sends the user to its row, every row that has it marked", () => {
+    const said = problems.filter((x) => x.say.key === "problem.queueExtra").map((p) => [sayProblem(p, "zh_tw"), sayProblem(p, "en_us")]);
+    expect(said).toEqual([["隊伍佇列裡的 id「x」不是任何一支隊伍的：在「執行」分頁鏡牢的隊伍佇列按那一列的 ✕ 移出。",
+      'The team queue lists the id "x", which no team has. In the team queue of Mirror Dungeon in the Run tab, press ✕ on its row.']]);
+    const twice = validate({ ...cases.valid, team_queue: ["x", "a", "x"] });
+    expect(twice.map((p) => p.paths)).toEqual([["team_queue/0", "team_queue/2"]]);
   });
 
   test("a gift is said by its name", () => {
@@ -116,7 +114,7 @@ test("parseSettings refuses a newer version", () => {
 });
 
 type MigrateCase = { name: string; edits: Edit[]; gives?: Edit[]; schema?: string[] };
-describe.each([20, 22] as const)("tests/settings_cases.json migrate_v%i: the sections version 23 added come back (#813)", (version) => {
+describe.each([20, 22, 23] as const)("tests/settings_cases.json migrate_v%i: the sections version 23 added come back (#813), the queue as version 24 has it (#954)", (version) => {
   for (const c of cases[`migrate_v${version}`] as MigrateCase[]) {
     test(c.name, () => {
       const old = olderFile(version, c.edits);
@@ -133,7 +131,7 @@ describe.each([20, 22] as const)("tests/settings_cases.json migrate_v%i: the sec
   }
 });
 
-test("a version 23 file needs no migration and has no old file", () => {
+test("a current file needs no migration and has no old file", () => {
   expect(parseSettings(JSON.stringify(cases.valid)).old).toBeNull();
 });
 
@@ -144,7 +142,7 @@ test("the sections version 23 added are what a new file has, as the shared valid
   expect(Object.fromEntries(cases.added_v23.map((k) => [k, (newSettings() as unknown as Record<string, unknown>)[k]]))).toEqual(added);
 });
 
-describe("tests/settings_cases.json migrate_v21: a version 21 file reads with the queue in the order of teams (#803), on to version 23", () => {
+describe("tests/settings_cases.json migrate_v21: a version 21 file reads with the queue in the order of teams (#803), on to version 24", () => {
   const added = Object.fromEntries(cases.added_v23.map((k) => [k, (cases.valid as Record<string, unknown>)[k]]));
   for (const c of cases.migrate_v21 as { name: string; edits: Edit[]; team_queue: string[] }[]) {
     test(c.name, () => {
@@ -152,7 +150,8 @@ describe("tests/settings_cases.json migrate_v21: a version 21 file reads with th
       const { data, old: read } = parseSettings(JSON.stringify(old));
       const { gift_lists: _, ...rest } = data;
       const { gift_lists: __, ...was } = old;
-      expect([rest, read]).toEqual([{ ...was, version: 23, team_queue: c.team_queue, ...added }, { version: 21, data: old }]);
+      const teams = (was.teams as { enabled?: boolean }[]).map(({ enabled: ___, ...team }) => team);
+      expect([rest, read]).toEqual([{ ...was, version: 24, teams, team_queue: c.team_queue, ...added }, { version: 21, data: old }]);
     });
   }
 });

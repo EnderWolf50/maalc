@@ -70,7 +70,6 @@ const TASK_OPTIONS: Record<string, Record<string, MxuOption>> = {
     MirrorRunsLimit: spec("run/runs", "limit"),
     MirrorRuns: spec("run/runs", "int", "runs"),
     MirrorThemePackRefresh: spec("run/theme_pack_refresh", "select"),
-    MirrorStartTeam: spec("run/start_team", "team"),
     MirrorWeeklyBonusUse: spec("run/weekly_bonus_use", "select"),
     MirrorWeeklyBonusAmount: spec("run/weekly_bonus_amount", "select"),
     MirrorStopWhenBonusOut: spec("run/stop_when_weekly_bonus_out", "switch"),
@@ -91,10 +90,10 @@ const GLOBAL_OPTIONS: Record<string, MxuOption> = {
 };
 /** Each task option's settings path once, in the Run tab's order: the report lists the values off their defaults in it. */
 export const OPTION_PATHS: string[] = [...new Set([...Object.values(TASK_OPTIONS), GLOBAL_OPTIONS].flatMap((o) => Object.values(o).map((x) => x.path)))];
-/** The settings paths that hold a team id (the start team, a Luxcavation task's team). */
+/** The settings paths that hold a team id (a Luxcavation task's team). */
 export const TEAM_PATHS = new Set(Object.values(TASK_OPTIONS).flatMap((o) => Object.values(o)).filter((x) => x.kind === "team").map((x) => x.path));
-/** The team options' case 0, which picks no team: 「未選擇」 and 「照隊伍佇列」 (v1.0.0 teamOptions.ts NONE, QUEUE). */
-const NO_TEAM = new Set(["none", "queue"]);
+/** The team options' case 0, which picks no team: 「未選擇」 (v1.0.0 teamOptions.ts NONE). */
+const NO_TEAM = "none";
 const TASK_IDS: string[] = schema.$defs.task.enum;
 
 type Prop = { enum?: unknown[]; type?: string | string[]; minimum?: number; maximum?: number; minLength?: number };
@@ -135,14 +134,11 @@ class Reader {
     this.read.add(path);
   }
 
-  /** A team id: none picked, one of the teams, or one deleted since, which is noted and picks none. The start flag on a
-   * disabled team picks none too (#878), unnoted and not counted as read. */
+  /** A team id: none picked, one of the teams, or one deleted since, which is noted and picks none. */
   team(path: string, id: unknown) {
-    if (id === null || (typeof id === "string" && NO_TEAM.has(id))) return this.put(path, null);
+    if (id === null || id === NO_TEAM) return this.put(path, null);
     if (typeof id !== "string") return this.missed.push({ kind: "value", path, value: shown(id) });
-    const team = this.data.teams.find((t) => t.id === id);
-    if (team?.enabled === false && path === "run/start_team") return setAt(this.data, path, null);
-    if (team) return this.put(path, id);
+    if (this.data.teams.some((t) => t.id === id)) return this.put(path, id);
     this.missed.push({ kind: "team", path, id, label: this.labels.get(id) ?? null });
   }
 

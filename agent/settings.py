@@ -59,21 +59,38 @@ def _with_missing(default, have):
 def _sections_back(data):
     """22 -> 23 (#813): the options are the settings file's again (the runner reads no client). Each section of defaults()
     the file lacks comes in at its defaults, and each key a section lacks; a version-20 file still has its own run,
-    luxcavation and charge_enkephalin (20 -> 21 kept them), which only get start_team and keep_dismissed_screens when
-    they lack them."""
+    luxcavation and charge_enkephalin (20 -> 21 kept them), which only get keep_dismissed_screens when they lack it."""
     return {**data, **{k: _with_missing(v, data[k]) if k in data else v for k, v in defaults().items()}}
+
+
+def _queue_as_put_in(data):
+    """23 -> 24 (#954): the queue is the teams the user put in it, so the disabled teams leave it, the rest in their order,
+    and no team has the switch. run.start_team goes and moves nothing: the agent migrates in memory at every read, so a
+    moved team would be first each time. What a hand edit broke stays, for the schema check to name it."""
+    data = dict(data)
+    teams, queue, run = data.get("teams"), data.get("team_queue"), data.get("run")
+    if isinstance(teams, list):
+        off = [t.get("id") for t in teams if isinstance(t, dict) and t.get("enabled") is False]
+        data["teams"] = [{k: v for k, v in t.items() if k != "enabled"} if isinstance(t, dict) else t for t in teams]
+        if isinstance(queue, list):
+            data["team_queue"] = [i for i in queue if i not in off]
+    if isinstance(run, dict):
+        data["run"] = {k: v for k, v in run.items() if k != "start_team"}
+    return data
 
 
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
 # gui/src/model.ts. 20 -> 21 is the identity now: version 21 dropped run, luxcavation and charge_enkephalin while the
 # client held their values (#782), and 22 -> 23 brings them back, so a version-20 file keeps its own (#813).
-MIGRATIONS = {20: dict, 21: _queue_in_list_order, 22: _sections_back}
+MIGRATIONS = {20: dict, 21: _queue_in_list_order, 22: _sections_back, 23: _queue_as_put_in}
 # NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is at version n or older, until the GUI writes
 # it back: what its migration changed about what the task reads.
 NOTES = {
-    22: f"settings older than version {CURRENT_VERSION}: the task options are read from its run, luxcavation and "
+    22: "settings older than version 23: the task options are read from its run, luxcavation and "
         "charge_enkephalin again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; "
         f"open the settings GUI once: it writes the file as version {CURRENT_VERSION}",
+    23: "settings older than version 24: the disabled teams are left out of the team queue, and run.start_team is not read "
+        f"(#954); open the settings GUI once: it writes the file as version {CURRENT_VERSION}",
 }
 
 
@@ -171,7 +188,7 @@ def clean_gift_list(gift_list):
     return {**gift_list, "want": known_only(gift_list["want"]), "keep": known_only(gift_list["keep"]), "gorder": gorder}, dropped
 
 
-NO_TEAM = "No enabled team: set up a team in the settings GUI first."
+NO_TEAM = "No team in the team queue: set up a team in the settings GUI and add it to the team queue first."
 
 
 class SettingsError(Exception):
@@ -210,7 +227,7 @@ def write_settings(root, data, expected):
 def load_settings(root, need_team=False, notes=None):
     """Return the checked settings dict, or raise SettingsError listing every problem.
 
-    need_team: MirrorDungeon's own check, an enabled team (#364); the dailies run without one.
+    need_team: MirrorDungeon's own check, a team in the team queue (#364); the dailies run without one.
     notes: a list that gets the NOTES line of each version the file was migrated from, also when it then fails a check.
     """
     path = settings_path(root)
@@ -230,7 +247,7 @@ def load_settings(root, need_team=False, notes=None):
         data["gift_lists"] = [clean_gift_list(gift_list)[0] for gift_list in data["gift_lists"]]
     # Cross-checks assume the structure is valid.
     errors = errors or cross_check(data)
-    if need_team and not errors and not any(t["enabled"] for t in data["teams"]):
+    if need_team and not errors and not data["team_queue"]:
         errors.append(NO_TEAM)
     if errors:
         raise SettingsError(errors)
@@ -258,8 +275,8 @@ def migrate(data, notes=None):
 
 def cross_check(data):
     """The checks spec 04 section 2 says the schema cannot express, but the ones that cross a task's options with the
-    teams (the target floor's, the start team, a Luxcavation task's team): the task's start checks those (task_options,
-    #777), so a team deleted or disabled stops only the task that names it."""
+    teams (the target floor's, a Luxcavation task's team): the task's start checks those (task_options, #777), so a team
+    deleted stops only the task that names it."""
     errors = []
 
     def dupes(path, values, what):
@@ -272,17 +289,15 @@ def cross_check(data):
         dupes(key, [p["name"] for p in data[key]], "name")
     teams = data["teams"]
     dupes("teams", [t["id"] for t in teams], "id")
-    # the team queue (#803): each team's id once, in any order
+    # the team queue (#803, #954): ids of teams in any order, a team as often as the user put it in, or not at all
     queue, ids = data["team_queue"], {t["id"] for t in teams}
-    dupes("team_queue", queue, "id")
     errors.extend(f"team_queue: id {i!r} names no team" for i in dict.fromkeys(queue) if i not in ids)
-    errors.extend(f"team_queue: team {t['name']!r} (id {t['id']!r}) is missing" for t in teams if t["id"] not in queue)
 
-    enabled = [t for t in teams if t["enabled"]]
-    for slot, n in Counter(t["game_team"] for t in enabled).items():
+    queued = [t for t in teams if t["id"] in queue]
+    for slot, n in Counter(t["game_team"] for t in queued).items():
         if n > 1:
-            names = ", ".join(repr(t["name"]) for t in enabled if t["game_team"] == slot)
-            errors.append(f"teams: enabled teams {names} all use TEAMS #{slot}")
+            names = ", ".join(repr(t["name"]) for t in queued if t["game_team"] == slot)
+            errors.append(f"teams: teams in the queue {names} all use TEAMS #{slot}")
 
     for i, t in enumerate(teams):
         refs = [

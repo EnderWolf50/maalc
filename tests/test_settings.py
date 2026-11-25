@@ -30,7 +30,7 @@ STARLIGHT = {"levels": ["none"] * 10, "priority": list(range(1, 11)), "convert_l
 
 def team(id, game_team, **kw):
     return {
-        "id": id, "name": f"Team {id}", "enabled": True, "game_team": game_team,
+        "id": id, "name": f"Team {id}", "game_team": game_team,
         "usage": "any", "hard_from_floor": 1, "deployment_order": {"custom": ORDER},
         "starlight": {"custom": STARLIGHT}, "theme_pack_plan": "default",
         "reward_cards": ["Starlight", "Random E.G.O Gift", "Cost & Keyword Gift Chance", "Cost", "E.G.O Resource"],
@@ -59,7 +59,7 @@ def custom_skills():
 
 
 VALID = {
-    "version": 23,
+    "version": 24,
     "language": "zh_tw",
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -205,15 +205,24 @@ def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
         assert [e.split(":")[0] for e in errors(tmp_path, data)] == ["trial_risk_overrides/0/risk"]
 
 
-NOTE = ("settings older than version 23: the task options are read from its run, luxcavation and charge_enkephalin "
+NOTE_23 = ("settings older than version 23: the task options are read from its run, luxcavation and charge_enkephalin "
         "again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; open the "
-        "settings GUI once: it writes the file as version 23")
+        "settings GUI once: it writes the file as version 24")
+NOTE_24 = ("settings older than version 24: the disabled teams are left out of the team queue, and run.start_team is not "
+           "read (#954); open the settings GUI once: it writes the file as version 24")
 
 
 def older(version, edits=()):
-    """settings_cases' valid file at an older version, these edits made: without the sections version 23 added (#813),
-    without the team_queue version 22 added below it (#803), and version 20's with the three sections it had."""
-    old = {k: v for k, v in CASES["valid"].items() if k not in CASES["added_v23"] and (version >= 22 or k != "team_queue")}
+    """settings_cases' valid file at an older version, these edits made: each team with the switch version 24 dropped, and
+    run with version 23's start_team (#954); below version 23 without the sections it added (#813), below 22 without its
+    team_queue (#803), and version 20's with the three sections it had."""
+    old = copy.deepcopy(CASES["valid"])
+    for t in old["teams"]:
+        t["enabled"] = True
+    if version == 23:
+        old["run"]["start_team"] = None
+    else:
+        old = {k: v for k, v in old.items() if k not in CASES["added_v23"] and (version >= 22 or k != "team_queue")}
     return apply_edits({**old, "version": version, **(CASES["v20"] if version == 20 else {})}, list(edits))
 
 
@@ -221,15 +230,17 @@ def v20(edits=()):
     return older(20, edits)
 
 
-@pytest.mark.parametrize("version", [20, 21, 22])
-def test_an_older_file_is_read_as_the_current_version_in_memory_and_says_where_the_options_come_from(tmp_path, version):
-    # #813: the options are the file's again, at their defaults where it has none (a version 20 file has its own); the file
-    # on disk stays as it was, and a task's start logs the line (TaskStart) until the GUI writes the file back.
+@pytest.mark.parametrize("version, said", [(20, [NOTE_23, NOTE_24]), (21, [NOTE_23, NOTE_24]), (22, [NOTE_23, NOTE_24]),
+                                           (23, [NOTE_24])])
+def test_an_older_file_is_read_as_the_current_version_in_memory_and_says_what_is_read_anew(tmp_path, version, said):
+    # #813: the options are the file's again, at their defaults where it has none (a version 20 file has its own); #954: no
+    # team switch and no start team. The file on disk stays as it was, and a task's start logs the lines (TaskStart) until
+    # the GUI writes the file back.
     old = older(version)
     notes = []
     got = load(tmp_path, old, notes=notes)
     assert {**got, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}
-    assert notes == [NOTE]
+    assert notes == said
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 
 
@@ -294,9 +305,9 @@ def test_cross_checks(tmp_path, fn, expected):
     assert any(expected in e for e in errors(tmp_path, edited(fn)))
 
 
-@pytest.mark.parametrize("fn", [lambda d: [t.update(enabled=False) for t in d["teams"]], lambda d: d.update(teams=[], team_queue=[])])
-def test_only_the_mirror_dungeon_wants_an_enabled_team(tmp_path, fn):
-    # #364: a file with no enabled team loads (the dailies need none); MirrorDungeon asks with need_team.
+@pytest.mark.parametrize("fn", [lambda d: d.update(team_queue=[]), lambda d: d.update(teams=[], team_queue=[])])
+def test_only_the_mirror_dungeon_wants_a_team_in_the_queue(tmp_path, fn):
+    # #364, #954: a file with an empty team queue loads (the dailies need none); MirrorDungeon asks with need_team.
     data = edited(fn)
     assert load(tmp_path, data)["teams"] == data["teams"]
     with pytest.raises(SettingsError) as e:
@@ -306,9 +317,9 @@ def test_only_the_mirror_dungeon_wants_an_enabled_team(tmp_path, fn):
 
 def test_cross_check_allows_what_the_spec_allows(tmp_path):
     def fn(d):
-        d["teams"][1].update(game_team=1, enabled=False)  # disabled teams may share a slot
+        d["teams"][1].update(game_team=1)  # a team out of the queue may share a slot
         d["teams"].append(team("c", 3, name="Team a"))  # team names are not checked
-        d["team_queue"] = ["c", "b", "a"]  # the queue in an order of its own
+        d["team_queue"] = ["c", "a", "c"]  # the queue in an order of its own, a team twice, b not in it (#954)
         d["theme_pack_plans"][0]["weights"] = {}  # empty plan = every pack unlisted
         d["starlight_plans"].append({**d["starlight_plans"][0], "id": "s2", "name": "Bleed order"})  # names per kind
         d["gift_lists"].append({**d["gift_lists"][0], "id": "g2", "name": "Cheap", "want": [1, 2, 3], "gorder": {}})  # ids are not looked up
@@ -361,12 +372,13 @@ def test_shared_valid_loads(tmp_path):
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}  # the list is cleaned on load
 
 
-@pytest.mark.parametrize("version, case", [(v, c) for v in (20, 22) for c in CASES[f"migrate_v{v}"]],
+@pytest.mark.parametrize("version, case", [(v, c) for v in (20, 22, 23) for c in CASES[f"migrate_v{v}"]],
                          ids=lambda x: x if isinstance(x, int) else x["name"])
-def test_shared_v20_and_v22_migration(tmp_path, version, case):
+def test_shared_v20_v22_and_v23_migration(tmp_path, version, case):
     """#813: a version 20 file keeps its run, luxcavation and charge_enkephalin, a version 22 file gets them at their
-    defaults, both every other section version 23 added; a value broken by hand stays, for the schema to name. The GUI
-    migrates the same cases to the same file (gui/src/validate.test.ts)."""
+    defaults, both every other section version 23 added; #954: the disabled teams leave the queue, the start team goes; a
+    value broken by hand stays, for the schema to name. The GUI migrates the same cases to the same file
+    (gui/src/validate.test.ts)."""
     old = older(version, case["edits"])
     if "schema" in case:
         paths = {e.split(": ", 1)[0] for e in errors(tmp_path, old)}
@@ -378,11 +390,12 @@ def test_shared_v20_and_v22_migration(tmp_path, version, case):
 
 @pytest.mark.parametrize("case", CASES["migrate_v21"], ids=lambda c: c["name"])
 def test_shared_v21_migration(tmp_path, case):
-    """#803: a version 21 file reads with team_queue, the queue in the order of teams, and on to version 23 (#813); the file
-    on disk stays as it was. The GUI migrates the same cases to the same file (gui/src/validate.test.ts)."""
+    """#803: a version 21 file reads with team_queue, the queue in the order of teams, and on to version 23 (#813) and 24
+    (#954: the disabled teams left out of it); the file on disk stays as it was. The GUI migrates the same cases to the same file (gui/src/validate.test.ts)."""
     old = older(21, case["edits"])
     loaded = load(tmp_path, old)
-    want = {**old, "version": 23, "team_queue": case["team_queue"], **ADDED, "gift_lists": None}
+    teams = [{k: v for k, v in t.items() if k != "enabled"} for t in old["teams"]]
+    want = {**old, "version": 24, "teams": teams, "team_queue": case["team_queue"], **ADDED, "gift_lists": None}
     assert {**loaded, "gift_lists": None} == want
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 

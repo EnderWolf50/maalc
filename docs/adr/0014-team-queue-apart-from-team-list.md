@@ -1,8 +1,10 @@
 ---
-status: accepted（取代 ADR 0011 的「清單順序就是佇列」，ADR 0011 其餘不變；修訂 ADR 0006）；由 ADR 0015 與 #878 修訂
+status: accepted（取代 ADR 0011 的「清單順序就是佇列」，ADR 0011 其餘不變；修訂 ADR 0006）；由 ADR 0015 與 #878 修訂；「每個 id 各一次」、停用的隊伍與起頭隊伍由 ADR 0016 取代
 ---
 
 > [ADR 0015](0015-settings-window-runs-the-tasks.md) 修訂：起頭隊伍改成設定檔的 `run.start_team`（`null` 是「照隊伍佇列」），不再是 client 選項 `MirrorStartTeam`；下文「起頭隊伍」一節的規則不變，「client 會記住選擇」換成設定檔會記住。（#813，2026-11-17）
+
+> [ADR 0016](0016-team-queue-put-together-by-the-user.md) 取代（#954，2026-11-25）：`team_queue` 不再是 `teams` 每個 id 各一次，由使用者自己加，可以重複、可以少、可以空；隊伍沒有啟用開關，新增的隊伍不自動進佇列；沒有起頭隊伍（下文「起頭隊伍」一節全部）。佇列與清單分開、Agent 只寫佇列、比對後交換與合併的做法不變。
 
 # 隊伍佇列和隊伍清單分開，存在 `team_queue`
 

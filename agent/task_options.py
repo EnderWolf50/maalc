@@ -4,8 +4,7 @@ once, before any tap, and keeps in actions.TASK["options"]; every reader takes t
 They come from the settings file: run (MirrorDungeon's own and the four every task reads), luxcavation.<exp|thread> and
 charge_enkephalin (ADR 0015). The settings' schema checks them when the file loads. The rules that cross them with the
 teams (MirrorDungeon's target floor, a Luxcavation task's team) are checked here, at the task's start, so a team
-deleted or disabled stops only the task that names it; MirrorDungeon's start team on such a team is ignored, not an
-error (start_team_ignored_line)."""
+deleted stops only the task that names it."""
 
 import json
 
@@ -52,10 +51,10 @@ def line(values):
     return "options: " + ", ".join(shown)
 
 
-def target_floor_errors(options, teams):
+def target_floor_errors(options, settings):
     """MirrorDungeon's rule (#385): a target floor past 5 needs the whole run HARD, so the difficulty is not normal and
-    every enabled team (the rotation picks from them) plays HARD from floor 1 and is not normal_only. Floors 6+ open only
-    when every floor of the run was HARD. The errors name the settings path to change."""
+    every team in the team queue (the rotation picks from them) plays HARD from floor 1 and is not normal_only. Floors
+    6+ open only when every floor of the run was HARD. The errors name the settings path to change."""
     target_floor = options["target_floor"]
     if target_floor <= 5:
         return []
@@ -63,8 +62,8 @@ def target_floor_errors(options, teams):
     need = f"but run/target_floor {target_floor} needs the whole run HARD"
     if options["difficulty"] == "normal":
         errors.append(f"run/difficulty: 'normal', {need}")
-    for i, t in enumerate(teams):
-        if not t["enabled"]:
+    for i, t in enumerate(settings["teams"]):
+        if t["id"] not in settings["team_queue"]:
             continue
         if t["usage"] == "normal_only":
             errors.append(f"teams/{i}/usage: team {t['name']!r} is normal_only, {need}")
@@ -75,27 +74,9 @@ def target_floor_errors(options, teams):
     return errors
 
 
-def start_team_ignored_line(team, teams):
-    """MirrorDungeon's start team (#805): run.start_team, None for no flag in the team queue, names an enabled team of
-    teams. A flag on a disabled team, or on an id not in teams (a deleted team), has no effect: the task follows the
-    queue as with no flag, and the flag stays in the file, counting again once the team is enabled (#878). The settings
-    GUI leaves no such flag (it takes the flag off with the team it disables, and its save drops one on a team deleted),
-    so it comes from a hand edit, a file read back from MXU (on a disabled team), or a save made while a task ran. The
-    line for the log that says so, None for a flag that counts or no flag."""
-    if team is None:
-        return None
-    found = next((t for t in teams if t["id"] == team), None)
-    if found is None:
-        return f"run/start_team: team {team!r} is no longer listed, the flag is ignored and the task follows the team queue"
-    if not found["enabled"]:
-        return (f"run/start_team: team {found['name']!r} (id {team!r}) is disabled, the flag is ignored and the task "
-                "follows the team queue")
-    return None
-
-
 def team_errors(task, team, teams):
-    """A Luxcavation task's rule (#366, #780): its team (luxcavation.<key>.team), an id, names one of teams, enabled or
-    not. None: none picked yet. An id not in teams: a team deleted in the settings GUI."""
+    """A Luxcavation task's rule (#366, #780): its team (luxcavation.<key>.team), an id, names one of teams, in the
+    team queue or not. None: none picked yet. An id not in teams: a team deleted in the settings GUI."""
     path = f"luxcavation/{LUX_KEY[task]}/team"
     if team is None:
         return [Reason(f"{path}: no team picked; pick one in {where(task)}", "NoTeamPicked")]

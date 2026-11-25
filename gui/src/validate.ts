@@ -58,13 +58,13 @@ export function pyRepr(s: string) {
 export function crossCheck(data: Settings): Problem[] {
   const errors: Problem[] = [];
 
-  /** field: the key under each item that holds the value; null for a list of the values themselves (team_queue). */
-  const dupes = (path: string, values: string[], what: string, field: string | null, say: (v: string, n: number) => Say) => {
+  /** field: the key under each item that holds the value. */
+  const dupes = (path: string, values: string[], what: string, field: string, say: (v: string, n: number) => Say) => {
     const counts = new Map<string, number>();
     for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
     for (const [v, n] of counts) {
       if (n < 2) continue;
-      const paths = values.flatMap((x, i) => (x === v ? [field === null ? `${path}/${i}` : `${path}/${i}/${field}`] : []));
+      const paths = values.flatMap((x, i) => (x === v ? [`${path}/${i}/${field}`] : []));
       errors.push({ paths, text: `${path}: ${what} ${pyRepr(v)} appears ${n} times`, say: say(v, n) });
     }
   };
@@ -81,32 +81,24 @@ export function crossCheck(data: Settings): Problem[] {
   const teams = data.teams;
   dupes("teams", teams.map((t) => t.id), "id", "id", twice("problem.dupeId", "teams"));
 
-  // the team queue (#803): each team's id once, in any order; only a hand edit breaks it, so the way out is the file's
+  // the team queue (#803, #954): ids of teams in any order, a team as often as the user put it in, or not at all
   const queue = data.team_queue, ids = new Set(teams.map((t) => t.id));
-  dupes("team_queue", queue, "id", null, twice("problem.queueDupe"));
   for (const id of new Set(queue)) {
     if (ids.has(id)) continue;
     errors.push({
-      paths: [`team_queue/${queue.indexOf(id)}`], text: `team_queue: id ${pyRepr(id)} names no team`,
+      paths: queue.flatMap((x, i) => (x === id ? [`team_queue/${i}`] : [])), text: `team_queue: id ${pyRepr(id)} names no team`,
       say: { key: "problem.queueExtra", vars: { name: id } },
     });
   }
-  teams.forEach((t, i) => {
-    if (queue.includes(t.id)) return;
-    errors.push({
-      paths: [`teams/${i}`], text: `team_queue: team ${pyRepr(t.name)} (id ${pyRepr(t.id)}) is missing`,
-      say: { key: "problem.queueMissing", vars: { team: named(t.name), id: t.id } },
-    });
-  });
 
-  const enabled = teams.filter((t) => t.enabled);
-  const slots = [...new Set(enabled.map((t) => t.game_team))];
+  const queued = teams.filter((t) => queue.includes(t.id));
+  const slots = [...new Set(queued.map((t) => t.game_team))];
   for (const slot of slots) {
-    const using = teams.flatMap((t, i) => (t.enabled && t.game_team === slot ? [i] : []));
+    const using = teams.flatMap((t, i) => (queue.includes(t.id) && t.game_team === slot ? [i] : []));
     if (using.length < 2) continue;
     const names = using.map((i) => pyRepr(teams[i].name)).join(", ");
     errors.push({
-      paths: using.map((i) => `teams/${i}/game_team`), text: `teams: enabled teams ${names} all use TEAMS #${slot}`,
+      paths: using.map((i) => `teams/${i}/game_team`), text: `teams: teams in the queue ${names} all use TEAMS #${slot}`,
       say: { key: "problem.slot", vars: { names: { names: using.map((i) => named(teams[i].name)) }, slot } },
     });
   }

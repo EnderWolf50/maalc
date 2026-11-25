@@ -684,7 +684,7 @@ def test_tap_until_logs_how_long_the_screen_took(context, clock):
 def listed(*first):
     """Settings with a team on gift list "g" whose order starts with first, the other keywords after them."""
     order = [*first, *(k for k in ORDER if k not in first)]
-    team = {"id": "a", "name": "t", "enabled": True, "usage": "any", "game_team": 1, "guard_turns": 0, "hard_from_floor": 1, "gift_list": "g",
+    team = {"id": "a", "name": "t", "usage": "any", "game_team": 1, "guard_turns": 0, "hard_from_floor": 1, "gift_list": "g",
             "skill_replacement": replacing()}
     return {"run": {}, "teams": [team], "team_queue": ["a"], "gift_lists": [{"id": "g", "name": "G", "order": order}]}
 

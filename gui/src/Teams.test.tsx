@@ -191,7 +191,7 @@ describe("deleting a team", () => {
     expect(screen.queryByRole("button", { name: zh.undo })).toBeNull();
   });
 
-  test("undone after the Agent moved the queue, it goes back there before the team that followed it, not to its old index", async () => {
+  test("undone after the Agent moved the queue, it goes back there with that move made, not to its old index", async () => {
     const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, { ...newSettings(), language: "zh_tw", ...queuedTeams(teams) });
     await pickInList(r.user, "Tb");
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
@@ -207,7 +207,38 @@ describe("deleting a team", () => {
     await r.user.click(screen.getByRole("button", { name: zh.remove }));
     await r.user.click(screen.getByRole("button", { name: "claim a" }));
     await r.user.click(screen.getByRole("button", { name: zh.undo }));
-    expect(r.settings().team_queue).toEqual(["b", "a", "c"]);
+    expect(r.settings().team_queue).toEqual(["b", "c", "a"]); // as the Agent would have left it with c in it
+  });
+
+  test("takes every place it has in the queue, and its Undo puts each back (#954)", async () => {
+    const s = { ...newSettings(), language: "zh_tw" as const, ...queuedTeams(teams), team_queue: ["b", "a", "b", "c", "b"] };
+    const r = renderEditor(<TeamsTab />, s);
+    await pickInList(r.user, "Tb");
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    expect(r.settings().team_queue).toEqual(["a", "c"]);
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["b", "a", "b", "c", "b"]);
+  });
+
+  test("with several places, undone after the Agent moved the queue, each goes back with that move made (#954)", async () => {
+    const s = { ...newSettings(), language: "zh_tw" as const, ...queuedTeams(teams), team_queue: ["a", "b", "a", "b", "c"] };
+    const r = renderEditor(<><TeamsTab /><AgentClaimsA /></>, s);
+    await pickInList(r.user, "Tb");
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    await r.user.click(screen.getByRole("button", { name: "claim a" }));
+    expect(r.settings().team_queue).toEqual(["a", "c", "a"]);
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["b", "a", "b", "c", "a"]);
+  });
+
+  test("a team out of the queue leaves the queue as it is, and so does its Undo (#954)", async () => {
+    const s = { ...newSettings(), language: "zh_tw" as const, ...queuedTeams(teams), team_queue: ["c", "c"] };
+    const r = renderEditor(<TeamsTab />, s);
+    await pickInList(r.user, "Tb");
+    await r.user.click(screen.getByRole("button", { name: zh.remove }));
+    expect(r.settings().team_queue).toEqual(["c", "c"]);
+    await r.user.click(screen.getByRole("button", { name: zh.undo }));
+    expect([r.settings().teams.map((x) => x.id), r.settings().team_queue]).toEqual([["a", "b", "c"], ["c", "c"]]);
   });
 });
 
@@ -265,20 +296,18 @@ describe("a team on a starlight plan", () => {
   });
 });
 
-test("the list names a team kept to one difficulty, and strikes a disabled one through as the queue does, with no 停用 tag (#878)", () => {
+test("the list names a team kept to one difficulty; no switch on a team (#954)", () => {
   const s = settings();
-  s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(12, "T2"), enabled: false, usage: "hard_only" }];
+  s.teams = [{ ...newTeam(1, "T1") }, { ...newTeam(12, "T2"), usage: "hard_only" }]; // neither in the queue
   renderEditor(<TeamsTab />, s);
   const [first, second] = sideList().getAllByRole("listitem");
-  expect(first).not.toHaveTextContent(zh["team.off_read"]);
   expect(first).not.toHaveTextContent(zh["usage.hard_only"]);
   expect(second).toHaveTextContent(zh["usage.hard_only"]);
-  // off: the name in the muted ink and struck through, 「（停用）」 for a screen reader only, no tag
+  // a team out of the queue is written as any other
   const name = within(second).getByText("T2");
-  expect([cssValueOf(css, name, "color"), cssValueOf(css, name, "text-decoration")]).toEqual(["var(--muted)", "line-through"]);
-  expect(cssValueOf(css, within(first).getByText("T1"), "text-decoration")).toBeUndefined();
-  expect(within(second).getByText(zh["team.off_read"])).toHaveClass("sr-only");
-  expect(within(second).queryByText("停用")).toBeNull(); // the tag the list had
+  expect([cssValueOf(css, name, "color"), cssValueOf(css, name, "text-decoration")]).toEqual([undefined, undefined]);
+  for (const gone of ["啟用", "停用"]) expect(document.body).not.toHaveTextContent(gone);
+  expect(screen.queryByRole("checkbox", { name: "啟用" })).toBeNull();
   // the slot in the muted condensed numerals, no frame
   const slot = within(second).getByText("TEAMS #12");
   expect([cssValueOf(css, slot, "color"), cssValueOf(css, slot, "border"), cssValueOf(css, slot, "font-variant-numeric")])

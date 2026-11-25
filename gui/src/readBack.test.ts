@@ -47,7 +47,7 @@ describe("from MXU's config file", () => {
         MirrorDifficulty: select("hard"), MirrorTargetFloor: select("10"), MirrorRunsLimit: toggle(false),
         MirrorRuns: input({ runs: "4" }), MirrorThemePackRefresh: select("once"), MirrorWeeklyBonusUse: select("none"),
         MirrorWeeklyBonusAmount: select("one"), MirrorStopWhenBonusOut: toggle(true), MirrorStarlightUnaffordable: select("stop"),
-        MirrorWipeRetries: input({ wipe_retries: "3" }), MirrorAfterRetries: select("stop"), MirrorStartTeam: select("b"),
+        MirrorWipeRetries: input({ wipe_retries: "3" }), MirrorAfterRetries: select("stop"), MirrorStartTeam: select("b"), // no option any more (#954)
       } },
       { taskName: "AssembleModules", enabled: false },
       { taskName: "ThreadLuxcavation", enabled: true, optionValues: {
@@ -61,7 +61,7 @@ describe("from MXU's config file", () => {
     expect(data.run).toEqual({
       difficulty: "hard", target_floor: 10, runs: null, weekly_bonus_use: "none", weekly_bonus_amount: "one",
       stop_when_weekly_bonus_out: true, starlight_unaffordable: "stop", wipe_retries: 3, after_retries: "stop", webhook_url: "",
-      theme_pack_refresh: "once", auto_accept_terms: false, auto_download: true, keep_dismissed_screens: false, start_team: "b",
+      theme_pack_refresh: "once", auto_accept_terms: false, auto_download: true, keep_dismissed_screens: false,
     });
     expect(data.luxcavation).toEqual({
       exp: { mode: "count", count: 2, team: "a", retries: 1, consecutive: false },
@@ -80,12 +80,11 @@ describe("from MXU's config file", () => {
     expect(report.address).toBe("127.0.0.1:16416");
     // what the notice lists as read: each value off its default, in the tab's order
     expect(report.read.map((r) => r.path)).toEqual([
-      "run/difficulty", "run/target_floor", "run/runs", "run/theme_pack_refresh", "run/start_team", "run/weekly_bonus_use",
+      "run/difficulty", "run/target_floor", "run/runs", "run/theme_pack_refresh", "run/weekly_bonus_use",
       "run/weekly_bonus_amount", "run/stop_when_weekly_bonus_out", "run/starlight_unaffordable", "run/wipe_retries",
       "run/after_retries", "luxcavation/exp/mode", "luxcavation/exp/count", "luxcavation/exp/team", "luxcavation/exp/retries",
       "luxcavation/exp/consecutive", "charge_enkephalin/count", "run/auto_accept_terms", "run/keep_dismissed_screens",
     ]);
-    expect(report.read.find((r) => r.path === "run/start_team")!.value).toBe("b");
     // read too, at their defaults: Thread Luxcavation's mode, team, retries and Consecutive Battle, and AutoDownload
     expect(report.same).toBe(5);
     expect(report.absent).toEqual(["team_options.json", "settings.v20.json"]);
@@ -130,36 +129,34 @@ describe("from MXU's config file", () => {
 
   test("a team deleted since picks none and is listed by the name the team options file gave it", () => {
     const text = mxu([
-      { taskName: "MirrorDungeon", enabled: true, optionValues: { MirrorStartTeam: select("gone") } },
-      { taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpTeam: select("lost") } },
-      { taskName: "ThreadLuxcavation", enabled: true, optionValues: { ThreadTeam: select("queue") } },
+      { taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpTeam: select("gone") } },
+      { taskName: "ThreadLuxcavation", enabled: true, optionValues: { ThreadTeam: select("lost") } },
     ]);
-    const teamOptions = JSON.stringify({ option: { MirrorStartTeam: { cases: [
-      { name: "queue", label: "$MirrorStartTeam_queue" }, { name: "gone", label: "Old team（TEAMS #3）（已刪除）" },
+    const teamOptions = JSON.stringify({ option: { ExpTeam: { cases: [
+      { name: "none", label: "$ExpTeam_none" }, { name: "gone", label: "Old team（TEAMS #3）（已刪除）" },
     ] } } });
     const { data, report } = readBack(migrated(), 22, { ...files(text), teamOptions });
-    expect([data.run.start_team, data.luxcavation.exp.team, data.luxcavation.thread.team]).toEqual([null, null, null]);
+    expect([data.luxcavation.exp.team, data.luxcavation.thread.team]).toEqual([null, null]);
     expect(report.missed).toEqual([
-      { kind: "team", path: "run/start_team", id: "gone", label: "Old team（TEAMS #3）" },
-      { kind: "team", path: "luxcavation/exp/team", id: "lost", label: null },
+      { kind: "team", path: "luxcavation/exp/team", id: "gone", label: "Old team（TEAMS #3）" },
+      { kind: "team", path: "luxcavation/thread/team", id: "lost", label: null },
     ]);
   });
 
-  test("a start team flag on a disabled team is dropped, on an enabled team kept, on a deleted team dropped and listed (#878)", () => {
-    const text = (id: string) => mxu([{ taskName: "MirrorDungeon", enabled: true, optionValues: { MirrorStartTeam: select(id) } }]);
+  test("MXU's start team is no option any more: neither read nor listed, whatever team it names (#954)", () => {
+    for (const id of ["a", "gone", "queue"]) {
+      const { data, report } = readBack(migrated(), 22, files(mxu([
+        { taskName: "MirrorDungeon", enabled: true, optionValues: { MirrorStartTeam: select(id) } },
+      ])));
+      expect(data.run).not.toHaveProperty("start_team");
+      expect(data.team_queue).toEqual(migrated().team_queue);
+      expect([report.read, report.missed, report.same]).toEqual([[], [], 0]);
+    }
+  });
+
+  test("a Luxcavation task's team may be out of the queue", () => {
     const data = migrated();
-    data.teams.find((t) => t.id === "b")!.enabled = false;
-    const startTeam = (id: string) => readBack(data, 22, files(text(id)));
-    const off = startTeam("b");
-    expect(off.data.run.start_team).toBeNull();
-    expect(off.report.read.map((r) => r.path)).not.toContain("run/start_team");
-    expect(off.report.missed).toEqual([]);
-    expect(off.report.same).toBe(0);
-    expect(startTeam("a").data.run.start_team).toBe("a");
-    const gone = startTeam("gone");
-    expect(gone.data.run.start_team).toBeNull();
-    expect(gone.report.missed).toEqual([{ kind: "team", path: "run/start_team", id: "gone", label: null }]);
-    // a Luxcavation task's team is not a flag: a disabled team stays picked there
+    data.team_queue = ["a"];
     const lux = readBack(data, 22, files(mxu([{ taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpTeam: select("b") } }])));
     expect(lux.data.luxcavation.exp.team).toBe("b");
   });
@@ -236,12 +233,10 @@ describe("from MXU's config file", () => {
 });
 
 describe("without MXU's file", () => {
-  test("settings.v20.json's start flag on a disabled team is dropped too (#878)", () => {
-    const data = migrated();
-    data.teams.find((t) => t.id === "b")!.enabled = false;
+  test("settings.v20.json's start team, put there by hand, is neither read nor listed (#954)", () => {
     const v20 = JSON.stringify(olderFile(20, [{ set: "run/start_team", value: "b" }]));
-    const { data: out, report } = readBack(data, 22, { ...none, v20 });
-    expect(out.run.start_team).toBeNull();
+    const { data: out, report } = readBack(migrated(), 22, { ...none, v20 });
+    expect(out.run).not.toHaveProperty("start_team");
     expect(report.missed).toEqual([]);
   });
 
@@ -253,8 +248,8 @@ describe("without MXU's file", () => {
       { set: "charge_enkephalin/count", value: 2 },
     ]));
     const { data, report } = readBack(migrated(), 22, { ...none, v20 });
-    expect([data.run.difficulty, data.run.runs, data.run.wipe_retries, data.run.webhook_url, data.run.start_team])
-      .toEqual(["hard", null, 2, "https://hook.invalid/y", null]);
+    expect([data.run.difficulty, data.run.runs, data.run.wipe_retries, data.run.webhook_url])
+      .toEqual(["hard", null, 2, "https://hook.invalid/y"]);
     expect([data.luxcavation.exp.team, data.luxcavation.thread.team, data.charge_enkephalin.count]).toEqual(["a", null, 2]);
     expect(data.tasks).toEqual(newSections().tasks); // v1.0.0's task list was MXU's: without it, a new file's
     expect(data.emulator.address).toBeNull();

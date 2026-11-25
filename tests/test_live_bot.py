@@ -65,8 +65,8 @@ def test_prep_copies_config_and_state_and_sets_keys(tmp_path):
 
 
 @pytest.mark.parametrize("key, value", [
-    # #813: the task options are the settings file's again, every section of them
-    ("run.runs", None), ("run.start_team", "t3"), ("run.auto_download", False), ("luxcavation.exp.team", "t3"),
+    # #813: the task options are the settings file's again, every section of them; #954: the queue this test plays
+    ("run.runs", None), ("team_queue", ["t3", "t3", "t1"]), ("run.auto_download", False), ("luxcavation.exp.team", "t3"),
     ("luxcavation.thread.mode", "count"), ("charge_enkephalin.count", 3),
 ])
 def test_prep_sets_the_task_options(tmp_path, key, value):

@@ -83,15 +83,18 @@ export function useUndo() {
   return [note, remove] as const;
 }
 
-/** Delete a row with one step back, for a list the Agent never reorders (override rows, a team's skill rows): `remove` takes
+/** Delete a row with one step back, for a list the Agent never reorders while it can change (override rows, a team's skill
+ * rows, the Run tab's task list and team queue, which a run locks): `remove` takes
  * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
  * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
  * note, so an Undo never puts a row into the next team picked. `undone` hears the row an Undo put back and the place it had
- * (the Run tab picks a task list entry it brought back). The teams and plans use useUndo. */
-export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "", undone?: (row: T, at: number) => void) {
+ * (the Run tab picks a task list entry it brought back). `said` is the note's words (the team queue's: the team itself stays).
+ * The teams and plans use useUndo. */
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "", undone?: (row: T, at: number) => void,
+  said?: Key) {
   const [last, setLast] = useScopedState<{ row: T; at: number; name: string } | null>(scope, null);
   const note = last && (
-    <UndoNote name={last.name} onUndo={() => {
+    <UndoNote name={last.name} said={said} onUndo={() => {
       edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); });
       setLast(null);
       undone?.(last.row, last.at);
@@ -105,11 +108,11 @@ export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "
 }
 
 /** The note after a delete: what went, and the Undo button that puts it back. */
-function UndoNote({ name, onUndo }: { name: string; onUndo: () => void }) {
+function UndoNote({ name, said = "undo.deleted", onUndo }: { name: string; said?: Key; onUndo: () => void }) {
   const { t } = useEditor();
   return (
     <p className="notice" role="status">
-      {fill(t("undo.deleted"), { name })}{" "}
+      {fill(t(said), { name })}{" "}
       <button type="button" onClick={onUndo}>{t("undo")}</button>
     </p>
   );
