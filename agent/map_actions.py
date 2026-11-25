@@ -12,9 +12,9 @@ import map_route
 import recovery
 import settlement
 from actions import (ROOT, RUN, back, box_centre, current_run, data, hands_back, keep_floor_capture, leave_shop, log,
-                     number, on_map, page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap,
+                     map_floor, number, on_map, page_guard, run_continued, saturation, screen, scroll, seen, still, stuck, tap,
                      tap_shown, tap_then, text, until)
-from ocrtext import floor_number, has
+from ocrtext import has
 
 
 # Map page (spec 03 section 7). Offsets are from the MapBus template's top-left corner.
@@ -73,7 +73,6 @@ MAP_DRAGS = 3  # drags of two columns RouteMap.read_on makes at most: the first 
 SEARCH_DRAG, SEARCH_DRAGS = 800, 4
 PANEL_REWARDS = [700, 495, 110, 30]  # the "Clear Rewards" label
 PANEL_COST = [730, 545, 40, 35]  # the number by its Cost coin
-MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", top left
 MAP_LEAVING = 6  # s RouteMap waits for the last floor's map to give way to this floor's
 MAP_PAN_LIMIT = 8  # s find_bus drags a fresh NORMAL map again that took none of its drags
 # px (a pan's larger axis) from which find_bus looks as the finger stops whether the map ignored the pan (#486). On the six
@@ -242,15 +241,6 @@ def map_weights(context):
     return map_data()["hard" if is_hard(context) else "normal"]
 
 
-def map_floor(context, image):
-    """The floor number the map's title shows; None when it is covered or unreadable.
-
-    Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
-    the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3".
-    """
-    return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
-
-
 def enter_node(context):
     """On the node selection panel: log its Clear Rewards, press Enter until the panel is gone."""
     # Only logged: events show no Clear Rewards, a shop shows the next boss's (spec 03 section 7).
@@ -391,8 +381,11 @@ class RouteMap(CustomAction):
         Live 2026-10-19 (8 of 8 floors after the first): the last floor's map stayed ~3 s after the pull, its bus
         driving off to the exit; RouteMap dragged it, then read the new floor with its bus at rest.
         A title that keeps another number for MAP_LEAVING s is a misread: it is not looked at again this floor.
+        A run with no floor in memory keeps the title's as RUN["shown_floor"]: a stop off the map has no title (#552).
         """
         floor, shown = RUN.get("floor"), map_floor(context, image)
+        if floor is None and shown is not None:
+            RUN["shown_floor"] = shown
         if floor is None or shown in (None, floor) or RUN.get("title_off") == floor:
             return True
         log(f"map: floor {shown}'s map is up, floor {floor} next; waiting for it")

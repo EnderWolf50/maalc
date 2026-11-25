@@ -29,7 +29,7 @@ import run_start
 import settlement
 import task_options
 from gifts import main_keyword, resolve_list, want_kind
-from ocrtext import has, normalize
+from ocrtext import floor_number, has, normalize
 from reasons import Reason, code_line, of_node
 from settings import SettingsError, data_dir, gift_tables, load_settings
 from team_queue import migrate_cursor, resumed_team
@@ -397,6 +397,21 @@ def text(context, image, roi, only_rec=False):
     return " ".join(t for t, _ in ocr(context, image, roi, only_rec))
 
 
+MAP_TITLE = [40, 85, 240, 35]  # "Exploring Floor 3", the map's top left
+
+
+def map_floor(context, image):
+    """The floor number the map's title shows; None when it is covered or unreadable.
+
+    Swept 2026-10-19 over every 0.25 s from the 10 theme pack pulls of two runs: the last floor's number, a gap,
+    the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3". Swept 2026-11-25 over the 245 captures
+    of tests/screens (#552), 3 of the hits synthetic: a number on the 33 the map's title shows on, dimmed behind the
+    Dungeon Progress panel or a dialog too; none on the other 212.
+    Lives here, not in map_actions, because stop_floors needs it and map_actions imports this module.
+    """
+    return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
+
+
 def number(s):
     found = re.sub(r"\D", "", s)
     return int(found) if found else None
@@ -465,7 +480,8 @@ def done(reason):
 
 
 def run_line(run, outcome, hard, floors, bonuses=0):
-    """This run's runs.jsonl line (spec 06 執行記錄)."""
+    """This run's runs.jsonl line (spec 06 執行記錄). floors: the floors passed; None when not read (stop_floors), and
+    target_reached is None then too."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
     target = option("target_floor", 5)
@@ -477,6 +493,25 @@ def run_line(run, outcome, hard, floors, bonuses=0):
         "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
+
+
+def stop_floors(context):
+    """The floors a stopped run passed, for run_line; None when they cannot be read.
+
+    From the theme pack page's floor, less one; a run the bot began (it has a start) that saw no such page passed none.
+    A run picked up before its next theme pack page (#552) stands on the floor the map's title shows on the screen now,
+    else on the last one the map or the entry page showed (RUN["shown_floor"]): it passed the floors before it, so
+    the same number as a run that saw the page. A floor 1 passed none, a real 0.
+    """
+    if "floor" in RUN or "start" in RUN:
+        return max(RUN.get("floor", 1) - 1, 0)
+    try:
+        shown = map_floor(context, screen(context))
+    except RuntimeError as e:  # no screenshot: the line is written all the same
+        log(f"the floor was not read: {e}")
+        shown = None
+    floor = RUN.get("shown_floor") if shown is None else shown
+    return None if floor is None else max(floor - 1, 0)
 
 
 def stop(context, reason, line=None, whole_list=False):
@@ -498,7 +533,7 @@ def stop(context, reason, line=None, whole_list=False):
         except SettingsError as e:
             log(f"no runs.jsonl line: {e}")
     if line is None and "settings" in RUN:
-        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), max(RUN.get("floor", 1) - 1, 0))
+        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), stop_floors(context))
     if line:
         settlement.append_run(ROOT, line)
     folder = ROOT / "logs" / "evidence" / settlement.now().replace(":", "-")

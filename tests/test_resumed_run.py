@@ -8,7 +8,9 @@ from types import SimpleNamespace
 import pytest
 
 import actions
+import map_actions
 import settle_actions
+import settlement
 import run_start_actions
 import battle_actions
 import test_actions
@@ -116,6 +118,92 @@ def stopped_at_once(context, monkeypatch, entry):
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})
     actions.TaskStart().run(context, SimpleNamespace(node_name=entry))
     assert actions.stop(context, "recovery used up") is False
+
+
+def test_a_resumed_run_stopped_on_the_floor_3_map_writes_the_2_floors_it_passed(resumed, monkeypatch):
+    # #552: no theme pack page told this agent the floor; the map's title does. floors is the floors passed (the
+    # user's decision of 2026-11-25), as for a run the bot began: the title's number less one.
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
+    stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
+    line = last_line()
+    assert (line["start"], line["floors"], line["target_reached"]) == (None, 2, False)
+
+
+def test_a_resumed_run_stopped_on_the_floor_1_map_passed_no_floor(resumed, monkeypatch):
+    # A real 0, not the null of a floor that did not read.
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 1"})
+    stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
+    line = last_line()
+    assert (line["floors"], line["target_reached"]) == (0, False)
+
+
+def test_a_resumed_run_stopped_where_no_floor_reads_writes_null(resumed, monkeypatch):
+    # #552: not 0, which reads as a run that passed no floor; target_reached is not known either.
+    stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
+    line = last_line()
+    assert (line["result"], line["floors"], line["target_reached"]) == ("stop", None, None)
+
+
+def test_a_resumed_run_on_the_target_floors_map_has_not_reached_its_target(resumed, monkeypatch):
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 5"})  # target_floor 5: four floors passed
+    stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
+    assert (last_line()["floors"], last_line()["target_reached"]) == (4, False)
+
+
+def test_a_resumed_run_stopped_off_the_map_writes_the_floors_before_the_last_map_it_saw(resumed):
+    # RouteMap's title read on floor 3's map; the stop comes in the battle entered from it, where no title shows.
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
+    image = actions.screen(resumed)
+    assert map_actions.RouteMap.wait_for_floor(resumed, image)
+    page(resumed, {})
+    assert actions.stop(resumed, "retries used up") is False
+    assert last_line()["floors"] == 2
+
+
+def test_a_paused_run_stopped_on_the_entry_page_writes_the_floors_before_the_one_it_shows(resumed):
+    # Parallel Superposition Mode stays on the wrong side: the Exploring field reads the paused run's floor.
+    page(resumed, {tuple(run_start_actions.EXPLORING): "Mirror of Sisyphe - F7"})
+    run_start_actions.ParallelSwitch().analyze(
+        resumed, SimpleNamespace(image=actions.screen(resumed), custom_recognition_param=json.dumps({"on": False})))
+    actions.stop(resumed, "Parallel Superposition Mode stays ON")
+    assert last_line()["floors"] == 6
+
+
+def test_a_resumed_run_stopped_on_the_reward_window_writes_the_floors_it_shows_passed(resumed, monkeypatch):
+    # The window reads Floor 5 6/6, a fact the map's title on that floor does not hold: five floors, the target reached.
+    actions.RUN["shown_floor"] = 5  # a map's title of floor 5 would give 4
+    page(resumed, {tuple(settle_actions.RESULT): [("Floor 5 [NORMAL] 6/6", (300, 420, 90, 20))]})
+    monkeypatch.setattr(settlement, "claim_bonuses", lambda *args: 1)
+    patch_all(monkeypatch, "toggles", lambda context, image: [False, False, False])  # a tap on one does nothing
+    assert settle_actions.Settle().run(resumed, argv()) is False
+    assert (last_line()["result"], last_line()["floors"], last_line()["target_reached"]) == ("stop", 5, True)
+
+
+def test_a_resumed_run_whose_screen_cannot_be_read_still_writes_its_stop_line(resumed, monkeypatch):
+    # An emulator gone at the stop: the screenshot fails (maa's RuntimeError), for the evidence after the line as well.
+    def gone():
+        raise RuntimeError("Failed to get cached image.")
+    resumed.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = gone
+    with pytest.raises(RuntimeError):
+        stopped_at_once(resumed, monkeypatch, "MirrorDungeon")
+    assert last_line()["floors"] is None
+
+
+def test_a_run_the_bot_began_and_stopped_before_its_first_theme_pack_passed_no_floor(resumed):
+    # A planned grace is unaffordable, say: no floor was played, so the 0 is real and a title is not read for it.
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
+    actions.current_run(resumed)
+    actions.RUN["start"] = "2026-11-25T00:00:00.000Z"
+    actions.stop(resumed, "a planned grace is unaffordable")
+    assert (last_line()["floors"], last_line()["target_reached"]) == (0, False)
+
+
+def test_a_resumed_run_that_saw_a_theme_pack_page_writes_the_floors_before_it(resumed):
+    page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
+    actions.current_run(resumed)
+    actions.RUN["floor"] = 3  # PickThemePack's read
+    actions.stop(resumed, "recovery used up")
+    assert last_line()["floors"] == 2
 
 
 def test_a_mirror_dungeon_stopped_before_it_touched_the_run_writes_its_stop_line(resumed, monkeypatch):

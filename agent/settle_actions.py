@@ -129,7 +129,8 @@ class Settle(CustomAction):
             i = on[-1] if len(on) > want else states.index(False)
             tap_then(context, TOGGLE_X[i], 252, lambda im: toggles(context, im)[i] is (not states[i]), timeout=1.5)
         else:
-            return stop(context, f"weekly bonus toggles read {states}, want {want} ON: not claiming")
+            return stop(context, f"weekly bonus toggles read {states}, want {want} ON: not claiming",
+                        run_line(run, "stop", hard, settlement.floors_passed(result)))
         log(f"weekly bonuses left {left}, use {s['weekly_bonus_use']}/{s['weekly_bonus_amount']}: toggles {states} verified, {want} ON")
 
         # Live: Claim asks to confirm with bonuses left and none ON (2026-10-15), and with any ON (2026-10-16).

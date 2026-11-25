@@ -369,7 +369,7 @@ def title_reads(context, shown, switch_at=0.0, then=None):
     inner = context.run_recognition.side_effect
 
     def run_recognition(name, image, override=None):
-        if name == "ReadText" and override["ReadText"]["roi"] == map_actions.MAP_TITLE:
+        if name == "ReadText" and override["ReadText"]["roi"] == actions.MAP_TITLE:
             text = then if then and actions.time.monotonic() >= switch_at else shown
             return SimpleNamespace(all_results=[SimpleNamespace(text=text, box=(40, 90, 220, 25))])
         return inner(name, image, override)
