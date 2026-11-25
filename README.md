@@ -2,6 +2,12 @@
 
 用 [MaaFramework](https://github.com/MaaXYZ/MaaFramework) 自動化 Limbus Company 鏡牢的工具。規格見 [docs/spec](docs/spec/README.md)。
 
+## 帳號風險
+
+maalc 會自動操作遊戲。Project Moon 在 2026-04-06 的 Steam 公告 [Notice on Reinforced Monitoring and Countermeasures Against Macro Usage](https://steamcommunity.com/app/1973530/eventcomments/806847640195228900/) 寫明：疑似使用巨集的帳號已在沒有事先警告下被停權；公告後仍有異常遊玩紀錄的，會收到警告訊息，也可能被暫時或永久停權；巨集程式被公開分享與推廣的情形，監控會跟著加強。公告沒有限定平台。
+
+用不用 maalc、用多久，帳號的後果由你自己承擔。
+
 ## 下載與執行（Windows x64）
 
 1. 從 [Releases](https://github.com/EnderWolf50/maalc/releases) 下載 `maalc-<版本>.zip`，解壓縮到任意資料夾，得到一個 `maalc/` 資料夾。
