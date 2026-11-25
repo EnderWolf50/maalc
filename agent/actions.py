@@ -478,9 +478,9 @@ def done(reason):
     return True
 
 
-def run_line(run, outcome, hard, floors, bonuses=0, passed=None):
-    """This run's runs.jsonl line (spec 06 執行記錄). passed: the floors passed, where floors is the floor the run stands
-    on (stop_floors). floors None: not read, so target_reached is None too."""
+def run_line(run, outcome, hard, floors, bonuses=0):
+    """This run's runs.jsonl line (spec 06 執行記錄). floors: the floors passed; None when not read (stop_floors), and
+    target_reached is None then too."""
     team = run["team"] if run.get("planned") else None
     counts = STUCK["ladder"].counts
     target = option("target_floor", 5)
@@ -488,30 +488,29 @@ def run_line(run, outcome, hard, floors, bonuses=0, passed=None):
         "start": run.get("start"), "end": settlement.now(),
         "team": team and team["id"], "team_name": team and team["name"],
         "difficulty": None if hard is None else "hard" if hard else "normal", "weekly_bonus": bonuses,
-        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors if passed is None else passed, target),
+        "target": target, "floors": floors, "target_reached": settlement.target_reached(floors, target),
         "result": outcome, "l1": counts[1], "l2": counts[2], "l3": counts[3],
         **({"gift_search": run["gift_search"]} if "gift_search" in run else {}),
     }
 
 
 def stop_floors(context):
-    """A stopped run's (floors, passed) for run_line.
+    """The floors a stopped run passed, for run_line; None when they cannot be read.
 
-    Both are the floors passed, from the theme pack page's floor; a run the bot began (it has a start) that saw no such
-    page passed none. A run picked up before its next theme pack page (#552): floors is the floor it stands on, read off
-    the map's title on the screen now, else the last one the map or the entry page showed (RUN["shown_floor"]), and
-    passed the floors before it; (None, None) when none read.
+    From the theme pack page's floor, less one; a run the bot began (it has a start) that saw no such page passed none.
+    A run picked up before its next theme pack page (#552) stands on the floor the map's title shows on the screen now,
+    else on the last one the map or the entry page showed (RUN["shown_floor"]): it passed the floors before it, so
+    the same number as a run that saw the page. A floor 1 passed none, a real 0.
     """
     if "floor" in RUN or "start" in RUN:
-        passed = max(RUN.get("floor", 1) - 1, 0)
-        return passed, passed
+        return max(RUN.get("floor", 1) - 1, 0)
     try:
         shown = map_floor(context, screen(context))
     except RuntimeError as e:  # no screenshot: the line is written all the same
         log(f"the floor was not read: {e}")
         shown = None
     floor = RUN.get("shown_floor") if shown is None else shown
-    return (None, None) if floor is None else (floor, floor - 1)
+    return None if floor is None else max(floor - 1, 0)
 
 
 def stop(context, reason, line=None, whole_list=False):
@@ -533,8 +532,7 @@ def stop(context, reason, line=None, whole_list=False):
         except SettingsError as e:
             log(f"no runs.jsonl line: {e}")
     if line is None and "settings" in RUN:
-        floors, passed = stop_floors(context)
-        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), floors, passed=passed)
+        line = run_line(RUN, "stop", RUN.get("floor_hard", RUN.get("difficulty") == "hard"), stop_floors(context))
     if line:
         settlement.append_run(ROOT, line)
     folder = ROOT / "logs" / "evidence" / settlement.now().replace(":", "-")
