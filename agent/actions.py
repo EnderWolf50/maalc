@@ -407,6 +407,7 @@ def map_floor(context, image):
     the new one; never a third number. tests/screens/MapBoss.png reads "Floar 3". Swept 2026-11-25 over the 245 captures
     of tests/screens (#552), 3 of the hits synthetic: a number on the 33 the map's title shows on, dimmed behind the
     Dungeon Progress panel or a dialog too; none on the other 212.
+    Lives here, not in map_actions, because stop_floors needs it and map_actions imports this module.
     """
     return floor_number(text(context, image, MAP_TITLE), r"fl[a-z]*")
 

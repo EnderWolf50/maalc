@@ -150,7 +150,7 @@ def test_a_resumed_run_on_the_target_floors_map_has_not_reached_its_target(resum
     assert (last_line()["floors"], last_line()["target_reached"]) == (4, False)
 
 
-def test_a_resumed_run_stopped_off_the_map_writes_the_floors_before_the_last_map_it_saw(resumed, monkeypatch):
+def test_a_resumed_run_stopped_off_the_map_writes_the_floors_before_the_last_map_it_saw(resumed):
     # RouteMap's title read on floor 3's map; the stop comes in the battle entered from it, where no title shows.
     page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
     image = actions.screen(resumed)
@@ -189,7 +189,7 @@ def test_a_resumed_run_whose_screen_cannot_be_read_still_writes_its_stop_line(re
     assert last_line()["floors"] is None
 
 
-def test_a_run_the_bot_began_and_stopped_before_its_first_theme_pack_passed_no_floor(resumed, monkeypatch):
+def test_a_run_the_bot_began_and_stopped_before_its_first_theme_pack_passed_no_floor(resumed):
     # A planned grace is unaffordable, say: no floor was played, so the 0 is real and a title is not read for it.
     page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
     actions.current_run(resumed)
@@ -198,7 +198,7 @@ def test_a_run_the_bot_began_and_stopped_before_its_first_theme_pack_passed_no_f
     assert (last_line()["floors"], last_line()["target_reached"]) == (0, False)
 
 
-def test_a_resumed_run_that_saw_a_theme_pack_page_writes_the_floors_before_it(resumed, monkeypatch):
+def test_a_resumed_run_that_saw_a_theme_pack_page_writes_the_floors_before_it(resumed):
     page(resumed, {tuple(actions.MAP_TITLE): "Exploring Floor 3"})
     actions.current_run(resumed)
     actions.RUN["floor"] = 3  # PickThemePack's read
