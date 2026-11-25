@@ -546,6 +546,11 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; align-items: start; }
 .groups .grid, .globals .grid { width: 100%; }
 .groups .grid > .check.wide { grid-column: 1 / -1; }
+/* the global options (#955): the webhook on a row of its own, its full width; the three switches under it, a third of the row each
+ * (equal widths: a basis of 0 and a floor of 200 px), folding down where three do not fit, so no box floats above the others */
+.run-page details.globals > .grid { display: flex; flex-wrap: wrap; align-items: flex-start; }
+.run-page details.globals > .grid > .field { flex: 1 1 100%; }
+.run-page details.globals > .grid > .toggle { flex: 1 1 0; min-width: 200px; }
 /* the run limit as the fields beside it (#878): the label on top, the switch and the number on one line under it */
 .toggle-field .tf-line { display: flex; align-items: center; gap: 8px; }
 /* The team queue at the top of the Mirror Dungeon options (#878, spec #871 「隊伍佇列」), the box's whole width. Every row on
