@@ -6,6 +6,7 @@ once for every capture (as test_live_giveup.py).
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +41,23 @@ NAMED = {
     "Shop.png": None,
 }
 
+# the same for the wait for the main window: the notice window, and what the Back key must not answer
+AT_HOME = {
+    "EventNotices.png": "Notices",
+    "SystemNotices.png": "Notices",
+    "PreviousSessionExpired.png": "PreviousSessionExpired",
+    "MainWindow.png": "HomeReached",
+    "MirrorMap.png": "MirrorMap",
+    "MaintenanceNotice.png": "PopupButton",
+    "TitleClientOutdated.png": "ClientOutdated",
+    "TitleDownload.png": "DownloadDialog",
+    "ServerErrorRetry.png": "RetryPopup",
+    "UserAgreement.png": "UserAgreement",
+    "Mailbox.png": None,
+    "Title.png": None,
+    "EntryPaused.png": None,
+}
+
 
 def look_files(*options, names=tuple(NAMED)):
     done = subprocess.run([sys.executable, str(REPO / "tools/live/give_way.py"), "look", *options, "--json",
@@ -63,6 +81,24 @@ def test_a_glance_sees_the_map_and_the_panel_and_no_battle():
 @pytest.mark.parametrize("capture", list(NAMED))
 def test_the_probe_tells_the_map_from_what_stands_over_it(named, capture):
     assert named[capture] == NAMED[capture]
+
+
+def test_the_wait_for_the_main_window_tells_the_notice_from_the_rest():
+    # 2026-11-25, over all 246 captures (too long for every run): Notices names EventNotices and SystemNotices alone,
+    # PreviousSessionExpired its own capture alone, HomeReached the 4 main windows and SettingsMenu
+    assert look_files("--home", names=tuple(AT_HOME)) == AT_HOME
+
+
+def test_the_notice_is_told_by_its_tabs_not_by_a_title_ending_in_notifs():
+    # an expired-session dialog whose body does not read is still no notice window
+    tabs = gw.probe_override(gw.HOME_SCREENS)["Notices"]["expected"]
+    assert all(re.search(tabs, title) for title in ("Event Notifs", "System Notifs", "SystemNotifs"))
+    assert not re.search(tabs, "Notifs")
+
+
+def test_the_popups_before_the_notice_are_the_server_popups():
+    assert set(gw.SERVER_POPUPS) == set(load_nodes()["ServerPopups"]["custom_recognition_param"]["entries"]) | {"Connecting"}
+    assert gw.HOME_SCREENS.index("Notices") > max(gw.HOME_SCREENS.index(n) for n in ("PreviousSessionExpired", *gw.SERVER_POPUPS))
 
 
 def test_over_every_capture_the_bot_is_stopped_on_the_map_alone():
@@ -106,7 +142,7 @@ class Game:
         self.did, self.said, self.now, self.ended = [], [], 0.0, False
         self.world = gw.World(
             holders=self.holders, bot_runs=self.bot_runs, forfeit_pending=forfeit, glance=lambda: self.next(self.glances),
-            look=lambda: self.next(self.looks), suspend=self.suspend, end_bot=self.end_bot,
+            look=lambda: self.next(self.looks), look_home=lambda: self.next(self.looks), suspend=self.suspend, end_bot=self.end_bot,
             lift_finger=lambda: self.did.append("lift"), back=lambda: self.did.append("back"),
             to_window=lambda: self.did.append("to window") or to_window, shot=lambda name: self.did.append(f"shot {name}"),
             pause=lambda minutes: self.did.append(f"pause {minutes}"), queue_next=self.queue_next,
@@ -254,6 +290,47 @@ def test_a_bot_that_does_not_end_stays_suspended():
     game = Game(glances=["MirrorMap"], looks=["MirrorMap"], ends=False)
     assert game.watch() == 1
     assert "resume" not in game.did and "lift" not in game.did and "done" not in game.did
+
+
+def to_home(*looks):
+    """A run that left the map, with what the screen shows from the To Window on."""
+    return Game(glances=["MirrorMap"], looks=["MirrorMap", "MirrorMap", "MirrorMap", *looks])
+
+
+def test_a_notice_over_the_main_window_is_closed_with_one_back_key():
+    # the first look and the one SETTLE s later both see it; a shot before the key and one after
+    game = to_home(None, "Notices", "Notices", "HomeReached")
+    assert game.watch() == 0
+    way = game.did[game.did.index("to window"):]
+    assert way[:5] == ["to window", "shot notice-1", "back", "shot notice-1-after", "shot main-window"]
+
+
+def test_a_notice_that_stays_is_given_up_after_its_presses():
+    game = to_home("Notices")
+    assert game.watch() == 1 and "notice" in game.said[-1]
+    assert game.did.count("back") == gw.NOTICE_PRESSES == 3
+    assert game.did[-1] == "shot failed" and "done" not in game.did and "pause None" not in game.did
+
+
+@pytest.mark.parametrize("looks", [("PreviousSessionExpired",), ("Notices", "PreviousSessionExpired")])
+def test_the_expired_session_dialog_is_never_answered(looks):
+    # the Back key would be its Cancel: a person decides; also when it shows only at the second look
+    game = to_home(*looks)
+    assert game.watch() == 1 and "PreviousSessionExpired" in game.said[-1]
+    assert "back" not in game.did and game.did[-1] == "shot failed" and "done" not in game.did
+
+
+@pytest.mark.parametrize("screen", [None, "MaintenanceNotice", "ClientOutdated", "PopupButton", "MirrorMap", "Connecting"])
+def test_no_back_key_on_any_other_screen(screen):
+    game = to_home(screen)
+    assert game.watch() == 1 and "main window" in game.said[-1]
+    assert "back" not in game.did
+
+
+def test_no_back_key_once_the_notice_is_gone():
+    # it closed by itself before the second look: the Back key on the main window may open the quit dialog
+    game = to_home("Notices", "HomeReached")
+    assert game.watch() == 0 and "back" not in game.did
 
 
 def test_a_deliberate_break_needs_no_daily_and_keeps_the_hold():
