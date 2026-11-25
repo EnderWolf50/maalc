@@ -547,7 +547,8 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
 .groups .grid, .globals .grid { width: 100%; }
 .groups .grid > .check.wide { grid-column: 1 / -1; }
 /* the global options (#955): the webhook on a row of its own, its full width; the three switches under it, a third of the row each
- * (equal widths: a basis of 0 and a floor of 200 px), folding down where three do not fit, so no box floats above the others */
+ * (equal widths: a basis of 0 and a floor of 200 px), folding down where three do not fit (the one that folds fills its row), so
+ * no box floats above the others. The box is a flex row now: it keeps only the .grid's gap, not its columns. */
 .run-page details.globals > .grid { display: flex; flex-wrap: wrap; align-items: flex-start; }
 .run-page details.globals > .grid > .field { flex: 1 1 100%; }
 .run-page details.globals > .grid > .toggle { flex: 1 1 0; min-width: 200px; }
