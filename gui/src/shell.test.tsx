@@ -47,7 +47,7 @@ vi.mock("./api", async (original) => ({
   rootDir: () => Promise.resolve("root"),
 }));
 
-/** Two enabled teams on game team slot 1: a save is refused (validate.ts crossCheck). */
+/** Two teams of the queue on game team slot 1: a save is refused (validate.ts crossCheck). */
 function clash() {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
@@ -177,9 +177,9 @@ describe("an older file (#782, #813)", () => {
   });
 
   test("a version 23 file is kept beside it, then written back as version 24 with its own values, nothing read back (#954)", async () => {
-    // team a off and the start team b: a leaves the queue, b moves nothing; the run options of version 23 are the file's own
+    // the start team a, second in the queue, moves nothing; the run options of version 23 are the file's own
     const text = write(olderFile(23, [
-      { set: "team_queue", value: ["b", "a"] }, { set: "teams/0/enabled", value: false }, { set: "run/start_team", value: "a" },
+      { set: "team_queue", value: ["b", "a"] }, { set: "run/start_team", value: "a" },
       { set: "run/difficulty", value: "hard" }, { set: "run/runs", value: null }, { set: "luxcavation/exp/team", value: "a" },
       { set: "charge_enkephalin/count", value: 3 }, { set: "tasks", value: [{ id: "MirrorDungeon", enabled: true }] },
       { set: "emulator/address", value: "127.0.0.1:16384" },
@@ -189,7 +189,7 @@ describe("an older file (#782, #813)", () => {
     expect([file.old, file.writes, file.reads]).toEqual([[[23, text]], ["old", "settings"], []]);
     const saved = JSON.parse(file.saved[0]);
     expect({ ...saved, gift_lists: null }).toEqual({
-      ...cases.valid, gift_lists: null, team_queue: ["b"], run: { ...cases.valid.run, difficulty: "hard", runs: null },
+      ...cases.valid, gift_lists: null, team_queue: ["b", "a"], run: { ...cases.valid.run, difficulty: "hard", runs: null },
       luxcavation: { ...cases.valid.luxcavation, exp: { ...cases.valid.luxcavation.exp, team: "a" } }, charge_enkephalin: { count: 3 },
       tasks: [{ id: "MirrorDungeon", enabled: true }], emulator: { ...cases.valid.emulator, address: "127.0.0.1:16384" },
     });

@@ -91,10 +91,9 @@ export function crossCheck(data: Settings): Problem[] {
     });
   }
 
-  const queued = teams.filter((t) => queue.includes(t.id));
-  const slots = [...new Set(queued.map((t) => t.game_team))];
-  for (const slot of slots) {
-    const using = teams.flatMap((t, i) => (queue.includes(t.id) && t.game_team === slot ? [i] : []));
+  const inQueue = teams.flatMap((t, i) => (queue.includes(t.id) ? [i] : [])); // each once, in the list's order
+  for (const slot of new Set(inQueue.map((i) => teams[i].game_team))) {
+    const using = inQueue.filter((i) => teams[i].game_team === slot);
     if (using.length < 2) continue;
     const names = using.map((i) => pyRepr(teams[i].name)).join(", ");
     errors.push({
@@ -144,8 +143,8 @@ export function crossCheck(data: Settings): Problem[] {
     });
   });
 
-  // The target floor's rule (#385), the start team and a Luxcavation task's team are the agent's, at that task's start
-  // (tests/settings_cases.json task_start): a team deleted or disabled stops only the task that names it, so a save is not
+  // The target floor's rule (#385) and a Luxcavation task's team are the agent's, at that task's start
+  // (tests/settings_cases.json task_start): a team deleted stops only the task that names it, so a save is not
   // refused over it. The Teams tab says so of the target floor (team.target_floor_note).
 
   data.gift_lists.forEach((list, i) => {

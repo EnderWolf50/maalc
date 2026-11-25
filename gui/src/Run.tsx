@@ -16,7 +16,7 @@ import {
 } from "react";
 import { fill, type Key } from "./i18n";
 import { LockIcon } from "./KeywordGrid";
-import { TASK_ORDER, nextRuns, schema, type Difficulty, type LuxOptions, type NextRun, type Settings } from "./model";
+import { TASK_ORDER, nextRuns, placeBack, schema, type Difficulty, type LuxOptions, type NextRun, type Settings } from "./model";
 import {
   LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
 } from "./runner";
@@ -283,12 +283,12 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
   const aside = useRef<HTMLElement>(null);
   const focusRow = useRowFocus(aside);
   // an Undo puts the entry back where it was and picks it, as the team list's does
-  const [undoNote, removeRow] = useUndoRow<Settings["tasks"][number]>((fn) => update((d) => fn(d.tasks)), "", (row, at) => {
+  const [undoNote, removeRow] = useUndoRow<Settings["tasks"][number]>((fn) => update((d) => fn(d.tasks)), "", { undone: (row, at) => {
     const tasks = [...s.tasks];
     tasks.splice(Math.min(at, tasks.length), 0, row);
     setSel(entryKey(tasks, Math.min(at, s.tasks.length)));
     focusRow(Math.min(at, s.tasks.length));
-  });
+  } });
   // a new entry of task `id` at place `at`, unticked (it runs only once ticked), and picked: a copy right under the row it
   // copies, an add at the end
   const insertAt = (at: number, id: string) => {
@@ -741,9 +741,21 @@ function MirrorTeams() {
   const nameOf = (id: string) => { const team = byId.get(id); return team ? team.name || "—" : `? ${id}`; };
   const box = useRef<HTMLFieldSetElement>(null);
   const focusRow = useRowFocus(box);
-  const [undoNote, removeRow] = useUndoRow<string>((fn) => update((d) => fn(d.team_queue)), "", (_, at) => focusRow(at), "queue.removed");
+  // the queue before the removal the Undo note is of, while only the Agent moved it since: its moves are then made around the
+  // place put back too. Null once the user arranged the queue: the place goes back to its old number.
+  const before = useRef<string[] | null>(null);
+  const arrange = (fn: (queue: string[]) => string[]) => { before.current = null; update((d) => { d.team_queue = fn(d.team_queue); }); };
+  const [undoNote, removeRow] = useUndoRow<string>((fn) => update((d) => fn(d.team_queue)), "", {
+    undone: (_, at) => focusRow(at), said: "queue.removed",
+    place: (at) => (before.current ? placeBack(before.current, at, s.team_queue) : at),
+  });
+  const takeOut = (j: number) => {
+    removeRow(s.team_queue, j, nameOf(s.team_queue[j]));
+    before.current = s.team_queue;
+    focusRow(j);
+  };
   const toTop = (j: number) => {
-    update((d) => { d.team_queue.unshift(...d.team_queue.splice(j, 1)); });
+    arrange((queue) => [queue[j], ...queue.filter((_, k) => k !== j)]);
     focusRow(0);
   };
   return (
@@ -753,7 +765,7 @@ function MirrorTeams() {
         <div className="mt-order">
           <ReorderList items={rows} keyOf={(x) => x.key} badAt={(j) => bad(`team_queue/${j}`)}
             label={t("queue.title")} help={t("queue.help")}
-            onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
+            onChange={(moved) => arrange(() => moved.map((x) => x.id))}
             render={(x, j) => {
               const team = byId.get(x.id), name = nameOf(x.id);
               // the runs this row's team plays next, on its first row
@@ -772,7 +784,7 @@ function MirrorTeams() {
                     aria-label={fill(t("queue.to_top_row"), { n: j + 1, name })} onClick={() => toTop(j)}><Glyph d={TO_TOP} /></button>
                   <button type="button" className="icon remove" title={t("queue.remove")} disabled={locked}
                     aria-label={fill(t("queue.remove_row"), { n: j + 1, name })}
-                    onClick={() => { removeRow(s.team_queue, j, name); focusRow(j); }}><Glyph d={CROSS} /></button>
+                    onClick={() => takeOut(j)}><Glyph d={CROSS} /></button>
                 </span>
               );
             }} />
@@ -781,7 +793,7 @@ function MirrorTeams() {
       {!rows.length && <p className="mt-note">{t(s.teams.length ? "queue.empty" : "queue.empty_no_teams")}</p>}
       {/* an Undo during a run would change the queue it reads: it waits for the run's end */}
       {!locked && undoNote}
-      <AddMenu label={t("queue.add")} onPick={(id) => update((d) => { d.team_queue.push(id); })}
+      <AddMenu label={t("queue.add")} onPick={(id) => arrange((queue) => [...queue, id])}
         items={s.teams.map((x) => {
           const n = s.team_queue.filter((id) => id === x.id).length;
           return { id: x.id, name: x.name || "—", note: fill(t(n ? "queue.add_listed" : "queue.add_unlisted"), { slot: x.game_team, n }) };

@@ -117,7 +117,7 @@ const zh_tw = {
   "event_packs.weight": "照分數", "event_packs.prefer": "優先選", "event_packs.avoid": "避開",
   // teams
   teamName: "隊伍",
-  noTeams: "還沒有隊伍。新增一支隊伍，bot 才能開始跑。",
+  noTeams: "還沒有隊伍。新增一支隊伍，再加進隊伍佇列，bot 才能打鏡牢。",
   "team.plan_note": "這支隊伍用方案「{name}」。要改這個方案，到「{tab}」分頁。只改這支隊伍，選「{custom}」。",
   "team.game_team": "遊戲內隊伍欄位（TEAMS #）",
   "team.main_keyword": "主要體系",
@@ -628,7 +628,7 @@ const en_us: typeof zh_tw = {
   "packs.eventPacksNote": "This setting looks only at the leftmost card of floor 5. While an event runs, its pack shows there.\nThe setting applies only when that card is an event story pack, or a pack the data file lacks. A running event's new pack is usually not in the data file yet.\nOther floors, other cards and plain packs go by weight. An ended event's pack is a plain pack.",
   "event_packs.weight": "By weight", "event_packs.prefer": "Take it", "event_packs.avoid": "Avoid",
   teamName: "Team",
-  noTeams: "No teams yet. Add a team so the bot can run.",
+  noTeams: "No teams yet. Add a team, then put it in the team queue so the bot can run Mirror Dungeon.",
   "team.plan_note": "This team uses the plan \"{name}\". To change the plan, go to the \"{tab}\" tab. To change only this team, select \"{custom}\".",
   "team.game_team": "In-game team slot (TEAMS #)",
   "team.main_keyword": "Main keyword",

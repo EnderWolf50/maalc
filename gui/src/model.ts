@@ -560,3 +560,14 @@ export function queueWithTeam(was: string[], now: string[], id: string): string[
   was.forEach((x, j) => { if (x === id) queue.splice(Math.min(j, queue.length), 0, id); });
   return queue;
 }
+
+/** Where place `at` of `was`, taken out of it, goes back in `now`, what the queue became since by the Agent's moves alone: the
+ * place it has once those are made in `was` (movedToEnd); `at` when `now` is no such thing. */
+export function placeBack(was: string[], at: number, now: string[]): number {
+  const without = (queue: string[], j: number) => queue.filter((_, k) => k !== j);
+  const moved = movedToEnd(without(was, at), now);
+  if (!moved) return at;
+  const full = moveToEnd(was, moved);
+  const back = full.findIndex((id, j) => id === was[at] && without(full, j).every((x, k) => x === now[k]));
+  return back < 0 ? at : back;
+}

@@ -70,7 +70,7 @@ def _queue_as_put_in(data):
     data = dict(data)
     teams, queue, run = data.get("teams"), data.get("team_queue"), data.get("run")
     if isinstance(teams, list):
-        off = [t.get("id") for t in teams if isinstance(t, dict) and t.get("enabled") is False]
+        off = [t["id"] for t in teams if isinstance(t, dict) and t.get("enabled") is False and "id" in t]
         data["teams"] = [{k: v for k, v in t.items() if k != "enabled"} if isinstance(t, dict) else t for t in teams]
         if isinstance(queue, list):
             data["team_queue"] = [i for i in queue if i not in off]
@@ -293,10 +293,10 @@ def cross_check(data):
     queue, ids = data["team_queue"], {t["id"] for t in teams}
     errors.extend(f"team_queue: id {i!r} names no team" for i in dict.fromkeys(queue) if i not in ids)
 
-    queued = [t for t in teams if t["id"] in queue]
-    for slot, n in Counter(t["game_team"] for t in queued).items():
+    in_queue = [t for t in teams if t["id"] in queue]  # each once, in the list's order
+    for slot, n in Counter(t["game_team"] for t in in_queue).items():
         if n > 1:
-            names = ", ".join(repr(t["name"]) for t in queued if t["game_team"] == slot)
+            names = ", ".join(repr(t["name"]) for t in in_queue if t["game_team"] == slot)
             errors.append(f"teams: teams in the queue {names} all use TEAMS #{slot}")
 
     for i, t in enumerate(teams):

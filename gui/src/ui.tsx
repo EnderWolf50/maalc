@@ -83,21 +83,22 @@ export function useUndo() {
   return [note, remove] as const;
 }
 
-/** Delete a row with one step back, for a list the Agent never reorders while it can change (override rows, a team's skill
- * rows, the Run tab's task list and team queue, which a run locks): `remove` takes
+/** Delete a row with one step back (override rows, a team's skill rows, the Run tab's task list and team queue): `remove` takes
  * row `i` out of `rows` through `edit`, and the note names it with an Undo button that puts it back in its place (at the end
  * when the list got shorter) until the next delete. `scope` names whose rows they are (a team's id): picking another drops the
  * note, so an Undo never puts a row into the next team picked. `undone` hears the row an Undo put back and the place it had
- * (the Run tab picks a task list entry it brought back). `said` is the note's words (the team queue's: the team itself stays).
+ * (the Run tab picks a task list entry it brought back). `place` gives the place it goes back to, its old one when left out (the
+ * team queue's, which the Agent may have moved meanwhile); `said` is the note's words (the team queue's: the team itself stays).
  * The teams and plans use useUndo. */
-export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "", undone?: (row: T, at: number) => void,
-  said?: Key) {
+export function useUndoRow<T>(edit: (fn: (rows: T[]) => void) => void, scope = "",
+  { undone, place, said }: { undone?: (row: T, at: number) => void; place?: (at: number) => number; said?: Key } = {}) {
   const [last, setLast] = useScopedState<{ row: T; at: number; name: string } | null>(scope, null);
   const note = last && (
     <UndoNote name={last.name} said={said} onUndo={() => {
-      edit((rows) => { rows.splice(Math.min(last.at, rows.length), 0, last.row); });
+      const at = place ? place(last.at) : last.at;
+      edit((rows) => { rows.splice(Math.min(at, rows.length), 0, last.row); });
       setLast(null);
-      undone?.(last.row, last.at);
+      undone?.(last.row, at);
     }} />
   );
   const remove = (rows: T[], i: number, name: string) => {

@@ -9,10 +9,11 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App, { TABS } from "./App";
 import { TEXT, fill } from "./i18n";
-import { moveToEnd, movedToEnd, newSettings, newTeam, queueWithTeam, rebase, type Settings } from "./model";
+import { moveToEnd, movedToEnd, newSettings, newTeam, placeBack, queueWithTeam, rebase, type Settings } from "./model";
 import { applyEdits, cases, type Edit as FileEdit } from "./settingsCases";
 import css from "./index.css?raw";
 import { TeamsTab } from "./Teams";
+import { useEditor } from "./ui";
 import { addQueued, altMove, cssValueOf, dragOnto, pickInList, renderEditor, sideList } from "./testing";
 
 // lib.rs save_settings: refused when the file is no longer the text the editor last read or wrote.
@@ -111,6 +112,19 @@ describe("queueWithTeam: the queue once a deleted team's Undo puts its places ba
     ["the queue emptied since: each place back", ["a", "b", "b"], [], ["b", "b"]],
   ])("%s", (_, was, now, after) => {
     expect(queueWithTeam(was, now, "b")).toEqual(after);
+  });
+});
+
+describe("placeBack: where a place taken out goes back (#954)", () => {
+  test.each<[string, string[], number, string[], number]>([
+    ["nothing moved since: its old place", ["a", "b", "c"], 1, ["a", "c"], 1],
+    ["the Agent moved the one before it: one up", ["a", "b", "c"], 1, ["c", "a"], 0],
+    ["the Agent moved one after it: its old place", ["a", "b", "c", "d"], 1, ["a", "d", "c"], 1],
+    ["the last place, after a move: before the one moved", ["a", "b", "c"], 2, ["b", "a"], 1],
+    ["a team's first place, its other one moved since", ["a", "b", "a", "c"], 0, ["b", "c", "a"], 1],
+    ["a place added since: its old place", ["a", "b", "c"], 1, ["c", "a", "n"], 1],
+  ])("%s", (_, was, at, now, place) => {
+    expect(placeBack(was, at, now)).toBe(place);
   });
 });
 
@@ -388,6 +402,33 @@ describe("the queue put together one team at a time (#954)", () => {
     expect(r.settings().team_queue).toEqual(["a", "b", "a"]);
     expect(queueRows()[2]).toHaveFocus();
     expect(within(queueFrame()).queryByRole("button", { name: zh.undo })).toBeNull();
+  });
+
+  test("a claim between the ✕ and its Undo: the place goes back with that move made, as if it had never left", async () => {
+    function Claim() { // what the editor holds once the Agent's requeue of a is read
+      const { update } = useEditor();
+      return <button onClick={() => update((s) => { s.team_queue = moveToEnd(s.team_queue, ["a"]); })}>claim a</button>;
+    }
+    const r = renderEditor(<><RunTab /><Claim /></>, queue("a", "b", "c"));
+    await showMirror(r.user);
+    await r.user.click(takeOut(2, "Tb"));
+    await r.user.click(screen.getByRole("button", { name: "claim a" }));
+    expect(r.settings().team_queue).toEqual(["c", "a"]);
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["b", "c", "a"]);
+    expect(queueRows()[0]).toHaveFocus();
+  });
+
+  test("the user's own move or add between the ✕ and its Undo: the place goes back to its old number", async () => {
+    const r = await mirror(queue("a", "b", "c", "d"));
+    await r.user.click(takeOut(2, "Tb"));
+    await r.user.click(toTop(3, "Td")); // d, a, c
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["d", "b", "a", "c"]);
+    await r.user.click(takeOut(1, "Td"));
+    await addFromMenu(r.user, "Ta"); // b, a, c, a
+    await r.user.click(within(queueFrame()).getByRole("button", { name: zh.undo }));
+    expect(r.settings().team_queue).toEqual(["d", "b", "a", "c", "a"]);
   });
 
   test("the last place taken out leaves the add button the focus, and its Undo brings the queue back", async () => {

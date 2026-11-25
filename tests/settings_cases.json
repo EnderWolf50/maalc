@@ -108,6 +108,7 @@
        {"set": "luxcavation/thread", "value": {"mode": "daily", "count": 9, "team": "a", "retries": 0, "consecutive": true}},
        {"set": "charge_enkephalin/count", "value": 5}]},
     {"name": "a section the file lacks comes in at its defaults", "edits": [{"delete": "charge_enkephalin"}], "gives": []},
+    {"name": "a disabled team is not in the queue (#954)", "edits": [{"set": "teams/0/enabled", "value": false}], "gives": [{"set": "team_queue", "value": ["b"]}]},
     {"name": "a hand-broken value stays, for the check to name it",
      "edits": [{"set": "run/difficulty", "value": "extreme"}, {"set": "run/wipe_retries", "value": "2"}],
      "schema": ["run/difficulty", "run/wipe_retries"]}
@@ -146,7 +147,9 @@
     {"name": "a hand-broken queue, run and list of teams stay, for the check to name them",
      "edits": [{"set": "team_queue", "value": "a"}, {"set": "run", "value": 1}, {"set": "teams", "value": ["a"]}], "schema": ["run", "team_queue", "teams/0"]},
     {"name": "a hand-broken id in the queue stays, for the check to name it",
-     "edits": [{"set": "team_queue", "value": [["a"], "b"]}, {"set": "teams/1/enabled", "value": false}], "schema": ["team_queue/0"]}
+     "edits": [{"set": "team_queue", "value": [["a"], "b"]}, {"set": "teams/1/enabled", "value": false}], "schema": ["team_queue/0"]},
+    {"name": "a disabled team broken by hand to have no id takes no place out",
+     "edits": [{"set": "team_queue", "value": ["a", null]}, {"set": "teams/1/enabled", "value": false}, {"delete": "teams/1/id"}], "schema": ["team_queue/1", "teams/1"]}
   ],
   "cases": [
     {"name": "a team out of the queue may share a slot, plan names are per kind, empty weights",

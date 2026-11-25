@@ -13,7 +13,7 @@ import { pyRepr, sayProblem, validate } from "./validate";
 describe("tests/settings_cases.json", () => {
   test("valid file passes", () => expect(validate(cases.valid)).toEqual([]));
 
-  // Not task_start's: the agent checks those at a task's start (tests/test_task_options.py), so a team deleted or disabled
+  // Not task_start's: the agent checks those at a task's start (tests/test_task_options.py), so a team deleted
   // stops only the task that names it (#813).
   for (const c of cases.cases as { name: string; edits: Edit[]; schema?: string[]; cross?: string[] }[]) {
     test(c.name, () => {
