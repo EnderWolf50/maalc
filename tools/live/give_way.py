@@ -18,7 +18,7 @@ screenshots, give-way/.
      closes a node panel with the Back key and goes to the main window with the pipeline's RecoverL2 (Dungeon Progress,
      To Window, Pause Exploration Confirm): the run stays in progress, and the daily's pre-flight reads `ok` there. The
      Event / System Notifs window over it is closed with the Back key (no live run has shown it); no other window is
-     touched, and the expired-session dialog ends the step at once.
+     touched, and the expired-run dialog ends the step at once.
   3. It stops the recording PROFILE and queues the next leg T2 with `--first`, so it stands right behind the daily and ahead
      of the tasks that wait: one of them would start on an account with the run in progress. Then it creates T's done
      file: `hold` verifies install/ and the daily starts.
@@ -66,9 +66,16 @@ SCREENS = (*OVER_MAP, *SAFE, HOME)
 EXPIRED, NOTICE = "PreviousSessionExpired", "Notices"
 SERVER_POPUPS = ("Connecting", "RetryPopup", "MaintenanceNotice", "ClientOutdated", "DeviceRooted", "UpdateDialog",
                  "UserAgreement", "DownloadDialog", "Downloading", "Loading")  # popups.json's ServerPopups, and Connecting
-HOME_SCREENS = (EXPIRED, *OVER_MAP, *SERVER_POPUPS, *SAFE, NOTICE, HOME)
-# Its two tabs, where Notices reads any title that ends in Notifs: the expired-session dialog is titled "Notifs" alone.
-NOTICE_TABS = {NOTICE: {"expected": "(Event|System)\\s*Notifs$"}}
+DIALOG = "DialogButton"
+HOME_SCREENS = (EXPIRED, *OVER_MAP, *SERVER_POPUPS, *SAFE, DIALOG, NOTICE, HOME)
+HOME_NODES = {
+    # Notices reads any title that ends in Notifs, and the expired-run dialog's is "Notifs" alone: here only the window's
+    # two tabs count. The bot's own node stays (#935): its Back key is also its answer to other "Notifs" titles.
+    NOTICE: {"expected": "(Event|System)\\s*Notifs$"},
+    # A dialog over the notice window, such as a quit dialog the Back key opened: its tabs still read beside it. The window
+    # has no such button, and its text is told by the line's end.
+    DIALOG: {"recognition": "OCR", "roi": [340, 380, 600, 180], "expected": "(Cancel|Confirm|Close|OK)$"},
+}
 PROBE = "GiveWayProbe"
 LOOK_MS = 1500  # how long one look at the whole screen tries before it names none
 GLANCE_MS = 0  # one pass over the two map templates: what the wait for a safe point costs the running bot
@@ -206,23 +213,25 @@ def stop_at_safe_point(w: World, due: Callable[[], bool]) -> bool:
     return False
 
 
-def close_notice(w: World, press: int) -> None:
-    """One Back key on the notice window over the main window, if it still shows SETTLE s later: on the main window the
-    Back key may open the quit dialog."""
-    w.sleep(SETTLE)
-    w.shot(f"notice-{press}")
-    if home_screen(w) == NOTICE:
-        w.back()
-        w.say(f"the notice window is up: Back key {press} of {NOTICE_PRESSES}")
-        w.sleep(NOTICE_WAIT)
-        w.shot(f"notice-{press}-after")
-
-
-def home_screen(w: World) -> str | None:
+def home_screen_or_fail(w: World) -> str | None:
     screen = w.look_home()
     if screen == EXPIRED:
         raise Failed(f"{EXPIRED} shows (the previous session has expired): not answered, it is a person's to decide")
     return screen
+
+
+def close_notice(w: World, press: int) -> bool:
+    """One Back key on the notice window over the main window, if it still shows SETTLE s later (a dialog that opens or a
+    window that fades has changed by then): on the main window the Back key may open the quit dialog. Whether it pressed."""
+    w.sleep(SETTLE)
+    w.shot(f"notice-{press}")
+    if home_screen_or_fail(w) != NOTICE:
+        return False
+    w.back()
+    w.say(f"the notice window is up: Back key {press} of {NOTICE_PRESSES}")
+    w.sleep(NOTICE_WAIT)
+    w.shot(f"notice-{press}-after")
+    return True
 
 
 def to_main_window(w: World) -> None:
@@ -244,12 +253,12 @@ def to_main_window(w: World) -> None:
 
     def on_home() -> bool:
         nonlocal presses
-        screen = home_screen(w)
+        screen = home_screen_or_fail(w)
         if screen == NOTICE:
             if presses == NOTICE_PRESSES:
                 raise Failed(f"the notice window stayed after {presses} Back keys")
-            presses += 1
-            close_notice(w, presses)
+            presses += close_notice(w, presses + 1)
+            screen = home_screen_or_fail(w)  # at once: HOME_LIMIT may have run out meanwhile
         return screen == HOME
 
     if not wait_until(w, HOME_LIMIT, on_home):
@@ -312,7 +321,7 @@ def watch(w: World, task: str, next_task: str | None) -> int:
 
 def probe_override(screens=SCREENS, timeout_ms: int = LOOK_MS) -> dict:
     """The pipeline override of one look: `screens` tried in order, each with its action switched off."""
-    own = {n: node for n, node in (giveup.DIALOG_NODES | NOTICE_TABS).items() if n in screens}
+    own = {n: node for n, node in (giveup.DIALOG_NODES | HOME_NODES).items() if n in screens}
     nodes = screen_probe.override(PROBE, screens, timeout_ms, own)
     nodes[PROBE] |= {"pre_delay": 0, "post_delay": 0}  # the map a bot reads stands 0.5 s and more: each glance counts
     return nodes

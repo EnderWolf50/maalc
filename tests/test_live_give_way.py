@@ -53,7 +53,7 @@ AT_HOME = {
     "TitleDownload.png": "DownloadDialog",
     "ServerErrorRetry.png": "RetryPopup",
     "UserAgreement.png": "UserAgreement",
-    "Mailbox.png": None,
+    "Mailbox.png": "DialogButton",
     "Title.png": None,
     "EntryPaused.png": None,
 }
@@ -90,10 +90,24 @@ def test_the_wait_for_the_main_window_tells_the_notice_from_the_rest():
 
 
 def test_the_notice_is_told_by_its_tabs_not_by_a_title_ending_in_notifs():
-    # an expired-session dialog whose body does not read is still no notice window
+    # an expired-run dialog whose body does not read is still no notice window
     tabs = gw.probe_override(gw.HOME_SCREENS)["Notices"]["expected"]
     assert all(re.search(tabs, title) for title in ("Event Notifs", "System Notifs", "SystemNotifs"))
     assert not re.search(tabs, "Notifs")
+
+
+def test_a_dialog_over_the_notice_window_is_not_the_notice(tmp_path):
+    # the tabs read beside it, dimmed or not; GiveUpDialog stands for a quit dialog, which has no capture
+    from PIL import Image
+
+    names, box = [], (330, 165, 950, 566)
+    for capture in ("EventNotices.png", "SystemNotices.png"):
+        for light in (1.0, 0.6):
+            page = Image.open(SCREENS / capture).convert("RGB").point(lambda v, light=light: int(v * light))
+            page.paste(Image.open(SCREENS / "GiveUpDialog.png").convert("RGB").crop(box), box[:2])
+            names.append(str(tmp_path / f"{light}-{capture}"))
+            page.save(names[-1])
+    assert set(look_files("--home", names=names).values()) == {"DialogButton"}
 
 
 def test_the_popups_before_the_notice_are_the_server_popups():
@@ -142,7 +156,7 @@ class Game:
         self.did, self.said, self.now, self.ended = [], [], 0.0, False
         self.world = gw.World(
             holders=self.holders, bot_runs=self.bot_runs, forfeit_pending=forfeit, glance=lambda: self.next(self.glances),
-            look=lambda: self.next(self.looks), look_home=lambda: self.next(self.looks), suspend=self.suspend, end_bot=self.end_bot,
+            look=lambda: self.one_of(gw.SCREENS), look_home=lambda: self.one_of(gw.HOME_SCREENS), suspend=self.suspend, end_bot=self.end_bot,
             lift_finger=lambda: self.did.append("lift"), back=lambda: self.did.append("back"),
             to_window=lambda: self.did.append("to window") or to_window, shot=lambda name: self.did.append(f"shot {name}"),
             pause=lambda minutes: self.did.append(f"pause {minutes}"), queue_next=self.queue_next,
@@ -152,6 +166,11 @@ class Game:
     @staticmethod
     def next(values):
         return values.pop(0) if len(values) > 1 else values[0]
+
+    def one_of(self, screens):
+        screen = self.next(self.looks)
+        assert screen is None or screen in screens
+        return screen
 
     def holders(self):
         return self.next(self.queue)
@@ -313,14 +332,14 @@ def test_a_notice_that_stays_is_given_up_after_its_presses():
 
 
 @pytest.mark.parametrize("looks", [("PreviousSessionExpired",), ("Notices", "PreviousSessionExpired")])
-def test_the_expired_session_dialog_is_never_answered(looks):
+def test_the_expired_run_dialog_is_never_answered(looks):
     # the Back key would be its Cancel: a person decides; also when it shows only at the second look
     game = to_home(*looks)
     assert game.watch() == 1 and "PreviousSessionExpired" in game.said[-1]
     assert "back" not in game.did and game.did[-1] == "shot failed" and "done" not in game.did
 
 
-@pytest.mark.parametrize("screen", [None, "MaintenanceNotice", "ClientOutdated", "PopupButton", "MirrorMap", "Connecting"])
+@pytest.mark.parametrize("screen", [None, "MaintenanceNotice", "ClientOutdated", "PopupButton", "DialogButton", "MirrorMap", "Connecting"])
 def test_no_back_key_on_any_other_screen(screen):
     game = to_home(screen)
     assert game.watch() == 1 and "main window" in game.said[-1]
@@ -331,6 +350,17 @@ def test_no_back_key_once_the_notice_is_gone():
     # it closed by itself before the second look: the Back key on the main window may open the quit dialog
     game = to_home("Notices", "HomeReached")
     assert game.watch() == 0 and "back" not in game.did
+
+
+def test_only_a_pressed_back_key_counts():
+    # four times it was gone at the second look: none of the three Back keys is used up
+    game = to_home(*["Notices", None, None] * 4, "Notices", "Notices", "HomeReached")
+    assert game.watch() == 0 and game.did.count("back") == 1
+
+
+def test_a_notice_closed_as_the_time_runs_out_still_leaves():
+    game = to_home(*[None] * int(gw.HOME_LIMIT - 1), "Notices", "Notices", "HomeReached")
+    assert game.watch() == 0 and game.did.count("back") == 1
 
 
 def test_a_deliberate_break_needs_no_daily_and_keeps_the_hold():
