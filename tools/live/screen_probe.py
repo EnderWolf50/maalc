@@ -13,7 +13,7 @@ OFF = {"action": "DoNothing", "next": [], "pre_delay": 0, "post_delay": 0}  # a 
 
 def override(probe: str, screens: Iterable[str], timeout_ms: int, own: Mapping[str, dict] | None = None) -> dict:
     """The pipeline override of one probe task: `screens` tried in order, each with its action switched off; `own`
-    adds the recognition of a screen that is not a pipeline node."""
+    adds the recognition of a screen that is not a pipeline node, or changes that of one that is."""
     screens = list(screens)
     nodes = {n: {**OFF, **(own or {}).get(n, {})} for n in screens}
     nodes[probe] = {"recognition": "DirectHit", "action": "DoNothing", "next": screens, "timeout": timeout_ms}

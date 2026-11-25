@@ -2,7 +2,7 @@
 
     uv run --group probe python tools/live/give_way.py watch --task T --install DIR (--next T2 [--recording PROFILE] [--timeout S] | --now)
         [--port 16384] [--out DIR] [--bot-log FILE] [--run-log FILE]
-    uv run --group probe python tools/live/give_way.py look [--glance] [--json] IMAGE...
+    uv run --group probe python tools/live/give_way.py look [--glance | --home] [--json] IMAGE...
 
 Start `watch` detached beside the bot (`queue.py detach --log <local>/scratch/T/give-way.log -- ...`; a name the hold's
 `--guard` glob of bot logs does not match). Its files default to the task's folder: bot.log, run.log, done and, for the
@@ -16,7 +16,9 @@ screenshots, give-way/.
      the map (OVER_MAP) is not. When it is not, or the ticket left, it resumes the bot and looks again.
   2. It pauses the hold of T (queue.py pause), ends the bot's processes, lifts a finger a cut swipe may have left down,
      closes a node panel with the Back key and goes to the main window with the pipeline's RecoverL2 (Dungeon Progress,
-     To Window, Pause Exploration Confirm): the run stays in progress, and the daily's pre-flight reads `ok` there.
+     To Window, Pause Exploration Confirm): the run stays in progress, and the daily's pre-flight reads `ok` there. The
+     Event / System Notifs window over it is closed with the Back key (no live run has shown it); no other window is
+     touched, and the expired-run dialog ends the step at once.
   3. It stops the recording PROFILE and queues the next leg T2 with `--first`, so it stands right behind the daily and ahead
      of the tasks that wait: one of them would start on an account with the run in progress. Then it creates T's done
      file: `hold` verifies install/ and the daily starts.
@@ -31,8 +33,8 @@ paused for PAUSE minutes, the emulator is the caller's, look at the screenshots.
 does not hold the emulator, no bot runs, T2 was used before, the emulator did not answer). Exit 3: the bot ended by itself before a safe point: the skill's steps 7
 and 9 let the daily in.
 
-**look** names the screen of each image as step 1 reads it (--glance: as the wait for it does, the map and the panel alone):
-the tests' seam.
+**look** names the screen of each image as step 1 reads it (--glance: as the wait for it does, the map and the panel alone;
+--home: as the wait for the main window does): the tests' seam.
 """
 from __future__ import annotations
 
@@ -60,15 +62,31 @@ OVER_MAP = ("ParallelModePrompt", "ExtremeModePrompt", "HiddenBattle", "PopupBut
 SAFE = ("MapNodePanel", "MirrorMap")  # the panel first: the map's icons read beside it
 HOME = "HomeReached"
 SCREENS = (*OVER_MAP, *SAFE, HOME)
+# The wait for the main window: the dialogs and the server's popups before the notice window, so no Back key answers one.
+EXPIRED, NOTICE = "PreviousSessionExpired", "Notices"
+SERVER_POPUPS = ("Connecting", "RetryPopup", "MaintenanceNotice", "ClientOutdated", "DeviceRooted", "UpdateDialog",
+                 "UserAgreement", "DownloadDialog", "Downloading", "Loading")  # popups.json's ServerPopups, and Connecting
+DIALOG = "DialogButton"
+HOME_SCREENS = (EXPIRED, *OVER_MAP, *SERVER_POPUPS, *SAFE, DIALOG, NOTICE, HOME)
+HOME_NODES = {
+    # Notices reads any title that ends in Notifs, and the expired-run dialog's is "Notifs" alone: here only the window's
+    # two tabs count. The bot's own node stays (#935): its Back key is also its answer to other "Notifs" titles.
+    NOTICE: {"expected": "(Event|System)\\s*Notifs$"},
+    # A dialog over the notice window, such as a quit dialog the Back key opened: its tabs still read beside it. The window
+    # has no such button, and its text is told by the line's end.
+    DIALOG: {"recognition": "OCR", "roi": [340, 380, 600, 180], "expected": "(Cancel|Confirm|Close|OK)$"},
+}
 PROBE = "GiveWayProbe"
 LOOK_MS = 1500  # how long one look at the whole screen tries before it names none
 GLANCE_MS = 0  # one pass over the two map templates: what the wait for a safe point costs the running bot
+HOME_MS = 0  # one pass over HOME_SCREENS: a window that opens or fades is looked at again, not waited out
 
 DUE_POLL = 15.0  # s between two looks at the queue
 GLANCE_POLL = 0.3  # s between two glances: a map whose next node is planned takes its tap soon after it stands still
 SETTLE = 3.0  # s a suspended bot's last tap has to change the screen (a node panel shows within about 0.5 s, #130)
 PAUSE = 120  # min the hold stays paused when a step fails
 MAP_LIMIT, HOME_LIMIT = 20.0, 90.0  # s the panel has to close, and To Window to reach the main window
+NOTICE_PRESSES, NOTICE_WAIT = 3, 2.0  # Back keys on the notice window, and s one has to close it (the bot's Notices waits 1.5)
 MAP_POLL = 2.0  # s a Back key has to close the panel before the next look (giveup.STEPS waits the same)
 QUEUED_LIMIT = 60.0  # s the next leg's ticket has to show (its process starts first)
 FORFEITS = ("forfeit the run", "used: forfeit")  # battle_actions' lines as it sets RUN["forfeit"]: the map then forfeits
@@ -122,6 +140,7 @@ class World:
     forfeit_pending: Callable[[], bool]
     glance: Callable[[], str | None]  # one of SAFE, or None
     look: Callable[[], str | None]  # one of SCREENS, or None
+    look_home: Callable[[], str | None]  # one of HOME_SCREENS, or None
     suspend: Callable[[], Callable[[], None]]  # suspends the bot; gives back what resumes it
     end_bot: Callable[[], None]
     lift_finger: Callable[[], None]
@@ -194,6 +213,27 @@ def stop_at_safe_point(w: World, due: Callable[[], bool]) -> bool:
     return False
 
 
+def home_screen_or_fail(w: World) -> str | None:
+    screen = w.look_home()
+    if screen == EXPIRED:
+        raise Failed(f"{EXPIRED} shows (the previous session has expired): not answered, it is a person's to decide")
+    return screen
+
+
+def close_notice(w: World, press: int) -> bool:
+    """One Back key on the notice window over the main window, if it still shows SETTLE s later (a dialog that opens or a
+    window that fades has changed by then): on the main window the Back key may open the quit dialog. Whether it pressed."""
+    w.sleep(SETTLE)
+    w.shot(f"notice-{press}")
+    if home_screen_or_fail(w) != NOTICE:
+        return False
+    w.back()
+    w.say(f"the notice window is up: Back key {press} of {NOTICE_PRESSES}")
+    w.sleep(NOTICE_WAIT)
+    w.shot(f"notice-{press}-after")
+    return True
+
+
 def to_main_window(w: World) -> None:
     """From the map the bot was ended on to the main window; the run stays in progress."""
     w.lift_finger()
@@ -208,7 +248,20 @@ def to_main_window(w: World) -> None:
         raise Failed(f"the map did not come back in {MAP_LIMIT:g} s")
     if not w.to_window():
         raise Failed("To Window did not go through (RecoverL2)")
-    if not wait_until(w, HOME_LIMIT, lambda: w.look() == HOME):
+
+    presses = 0
+
+    def on_home() -> bool:
+        nonlocal presses
+        screen = home_screen_or_fail(w)
+        if screen == NOTICE:
+            if presses == NOTICE_PRESSES:
+                raise Failed(f"the notice window stayed after {presses} Back keys")
+            presses += close_notice(w, presses + 1)
+            screen = home_screen_or_fail(w)  # at once: HOME_LIMIT may have run out meanwhile
+        return screen == HOME
+
+    if not wait_until(w, HOME_LIMIT, on_home):
         raise Failed(f"the main window did not show in {HOME_LIMIT:g} s after To Window")
     w.shot("main-window")
 
@@ -268,7 +321,7 @@ def watch(w: World, task: str, next_task: str | None) -> int:
 
 def probe_override(screens=SCREENS, timeout_ms: int = LOOK_MS) -> dict:
     """The pipeline override of one look: `screens` tried in order, each with its action switched off."""
-    own = {n: giveup.DIALOG_NODES[n] for n in screens if n in giveup.DIALOG_NODES}
+    own = {n: node for n, node in (giveup.DIALOG_NODES | HOME_NODES).items() if n in screens}
     nodes = screen_probe.override(PROBE, screens, timeout_ms, own)
     nodes[PROBE] |= {"pre_delay": 0, "post_delay": 0}  # the map a bot reads stands 0.5 s and more: each glance counts
     return nodes
@@ -280,6 +333,10 @@ def look(t) -> str | None:
 
 def glance(t) -> str | None:
     return screen_probe.look(t, PROBE, probe_override(SAFE, GLANCE_MS), SAFE)
+
+
+def look_home(t) -> str | None:
+    return screen_probe.look(t, PROBE, probe_override(HOME_SCREENS, HOME_MS), HOME_SCREENS)
 
 
 def to_window(t) -> bool:
@@ -361,6 +418,7 @@ def run(a) -> int:
         forfeit_pending=lambda: forfeit_pending(run_log),
         glance=lambda: glance(t),
         look=lambda: look(t),
+        look_home=lambda: look_home(t),
         suspend=lambda: suspend(bot_processes(doc["pid"])),
         end_bot=lambda: end(bot_processes(doc["pid"])),
         lift_finger=lambda: ctl.post_touch_up().wait(),
@@ -390,7 +448,9 @@ def main(argv=None) -> int:
     p.add_argument("--bot-log", type=Path)
     p.add_argument("--run-log", type=Path)
     p = sub.add_parser("look")
-    p.add_argument("--glance", action="store_true", help="as the wait for a safe point sees it")
+    how = p.add_mutually_exclusive_group()
+    how.add_argument("--glance", dest="look", action="store_const", const=glance, default=look, help="as the wait for a safe point sees it")
+    how.add_argument("--home", dest="look", action="store_const", const=look_home, help="as the wait for the main window sees it")
     p.add_argument("--json", action="store_true", help="the names as one JSON line at the end")
     p.add_argument("images", nargs="+")
     a = ap.parse_args(argv)
@@ -398,7 +458,7 @@ def main(argv=None) -> int:
         if a.now and a.recording:
             ap.error("--now keeps the hold and its recording: no --recording")
         return run(a)
-    named = giveup.look_files(a.images, REPO / "assets/resource/base", glance if a.glance else look)
+    named = giveup.look_files(a.images, REPO / "assets/resource/base", a.look)
     if a.json:
         print(json.dumps(named))
     return 0
