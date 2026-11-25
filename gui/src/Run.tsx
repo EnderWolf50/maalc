@@ -749,8 +749,8 @@ function MirrorTeams() {
   return (
     <fieldset className="mirror-teams" data-path="team_queue" ref={box}>
       <legend>{t("queue.title")}</legend>
-      <div className="mt-order">
-        {rows.length > 0 && (
+      {rows.length > 0 && (
+        <div className="mt-order">
           <ReorderList items={rows} keyOf={(x) => x.key} badAt={(j) => bad(`team_queue/${j}`)}
             label={t("queue.title")} help={t("queue.help")}
             onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
@@ -776,8 +776,8 @@ function MirrorTeams() {
                 </span>
               );
             }} />
-        )}
-      </div>
+        </div>
+      )}
       {!rows.length && <p className="mt-note">{t(s.teams.length ? "queue.empty" : "queue.empty_no_teams")}</p>}
       {/* an Undo during a run would change the queue it reads: it waits for the run's end */}
       {!locked && undoNote}

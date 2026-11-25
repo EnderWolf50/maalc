@@ -579,7 +579,7 @@ details.emu-manual[open] > summary { margin-bottom: 8px; }
   border: 1px solid var(--line-2); border-radius: 2px; white-space: nowrap;
 }
 .dchip[data-d="hard"] { color: var(--fg); background: var(--line); }
-.mirror-teams > p.mt-note { font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
+.mirror-teams > p.mt-note { margin: 0; font-size: 12.5px; line-height: 1.5; text-wrap: pretty; }
 /* to the top and out of the queue: 26 px each, as the task rows' copy and remove */
 .mt-row button.icon { padding: 6px; line-height: 0; }
 .mt-row button.icon:hover:not(:disabled) { color: var(--fg); }
