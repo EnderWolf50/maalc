@@ -37,8 +37,28 @@
             "[JumpBack]HomeWindowTab",
             "[JumpBack]HomeGameAway",
             "HomeInBattle",
+            "[JumpBack]HomeMirror",
             "[JumpBack]HomeBack"
         ]
+    },
+    // The mirror's map, its Dungeon Progress panel open over it too (the map's buttons read under it): the list stopped
+    // mid-run (#958, live 2026-11-25). The map's back key only opens and closes the panel (spec 06), so HomeBack's 5 keys
+    // went open, close, open, close, open, then GoHomeLost's L3. HomeMirror takes L2's way out instead (RecoverL2: the
+    // gear, To Window, Pause Exploration's Confirm), to the main window with the run paused for the list's MirrorDungeon
+    // task to Resume; never Forfeit. The map template alone: GoHome's next lists no OCR (#365). It reads under what opens
+    // over the map too (a GET! window, the prompts after floors 5 and 10, Hidden Battle, the Forfeit and Pause
+    // Exploration dialogs), where RecoverL2 taps the gear under it: not verified, no live or model run. Twice at most
+    // (max_hit): an L2 that does not go through is tried once more; HomeBack then presses nothing (the map is a screen
+    // GoHome knows), and GoHome times out into GoHomeLost's L3, where it gave 5 back keys before.
+    "HomeMirror": {
+        "recognition": "Or",
+        "any_of": [
+            "MirrorMap"
+        ],
+        "action": "Custom",
+        "custom_action": "HomeMirror",
+        "post_delay": 0,
+        "max_hit": 2
     },
     // A battle (BattleHUD's menus, turn and pause; not its E.G.O card, #468: a task that stopped with the card up leaves
     // it to HomeBack, then GoHomeLost's L3, as before): the last task stopped mid-battle (J2, live 2026-10-28). The back key opens a

@@ -176,10 +176,10 @@ def tap_then(context, x, y, done, timeout=2.0, lively="HomeReached"):
     return image
 
 
-def log_change(node, image, began):
+def log_change(node, image, began, unseen="no change"):
     """Log how long the screen after a node's tap or key took to come, from before it (image: until()'s, None when it
-    never did); a live run reads each wait from these lines (#254)."""
-    log(f"{node}: {'screen changed' if image is not None else 'no change'} after {time.monotonic() - began:.1f} s")
+    never did: then the line says unseen); a live run reads each wait from these lines (#254)."""
+    log(f"{node}: {'screen changed' if image is not None else unseen} after {time.monotonic() - began:.1f} s")
 
 
 def tap_moved(context, x, y, timeout=1.0):
@@ -765,7 +765,7 @@ def restart_game(context, reason, kind=None):
         TASK["l3"] = TASK.get("l3", 0) + 1
     else:
         log("L3 did not go through")
-    for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
+    for node in ("HomeBack", "HomeGameAway", "HomeWindowTab", "HomeMirror"):
         context.clear_hit_count(node)
     forget_game_state()
     return True
@@ -818,6 +818,18 @@ class HomeLost(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return restart_game(context, param(argv.custom_action_param) or "the main window was not reached")
+
+
+@AgentServer.custom_action("HomeMirror")
+class HomeMirror(CustomAction):
+    """GoHome on the mirror's map or its Dungeon Progress panel (#958): L2's way out (RecoverL2), which pauses the run
+    and lands on the main window. GoHome goes on from wherever it left the game: HomeReached, or the node's second try."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        detail = context.run_task("RecoverL2")
+        through = detail and detail.status.succeeded
+        log(f"{argv.node_name}: {'run paused (To Window)' if through else 'To Window did not go through'}")
+        return True
 
 
 @AgentServer.custom_action("DailyRecover")
@@ -1049,9 +1061,9 @@ class DismissShot(CustomAction):
             def closed(im):
                 return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
             log_change(argv.node_name, until(context, closed, timeout=p["timeout"]), began)
-        if "known" in p:
+        if "known" in p:  # a screen may change into one the hub does not know (the map's panel, #958): not "no change"
             log_change(argv.node_name, until(context, hub_knows(context, p["known"], argv.node_name),
-                                             timeout=p["timeout"]), began)
+                                             timeout=p["timeout"]), began, f"no screen {p['known']} knows")
         return True
 
 
