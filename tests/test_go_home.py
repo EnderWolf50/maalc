@@ -6,26 +6,53 @@ that move between them, and `dumpsys window` for the front package.
 
 import json
 import time
+from unittest.mock import MagicMock
 
 import numpy as np
-from daily_child import GAME, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task, screen
+import pytest
+from daily_child import (GAME, ROOT, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task,
+                         screen)
 from agent_patch import rebind
 import recovery
+from recovery import L2_SCREENS
+from test_pipeline import load_nodes, strip
 
 HOLD = 0.5  # s: how long the child holds the stop task that an account-level stop queues behind its task
 WINDOW_TAB = (790, 608, 70, 64)  # the bottom tab bar's Window tab
 MAILBOX_CLOSE = (690, 530, 175, 45)
 SETTINGS_RETURN = (500, 370, 280, 45)
 TITLE_TAP = (540, 300, 200, 120)
+# The mirror's map and its Dungeon Progress panel (#958), measured on tests/screens/MirrorMap.png, ProgressPanel.png
+# and PauseExploration.png: the map's gear, the panel's To Window and Forfeit, Pause Exploration's Confirm and Cancel.
+MAP_GEAR = (1210, 22, 45, 45)
+TO_WINDOW = (696, 373, 83, 125)
+FORFEIT = (500, 373, 83, 125)
+PAUSE_CONFIRM = (652, 470, 218, 38)
+PAUSE_CANCEL = (410, 470, 218, 38)
+# Every capture of tests/screens the map template reads (HomeMirror, #958): the map, and what opens over it with the
+# map's buttons still reading. MapNodePanel.png is not one: the node panel hides them.
+MAP_SCREENS = {
+    "MirrorMap.png", "MapBoss.png", "MapBossCost500.png", "MapBossDarkAfterShop.png", "MapCards.png", "MapCostFloor3.png",
+    "MapCostFloor4.png", "MapCostHard85.png", "MapEvent.png", "MapFloor4.png", "MapFloor4Panned.png", "MapFloor5Shop.png",
+    "MapFloor5ShopAgain.png", "MapFocused.png", "MapHardF5Warn.png", "MapHardRest.synthetic.png",
+    "MapHardTwoColsMidDown.png", "MapHardTwoColsUp.png", "MapHardTwoColsUpOnly.png", "MapPanned.png", "MapRock.png",
+    "MapShop.png", "MapZoomed.png",
+    # over the map: Dungeon Progress (the back key, the gear), its Forfeit and Pause Exploration dialogs, a GET! window,
+    # the Hidden Battle window and the prompts after floors 5 and 10
+    "DungeonProgress.png", "DungeonProgressNormal.png", "ProgressPanel.png", "ForfeitDialog.png", "PauseExploration.png",
+    "GiftGetOverMap.png", "HiddenBattleOverMap.synthetic.png", "ParallelModePromptOverMap.png",
+    "ParallelModeExtremeOverMap.synthetic.png"}
 
 # screen name -> tests/screens image (None: black, the game is not up)
 SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "sinners": "SinnersTab.png", "mailbox": "Mailbox.png",
            "settings": "SettingsMenu.png", "entry": "EntryNewRun.png", "title": "Title.png", "black": None,
            "battle": "LuxBattleTurn.png", "event": "LuxEventStory.png", "pressed": "WindowTabPressed.png",
-           "rooted": "RootWarning.png"}
+           "rooted": "RootWarning.png", "map": "MirrorMap.png", "panel": "ProgressPanel.png",
+           "pause": "PauseExploration.png"}
 # where a tap moves: (screens it works on, its box, the screen it shows)
 TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE, "main"),
-        (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main")]
+        (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main"), (("map",), MAP_GEAR, "panel"),
+        (("panel",), TO_WINDOW, "pause"), (("pause",), PAUSE_CONFIRM, "main"), (("pause",), PAUSE_CANCEL, "map")]
 
 
 class SleptClock:
@@ -96,6 +123,8 @@ def child():
             return True
 
         def on_key(self, keycode):
+            if keycode == 4 and self.screen in ("map", "panel"):  # live (spec 06): the map's back key opens and closes the panel
+                self.screen = "panel" if self.screen == "map" else "map"
             if keycode == 4 and self.screen == "entry":  # the entry page's back: the Drive tab
                 if self.back_lag:
                     self.screen, self.back_at = "black", actions.time.monotonic() + self.back_lag
@@ -133,7 +162,11 @@ def child():
     holder = HoldsTheStop()
     tasker.add_sink(holder)
     out = {"error": None}
-    calls = {"go_home": actions.go_home, "finish": lambda context: actions.finish(context, "nothing left")}
+    def sweep(context):  # #958: every capture HomeMirror's recognition hits, read by MaaFramework itself
+        shots = sorted(p.name for p in (ROOT / "tests" / "screens").glob("*.png"))
+        return [name for name in shots if actions.seen(context, screen(name), "HomeMirror") is not None]
+
+    calls = {"go_home": actions.go_home, "finish": lambda context: actions.finish(context, "nothing left"), "sweep": sweep}
     returned = {}
 
     class RunsGoHome(CustomAction):
@@ -147,6 +180,7 @@ def child():
     for scenario, (start, entry, call) in {
         "go_home_main": ("main", "RunsGoHome", "go_home"), "go_home_battle": ("battle", "RunsGoHome", "go_home"),
         "finish_battle": ("battle", "RunsGoHome", "finish"), "lux_home_battle": ("battle", "ThreadHome", None),
+        "sweep": ("main", "RunsGoHome", "sweep"),
     }.items():
         game.set(start)
         returned.clear()
@@ -172,6 +206,8 @@ def child():
         "drive_pressed": ("drive", GAME, 0, 0, 2),
         # the Mailbox closes 3 screenshots after its Close (#258)
         "mailbox_late": ("mailbox", GAME, 3),
+        # #958: the list stopped mid-run and started again on the mirror's map, or on its Dungeon Progress panel
+        "mirror_map": ("map", GAME), "mirror_panel": ("panel", GAME),
         # these last: they change the model's methods
         "stuck": ("entry", GAME), "restart": ("entry", GAME), "restarts_used": ("entry", GAME), "event": ("event", GAME),
         # the Window tab shows its tap but the page never changes: tapped up to its limit (the taps stay ignored after it)
@@ -372,6 +408,13 @@ def test_go_home_on_an_event_page_presses_back_then_restarts_the_game():
     assert o["nodes"][-1] == "GoHomeLost" and o["stopped"] == 1 and o["halted"] is None, o
 
 
+def test_a_back_key_that_brings_no_screen_go_home_knows_says_so():
+    # #958: the log said `HomeBack: no change after 2.4 s` while the map's back key opened and closed the panel: the
+    # screen changed, only into none GoHome knows.
+    lines = [line for line in run_child(__file__)["event"]["log"] if " HomeBack: " in line and " after " in line]
+    assert len(lines) == 5 and all("no screen GoHome knows after" in line for line in lines), lines
+
+
 def test_go_home_taps_a_window_tab_that_does_not_open_its_page_only_a_limited_number_of_times():
     # Review of #375: HomeWindowTab had no limit, so a tab that showed its tap but never changed the page was tapped
     # until the end of time (a JumpBack gives GoHome a fresh timeout each time). 10 taps, then GoHomeLost's L3.
@@ -386,6 +429,58 @@ def test_go_home_taps_the_window_tab_again_after_the_game_restarted():
     o = run_child(__file__)["tab_restart"]
     assert o["succeeded"] and o["in_a_row"] == 1 and "GoHomeLost" in o["nodes"], o
     assert len(o["clicks"]) == 11 and all(inside(WINDOW_TAB, *c) for c in o["clicks"]), o
+
+
+@pytest.mark.parametrize("name, taps", [("mirror_map", [MAP_GEAR, TO_WINDOW, PAUSE_CONFIRM]),
+                                         ("mirror_panel", [TO_WINDOW, PAUSE_CONFIRM])])
+def test_go_home_on_the_mirrors_map_pauses_the_run_without_a_restart(name, taps):
+    # #958 (live 2026-11-25): the list stopped mid-run and started again on the map. The map's back key only opens and
+    # closes Dungeon Progress (spec 06), so GoHome's 5 back keys went open, close, open, close, open, then its L3. Now
+    # L2's way out: the gear (on the map), To Window, Pause Exploration's Confirm, and the main window with the run paused
+    # for the list's MirrorDungeon task to Resume. No back key, no restart, never Forfeit. The restarts in a row are used
+    # up here (as in every scenario but the restart ones): an L3 would have run the stop procedure.
+    o = run_child(__file__)[name]
+    assert o["succeeded"] and o["nodes"][-1] == "HomeReached" and "HomeMirror" in o["nodes"], json.dumps(o)
+    assert (o["keys"], o["starts"], o["stops"], o["stopped"]) == ([], 0, 0, 0), json.dumps(o)
+    assert len(o["clicks"]) == len(taps) and all(inside(box, *c) for box, c in zip(taps, o["clicks"])), json.dumps(o)
+    assert not any(inside(FORFEIT, *c) for c in o["clicks"]), json.dumps(o)
+    assert any("HomeMirror: run paused" in line for line in o["log"]), json.dumps(o)
+
+
+def test_go_home_pauses_the_run_the_way_l2_does_and_reads_no_ocr_of_its_own():
+    # #958: one way out of the map, L2's (RecoverL2), not a second one. The map template alone: it reads under the open
+    # panel too (maatools.config.mts: DungeonProgress.png, ProgressPanel.png), and GoHome's next lists no OCR (#365).
+    nodes = load_nodes()
+    node = nodes["HomeMirror"]
+    assert node["recognition"] == "Or" and node["any_of"] == ["MirrorMap"] and set(node["any_of"]) <= L2_SCREENS
+    assert node["custom_action"] == "HomeMirror" and node["max_hit"] == 2
+    hub = strip(nodes["GoHome"]["next"])
+    assert hub.index("HomeInBattle") < hub.index("HomeMirror") < hub.index("HomeBack")
+
+
+def test_home_mirror_hits_the_map_and_what_opens_over_it_and_nothing_else():
+    # #958: every capture of tests/screens (246 on 2026-11-27) through MaaFramework and the agent's seen(): 32 hits, the
+    # map and what opens over it (MAP_SCREENS); no page of the main window, the entry page, a battle, an event, the shop
+    # or the theme packs.
+    hits = run_child(__file__)["sweep"]["returned"]
+    assert set(hits) == MAP_SCREENS, f"hits not listed: {set(hits) - MAP_SCREENS}; listed, missed: {MAP_SCREENS - set(hits)}"
+
+
+def test_a_restart_lets_go_home_use_each_of_its_limited_nodes_afresh(monkeypatch):
+    # Review of #375: L3 clears the hit counts of GoHome's nodes that have a max_hit, or the restarted game could not use
+    # them; HomeMirror (#958) is one of them.
+    import actions
+
+    nodes = load_nodes()
+    limited = {n for n in strip(nodes["GoHome"]["next"]) if "max_hit" in nodes[n]}
+    context = MagicMock()
+    context.run_task.return_value.status.succeeded = True
+    monkeypatch.setitem(actions.STUCK, "restarts", recovery.Restarts())
+    monkeypatch.setitem(actions.STUCK, "halted", None)
+    monkeypatch.setattr(actions, "TASK", {})
+    monkeypatch.setattr(actions, "forget_game_state", lambda: None)
+    assert actions.restart_game(context, "test")
+    assert {c.args[0] for c in context.clear_hit_count.call_args_list} == limited
 
 
 def test_go_home_is_not_a_task_of_the_interface():  # the daily tasks run it themselves (#365); no PI entry of its own
