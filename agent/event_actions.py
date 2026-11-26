@@ -17,7 +17,7 @@ import run_start
 import shop
 from actions import (ENDS_ON, GET_TITLE, GIFT_IDS, GIFT_NAMES, POPUPS, RUN, PageEnded, avoided_gifts, columns,
                      current_run, data, get_window, gone, hands_back, hold, log, moved, note_got, ocr, on_page, page_guard, screen, scroll, shows,
-                     still, stuck, tap, text, until, want_of)
+                     still, stuck, STUCK, tap, text, until, want_of)
 from ocrtext import compact, has
 from settings import data_dir
 
@@ -47,6 +47,9 @@ EVENT_MAP_REST = 0.4
 EVENT_LIMIT = 180  # s one event may take before recovery L1 (AALC allows 300); a boss quiz of several rounds stays well under
 EVENT_ODDS_WAIT = 2.0  # s after a check's prompt first shows that no odds read hands back to MirrorHub, not a sinner (#380); live: the odds came 1.8 s after
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
+# Event table pages a press shows again on purpose (#959): the augmentation factory's button, Yes. or No. Each return
+# is not a stuck screen; EVENT_LIMIT still bounds the event.
+REPEATING_PAGES = {801203, 801204}
 EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
 CHOICE_X = 925  # the option list's middle
 CHOICE_STEP = 150  # px per drag of a list that scrolls: about a card (130-150 px), so none is skipped
@@ -153,6 +156,8 @@ class Event(CustomAction):
             elif (after := until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE)) is None:
                 log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
             else:
+                if REPEATING_PAGES & rewards.event_ids(" ".join(story), event_table()):
+                    STUCK["watch"].restart_streak()
                 Event.advance(context, after)
         else:
             tried.clear()

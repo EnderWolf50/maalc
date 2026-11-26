@@ -383,7 +383,7 @@ def test_pick_gifts_repicks_a_card_the_tap_dropped():
 
 
 def test_data_files():
-    assert yaml.safe_load((DATA / "events.yaml").read_text(encoding="utf-8")) == {}
+    assert yaml.safe_load((DATA / "events.yaml").read_text(encoding="utf-8")) == {"<DO YOU LOVE THE CITY YOU LIVE IN?>": "No."}  # #959
     events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))
     assert events["client"] == "1.119.0" and "Project Moon" in events["note"]
     nails = next(e for e in events["events"] if e["id"] == 901008)["options"][0]  # Grimy Iron Stake is a Bleed gift

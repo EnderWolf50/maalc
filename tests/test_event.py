@@ -8,6 +8,8 @@ import pytest
 
 import actions
 import event_actions
+import recovery
+import rewards
 import test_actions
 from test_actions import Choices
 from agent_patch import patch_all
@@ -53,8 +55,9 @@ class Picked(Choices):
     `fading` while the page moves and Proceed after. pressed: the screenshot of that page (1 its first) each tap on the
     button came after."""
 
-    def __init__(self, context, monkeypatch, fade, then=(), fading="Proceed"):
-        super().__init__(context, monkeypatch, [("Take it.", ""), ("Leave it.", "")], ["Unknown story."])
+    def __init__(self, context, monkeypatch, fade, then=(), fading="Proceed", options=(("Take it.", ""), ("Leave it.", "")),
+                 story=("Unknown story.",)):
+        super().__init__(context, monkeypatch, list(options), list(story))
         self.fade, self.then, self.fading, self.shots_since_tap, self.pressed = fade, then, fading, None, []
 
     def next_page(self):
@@ -428,3 +431,60 @@ def test_a_check_after_an_option_with_no_fail_only_gift_still_sends_the_best_odd
     test_actions.check_page(context, list(zip(event_actions.EVENT_PORTRAIT_X, ["High", "Very Low", "Normal", "Very High", "Low"])))
     event_actions.Event().run(context, None)
     assert test_actions.event_portrait_taps(context) == [event_actions.EVENT_PORTRAIT_X[3]]
+
+
+# The augmentation factory's button pages (#959), as the story box ends them: 801203's lines are the 2026-11-25 capture's
+# (tests/screens/EventFactoryButton.png), 801202's and 801204's the client's text (EN_ActionEvents.json).
+FACTORY_OPTIONS = [("Yes.", "Press the button to proceed."), ("No.", "Press the button to stop.")]
+FACTORY = {
+    801202: ["The Sinner pointed to a control panel with several buttons attached to it.",
+             "<DO YOU LOVE THE CITY YOU LIVE IN?>", "What should you press?"],
+    801203: ["strong.", "Please proceed with the input.", "<DO YOU LOVE THE CITY YOU LIVE IN?>", "What should you press?"],
+    801204: ["WARNING: Pressing the button three times will cause the facility to shut down.",
+             "<DO YOU LOVE THE CITY YOU LIVE IN?>", "What should you press?"],
+}
+
+
+@pytest.mark.parametrize("page_id", sorted(FACTORY))
+def test_the_factory_button_pages_take_no(context, monkeypatch, page_id):
+    # No. pressed three times shuts the factory down and the cyborgs stop reviving; Yes. may blow it up with the Sinners
+    # inside (#959). The bot took Yes. on every page: the first option of two the hint rules rank alike.
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    page = Choices(context, monkeypatch, FACTORY_OPTIONS, FACTORY[page_id])
+    event_actions.Event().run(context, None)
+    assert page.tapped == ["No."]
+
+
+def test_the_factory_pages_are_in_the_event_table_by_their_question():
+    keys = {e["id"]: e["key"] for e in event_actions.event_table()}
+    assert all("doyoulovethecityyoulivein" in keys[i] for i in (801203, 801204))
+    for i in (801203, 801204):
+        assert rewards.match_event(" ".join(FACTORY[i]), event_actions.event_table()) is not None
+
+
+def looks_and_takes(context, monkeypatch, story, looks):
+    """MirrorHub hands out the same Choices page `looks` times, the Event action taking an option on each that the page goes
+    through on: what the watchdog flagged."""
+    monkeypatch.setitem(actions.STUCK, "watch", recovery.Watchdog())
+    actions.RUN["team"] = {"keyword": "Burn"}
+    actions.RUN["settings"] = {"event_overrides": []}
+    for _ in range(looks):
+        page = Picked(context, monkeypatch, fade=3, then=[40, 80, 120], options=FACTORY_OPTIONS, story=story)
+        actions.StuckFlag.see("Event", page.render())
+        if actions.STUCK["flag"]:
+            break
+        event_actions.Event().run(context, None)
+        assert len(page.tapped) == 1
+    return actions.STUCK["flag"]
+
+
+def test_a_factory_page_a_press_shows_again_is_not_a_stuck(context, clock, monkeypatch):
+    # 2026-11-25: Yes. four times on 801203 brought the same page back each time, and the fifth look at it was taken
+    # for a stuck screen (L1, a back key). The event's own 180 s limit still holds.
+    assert looks_and_takes(context, monkeypatch, FACTORY[801203], recovery.SAME_SCREEN + 2) is None
+
+
+def test_another_events_page_handed_out_again_and_again_is_still_a_stuck(context, clock, monkeypatch):
+    flag = looks_and_takes(context, monkeypatch, ["Unknown story."], recovery.SAME_SCREEN + 2)
+    assert flag and "the screen did not change" in flag[2]

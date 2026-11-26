@@ -37,8 +37,28 @@
             "[JumpBack]HomeWindowTab",
             "[JumpBack]HomeGameAway",
             "HomeInBattle",
+            "[JumpBack]HomeMirror",
             "[JumpBack]HomeBack"
         ]
+    },
+    // The mirror's map, its Dungeon Progress panel open over it too (the map's buttons read under it): the list stopped
+    // mid-run (#958, live 2026-11-25). The map's back key only opens and closes the panel (spec 06), so HomeBack's 5 keys
+    // went open, close, open, close, open, then GoHomeLost's L3. HomeMirror takes L2's way out instead (RecoverL2: the
+    // gear, To Window, Pause Exploration's Confirm), to the main window with the run paused for the list's MirrorDungeon
+    // task to Resume; never Forfeit. The map template alone: GoHome's next lists no OCR (#365). It reads under what opens
+    // over the map too (a GET! window, the prompts after floors 5 and 10, Hidden Battle, the Forfeit and Pause
+    // Exploration dialogs), where RecoverL2 taps the gear under it: not verified, no live or model run. Twice at most
+    // (max_hit): an L2 that does not go through is tried once more; HomeBack then presses nothing (the map is a screen
+    // GoHome knows), and GoHome times out into GoHomeLost's L3, where it gave 5 back keys before.
+    "HomeMirror": {
+        "recognition": "Or",
+        "any_of": [
+            "MirrorMap"
+        ],
+        "action": "Custom",
+        "custom_action": "HomeMirror",
+        "post_delay": 0,
+        "max_hit": 2
     },
     // A battle (BattleHUD's menus, turn and pause; not its E.G.O card, #468: a task that stopped with the card up leaves
     // it to HomeBack, then GoHomeLost's L3, as before): the last task stopped mid-battle (J2, live 2026-10-28). The back key opens a
@@ -258,12 +278,17 @@
     // within 0.1-0.2 s of each of 4 taps, so the 3 s were about 2.8 s of nothing.
     // Client 1.119.1 (2026-11-21, Walpurgis Night) redrew the card smaller and up at y 186 (DriveWalpurgis.png, #884):
     // the second template, 1.0 there and at most 0.52 in this roi on the other 241 screens; the roi takes both places.
+    // The 2026-11-26 update (Refraction Railway added below it) redrew the card again in the same place, darker and
+    // blue (DriveRefraction.png): the Walpurgis template read 0.736 there and the bot never left the Drive page. The
+    // third template, 1.0 there, 0.736 on DriveWalpurgis and at most 0.50 in this roi on the other 245 screens. A
+    // greyscale match was tried first (CODING_STANDARDS.md, theme colours): the Walpurgis template reads 0.713 there.
     "NavDrive": {
         "recognition": "TemplateMatch",
         "roi": [340, 170, 240, 210],
         "template": [
             "Navigation/NavDrive.png",
-            "Navigation/NavDriveWalpurgis.png"
+            "Navigation/NavDriveWalpurgis.png",
+            "Navigation/NavDriveRefraction.png"
         ],
         "threshold": 0.8,
         "action": "Custom",

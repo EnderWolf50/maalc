@@ -23,7 +23,7 @@
 |---|---|---|---|---|---|
 | 標題畫面 | 模板：`Change Account`、`Clear all caches` 按鈕 | 點畫面中央進入遊戲 | 連線中（`CONNECTING`）、載入畫面、主畫面 | #2、#7 | — |
 | 主畫面（Window 分頁） | 模板：底部分頁列（Window／Sinners／Drive／Theater／Extract／Dispense） | 點 Drive | Drive | #8 | `captures/255_final_window.png` |
-| Drive | 模板：`Mirror Dungeons` 入口按鈕 | 點 Mirror Dungeons | 鏡牢入口頁 | #8 | — |
+| Drive | 模板：`Mirror Dungeons` 入口按鈕（`NavDrive`；1.119.1 的 Walpurgis 外觀、2026-11-26 更新後的深藍外觀各有一張模板，#884、#853） | 點 Mirror Dungeons | 鏡牢入口頁 | #8 | `tests/screens/Drive.png`、`DriveWalpurgis.png`、`DriveRefraction.png` |
 | 鏡牢入口頁：Before Entry | OCR：`Exploring:` 欄位為 `Before Entry`；模板：右下 Enter 按鈕。旁邊另有 `Rental` 按鈕，不要點（#24 實機） | 讀 Weekly Bonuses 剩餘格數（全域難度「自動」與「每週獎勵用完就停」要用）；依隊伍佇列開新局，點 Enter | 進入確認對話框 | #8、#9 | `captures/00_md_enter_dialog.png`（對話框背後） |
 | 鏡牢入口頁：暫停中的局 | OCR：`Exploring:` 欄位為 `<季名> - F<N>`，下一行是 `<主題包> [NORMAL]` 或 `[HARD]`；還沒選主題包就暫停時是 `-`（#24 實機） | 點 Enter 接續 | Resume 對話框 | #8 | — |
 | 鏡牢入口頁：Exploration Complete | OCR：`Exploring:` 欄位為 `Exploration Complete`，卡片中央 `Unclaimed Rewards` | 點 Enter，依結算規則處理上局沒領的獎勵（[01](01-architecture.md#結算規則)） | Exploration Reward 視窗 | #8、#19 | — |
@@ -40,7 +40,7 @@
 
 | 畫面 | 辨識方式 | 處理 | 可能的下一個畫面 | 來源 | 實機截圖 |
 |---|---|---|---|---|---|
-| Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`；客戶端 1.119.1 的活動外觀另有一張模板，#884） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png`、`DriveWalpurgis.png` |
+| Drive | 模板：`Luxcavation` 按鈕（`NavLuxcavation`；客戶端 1.119.1 的活動外觀另有一張模板，#884） | 點它 | Luxcavation（上次停的分頁） | #366 | `tests/screens/Drive.png`、`DriveWalpurgis.png`、`DriveRefraction.png` |
 | Luxcavation：Thread 分頁 | 模板：左上 `Luxcavation` 面板；ColorMatch：Thread 分頁的橘色邊框（`LuxExpTab`） | 點 EXP 分頁 | EXP 分頁 | #366 | `tests/screens/LuxThread.png` |
 | Luxcavation：EXP 分頁 | ColorMatch：EXP 分頁的橘色邊框；模板：卡片上的 Enter，取最右邊的一個（`LuxExpEnter`） | 點最右邊的 Enter；打完一場回到這頁就結束 | 選隊頁（`LuxTeamSelect`） | #366 | `tests/screens/LuxExp.png`、`LuxExpLocked.png`（最右邊是上鎖的第 10 關） |
 | 選隊頁 | OCR：`TEAMS` 標題（80,272）和 `To Battle!` 按鈕（`LuxTeamSelect`）；和鏡牢 `TeamSelect` 同一頁，按鈕是 To Battle!（連戰 ×2 以上是 Chain To Battle!）不是 Confirm | 選任務選項 `luxcavation.exp.team`（紐本 `luxcavation.thread.team`）選的隊伍的遊戲內隊伍欄位（`TEAMS #N`，必要時捲動清單），按 To Battle!（1145,588） | 隊伍等級警告或開戰確認（未截圖）、戰鬥 | #366 | `tests/screens/LuxTeamSelect.png`（選了 TEAMS #3） |
