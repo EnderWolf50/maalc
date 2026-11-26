@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from daily_child import (GAME, ROOT, bind, game_class, inside, interface as interface_json, load, result, run_child, run_task,
                          screen)
-from agent_patch import rebind
+from agent_patch import patch_all, rebind
 import recovery
 from recovery import L2_SCREENS
 from test_pipeline import load_nodes, strip
@@ -477,8 +477,8 @@ def test_a_restart_lets_go_home_use_each_of_its_limited_nodes_afresh(monkeypatch
     context.run_task.return_value.status.succeeded = True
     monkeypatch.setitem(actions.STUCK, "restarts", recovery.Restarts())
     monkeypatch.setitem(actions.STUCK, "halted", None)
-    monkeypatch.setattr(actions, "TASK", {})
-    monkeypatch.setattr(actions, "forget_game_state", lambda: None)
+    patch_all(monkeypatch, "TASK", {})
+    patch_all(monkeypatch, "forget_game_state", lambda: None)
     assert actions.restart_game(context, "test")
     assert {c.args[0] for c in context.clear_hit_count.call_args_list} == limited
 
