@@ -401,6 +401,7 @@ describe("hover card: the effect of the gift's + and ++, switched on the card (#
     await hover(r, 9001);
     const head = popover()!.querySelector(".gl-tip-head")!;
     expect(head.contains(levels())).toBe(true); // on the name's row: the card is no taller for it
+    expect(style(levels()!, "flex-direction")).toBeUndefined(); // a row: not the name column's (the head's `> div`, a column)
     expect(within(levels()!).getAllByRole("button").map((b) => b.textContent)).toEqual(["−", "＋", "＋＋"]);
     expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
     expect(effectOf()).toHaveTextContent(/隨機使敵方單位增加共計3級燒傷強度。/);

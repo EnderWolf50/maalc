@@ -157,12 +157,12 @@ export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HT
           {zh && <small>{g.en}</small>}
         </div>
         {levels.length > 1 && (
-          <div className="gl-tip-lv" role="group" aria-label={t("gl.tip_level_group")}>
+          <span className="gl-tip-lv" role="group" aria-label={t("gl.tip_level_group")}>
             {levels.map((l) => (
               <button type="button" key={l} aria-pressed={l === level} aria-label={t(`gl.tip_level_${l}`)} title={t(`gl.tip_level_${l}`)}
                 onClick={() => pick({ id, level: l })}>{LEVEL_GLYPHS[l]}</button>
             ))}
-          </div>
+          </span>
         )}
       </div>
       {effect && <EffectText runs={effect} zh={zh} />}
