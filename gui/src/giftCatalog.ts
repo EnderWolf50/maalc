@@ -35,17 +35,27 @@ export const wantable = (g: CatalogGift) => g.kind === "buyable" || g.kind === "
  * text). */
 export type Colour = "Positive" | "Negative" | "Neutral";
 /** A run of a gift's effect text (gift_effects.json, tools/llc_text.py effect_runs): plain text, a status word (狀態詞, the
- * game's `[tag]`, by its id) the game draws as its status icon and its name, or italic or coloured text (flavour text). */
-export type EffectRun = string | { kw: string } | { text: string; i?: boolean; colour?: Colour };
+ * game's `[tag]`, by its id) the game draws as its status icon and its name, or italic or coloured text (flavour text). `up`:
+ * in a + or ++ text, what it changed from the level below, which the game prints in its yellow (#961). */
+export type EffectRun = string | { kw: string; up?: boolean } | { text: string; i?: boolean; colour?: Colour; up?: boolean };
 /** A status word of the effect texts (gift_effects.json `keywords`; not a gift's keyword, its 體系): the colour its name is
  * printed in, its status icon (data/buf_icons/<icon>.webp) and its names. */
 export interface StatusWord { colour: Colour; icon: string; en: string; zh: string }
 export const STATUS_WORDS = effects.keywords as Record<string, StatusWord>;
 /** A gift's sin, its attributeType in the game's data (ATTRIBUTE_TYPE 0..6). */
 export type Sin = keyof typeof plates.plates;
-const EFFECTS = effects.effects as Record<string, { sin: Sin; en: EffectRun[]; zh: EffectRun[] }>;
-/** The gift's effect text in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764). */
-export const giftEffect = (id: number, zh: boolean): EffectRun[] | undefined => EFFECTS[id]?.[zh ? "zh" : "en"];
+/** A gift's effect level: as found, enhanced once (+, the game's gift of id + 10000) or twice (++, id + 20000). */
+export type Level = "base" | "plus" | "plus2";
+type Texts = { en: EffectRun[]; zh: EffectRun[] };
+const EFFECTS = effects.effects as Record<string, Texts & { sin: Sin; plus?: Texts; plus2?: Texts }>;
+/** The gift's effect text at `level` in the GUI's language, as the game's gift panel prints it (gift_effects.json, #721, #764,
+ * #961); none at a level the gift does not have. */
+export const giftEffect = (id: number, zh: boolean, level: Level = "base"): EffectRun[] | undefined => {
+  const e = EFFECTS[id];
+  return (level === "base" ? e : e?.[level])?.[zh ? "zh" : "en"];
+};
+/** The levels the gift's effect has, base first: base alone, base and +, or all three (a ++ only follows a +). */
+export const giftLevels = (id: number): Level[] => (["base", "plus", "plus2"] as const).filter((l) => giftEffect(id, false, l));
 /** The gift's sin (gift_effects.json, tools/llc_text.py gift_sins): the colour of the plate the game draws its name on (#786). */
 export const giftSin = (id: number): Sin | undefined => EFFECTS[id]?.sin;
 /** A status word's icon URL (data/buf_icons/<icon>.webp, tools/buf_icons.py). */

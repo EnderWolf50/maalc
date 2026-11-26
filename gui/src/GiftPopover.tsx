@@ -3,7 +3,7 @@
 // make of it; the team page's Gift Search says why a gift cannot be picked. One card for a page: a tile shows it for itself (a
 // GiftTip), the page renders it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { bufIconUrl, FUSION_BY_ID, GIFT_BY_ID, giftEffect, giftSin, iconUrl, keywordIconUrl, packName, packsOf, plateOf, STATUS_WORDS, usedIn, type Colour, type EffectRun } from "./giftCatalog";
+import { bufIconUrl, FUSION_BY_ID, GIFT_BY_ID, giftEffect, giftLevels, giftSin, iconUrl, keywordIconUrl, packName, packsOf, plateOf, STATUS_WORDS, usedIn, type Colour, type EffectRun, type Level } from "./giftCatalog";
 import { plan, STATES, useGiftEdit, type GiftTip } from "./giftEdit";
 import { lockers, materialsOf, purchases, queue, type GiftState } from "./gifts";
 import { fill, localName, TEXT, type Key } from "./i18n";
@@ -86,36 +86,47 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 const COLOUR_CLASS: Record<Colour, string> = { Positive: "gl-pos", Negative: "gl-neg", Neutral: "gl-neu" };
 
 /** A gift's effect text as the game's gift panel prints it (#764): a status word as its status icon, then its name underlined in
- * its buff's colour; flavour text italic, in its colour when the text gives one; the rest, a bracketed note too, as written. */
+ * its buff's colour; flavour text italic, in its colour when the text gives one; the rest, a bracketed note too, as written.
+ * What a + or ++ changed (`up`, #961) is marked, in the game's yellow, a status word's name too. */
 export function EffectText({ runs, zh }: { runs: EffectRun[]; zh: boolean }) {
   return (
     <p className="gl-tip-effect">
       {runs.map((r, i) => {
         if (typeof r === "string") return r;
+        let run: ReactNode;
         if ("kw" in r) {
           const word = STATUS_WORDS[r.kw];
-          return (
+          run = (
             <span key={i} className="gl-kw">
               <img src={bufIconUrl(word.icon)} alt="" /><span className={"gl-kw-name " + COLOUR_CLASS[word.colour]}>{zh ? word.zh : word.en}</span>
             </span>
           );
+        } else {
+          const colour = r.colour ? COLOUR_CLASS[r.colour] : "";
+          run = r.i ? <i key={i} className={("gl-fl " + colour).trim()}>{r.text}</i> : <span key={i} className={colour}>{r.text}</span>;
         }
-        const colour = r.colour ? COLOUR_CLASS[r.colour] : "";
-        return r.i ? <i key={i} className={("gl-fl " + colour).trim()}>{r.text}</i> : <span key={i} className={colour}>{r.text}</span>;
+        return r.up ? <mark key={i} className="gl-up">{run}</mark> : run;
       })}
     </p>
   );
 }
 
+/** The switch's label of each level, as the game writes a gift's + and ++. */
+const LEVEL_GLYPHS: Record<Level, string> = { base: "−", plus: "＋", plus2: "＋＋" };
+
 /** The card's frame: the gift's icon with its tier at the top left and the icon of its keyword (its 體系) at the bottom right,
  * as the game's panel draws it; its name on the plate of its sin (#786) and, in Chinese, its English name under the plate;
- * its effect; then `children` (on the Gift Search,
+ * beside the name, when the gift has a + (#961), a switch of the effect between −, ＋ and ＋＋ (the levels it has), at − each
+ * time the card opens or shows another gift; its effect at that level; then `children` (on the Gift Search,
  * why it cannot be picked). Placed against its tile (`place`) and kept open while the pointer is on it; focus going anywhere
  * but its tile or itself closes it. */
 export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children?: ReactNode }) {
-  const { zh } = useEditor();
+  const { t, zh } = useEditor();
   const box = useRef<HTMLDivElement>(null);
-  const g = GIFT_BY_ID.get(id)!, name = localName(g, zh), effect = giftEffect(id, zh), categoryIcon = keywordIconUrl(g.keyword);
+  // the level picked on this gift's card: another gift starts at −, and so does the card opened again (it is mounted anew)
+  const [picked, pick] = useState<{ id: number; level: Level }>({ id, level: "base" });
+  const level = picked.id === id ? picked.level : "base", levels = giftLevels(id);
+  const g = GIFT_BY_ID.get(id)!, name = localName(g, zh), effect = giftEffect(id, zh, level), categoryIcon = keywordIconUrl(g.keyword);
   const plate = plateOf(giftSin(id)!);
 
   // After every render (its height changes with the content): place it against the tile.
@@ -143,6 +154,14 @@ export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HT
           <b className="gl-plate" data-ink={plate.ink} style={{ "--plate": `url(${plate.url})`, color: plate.colour } as CSSProperties}>{name}</b>
           {zh && <small>{g.en}</small>}
         </div>
+        {levels.length > 1 && (
+          <div className="gl-tip-lv" role="group" aria-label={t("gl.tip_level_group")}>
+            {levels.map((l) => (
+              <button type="button" key={l} aria-pressed={l === level} aria-label={t(`gl.tip_level_${l}`)} title={t(`gl.tip_level_${l}`)}
+                onClick={() => pick({ id, level: l })}>{LEVEL_GLYPHS[l]}</button>
+            ))}
+          </div>
+        )}
       </div>
       {effect && <EffectText runs={effect} zh={zh} />}
       {children}

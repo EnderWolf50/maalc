@@ -8,7 +8,9 @@ import pytest
 import resource_package as rp
 
 
-def test_the_program_knows_format_3_and_template_7():
+def test_the_program_knows_format_4_and_template_7():
+    # format 4 (#961): gift_effects.json's enhanced effects (plus, plus2) and their marked runs (up), gift_text.json's plus2_*,
+    # fields format 3's data lacks.
     # format 3 (#899): theme_pack_names.json, the theme packs' Chinese names the settings GUI reads, a file format 2's data
     # lacks.
     # format 2 (#849): map_weights.yaml weighs Hidden Battle (hidden), a field format 1's data lacks. Nothing reads it
@@ -24,7 +26,7 @@ def test_the_program_knows_format_3_and_template_7():
     # template 4 (#840): the agent matches the map's shop with MapNodeShopIconFlame too, a node template 3's pipeline lacks.
     # template 3 (#813, ADR 0015): the pipeline without the global options' node, as the agent reads the task options
     # from the settings file; template 2's agent read them from the attach of that node and of the entry nodes (#782)
-    assert (rp.FORMAT, rp.TEMPLATE) == (3, 7)
+    assert (rp.FORMAT, rp.TEMPLATE) == (4, 7)
 
 
 def test_versions_compare_as_tuples_of_ints():

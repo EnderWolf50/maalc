@@ -7,8 +7,8 @@ Downloads `LimbusLocalize_<release>.zip` from https://github.com/LocalizeLimbusC
 `mirror_dungeon_5_buffs_title_<id>`; effects: the `DungeonStartBuffs_MD7.json` templates filled with the effect values of
 `.local/unpack/` static data mirrordungeon-start-buffs-08, each line as runs that say which text the game prints yellow; the
 English effects the same from the client's `EN_DungeonStartBuffs_MD7.json`). It writes data/gift_effects.json too: the effect text of each
-gift the settings GUI shows (catalog_ids), English from the client's `EN_EGOgift_*.json` and Chinese from
-`LLC_zh-CN/EGOgift_*.json` (`desc`), as runs that keep the game's markup (effect_runs: a keyword tag, flavour text), and the
+gift the settings GUI shows (catalog_ids) and of its + and ++ (the gifts of id + 10000 and + 20000, #961), English from the
+client's `EN_EGOgift_*.json` and Chinese from `LLC_zh-CN/EGOgift_*.json` (`desc`), as runs that keep the game's markup (effect_runs: a keyword tag, flavour text), and the
 keywords they name: their names in the `Bufs*.json` and `BattleKeywords*.json` of each, their colour and icon from the client's
 static buff data (#764; tools/buf_icons.py draws the icons). And data/theme_pack_names.json: each theme pack's Chinese
 name by its id in data/theme_packs.yaml's `pack_ids` (`LLC_zh-CN/MirrorDungeonTheme*.json`), and the packs the release names
@@ -18,6 +18,7 @@ gift_recipes.py reuses `gift_names`. LLC is CC BY-NC-SA 4.0 (NOTICE.md).
 """
 
 import argparse
+import difflib
 import json
 import re
 import urllib.request
@@ -39,6 +40,13 @@ PACK_NAMES = DATA / "theme_pack_names.json"
 LANG = "LimbusCompany_Data/Lang/LLC_zh-CN/"
 URL = "https://github.com/LocalizeLimbusCompany/LocalizeLimbusCompany/releases/download/{0}/LimbusLocalize_{0}.zip"
 LEVELS = {1: "base", 2: "plus", 3: "plus2"}
+# A gift's enhanced levels in gift_effects.json: the client's + gift is the base id + 10000, its ++ the id + 20000 (#961)
+ENHANCED = {"plus": 10000, "plus2": 20000}
+# How the client marks what an enhanced gift changed: the game draws it in its yellow
+HIGHLIGHT = '<style="upgradeHighlight">{}</style>'
+HIGHLIGHT_RE = re.compile(r"</?style(?:=\"?upgradeHighlight\"?)?>", re.I)
+# The pieces marked_changes compares: a tag, a [keyword], a word, a number, whitespace, or any other one character (a CJK one)
+TOKEN = re.compile(r"<[^>]+>|\[[^\]<]+\]|[A-Za-z']+|\d+(?:\.\d+)?%?|\s+|.", re.S)
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"  # the client's static data, under .local/unpack/
 BUFFS = STATIC + "/buff"  # the client's buff records
 # The gift records that carry a gift's sin (attributeType): the mirror dungeon's own first, then the plain ones; 9038, 9111
@@ -93,9 +101,12 @@ def note_effects(client):
             f"materials, extra gifts and vestiges), as the game's gift panel prints it. English: the game client {client}'s "
             "EN_EGOgift_*.json desc; Chinese: the Localize Limbus Company release's LLC_zh-CN/EGOgift_*.json desc (Simplified "
             "Chinese), by gift id. sin: the gift's sin, which colours the plate the game draws its name on (the attributeType of "
-            "its record in the same client's static data, ego-gift-mirrordungeon/*.json before ego-gift/*.json). "
+            "its record in the same client's static data, ego-gift-mirrordungeon/*.json before ego-gift/*.json). plus, plus2: "
+            "the en and zh of the gift's + (the gift of id + 10000) and ++ (id + 20000), when the client has one. "
             "Each text is a list of runs: a string is plain text; {\"kw\": id} a [tag] that names a keyword, "
-            "drawn as its icon and its name in its colour; {\"text\", \"i\", \"colour\"} italic or coloured text (flavour text). "
+            "drawn as its icon and its name in its colour; {\"text\", \"i\", \"colour\"} italic or coloured text (flavour text); "
+            "\"up\": true on a run of an enhanced text is what it changed from the level below, which the game prints in its "
+            "yellow (the client's <style=\"upgradeHighlight\">; where a text has none, the words that differ from the level below). "
             "keywords: each keyword the texts name: its name in each language (Bufs*.json, BattleKeywords*.json of each), its "
             "colour as the client's ColorCode table names it (its buff's buffType in the static data buff/*.json) and its icon "
             "(data/buf_icons/<icon>.webp, tools/buf_icons.py). A bracketed note that names no keyword stays as written. The "
@@ -175,7 +186,8 @@ def effect_runs(text, names, convert=lambda t: t):
     """A gift's effect text as runs: a plain run is a string, a `[tag]` that names a keyword of `names` (id -> name) is
     {"kw": id}; a bracketed note that names none (`[Cannot Stack]`) stays in the text as the game prints it. Text in `<i>` or
     a `<color=...>` is {"text", "i": True, "colour": <the colour's name in the game's ColorCode table, COLOURS>}, each key
-    only when it holds (a gift's flavour text). `<noparse>` text is printed as written, and so is a `<word>` TextMeshPro has
+    only when it holds (a gift's flavour text); a run (a keyword's too) in `<style="upgradeHighlight">`, what an enhanced
+    gift changed, has "up": True. `<noparse>` text is printed as written, and so is a `<word>` TextMeshPro has
     no tag for (`<Bloodfiend>`); any other tag is an error, since the GUI would not draw it. Each run's text goes through
     `convert` on its own (LLC's Simplified to Traditional), and with the keywords' names converted the same way the text
     must read as the whole text converted at once."""
@@ -191,10 +203,10 @@ def effect_runs(text, names, convert=lambda t: t):
 
 def _runs(text, names):
     """effect_runs before conversion."""
-    runs, italic, colours = [], 0, []
+    runs, italic, colours, up = [], 0, [], 0
 
     def add(piece):
-        style = {k: v for k, v in (("i", italic > 0), ("colour", colours[-1] if colours else None)) if v}
+        style = {k: v for k, v in (("i", italic > 0), ("colour", colours[-1] if colours else None), ("up", up > 0)) if v}
         last = runs[-1] if runs else None
         if not style:
             if isinstance(last, str):
@@ -220,13 +232,30 @@ def _runs(text, names):
             colours.append(COLOURS[low[len("<color="):-1]])
         elif low == "</color>" and colours:
             colours.pop()
+        elif low in ('<style="upgradehighlight">', "<style=upgradehighlight>"):
+            up += 1
+        elif low == "</style>" and up:
+            up -= 1
         elif tag and tag[1] in TMP_TAGS:  # a new mark, or a closing tag with nothing open
             raise ValueError(f"markup the GUI does not draw: {piece} in {text}")
         elif piece.startswith("[") and piece[1:-1] in names:
-            runs.append({"kw": piece[1:-1]})
+            runs.append({"kw": piece[1:-1], **({"up": True} if up else {})})
         elif piece:
             add(piece)
     return runs
+
+
+def marked_changes(text, below):
+    """`text` of an enhanced gift with what differs from `below` (the level below's text) marked as the client marks it
+    (HIGHLIGHT), piece by piece (TOKEN), when the client marks nothing in it; a text it marks is left as it is."""
+    if HIGHLIGHT_RE.search(text):
+        return text
+    old, new = TOKEN.findall(HIGHLIGHT_RE.sub("", below)), TOKEN.findall(text)
+    out = []
+    for op, _, _, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        piece = "".join(new[j1:j2])
+        out.append(HIGHLIGHT.format(piece) if op in ("replace", "insert") and piece.strip() else piece)
+    return "".join(out)
 
 
 def _en_list(unpack, pattern):
@@ -292,8 +321,9 @@ def catalog_ids():
 
 
 def gift_effects(z, unpack, ids):
-    """(keywords, effects): effects str(gift id) -> {"sin", "en", "zh"}, each gift's sin (gift_sins) and effect text as runs
-    (effect_runs), in the order of `ids`; keywords keyword id -> keyword_entry, every keyword the effects name, by id. A
+    """(keywords, effects): effects str(gift id) -> {"sin", "en", "zh", "plus", "plus2"}, each gift's sin (gift_sins) and effect
+    text as runs (effect_runs), in the order of `ids`, and the {"en", "zh"} of its + and ++ (ENHANCED) when the client has
+    them, marked where the client marks nothing (marked_changes); keywords keyword id -> keyword_entry, every keyword the effects name, by id. A
     keyword that names no buff of the static data stops the tool: the GUI would have no colour and no icon for it."""
     en = _en_list(unpack, "EN_EGOgift_*.json")
     en_names = en_keyword_names(unpack)
@@ -303,9 +333,22 @@ def gift_effects(z, unpack, ids):
             zh.setdefault(x["id"], x)
     zh_names = keyword_names(z)
     sins = gift_sins(unpack, ids)
-    effects = {str(i): {"sin": sins[i], "en": effect_runs(en[i]["desc"].strip(), en_names),
-                        "zh": effect_runs(zh[i]["desc"].strip(), zh_names, to_traditional)} for i in ids}
-    used = sorted({r["kw"] for e in effects.values() for runs in (e["en"], e["zh"]) for r in runs if isinstance(r, dict) and "kw" in r})
+
+    def texts(i, below=None):  # {"en", "zh"} of gift i; an enhanced one marked against the level below where the client does not
+        out = {}
+        for lang, rows, names, convert in (("en", en, en_names, lambda t: t), ("zh", zh, zh_names, to_traditional)):
+            text = rows[i]["desc"].strip()
+            out[lang] = effect_runs(text if below is None else marked_changes(text, rows[below]["desc"].strip()), names, convert)
+        return out
+
+    effects = {}
+    for i in ids:
+        effects[str(i)], below = {"sin": sins[i], **texts(i)}, i
+        for level, plus in ENHANCED.items():
+            if i + plus in en:
+                effects[str(i)][level], below = texts(i + plus, below), i + plus
+    used = sorted({r["kw"] for e in effects.values() for t in [e, *(e[k] for k in ENHANCED if k in e)] for runs in (t["en"], t["zh"])
+                   for r in runs if isinstance(r, dict) and "kw" in r})
     buffs = buff_records(unpack)
     missing = [k for k in used if k not in buffs or k not in en_names or k not in zh_names]
     if missing:

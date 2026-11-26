@@ -3,7 +3,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import recipes from "../../assets/resource/base/data/gift_recipes.json";
-import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, giftSin, plateOf, STATUS_WORDS, keywordIconUrl, packName } from "./giftCatalog";
+import { bufIconUrl, CATALOG, GIFT_BY_ID, giftEffect, giftLevels, giftSin, plateOf, STATUS_WORDS, keywordIconUrl, packName } from "./giftCatalog";
 import giftCss from "./giftlists.css?raw";
 import { GiftListsTab } from "./GiftLists";
 import { EffectText, place, usedText } from "./GiftPopover";
@@ -384,6 +384,96 @@ describe("hover card: the gift's effect as the game's gift panel prints it (#764
     const plain = popover()!.querySelector(".gl-tip-icon")!;
     expect(within(plain as HTMLElement).getByText("III")).toBeInTheDocument();
     expect(plain.querySelectorAll("img")).toHaveLength(1); // the gift's own
+  });
+});
+
+describe("hover card: the effect of the gift's + and ++, switched on the card (#961)", () => {
+  const style = (el: Element, prop: string) => cssValueOf(giftCss, el, prop);
+  const effectOf = () => popover()!.querySelector<HTMLElement>(".gl-tip-effect")!;
+  /** The card's level switch, or null when it has none. */
+  const levels = () => within(popover()!).queryByRole("group", { name: zh["gl.tip_level_group"] });
+  const levelButton = (level: "base" | "plus" | "plus2") => within(levels()!).getByRole("button", { name: zh[`gl.tip_level_${level}`] });
+  /** What the effect marks as changed from the level below, in order. */
+  const marked = () => [...effectOf().querySelectorAll("mark")].map((m) => m.textContent);
+
+  test("a gift with a ++ (Hellterfly's Dream) switches −, ＋ and ＋＋ beside its name, from − each time", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9001);
+    const head = popover()!.querySelector(".gl-tip-head")!;
+    expect(head.contains(levels())).toBe(true); // on the name's row: the card is no taller for it
+    expect(within(levels()!).getAllByRole("button").map((b) => b.textContent)).toEqual(["−", "＋", "＋＋"]);
+    expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
+    expect(effectOf()).toHaveTextContent(/隨機使敵方單位增加共計3級燒傷強度。/);
+    expect(marked()).toEqual([]);
+
+    await r.user.click(levelButton("plus"));
+    expect(levelButton("plus")).toHaveAttribute("aria-pressed", "true");
+    expect(levelButton("base")).toHaveAttribute("aria-pressed", "false");
+    expect(effectOf()).toHaveTextContent(/隨機使敵方單位增加共計4級燒傷強度。/);
+    expect(marked()).toEqual(["4級", "燒傷", "強度", "6級", "燒傷", "強度"]); // what the client marks the + changed
+    expect(style(effectOf().querySelector("mark")!, "color")).toBe("var(--kw-pos)"); // the game's yellow
+    // a keyword the + changed: its icon, its name in the yellow, not its buff's red
+    const burn = effectOf().querySelector("mark .gl-kw-name")!;
+    expect(burn.previousElementSibling).toHaveAttribute("src", bufIconUrl("Combustion"));
+    expect(style(burn, "color")).toBe("var(--kw-pos)");
+
+    await r.user.click(levelButton("plus2"));
+    expect(effectOf()).toHaveTextContent(/隨機使敵方單位增加共計5級燒傷強度。/);
+    expect(marked()).toContain("8級");
+
+    await r.user.unhover(popover()!);
+    await waitFor(() => expect(popover()).toBeNull());
+    await hover(r, 9001); // opened again: from −
+    expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
+    expect(marked()).toEqual([]);
+  });
+
+  test("another gift's card starts from − too", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9001);
+    await r.user.click(levelButton("plus2"));
+    await hover(r, 9053); // Dust to Dust, Burn III
+    expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
+    expect(marked()).toEqual([]);
+  });
+
+  test("a gift with only a + (9192) switches − and ＋; one with neither (9071) has no switch", async () => {
+    const r = await open([mine()]);
+    await hover(r, 9192);
+    expect(within(levels()!).getAllByRole("button").map((b) => b.textContent)).toEqual(["−", "＋"]);
+    await r.user.click(levelButton("plus"));
+    expect(marked()).toEqual(["2名"]);
+    await hover(r, 9071);
+    expect(levels()).toBeNull();
+  });
+
+  test("in English: the English labels and the English text of the + ", async () => {
+    const en = TEXT.en_us;
+    const r = await open([mine()], "en_us");
+    await hover(r, 9001, true);
+    const group = within(popover()!).getByRole("group", { name: en["gl.tip_level_group"] });
+    await r.user.click(within(group).getByRole("button", { name: en["gl.tip_level_plus"] }));
+    expect(effectOf()).toHaveTextContent(/randomly inflict a total of 4 Burn Potency between all enemies\./);
+    expect(marked()).toEqual(["4 ", "Burn", " Potency", "6 ", "Burn", " Potency"]);
+  });
+
+  test("the effect text marks a changed run and a changed keyword in the yellow, and nothing else", () => {
+    render(<EffectText runs={["gain ", { text: "4", up: true }, " ", { kw: "Sinking", up: true }, " and ", { kw: "Sinking" }]} zh={false} />);
+    const [four, sinking] = screen.getAllByText((_, el) => el?.tagName === "MARK");
+    expect(four).toHaveTextContent(/^4$/);
+    expect(sinking).toHaveTextContent(/^Sinking$/);
+    expect(style(four, "background")).toBe("none"); // the mark's own yellow fill dropped
+    const [up, plain] = screen.getAllByText("Sinking");
+    expect(style(up, "color")).toBe("var(--kw-pos)");
+    expect(style(plain, "color")).toBe("var(--kw-neg)");
+  });
+
+  test("every gift the tab shows that has a + has its text in both languages, and a ++ only after a +", () => {
+    const plus = CATALOG.filter((g) => giftLevels(g.id).length > 1);
+    expect(plus).toHaveLength(111);
+    expect(CATALOG.filter((g) => giftLevels(g.id).length === 3)).toHaveLength(108);
+    for (const g of plus) for (const level of giftLevels(g.id)) for (const zhText of [true, false])
+      expect(giftEffect(g.id, zhText, level)?.length, `${g.id} ${level}`).toBeGreaterThan(0);
   });
 });
 

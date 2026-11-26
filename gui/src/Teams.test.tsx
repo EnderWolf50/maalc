@@ -356,6 +356,22 @@ describe("the E.G.O Gift Search gifts: icon first, details on hover (#721)", () 
     await waitFor(() => expect(card()).toBeNull());
   });
 
+  test("its card switches the effect to the gift's + and ++ as the gift list tab's does, from − each time (#961)", async () => {
+    const r = renderEditor(<TeamsTab />, burnFirst());
+    await r.user.hover(tile(DUST.zh));
+    const level = (l: string) => within(card()!).getByRole("button", { name: zh[`gl.tip_level_${l}` as keyof typeof zh] });
+    expect(within(card()!).getByRole("group", { name: zh["gl.tip_level_group"] })).toBeInTheDocument();
+    expect(level("base")).toHaveAttribute("aria-pressed", "true");
+    await r.user.click(level("plus"));
+    const effect = card()!.querySelector(".gl-tip-effect")!;
+    expect(effect).toHaveTextContent(/增加6級燒傷強度並對其施加3層燒傷/);
+    expect([...effect.querySelectorAll("mark")].map((m) => m.textContent).slice(0, 2)).toEqual(["增加6級", "燒傷"]); // as LLC marks it
+    await r.user.unhover(card()!);
+    await waitFor(() => expect(card()).toBeNull());
+    await r.user.hover(tile(DUST.zh));
+    expect(level("base")).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("Esc closes the card, as on the gift list tab", async () => {
     const r = renderEditor(<TeamsTab />, burnFirst());
     act(() => tile(DUST.zh).focus());

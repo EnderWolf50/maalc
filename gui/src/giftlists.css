@@ -128,6 +128,11 @@
 .gl-tip-kwi { position: absolute; right: -7px; bottom: -6px; width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 1px 1px #000a); }
 .gl-tip-head > div { display: flex; flex-direction: column; justify-content: center; gap: 3px; flex: 1; min-width: 0; line-height: 1.35; }
 .gl-tip-head > div > small { padding-left: 2px; }
+/* The switch of the effect's level (#961): on the name's row, at its top right, so the card is no taller for it. */
+.gl-tip .gl-tip-lv { display: inline-flex; flex: none; align-self: flex-start; border: 1px solid var(--line-2); border-radius: 3px; overflow: hidden; }
+.gl-tip .gl-tip-lv button { min-width: 30px; padding: 1px 7px; border: 0; border-radius: 0; color: var(--gl-muted); font: 700 12px/1.5 var(--font-display); }
+.gl-tip .gl-tip-lv button + button { border-left: 1px solid var(--line-2); }
+.gl-tip .gl-tip-lv button[aria-pressed="true"] { background: var(--gl-panel2); color: var(--kw-pos); }
 /* The name on the plate the game's gift panel draws it on (#786): the game's white plate tinted by the gift's sin
  * (gift_plates/<sin>.webp, tools/gift_plates.py), sliced as the game slices it by the sprite's border (plates.json `border`, top
  * right bottom left; GiftPopover.test.tsx holds the two together) at 0.4 of its size, in the ink plates.json gives the sin (set
@@ -153,6 +158,8 @@
 .gl-pos { color: var(--kw-pos); }
 .gl-neg { color: var(--kw-neg); }
 .gl-neu { color: var(--kw-neu); }
+/* What a + or ++ changed (#961), in the game's yellow, as the game prints its upgradeHighlight; a status word's name too. */
+.gl-up, .gl-up .gl-kw-name { background: none; color: var(--kw-pos); }
 .gl-tip-effect + .gl-tip-set { margin-top: 8px; border-top: 1px solid var(--gl-line); padding-top: 9px; }
 .gl-tip-note { margin: 8px 0 0; padding-top: 7px; border-top: 1px solid var(--gl-line); color: var(--gl-muted); }
 .gl-tip-head small, .gl-tip-why { color: var(--gl-muted); }
