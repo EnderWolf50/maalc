@@ -176,10 +176,10 @@ def tap_then(context, x, y, done, timeout=2.0, lively="HomeReached"):
     return image
 
 
-def log_change(node, image, began, missed="no change"):
+def log_change(node, image, began, unseen="no change"):
     """Log how long the screen after a node's tap or key took to come, from before it (image: until()'s, None when it
-    never did, said by missed); a live run reads each wait from these lines (#254)."""
-    log(f"{node}: {'screen changed' if image is not None else missed} after {time.monotonic() - began:.1f} s")
+    never did: then the line says unseen); a live run reads each wait from these lines (#254)."""
+    log(f"{node}: {'screen changed' if image is not None else unseen} after {time.monotonic() - began:.1f} s")
 
 
 def tap_moved(context, x, y, timeout=1.0):

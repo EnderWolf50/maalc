@@ -23,12 +23,11 @@ MAILBOX_CLOSE = (690, 530, 175, 45)
 SETTINGS_RETURN = (500, 370, 280, 45)
 TITLE_TAP = (540, 300, 200, 120)
 # The mirror's map and its Dungeon Progress panel (#958), measured on tests/screens/MirrorMap.png, ProgressPanel.png
-# and PauseExploration.png: the map's gear, the panel's To Window and Forfeit, Pause Exploration's Confirm and Cancel.
+# and PauseExploration.png: the map's gear, the panel's To Window and Forfeit, Pause Exploration's Confirm.
 MAP_GEAR = (1210, 22, 45, 45)
 TO_WINDOW = (696, 373, 83, 125)
 FORFEIT = (500, 373, 83, 125)
 PAUSE_CONFIRM = (652, 470, 218, 38)
-PAUSE_CANCEL = (410, 470, 218, 38)
 # Every capture of tests/screens the map template reads (HomeMirror, #958): the map, and what opens over it with the
 # map's buttons still reading. MapNodePanel.png is not one: the node panel hides them.
 MAP_SCREENS = {
@@ -52,7 +51,7 @@ SCREENS = {"main": "MainWindow.png", "drive": "Drive.png", "sinners": "SinnersTa
 # where a tap moves: (screens it works on, its box, the screen it shows)
 TAPS = [(("drive", "sinners"), WINDOW_TAB, "main"), (("mailbox",), MAILBOX_CLOSE, "main"),
         (("settings",), SETTINGS_RETURN, "main"), (("title",), TITLE_TAP, "main"), (("map",), MAP_GEAR, "panel"),
-        (("panel",), TO_WINDOW, "pause"), (("pause",), PAUSE_CONFIRM, "main"), (("pause",), PAUSE_CANCEL, "map")]
+        (("panel",), TO_WINDOW, "pause"), (("pause",), PAUSE_CONFIRM, "main")]
 
 
 class SleptClock:
@@ -453,6 +452,7 @@ def test_go_home_pauses_the_run_the_way_l2_does_and_reads_no_ocr_of_its_own():
     nodes = load_nodes()
     node = nodes["HomeMirror"]
     assert node["recognition"] == "Or" and node["any_of"] == ["MirrorMap"] and set(node["any_of"]) <= L2_SCREENS
+    assert nodes["MirrorMap"]["recognition"] == "TemplateMatch"
     assert node["custom_action"] == "HomeMirror" and node["max_hit"] == 2
     hub = strip(nodes["GoHome"]["next"])
     assert hub.index("HomeInBattle") < hub.index("HomeMirror") < hub.index("HomeBack")
