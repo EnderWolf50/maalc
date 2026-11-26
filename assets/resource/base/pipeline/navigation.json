@@ -258,12 +258,16 @@
     // within 0.1-0.2 s of each of 4 taps, so the 3 s were about 2.8 s of nothing.
     // Client 1.119.1 (2026-11-21, Walpurgis Night) redrew the card smaller and up at y 186 (DriveWalpurgis.png, #884):
     // the second template, 1.0 there and at most 0.52 in this roi on the other 241 screens; the roi takes both places.
+    // The 2026-11-26 update (Refraction Railway added below it) redrew the card again in the same place, darker and
+    // blue (DriveRefraction.png): the Walpurgis template read 0.736 there and the bot never left the Drive page. The
+    // third template, 1.0 there, 0.736 on DriveWalpurgis and at most 0.50 in this roi on the other 245 screens.
     "NavDrive": {
         "recognition": "TemplateMatch",
         "roi": [340, 170, 240, 210],
         "template": [
             "Navigation/NavDrive.png",
-            "Navigation/NavDriveWalpurgis.png"
+            "Navigation/NavDriveWalpurgis.png",
+            "Navigation/NavDriveRefraction.png"
         ],
         "threshold": 0.8,
         "action": "Custom",

@@ -27,7 +27,7 @@ IDENTITY = {
     "UserAgreement": [TITLE_EMAIL], "UserAgreementTicked": [TITLE_EMAIL], "UpdateDialog.synthetic": [TITLE_EMAIL],
     "Title": [TITLE_EMAIL_SMALL], "TitleConnecting": [TITLE_EMAIL_SMALL], "TitleFading": [TITLE_EMAIL_SMALL],
     "MainWindow": [UID_PLATE, NAME_PLATE], "MainWindowFadeIn": [UID_PLATE, NAME_PLATE],
-    "Drive": [NAME_PLATE], "DriveWalpurgis": [NAME_PLATE], "SinnersTab": [NAME_PLATE], "WindowTabPressed": [NAME_PLATE],  # a recording frame (#496)
+    "Drive": [NAME_PLATE], "DriveWalpurgis": [NAME_PLATE], "DriveRefraction": [NAME_PLATE],"SinnersTab": [NAME_PLATE], "WindowTabPressed": [NAME_PLATE],  # a recording frame (#496)
     # Luxcavation's narrower LV panel: the LV label sits elsewhere (#366)
     "LuxExp": [NAME_PLATE], "LuxExpLocked": [NAME_PLATE], "LuxExpStage10": [NAME_PLATE], "LuxThread": [NAME_PLATE],  # #886
     "LuxThreadScrolled": [NAME_PLATE], "LuxThreadLust": [NAME_PLATE], "LuxThreadLevels": [NAME_PLATE],  # #368
@@ -82,7 +82,7 @@ def test_every_listed_fixture_exists():
 
 def test_the_name_plate_detector_finds_every_screen_that_shows_the_lv_panel():
     shown = {p.stem for p in SCREENS.glob("*.png") if NAME_PLATE in required_boxes(p)}
-    assert shown == {"RootWarning", "MainWindow", "MainWindowFadeIn", "Drive", "DriveWalpurgis", "SinnersTab", "WindowTabPressed", "ServerErrorRetry", "ServerErrorRetryCountdown",
+    assert shown == {"RootWarning", "MainWindow", "MainWindowFadeIn", "Drive", "DriveWalpurgis", "DriveRefraction", "SinnersTab", "WindowTabPressed", "ServerErrorRetry", "ServerErrorRetryCountdown",
                      "NetworkUnstable", "EventNotices", "SystemNotices", "Mailbox", "SettingsMenu",
                      "LuxExp", "LuxExpLocked", "LuxExpStage10", "LuxThread", "LuxThreadScrolled", "LuxThreadLust", "LuxThreadLevels",
                      "LuxThreadNoBox.synthetic", "LuxThreadLevelsNoBox.synthetic",
