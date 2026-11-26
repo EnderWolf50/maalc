@@ -260,7 +260,8 @@
     // the second template, 1.0 there and at most 0.52 in this roi on the other 241 screens; the roi takes both places.
     // The 2026-11-26 update (Refraction Railway added below it) redrew the card again in the same place, darker and
     // blue (DriveRefraction.png): the Walpurgis template read 0.736 there and the bot never left the Drive page. The
-    // third template, 1.0 there, 0.736 on DriveWalpurgis and at most 0.50 in this roi on the other 245 screens.
+    // third template, 1.0 there, 0.736 on DriveWalpurgis and at most 0.50 in this roi on the other 245 screens. A
+    // greyscale match was tried first (CODING_STANDARDS.md, theme colours): the Walpurgis template reads 0.713 there.
     "NavDrive": {
         "recognition": "TemplateMatch",
         "roi": [340, 170, 240, 210],
