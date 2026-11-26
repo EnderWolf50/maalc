@@ -852,34 +852,40 @@ describe("during a run", () => {
     expect(list.getByRole("button", { name: zh.undo })).toBeVisible(); // back with the run's end
   });
 
-  test("the team queue is locked too: no drag and no Alt move, every flag off, each row faded to 0.45 (#878)", async () => {
+  test("the team queue is locked too: no drag and no Alt move, every button and 加入隊伍 off, each row faded to 0.45 (#878, #954)", async () => {
     const s = settings();
-    Object.assign(s, queuedTeams([newTeam(1, "T1"), newTeam(2, "T2"), { ...newTeam(3, "T3"), enabled: false }]));
-    s.run.start_team = s.teams[0].id;
+    Object.assign(s, queuedTeams([newTeam(1, "T1"), newTeam(2, "T2"), newTeam(3, "T3")]));
     back.text = fileOf(s);
     const user = await open();
-    await started(user);
     await user.click(taskList().getByText(zh["task.MirrorDungeon"]));
-    const queue = () => within(screen.getByRole("list", { name: zh["queue.title"] }));
-    const order = () => queue().getAllByRole("listitem").map((li) => li.textContent!.match(/T\d/)![0]);
-    for (const row of queue().getAllByRole("listitem")) {
+    const list = () => screen.getByRole("list", { name: zh["queue.title"] });
+    const frame = () => within(screen.getByRole("group", { name: zh["queue.title"] }));
+    const order = () => within(list()).getAllByRole("listitem").map((li) => li.textContent!.match(/T\d/)![0]);
+    const removeRow = (n: number, name: string) => frame().getByRole("button", { name: fill(zh["queue.remove_row"], { n, name }) });
+    await user.click(removeRow(3, "T3"));
+    expect(frame().getByRole("button", { name: zh.undo })).toBeVisible();
+    await user.click(frame().getByRole("button", { name: zh["queue.add"] })); // the menu open as the run starts
+    await started(user);
+    expect(frame().queryByRole("menu")).toBeNull();
+    for (const row of within(list()).getAllByRole("listitem")) {
       expect(row).toHaveAttribute("draggable", "false");
       expect(cssValueOf(css, row, "opacity")).toBe("0.45");
     }
-    const flags = queue().getAllByRole("button");
-    expect(flags).toHaveLength(3);
-    for (const flag of flags) expect(flag).toBeDisabled();
-    expect(cssValueOf(css, flags[1], "opacity")).toBe("1"); // the row's fade alone: a flag is not dimmed twice
-    // a disabled team's: 0.5 under the row's fade, its icon not faded again (disabled with the rest, so not aria-disabled)
-    expect(flags[2]).not.toHaveAttribute("aria-disabled");
-    expect(cssValueOf(css, flags[2], "opacity")).toBe("0.5");
-    expect(cssValueOf(css, flags[2].querySelector("svg")!, "opacity")).toBeUndefined();
-    const rows = queue().getAllByRole("listitem");
+    const buttons = within(list()).getAllByRole("button");
+    expect(buttons).toHaveLength(4); // to the top and out, two rows
+    for (const b of buttons) expect(b).toBeDisabled();
+    expect(buttons.slice(1).map((b) => cssValueOf(css, b, "opacity"))).toEqual(["1", "1", "1"]); // the row's fade alone
+    expect(frame().getByRole("button", { name: zh["queue.add"] })).toBeDisabled();
+    expect(frame().queryByRole("button", { name: zh.undo })).toBeNull(); // an Undo would change what the run reads
+    const rows = within(list()).getAllByRole("listitem");
     dragOnto(rows[1], rows[0]);
     await altMove(user, rows[1], "ArrowUp");
-    expect(order()).toEqual(["T1", "T2", "T3"]);
+    expect(order()).toEqual(["T1", "T2"]);
     send(exit(0, true));
-    for (const flag of queue().getAllByRole("button")) expect(flag).toBeEnabled();
+    expect(within(list()).getAllByRole("button").map((b) => (b as HTMLButtonElement).disabled)).toEqual([true, false, false, false]);
+    expect(frame().getByRole("button", { name: zh["queue.add"] })).toBeEnabled();
+    expect(frame().queryByRole("menu")).toBeNull(); // closed, not open again
+    expect(frame().getByRole("button", { name: zh.undo })).toBeVisible();
   });
 
   /** The next-run line of the Mirror Dungeon row, or null. */

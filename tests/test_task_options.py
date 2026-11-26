@@ -1,7 +1,7 @@
 """A task's options (#777, #813, agent/task_options.py): its entry action (TaskStart, LuxStart, ChargeStart) reads them
 once, before any tap, from the settings file (run, luxcavation.<task>, charge_enkephalin), logs them on its options
 line, and every reader takes them from there. A rule that crosses them with the teams ends the task at its start:
-MirrorDungeon fails on a target floor its teams cannot play, a start team or a Luxcavation team it cannot play takes the
+MirrorDungeon fails on a target floor its teams cannot play, a Luxcavation team it cannot play takes the
 stop procedure.
 
 In process on test_actions' fake Maa context, then the real tasks on MaaFramework in a child process (daily_child.py):
@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from daily_child import GLOBAL_DEFAULTS, bind, game_class, load, result, run_child, run_task, screen
-from test_settings import CASES, NOTE, apply_edits, older
+from test_settings import CASES, NOTE_23, NOTE_24, apply_edits, older
 
 VALID = CASES["valid"]  # team a (any, TEAMS #1, no guard turns) then team b (hard_only from floor 3, TEAMS #2, 3 guard turns)
 LUX_KEYS = {"ExpLuxcavation": "exp", "ThreadLuxcavation": "thread"}
@@ -27,20 +27,20 @@ HARD_FROM_1 = [{"set": "teams/1/hard_from_floor", "value": 1}]  # the valid file
 NOT_DEFAULT = {"difficulty": "hard", "target_floor": 15, "runs": 3, "weekly_bonus_use": "none", "weekly_bonus_amount": "one",
                "stop_when_weekly_bonus_out": True, "starlight_unaffordable": "stop", "wipe_retries": 0, "after_retries": "stop",
                "webhook_url": "http://hook.invalid/x", "theme_pack_refresh": "once", "auto_accept_terms": False,
-               "auto_download": False, "keep_dismissed_screens": False, "start_team": "b"}
+               "auto_download": False, "keep_dismissed_screens": False}
 NOT_DEFAULT_READ = {"webhook_url": "http://hook.invalid/x", "auto_accept_terms": False, "auto_download": False,
                     "keep_dismissed_screens": False, "difficulty": "hard", "target_floor": 15, "runs": 3,
                     "theme_pack_refresh": "once", "weekly_bonus_use": "none", "weekly_bonus_amount": "one",
                     "stop_when_weekly_bonus_out": True, "starlight_unaffordable": "stop", "wipe_retries": 0,
-                    "after_retries": "stop", "start_team": "b"}
+                    "after_retries": "stop"}
 NOT_DEFAULT_LINE = ("options: webhook_url (set), auto_accept_terms=false, auto_download=false, keep_dismissed_screens=false, "
                     "difficulty=hard, target_floor=15, runs=3, weekly_bonus_use=none, weekly_bonus_amount=one, "
                     "stop_when_weekly_bonus_out=true, starlight_unaffordable=stop, wipe_retries=0, after_retries=stop, "
-                    "theme_pack_refresh=once, start_team=b")
+                    "theme_pack_refresh=once")
 # The options lines of the valid file, whose options are the defaults; each Luxcavation task's with team b picked.
 MIRROR_LINE = (f"options: {GLOBAL_DEFAULTS}, difficulty=auto, target_floor=5, runs=1, weekly_bonus_use=hard, "
                "weekly_bonus_amount=all, stop_when_weekly_bonus_out=false, starlight_unaffordable=skip, wipe_retries=2, "
-               "after_retries=forfeit, theme_pack_refresh=all, start_team=null")
+               "after_retries=forfeit, theme_pack_refresh=all")
 LUX_LINE = {"ExpLuxcavation": f"options: {GLOBAL_DEFAULTS}, mode=daily, count=1, team=b, retries=0, consecutive=true",
             "ThreadLuxcavation": f"options: {GLOBAL_DEFAULTS}, mode=daily, count=3, team=b, retries=0, consecutive=true"}
 LINES = {"MirrorDungeon": MIRROR_LINE, **LUX_LINE, "ChargeEnkephalin": f"options: {GLOBAL_DEFAULTS}, count=0",
@@ -107,7 +107,7 @@ def test_mirror_dungeon_reads_every_option_of_the_settings_file_and_logs_them(co
     write(apply_edits({**VALID, "run": NOT_DEFAULT}, HARD_FROM_1))
     ok, stops, said = start(context, monkeypatch, "MirrorDungeon")
     assert ok is True and stops == []
-    assert actions.TASK["options"] == NOT_DEFAULT_READ and actions.TASK["start_team"] == "b"
+    assert actions.TASK["options"] == NOT_DEFAULT_READ
     assert options_line(said) == NOT_DEFAULT_LINE and "hook.invalid" not in "\n".join(said)  # the webhook only set or not
     context.tasker.controller.post_click.assert_not_called()
 
@@ -125,7 +125,6 @@ def test_mirror_dungeon_reads_every_option_of_the_settings_file_and_logs_them(co
     ("MirrorDungeon", [{"set": "run/starlight_unaffordable", "value": "stop"}], "starlight_unaffordable=stop"),
     ("MirrorDungeon", [{"set": "run/wipe_retries", "value": 5}], "wipe_retries=5"),
     ("MirrorDungeon", [{"set": "run/after_retries", "value": "stop"}], "after_retries=stop"),
-    ("MirrorDungeon", [{"set": "run/start_team", "value": "a"}], "start_team=a"),
     ("MirrorDungeon", [{"set": "run/webhook_url", "value": "http://hook.invalid/"}], "webhook_url (set)"),
     ("MirrorDungeon", [{"set": "run/auto_accept_terms", "value": False}], "auto_accept_terms=false"),
     ("MirrorDungeon", [{"set": "run/auto_download", "value": False}], "auto_download=false"),
@@ -151,16 +150,25 @@ def test_an_older_file_says_where_the_options_come_from_at_each_start(context, m
     # keeps its own run (normal here), a later one takes the defaults
     write(older(version, [{"set": "run/difficulty", "value": "normal"}] if version == 20 else []))
     ok, _, said = start(context, monkeypatch, "MirrorDungeon")
-    assert ok is True and said.count(NOTE) == 1
+    assert ok is True and said.count(NOTE_23) == 1
     assert actions.TASK["options"]["difficulty"] == ("normal" if version == 20 else "auto")
-    assert start(context, monkeypatch, "MirrorDungeon")[2].count(NOTE) == 1  # the next start says it again
+    assert start(context, monkeypatch, "MirrorDungeon")[2].count(NOTE_23) == 1  # the next start says it again
+
+
+def test_a_version_23_file_keeps_its_options_and_says_the_switches_and_the_start_team_are_not_read(context, monkeypatch):
+    # #954: the disabled team a is out of the queue, its start team b moves nothing
+    write(older(23, [{"set": "run/difficulty", "value": "hard"}, {"set": "run/start_team", "value": "b"},
+                     {"set": "teams/0/enabled", "value": False}]))
+    ok, _, said = start(context, monkeypatch, "MirrorDungeon")
+    assert ok is True and said.count(NOTE_24) == 1 and NOTE_23 not in said
+    assert actions.TASK["options"]["difficulty"] == "hard" and "start_team" not in options_line(said)
 
 
 def test_an_older_file_says_so_also_when_it_then_fails_a_check(context, monkeypatch):
     # the line is what explains a value at its default: it comes before the check's failure
     write(older(22, [{"set": "teams/1/game_team", "value": 1}]))
     ok, stops, said = start(context, monkeypatch, "ExpLuxcavation")
-    assert ok is False and NOTE in said and stops and stops[0].startswith("Invalid settings:")
+    assert ok is False and NOTE_23 in said and stops and stops[0].startswith("Invalid settings:")
 
 
 def test_a_current_file_says_nothing_of_it(context, monkeypatch):
@@ -204,7 +212,7 @@ def test_a_task_with_no_options_of_its_own_reads_the_global_ones(context, monkey
 @pytest.mark.parametrize("case", CASES["task_start"], ids=lambda c: c["name"])
 def test_a_rule_that_crosses_a_tasks_options_with_the_teams_stops_it_at_its_start(context, monkeypatch, case):
     # #777: the target floor's rule (#385) and a Luxcavation task's team (#366) are the task's start's, not the settings'
-    # load, in the words they had since #779 but for the settings path they name (#813). The start team is no rule (#878).
+    # load, in the words they had since #779 but for the settings path they name (#813).
     write(apply_edits(CASES["valid"], case["edits"]))
     ok, stops, said = start(context, monkeypatch, case["task"])
     target = next((e for e in case["edits"] if e["set"] == "run/target_floor"), None)
@@ -219,22 +227,22 @@ def test_a_rule_that_crosses_a_tasks_options_with_the_teams_stops_it_at_its_star
 
 
 @pytest.mark.parametrize("target", [10, 15])
-def test_a_disabled_team_does_not_hide_a_normal_only_team_behind_it_from_a_target_past_floor_5(context, monkeypatch, target):
-    # #640 (once in settings.py): the check passed over a disabled team with `break`, so teams after it went unchecked.
+def test_a_team_out_of_the_queue_does_not_hide_a_normal_only_team_behind_it_from_a_target_past_floor_5(context, monkeypatch, target):
+    # #640 (once in settings.py): the check passed over a team it does not ask with `break`, so teams after it went unchecked.
     data = copy.deepcopy(VALID)
-    data["teams"][0]["enabled"] = False
+    data["team_queue"] = ["b"]
     data["teams"][1]["usage"] = "normal_only"
     data["run"]["target_floor"] = target
     write(data)
     ok, _, said = start(context, monkeypatch, "MirrorDungeon")
     got = said[-1].removeprefix("stop: Invalid task options:\n- ").split("\n- ")
     assert ok is False and [e for e in got if "teams/1/usage" in e and "normal_only" in e], got
-    assert not [e for e in got if "teams/0/" in e]  # the disabled team itself is not asked
+    assert not [e for e in got if "teams/0/" in e]  # the team out of the queue itself is not asked
 
 
 def test_a_rule_a_task_does_not_play_by_leaves_it_alone(context, monkeypatch):
     # Each task checks its own: no EXP team picked stops neither the mail nor the Thread task, which picked its own.
-    write(apply_edits(VALID, [{"set": "luxcavation/thread/team", "value": "a"}, {"set": "run/start_team", "value": "gone"}]))
+    write(apply_edits(VALID, [{"set": "luxcavation/thread/team", "value": "a"}]))
     assert start(context, monkeypatch, "ClaimMail")[:2] == (True, [])
     assert start(context, monkeypatch, "ThreadLuxcavation")[:2] == (True, [])
 

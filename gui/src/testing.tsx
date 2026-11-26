@@ -30,6 +30,12 @@ export function renderEditor(ui: ReactElement, initial: Settings = newSettings()
  * into a test's settings. */
 export const queuedTeams = (teams: Team[]) => ({ teams, team_queue: teams.map((t) => t.id) });
 
+/** Add team `team` last in the team list, and last in the queue, as the user adds it to both (#954). */
+export function addQueued(s: Settings, team: Team) {
+  s.teams.push(team);
+  s.team_queue.push(team.id);
+}
+
 /** The side list of a tab that shows one item at a time (the team list, a plan tab's plans): queries inside its <aside>. */
 export const sideList = () => within(document.querySelector("aside")!);
 

@@ -17,12 +17,11 @@ export function ReadBackNotice({ report, onDismiss }: { report: Report; onDismis
     const task = taskOfPath(path);
     return `${task ? taskName(t, task) : t("globals.title")} · ${t(optionLabel(path))}`;
   };
-  const none = (path: string) => t(path === "run/start_team" ? "run.start_team_none" : "lux.team_none");
   const value = (path: string, v: unknown) => {
     const key = path.split("/").pop()!;
     if (TEAM_PATHS.has(path)) {
       const team = s.teams.find((x) => x.id === v);
-      return team ? fill(t("teamPick"), { name: team.name || "—", slot: team.game_team }) : v === null ? none(path) : String(v);
+      return team ? fill(t("teamPick"), { name: team.name || "—", slot: team.game_team }) : v === null ? t("lux.team_none") : String(v);
     }
     if (key === "runs" && v === null) return t("rb.no_limit");
     if (key === "webhook_url") return t("rb.set"); // the address stays off the screen: it may be a secret
@@ -33,7 +32,7 @@ export function ReadBackNotice({ report, onDismiss }: { report: Report; onDismis
   const missed = (m: Missed) => {
     if (m.kind === "webhook") return t("rb.webhook");
     if (m.kind === "value") return fill(t("rb.value"), { where: where(m.path), value: m.value });
-    if (m.kind === "team") return fill(t("rb.team"), { where: where(m.path), team: m.label ?? m.id, none: none(m.path) });
+    if (m.kind === "team") return fill(t("rb.team"), { where: where(m.path), team: m.label ?? m.id, none: t("lux.team_none") });
     if (m.kind === "task") return fill(t("rb.task"), { name: m.name });
     return fill(t("rb.differ"), { task: taskName(t, m.task), n: m.n });
   };

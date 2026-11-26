@@ -398,7 +398,6 @@ describe("the team pick lists", () => {
   const two = () => {
     const s = newSettings();
     Object.assign(s, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
-    s.teams[1].enabled = false;
     return s;
   };
   const optionsOf = (el: HTMLSelectElement) => [...el.options].map((o) => o.textContent);

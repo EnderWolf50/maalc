@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import { TEXT } from "./i18n";
-import { SINNERS, addTeam, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
+import { SINNERS, newSettings, newTeam, type Settings, type SkillSinner } from "./model";
 import css from "./index.css?raw";
 import { altMove, cssValueOf, dragHeld, dragOnto, pickInList, queuedTeams, renderEditor } from "./testing";
 import { TeamsTab } from "./Teams";
@@ -358,7 +358,7 @@ describe("in the whole editor", () => {
 
 test("a team switch drops a removed sinner's Undo, also on the way back, and the open panel stays open", async () => {
   const s = settings([entry("Yi Sang", 2, 2, 2)]);
-  addTeam(s, { ...newTeam(2, "T2"), id: "t2" });
+  s.teams.push({ ...newTeam(2, "T2"), id: "t2" });
   const r = renderEditor(<TeamsTab />, s);
   await expand(r);
   await r.user.click(within(row("Yi Sang")).getByRole("button", { name: `${zh["skill.remove"]} Yi Sang` }));

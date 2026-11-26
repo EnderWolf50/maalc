@@ -4,6 +4,7 @@ the head of the team queue, so the claim moves that team to the end and runs.jso
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,6 +17,7 @@ import battle_actions
 import test_actions
 from test_actions import argv, page
 from agent_patch import patch_all
+from settings import NO_TEAM
 from test_task_chain import ENTRY_RUN
 
 clock, context = test_actions.clock, test_actions.context  # its fixtures: the fake Maa context
@@ -111,6 +113,42 @@ def test_the_team_the_bot_picks_on_the_team_page_is_known(resumed, monkeypatch):
     assert run_start_actions.SelectTeam().run(resumed, argv())
     claim(resumed, monkeypatch)
     assert queue() == ["a", "b"] and last_line()["team"] == "b"
+
+
+def test_a_claim_with_no_run_plan_moves_the_first_place_of_a_team_the_queue_holds_twice(resumed, monkeypatch):
+    # #954: the run is the queue's first place, as the pick took it
+    edit_settings(lambda data: data.update(team_queue=["a", "b", "a"]))
+    claim(resumed, monkeypatch)
+    assert queue() == ["b", "a", "a"] and last_line()["team"] == "a"
+
+
+def empty_queue(data):
+    data["team_queue"] = []
+
+
+def test_a_run_under_way_with_an_empty_queue_goes_through_the_stop_procedure(resumed, monkeypatch):
+    # #954: no team to play it with, as with no enabled team before: current_run refuses it (need_team), and the action
+    # that asked ends through the stop procedure (hands_back), with no runs.jsonl line and nothing raised.
+    edit_settings(empty_queue)
+    urlopen = MagicMock()
+    monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
+    page(resumed, {tuple(settle_actions.RESULT): [("Floor 5 [NORMAL] 6/6", (300, 420, 90, 20))]})
+    assert settle_actions.Settle().run(resumed, argv()) is False
+    reason = f"Invalid settings:\n- {NO_TEAM}"
+    assert [line.split(" ", 1)[1] for line in actions.LOG if "stop: " in line] == [f"stop: {reason}"]
+    assert [json.loads(c.args[0].data)["reason"] for c in urlopen.call_args_list] == [reason]
+    assert not (actions.ROOT / "logs" / "runs.jsonl").exists()
+    assert queue() == []
+    resumed.tasker.controller.post_click.assert_not_called()
+
+
+def test_a_queue_emptied_during_a_planned_run_claims_it_and_stays_empty(resumed, monkeypatch):
+    # #954: the run plan in memory names the team; the claim has no place to move
+    actions.current_run(resumed)
+    edit_settings(empty_queue)
+    claim(resumed, monkeypatch)
+    assert queue() == [] and last_line()["team"] == "a"
+    assert "team queue: 'a' is no longer in it, the queue stays" in [line.split(" ", 1)[1] for line in actions.LOG]
 
 
 def stopped_at_once(context, monkeypatch, entry):

@@ -8,7 +8,7 @@ import { DeploymentTab } from "./Deployment";
 import { useDragScroll } from "./dragScroll";
 import { GiftListsTab } from "./GiftLists";
 import { TEXT, fill, type Key } from "./i18n";
-import { newSettings, parseSettings, rebase, withoutGoneStart, type Settings } from "./model";
+import { SECTIONS_VERSION, newSettings, parseSettings, rebase, type Settings } from "./model";
 import { EventsTab, TrialsTab } from "./Overrides";
 import { READ_BACK_FILES, readBack, type ReadBackFiles, type Report } from "./readBack";
 import { ReadBackNotice } from "./ReadBackNotice";
@@ -98,7 +98,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
   const [revertedFrom, setRevertedFrom] = useState<Settings | null>(null);
   // The file's text as last read or written: other text there is another writer's, the Agent's after a claim (#501).
   const disk = useRef<string | null>(null);
-  // An older file's read-back (#814): config/'s files as the load read them, so the old file read again (the Agent writes
+  // The read-back of a file older than SECTIONS_VERSION (#814): config/'s files as the load read them, so the old file read again (the Agent writes
   // back the version it read, #501) reads the same values back; and its report, which shows once the file is written as
   // the current version, until dismissed.
   const backFiles = useRef<ReadBackFiles | null>(null);
@@ -114,7 +114,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
    * read; with the read-back's report, null when there was none. */
   const settingsOf = (text: string) => {
     const parsed = parseSettings(text);
-    const back = parsed.old && backFiles.current ? readBack(parsed.data, parsed.old.version, backFiles.current) : null;
+    const back = parsed.old && parsed.old.version < SECTIONS_VERSION && backFiles.current ? readBack(parsed.data, parsed.old.version, backFiles.current) : null;
     return { ...parsed, data: back?.data ?? parsed.data, report: back?.report ?? null };
   };
   const latest = useRef({ s, savedText });
@@ -221,8 +221,8 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         // it cannot be, the load fails with why, and nothing is written.
         if (old) {
           await api.saveOldSettings(old.version, text);
-          // the run values a v1.0.0 install held outside the file come back once (#814); a version 23 file reads none
-          backFiles.current = await readBackFiles();
+          // the run values a v1.0.0 install held outside the file come back once (#814); a version 23 file has its own
+          if (old.version < SECTIONS_VERSION) backFiles.current = await readBackFiles();
         }
         const { data, unknown, report } = settingsOf(text);
         pending.current = report;
@@ -415,8 +415,7 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
     setRefused(false);
     try {
       for (let tries = 1; ; tries++) {
-        const synced = (await sync())!; // what another writer changed since goes under the edits first (#501)
-        const current = withoutGoneStart(synced); // a flag on a team deleted since goes (#878)
+        const current = (await sync())!; // what another writer changed since goes under the edits first (#501)
         if (validate(current).length) {
           setRefused(true);
           setStatus("");
@@ -434,7 +433,6 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
         }
         disk.current = written;
         latest.current = { s: current, savedText: written };
-        if (current !== synced) setS((now) => now && withoutGoneStart(now)); // the dropped flag is saved, not an edit; an edit made since stays
         setSavedText(written);
         wroteBack();
         setStatus("saved");

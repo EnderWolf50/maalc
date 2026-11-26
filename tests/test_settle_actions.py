@@ -21,9 +21,9 @@ def test_a_forfeited_run_gives_up_its_rewards_and_the_same_team_runs_next(contex
     # #95: after_retries "forfeit" ends the run at Exploration Reward short of floor 5; the team keeps its place
     # at the head of the queue, so the team that lost runs the next run again.
     patch_all(monkeypatch, "ROOT", tmp_path)
-    teams = [{"id": "a", "name": "A", "enabled": True}, {"id": "b", "name": "B", "enabled": True}]
+    teams = [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}]
     (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "settings.json").write_text(json.dumps({"version": 22, "teams": teams, "team_queue": ["a", "b"]}),
+    (tmp_path / "config" / "settings.json").write_text(json.dumps({"version": 24, "teams": teams, "team_queue": ["a", "b"]}),
                                                        encoding="utf-8")
     actions.RUN.update(settings={"teams": teams}, team=teams[0], planned=True, difficulty="hard")
     taps = []

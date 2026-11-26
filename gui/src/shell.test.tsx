@@ -47,7 +47,7 @@ vi.mock("./api", async (original) => ({
   rootDir: () => Promise.resolve("root"),
 }));
 
-/** Two enabled teams on game team slot 1: a save is refused (validate.ts crossCheck). */
+/** Two teams of the queue on game team slot 1: a save is refused (validate.ts crossCheck). */
 function clash() {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "Ta"), newTeam(2, "Tb")]));
@@ -157,14 +157,13 @@ test("a problem in a task list entry picks that entry, the second of a task list
 describe("an older file (#782, #813)", () => {
   const write = (data: unknown) => (file.text = JSON.stringify(data, null, 2) + "\n");
 
-  test("a version 20 file is kept beside it, then written back as version 23 with its own run options", async () => {
+  test("a version 20 file is kept beside it, then written back as version 24 with its own run options", async () => {
     const text = write(v20File([{ set: "run/difficulty", value: "hard" }, { set: "luxcavation/exp/team", value: "b" }]));
     render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect([file.old, file.writes]).toEqual([[[20, text]], ["old", "settings"]]);
     const saved = JSON.parse(file.saved[0]);
-    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.run.start_team, saved.luxcavation.exp.team])
-      .toEqual([23, ["a", "b"], "hard", null, "b"]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([24, ["a", "b"], "hard", "b"]);
     expect(saved.tasks).toEqual(cases.valid.tasks); // the sections version 23 added, at their defaults
   });
 
@@ -175,6 +174,41 @@ describe("an older file (#782, #813)", () => {
     expect(file.old[0][0]).toBe(22);
     const saved = JSON.parse(file.saved[0]);
     expect({ ...saved, gift_lists: null }).toEqual({ ...cases.valid, gift_lists: null });
+  });
+
+  test("a version 23 file is kept beside it, then written back as version 24 with its own values, nothing read back (#954)", async () => {
+    // the start team a, second in the queue, moves nothing; the run options of version 23 are the file's own
+    const text = write(olderFile(23, [
+      { set: "team_queue", value: ["b", "a"] }, { set: "run/start_team", value: "a" },
+      { set: "run/difficulty", value: "hard" }, { set: "run/runs", value: null }, { set: "luxcavation/exp/team", value: "a" },
+      { set: "charge_enkephalin/count", value: 3 }, { set: "tasks", value: [{ id: "MirrorDungeon", enabled: true }] },
+      { set: "emulator/address", value: "127.0.0.1:16384" },
+    ]));
+    render(<App start="teams" />);
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    expect([file.old, file.writes, file.reads]).toEqual([[[23, text]], ["old", "settings"], []]);
+    const saved = JSON.parse(file.saved[0]);
+    expect({ ...saved, gift_lists: null }).toEqual({
+      ...cases.valid, gift_lists: null, team_queue: ["b", "a"], run: { ...cases.valid.run, difficulty: "hard", runs: null },
+      luxcavation: { ...cases.valid.luxcavation, exp: { ...cases.valid.luxcavation.exp, team: "a" } }, charge_enkephalin: { count: 3 },
+      tasks: [{ id: "MirrorDungeon", enabled: true }], emulator: { ...cases.valid.emulator, address: "127.0.0.1:16384" },
+    });
+    expect(screen.queryByRole("region", { name: zh["rb.title"] })).toBeNull();
+  });
+
+  test("a version 23 file the Agent moves before the write-back keeps its own values and the Agent's queue (#954)", async () => {
+    const old = olderFile(23, [{ set: "run/difficulty", value: "hard" }]);
+    write(old);
+    file.agentFirst = JSON.stringify({ ...old, team_queue: ["b", "a"] }, null, 2) + "\n";
+    const user = userEvent.setup();
+    render(<App start="teams" />);
+    await waitFor(() => expect(file.agentFirst).toBeNull());
+    act(() => { window.dispatchEvent(new Event("focus")); }); // the editor reads the file again
+    expect(await screen.findByText(zh.diskChanged)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(file.saved).toHaveLength(1));
+    const saved = JSON.parse(file.saved[0]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty]).toEqual([24, ["b", "a"], "hard"]);
   });
 
   test("a version 21 file is written back with the queue in the order of its list", async () => {
@@ -188,7 +222,7 @@ describe("an older file (#782, #813)", () => {
   });
 
   test("a file the checks refuse is kept aside and waits for a save", async () => {
-    write(v20File([{ set: "teams/1/game_team", value: 1 }])); // two enabled teams on TEAMS #1
+    write(v20File([{ set: "teams/1/game_team", value: 1 }])); // two teams of the queue on TEAMS #1
     const user = userEvent.setup();
     render(<App start="teams" />);
     expect(await screen.findByRole("alert")).toHaveTextContent(zh.saveBlocked);
@@ -198,7 +232,7 @@ describe("an older file (#782, #813)", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(file.writes).toEqual(["old", "settings"]);
-    expect(JSON.parse(file.saved[0]).version).toBe(23);
+    expect(JSON.parse(file.saved[0]).version).toBe(24);
   });
 
   test("when it cannot be kept aside the window says why and writes nothing", async () => {
@@ -219,7 +253,8 @@ describe("an older file (#782, #813)", () => {
 describe("the read-back of a v1.0.0 install's run values (#814)", () => {
   const write = (data: unknown) => (file.text = JSON.stringify(data, null, 2) + "\n");
   const opt = (type: string, v: Record<string, unknown>) => ({ type, ...v });
-  /** MXU's config file: Mirror Dungeon on hard from a team deleted since, EXP Luxcavation on team a, the webhook encrypted. */
+  /** MXU's config file: Mirror Dungeon on hard (its start team is no option any more, #954), EXP Luxcavation on team a, Thread
+   * Luxcavation unticked on a team deleted since, the webhook encrypted. */
   const mxu = JSON.stringify({
     version: "1.0", lastActiveInstanceId: "i1",
     instances: [{
@@ -229,25 +264,27 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
           MirrorDifficulty: opt("select", { caseName: "hard" }), MirrorStartTeam: opt("select", { caseName: "gone" }),
         } },
         { id: "t2", taskName: "ExpLuxcavation", enabled: true, optionValues: { ExpTeam: opt("select", { caseName: "a" }) } },
+        { id: "t3", taskName: "ThreadLuxcavation", enabled: false, optionValues: { ThreadTeam: opt("select", { caseName: "gone" }) } },
       ],
     }],
     globalOptionValues: { WebhookUrl: opt("input", { values: { url: "" }, encryptedValues: { url: "eA==" } }) },
   });
   const notice = () => screen.findByRole("region", { name: zh["rb.title"] });
 
-  test("a version 22 file is written as 23 with MXU's values, and the notice lists what came back and what did not, once", async () => {
+  test("a version 22 file is written as 24 with MXU's values, and the notice lists what came back and what did not, once", async () => {
     write(olderFile(22));
     file.back = { "mxu-maalc.json": mxu };
     const user = userEvent.setup();
     render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
-    expect([saved.version, saved.run.difficulty, saved.run.start_team, saved.luxcavation.exp.team, saved.emulator.address])
-      .toEqual([23, "hard", null, "a", "127.0.0.1:16384"]);
-    // MXU's two, then each task MXU did not list, unticked though a new file ticks it, in a new file's order (#874)
+    expect([saved.version, saved.run.difficulty, saved.luxcavation.exp.team, saved.luxcavation.thread.team, saved.emulator.address])
+      .toEqual([24, "hard", "a", null, "127.0.0.1:16384"]);
+    expect(saved.run).not.toHaveProperty("start_team");
+    // MXU's three, then each task MXU did not list, unticked though a new file ticks it, in a new file's order (#874)
     expect(saved.tasks).toEqual([
-      { id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true },
-      ...["ThreadLuxcavation", "ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
+      { id: "MirrorDungeon", enabled: true }, { id: "ExpLuxcavation", enabled: true }, { id: "ThreadLuxcavation", enabled: false },
+      ...["ClaimMail", "ChargeEnkephalin", "AssembleModules", "ClaimPassMissions"].map((id) => ({ id, enabled: false })),
     ]);
     // MXU's file and the others are only read
     expect(file.writes).toEqual(["old", "settings"]);
@@ -260,9 +297,9 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
       fill(zh["rb.tasks"], { tasks: "鏡牢、經驗本" }),
       fill(zh["rb.address"], { address: "127.0.0.1:16384" }),
       zh["rb.missed"], zh["rb.webhook"],
-      // the start team by the queue's flag that sets it (#878)
-      fill(zh["rb.team"], { where: "鏡牢 · 起頭隊伍（隊伍佇列的旗子）", team: "gone", none: "沒有旗子" }),
+      fill(zh["rb.team"], { where: "紐本 · 隊伍", team: "gone", none: zh["lux.team_none"] }),
     ]) expect(shown).toHaveTextContent(text);
+    expect(shown).not.toHaveTextContent("起頭");
     // over every tab, until dismissed
     await user.click(screen.getByRole("tab", { name: zh["tab.gifts"] }));
     await user.click(within(await notice()).getByRole("button", { name: zh["rb.dismiss"] }));
@@ -289,7 +326,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     expect(JSON.parse(file.saved[0]).tasks).toEqual(cases.valid.tasks);
   });
 
-  test("a version 23 file reads nothing back and shows no notice", async () => {
+  test("a current file reads nothing back and shows no notice", async () => {
     file.back = { "mxu-maalc.json": mxu };
     render(<App start="teams" />);
     await screen.findByRole("button", { name: zh.save });
@@ -298,7 +335,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
   });
 
   test("a file the checks refuse shows its notice once the save that fixes it writes it", async () => {
-    write(olderFile(22, [{ set: "teams/1/game_team", value: 1 }])); // two enabled teams on TEAMS #1
+    write(olderFile(22, [{ set: "teams/1/game_team", value: 1 }])); // two teams of the queue on TEAMS #1
     file.back = { "mxu-maalc.json": mxu };
     const user = userEvent.setup();
     render(<App start="teams" />);
@@ -327,7 +364,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
-    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([23, ["b", "a"], "hard", "a"]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([24, ["b", "a"], "hard", "a"]);
     expect(await notice()).toBeVisible();
   });
 
@@ -353,7 +390,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
 test("a save keeps the task options, the task list, the emulator and the schedules it has no editor for (#813)", async () => {
   const s = newSettings();
   Object.assign(s, queuedTeams([newTeam(1, "Ta")]));
-  s.run = { ...s.run, difficulty: "hard", runs: null, start_team: s.teams[0].id, webhook_url: "http://hook.invalid/" };
+  s.run = { ...s.run, difficulty: "hard", runs: null, webhook_url: "http://hook.invalid/" };
   s.luxcavation.thread = { ...s.luxcavation.thread, mode: "count", team: s.teams[0].id };
   s.charge_enkephalin.count = 4;
   s.tasks = [{ id: "ClaimMail", enabled: true }, { id: "MirrorDungeon", enabled: true }];

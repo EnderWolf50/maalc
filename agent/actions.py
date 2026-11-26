@@ -48,8 +48,7 @@ RUN = {}
 # run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
 # "forfeits" (the forfeit reasons of the runs given up since the last claim: too many in a row stop the task, #560),
 # "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps), "l3"
-# (restart_game's restarts that went through, #520), "start_team" (a Mirror Dungeon task's start team, until its first new
-# run opened with it at the head of the queue, #805). "options": the task's options as its start read them (options()).
+# (restart_game's restarts that went through, #520). "options": the task's options as its start read them (options()).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -625,19 +624,12 @@ class TaskStart(CustomAction):
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
-        play (task_options.target_floor_errors), as PlanRun fails it on bad settings. A start team deleted or disabled
-        is ignored, and the log says so (task_options.start_team_ignored_line, #878); one it can play waits in TASK for the
-        task's first new run (PlanRun): a run under way plays the team of the queue as it is."""
+        play (task_options.target_floor_errors), as PlanRun fails it on bad settings."""
         if argv.node_name != "MirrorDungeon":
             return True
-        if errors := task_options.target_floor_errors(TASK["options"], settings["teams"]):
+        if errors := task_options.target_floor_errors(TASK["options"], settings):
             log(f"stop: {task_options.OptionsError(errors)}")
             return False
-        start = TASK["options"]["start_team"]
-        if ignored := task_options.start_team_ignored_line(start, settings["teams"]):
-            log(ignored)
-        elif start:
-            TASK["start_team"] = start
         return True
 
 

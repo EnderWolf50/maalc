@@ -19,8 +19,9 @@ MaaFramework (after the bot exited mid-run) has its process tree ended.
 from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
 into the team queue's head and removes the state files with `state/` (#501). Then it sets each dotted KEY to VALUE
 (JSON, else a string):
-`--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`, `--set run.start_team=t3`,
-`--set luxcavation.exp.team=t3`; a list's item goes by its id, `--set teams.t3.heal=revive`. A key it cannot set stops
+`--set run.runs=1 --set run.difficulty=normal --set run.weekly_bonus_use=none`, `--set luxcavation.exp.team=t3`; the
+teams this test plays, in order, a team as often as it is listed, `--set 'team_queue=["t3", "t3", "t1"]'` (a file older
+than version 24 leaves its disabled teams out of it); a list's item goes by its id, `--set teams.t3.heal=revive`. A key it cannot set stops
 it before DIR is touched. DIR comes from `tools/install.py` (a worktree's install/) or a copy of one under
 `.local/scratch/<task>/`.
 
