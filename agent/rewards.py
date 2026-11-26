@@ -153,7 +153,7 @@ def match_event(story, events, min_ratio=0.85):
 
 def event_ids(story, events, min_ratio=0.85):
     """The ids of the table events match_event pools for the story."""
-    return {e.get("id") for e in _story_events(story, events, min_ratio)}
+    return {e["id"] for e in _story_events(story, events, min_ratio)}
 
 
 def _story_events(story, events, min_ratio):

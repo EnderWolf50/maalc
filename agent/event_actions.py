@@ -49,7 +49,7 @@ EVENT_ODDS_WAIT = 2.0  # s after a check's prompt first shows that no odds read 
 EVENT_GAP = 30  # s between two Event calls after which the next call is another event
 # Event table pages a press shows again on purpose (#959): the augmentation factory's button, Yes. or No. Each return
 # is not a stuck screen; EVENT_LIMIT still bounds the event.
-REPEATS = {801203, 801204}
+REPEATING_PAGES = {801203, 801204}
 EVENT_LEAST = 0.5 # s after a tap before the screen counts as moved: a fade's first frames are the same page
 CHOICE_X = 925  # the option list's middle
 CHOICE_STEP = 150  # px per drag of a list that scrolls: about a card (130-150 px), so none is skipped
@@ -156,8 +156,8 @@ class Event(CustomAction):
             elif (after := until(context, gone(context, {"roi": CHOICES_HEADER, "expected": "Choices"}, image), timeout=EVENT_TAKE)) is None:
                 log(f"event: Choices still up {EVENT_TAKE} s after taking {options[i][0]!r}")
             else:
-                if REPEATS & rewards.event_ids(" ".join(story), event_table()):
-                    STUCK["watch"].went_on()
+                if REPEATING_PAGES & rewards.event_ids(" ".join(story), event_table()):
+                    STUCK["watch"].restart_streak()
                 Event.advance(context, after)
         else:
             tried.clear()

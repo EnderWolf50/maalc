@@ -178,7 +178,7 @@ class Watchdog:
             return "the screen did not change"
         return None
 
-    def went_on(self):
+    def restart_streak(self):
         """The screen just handled went on and comes back the same on purpose (an event page a press shows again, #959):
         the next look at it starts a new streak."""
         self.first = None
