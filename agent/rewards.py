@@ -148,10 +148,19 @@ def match_event(story, events, min_ratio=0.85):
     end). The longest key that matches wins; pages with the same key (several only say "What will you do?")
     are pooled, each on-screen option finding its own entry by its texts.
     """
+    return [o for e in _story_events(story, events, min_ratio) for o in e["options"]] or None
+
+
+def event_ids(story, events, min_ratio=0.85):
+    """The ids of the table events match_event pools for the story."""
+    return {e["id"] for e in _story_events(story, events, min_ratio)}
+
+
+def _story_events(story, events, min_ratio):
     s = _key(story)
     hits = [e for e in events if s and SequenceMatcher(None, e["key"], s[-len(e["key"]):]).ratio() >= min_ratio]
     longest = max((len(e["key"]) for e in hits), default=0)
-    return [o for e in hits if len(e["key"]) == longest for o in e["options"]] or None
+    return [e for e in hits if len(e["key"]) == longest]
 
 
 def choice_open(image, y):

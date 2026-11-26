@@ -298,6 +298,7 @@ const screens: [image: string, hits: string[]][] = [
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
+  ['EventFactoryButton.png', ['Event']],  // live 2026-11-25 (#959): the augmentation factory's button page mid-battle, SKIP grey
   // Live 2026-10-20 (#196): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
   ['EventChoicesLitTop.png', ['Event']],
   ['EventChoicesLitBottom.png', ['Event']],
