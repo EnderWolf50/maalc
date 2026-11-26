@@ -31,6 +31,13 @@ def test_a_page_without_story_text_keeps_its_odds_and_the_option_that_leads_ther
         {"p_per_pick": -0.125, "gets": [["next", 90102301]]}]
 
 
+def test_words_in_angle_brackets_stay_in_the_text_and_markup_goes():
+    # #959: the factory's question in angle brackets is story text the game shows; <i> and <color=...> are markup
+    assert event_table.plain("Please proceed.\n\n<DO YOU LOVE THE CITY YOU LIVE IN?>\n\nWhat should you press?") == (
+        "Please proceed.  <DO YOU LOVE THE CITY YOU LIVE IN?>  What should you press?")
+    assert event_table.plain("<i>Clank.</i> <color=#ff0000>Red</color>") == "Clank. Red"
+
+
 def test_a_check_keeps_what_its_failure_costs():
     # 901008 Remove the nails: failing the check still gives 40 Cost
     assert _option(901008, "Remove the nails.")["fail"] == [{"p": 1, "gets": [["cost", 40]]}]

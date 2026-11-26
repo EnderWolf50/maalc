@@ -102,6 +102,8 @@
 |---|---|
 | `What will you do with the box?` | `Leave it` |
 
+**目前的例外**：強化人工廠事件的按鈕頁（801202–801204，戰鬥中途）問 `<DO YOU LOVE THE CITY YOU LIVE IN?>`，固定選 `No.`：按三次會停掉工廠，機械人不再復活；選 `Yes.` 的結果之一是工廠爆炸，罪人被波及。兩個選項在事件表都是 `other`，通用規則會選第一個 `Yes.`。（#959）
+
 ## 4. 試煉表
 
 **用途**：Boss 後的選擇評分：選項分數 = 飾品分數 −（試煉分 + `level` × `Enemy Level Up` 的 N），`level` 是 0.36，規則見 [03](03-decisions.md#12-選飾品boss-後的選擇與試煉)。（#17、#381）
@@ -215,7 +217,7 @@ Hidden Battle 不在上表（#868）：遊戲資料的 `HIDDEN_BATTLE` cost（�
 |---|---|
 | `id` | 遊戲的事件 id，只供查閱 |
 | `key` | 故事文字的最後 60 個英數字（小寫）：敘事框顯示的是故事結尾 |
-| `options[].text`、`hint` | 選項文字與下方提示（去掉標籤）；畫面上的選項靠這兩項對到表上 |
+| `options[].text`、`hint` | 選項文字與下方提示（去掉 `<i>` 這類標籤；角括號裡的字遊戲照樣顯示，留著，如 801203 的 `<DO YOU LOVE THE CITY YOU LIVE IN?>`，#959）；畫面上的選項靠這兩項對到表上 |
 | `options[].kind` | `direct`、`random`、`check`、`check_fail_gift`、`followup`、`battle`、`check_other`、`followup_other`、`other`；`random` 的提示是 `???`（971055）或寫明機率（971003），兩者在 03 第 10 節分屬不同級 |
 | `options[].gifts` | `[體系, 取得方式]`，取得方式如 `direct`、`check_pass`、`check_fail`、`win_battle`、`later_direct` |
 | `options[].gift_ids` | `[飾品 id, 取得方式]`，與 `gifts` 同一批飾品、同樣的取得方式，但留下 id，供依想要類別（03 第 10 節）判斷；id ≥ 990000 的是隱藏的戰鬥 buff，不算飾品，不收 |

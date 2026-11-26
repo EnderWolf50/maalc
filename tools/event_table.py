@@ -27,7 +27,8 @@ HP_SP = re.compile(r"(Lose|Recover)(Ratio)?(HpMp|Hp|Mp)(Only|SameAmount|Differen
 
 
 def plain(s):
-    return re.sub(r"<[^>]*>", "", s or "").replace("\n", " ").strip()
+    """The text without its markup (<i>, </i>): words in angle brackets stay, the game shows them (#959)."""
+    return re.sub(r"</?[a-z]+(=[^>]*)?>", "", s or "").replace("\n", " ").strip()
 
 
 def norm(s):
