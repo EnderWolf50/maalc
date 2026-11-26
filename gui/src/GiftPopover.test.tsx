@@ -432,7 +432,11 @@ describe("hover card: the effect of the gift's + and ++, switched on the card (#
     const r = await open([mine()]);
     await hover(r, 9001);
     await r.user.click(levelButton("plus2"));
-    await hover(r, 9053); // Dust to Dust, Burn III
+    await r.user.hover(getTile(9053)); // Dust to Dust, Burn III, on the same tab
+    expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
+    expect(marked()).toEqual([]);
+    await r.user.hover(getTile(9001)); // straight back to the first gift's tile, the card never closed between: from − still
+    expect(popover()).toHaveAccessibleName(nameOf(9001));
     expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
     expect(marked()).toEqual([]);
   });

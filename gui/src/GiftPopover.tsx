@@ -123,8 +123,10 @@ const LEVEL_GLYPHS: Record<Level, string> = { base: "−", plus: "＋", plus2: "
 export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children?: ReactNode }) {
   const { t, zh } = useEditor();
   const box = useRef<HTMLDivElement>(null);
-  // the level picked on this gift's card: another gift starts at −, and so does the card opened again (it is mounted anew)
+  // the level picked on this gift's card. Another gift starts at −, and the pick is dropped then, so that a pointer back on the
+  // first gift's tile (the card never closed between) starts at − too; the card opened again is mounted anew.
   const [picked, pick] = useState<{ id: number; level: Level }>({ id, level: "base" });
+  if (picked.id !== id) pick({ id, level: "base" });
   const level = picked.id === id ? picked.level : "base", levels = giftLevels(id);
   const g = GIFT_BY_ID.get(id)!, name = localName(g, zh), effect = giftEffect(id, zh, level), categoryIcon = keywordIconUrl(g.keyword);
   const plate = plateOf(giftSin(id)!);

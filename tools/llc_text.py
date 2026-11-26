@@ -44,7 +44,7 @@ LEVELS = {1: "base", 2: "plus", 3: "plus2"}
 ENHANCED = {"plus": 10000, "plus2": 20000}
 # How the client marks what an enhanced gift changed: the game draws it in its yellow
 HIGHLIGHT = '<style="upgradeHighlight">{}</style>'
-HIGHLIGHT_RE = re.compile(r"</?style(?:=\"?upgradeHighlight\"?)?>", re.I)
+HIGHLIGHT_OPEN = re.compile(r'<style="?upgradeHighlight"?>', re.I)  # its opening tag; `</style>` closes it
 # The pieces marked_changes compares: a tag, a [keyword], a word, a number, whitespace, or any other one character (a CJK one)
 TOKEN = re.compile(r"<[^>]+>|\[[^\]<]+\]|[A-Za-z']+|\d+(?:\.\d+)?%?|\s+|.", re.S)
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"  # the client's static data, under .local/unpack/
@@ -203,10 +203,10 @@ def effect_runs(text, names, convert=lambda t: t):
 
 def _runs(text, names):
     """effect_runs before conversion."""
-    runs, italic, colours, up = [], 0, [], 0
+    runs, italic, colours, highlight_depth = [], 0, [], 0
 
     def add(piece):
-        style = {k: v for k, v in (("i", italic > 0), ("colour", colours[-1] if colours else None), ("up", up > 0)) if v}
+        style = {k: v for k, v in (("i", italic > 0), ("colour", colours[-1] if colours else None), ("up", highlight_depth > 0)) if v}
         last = runs[-1] if runs else None
         if not style:
             if isinstance(last, str):
@@ -232,14 +232,14 @@ def _runs(text, names):
             colours.append(COLOURS[low[len("<color="):-1]])
         elif low == "</color>" and colours:
             colours.pop()
-        elif low in ('<style="upgradehighlight">', "<style=upgradehighlight>"):
-            up += 1
-        elif low == "</style>" and up:
-            up -= 1
+        elif HIGHLIGHT_OPEN.fullmatch(piece):
+            highlight_depth += 1
+        elif low == "</style>" and highlight_depth:
+            highlight_depth -= 1
         elif tag and tag[1] in TMP_TAGS:  # a new mark, or a closing tag with nothing open
             raise ValueError(f"markup the GUI does not draw: {piece} in {text}")
         elif piece.startswith("[") and piece[1:-1] in names:
-            runs.append({"kw": piece[1:-1], **({"up": True} if up else {})})
+            runs.append({"kw": piece[1:-1], **({"up": True} if highlight_depth else {})})
         elif piece:
             add(piece)
     return runs
@@ -248,9 +248,9 @@ def _runs(text, names):
 def marked_changes(text, below):
     """`text` of an enhanced gift with what differs from `below` (the level below's text) marked as the client marks it
     (HIGHLIGHT), piece by piece (TOKEN), when the client marks nothing in it; a text it marks is left as it is."""
-    if HIGHLIGHT_RE.search(text):
+    if HIGHLIGHT_OPEN.search(text):
         return text
-    old, new = TOKEN.findall(HIGHLIGHT_RE.sub("", below)), TOKEN.findall(text)
+    old, new = TOKEN.findall(re.sub(r"</style>", "", HIGHLIGHT_OPEN.sub("", below), flags=re.I)), TOKEN.findall(text)
     out = []
     for op, _, _, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
         piece = "".join(new[j1:j2])
@@ -343,10 +343,12 @@ def gift_effects(z, unpack, ids):
 
     effects = {}
     for i in ids:
-        effects[str(i)], below = {"sin": sins[i], **texts(i)}, i
+        effects[str(i)] = {"sin": sins[i], **texts(i)}
+        below = i  # the level below the next one: the base, then the + when there is one
         for level, plus in ENHANCED.items():
             if i + plus in en:
-                effects[str(i)][level], below = texts(i + plus, below), i + plus
+                effects[str(i)][level] = texts(i + plus, below)
+                below = i + plus
     used = sorted({r["kw"] for e in effects.values() for t in [e, *(e[k] for k in ENHANCED if k in e)] for runs in (t["en"], t["zh"])
                    for r in runs if isinstance(r, dict) and "kw" in r})
     buffs = buff_records(unpack)

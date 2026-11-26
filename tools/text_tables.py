@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from llc_text import CONVERSION_NOTE, credit, current_release, files, read, release_zip, to_traditional
+from llc_text import CONVERSION_NOTE, ENHANCED, credit, current_release, files, read, release_zip, to_traditional
 from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
@@ -29,7 +29,6 @@ LOCALIZE_EN = "raw/Localize/en"
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 UI_KW = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
          "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}
-ENHANCED = {"plus": 10000, "plus2": 20000}  # an enhanced gift's id is the base gift's + this: + and ++ (#961)
 
 
 def plain(text):
