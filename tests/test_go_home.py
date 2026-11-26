@@ -459,7 +459,7 @@ def test_go_home_pauses_the_run_the_way_l2_does_and_reads_no_ocr_of_its_own():
 
 
 def test_home_mirror_hits_the_map_and_what_opens_over_it_and_nothing_else():
-    # #958: every capture of tests/screens (246 on 2026-11-27) through MaaFramework and the agent's seen(): 32 hits, the
+    # #958: every capture of tests/screens (247 on 2026-11-27) through MaaFramework and the agent's seen(): 32 hits, the
     # map and what opens over it (MAP_SCREENS); no page of the main window, the entry page, a battle, an event, the shop
     # or the theme packs.
     hits = run_child(__file__)["sweep"]["returned"]
