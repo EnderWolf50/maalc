@@ -45,6 +45,7 @@ ENHANCED = {"plus": 10000, "plus2": 20000}
 # How the client marks what an enhanced gift changed: the game draws it in its yellow
 HIGHLIGHT = '<style="upgradeHighlight">{}</style>'
 HIGHLIGHT_OPEN = re.compile(r'<style="?upgradeHighlight"?>', re.I)  # its opening tag; `</style>` closes it
+HIGHLIGHT_TAGS = re.compile(HIGHLIGHT_OPEN.pattern + "|</style>", re.I)  # both, to drop the mark from a text
 # The pieces marked_changes compares: a tag, a [keyword], a word, a number, whitespace, or any other one character (a CJK one)
 TOKEN = re.compile(r"<[^>]+>|\[[^\]<]+\]|[A-Za-z']+|\d+(?:\.\d+)?%?|\s+|.", re.S)
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"  # the client's static data, under .local/unpack/
@@ -250,7 +251,7 @@ def marked_changes(text, below):
     (HIGHLIGHT), piece by piece (TOKEN), when the client marks nothing in it; a text it marks is left as it is."""
     if HIGHLIGHT_OPEN.search(text):
         return text
-    old, new = TOKEN.findall(re.sub(r"</style>", "", HIGHLIGHT_OPEN.sub("", below), flags=re.I)), TOKEN.findall(text)
+    old, new = TOKEN.findall(HIGHLIGHT_TAGS.sub("", below)), TOKEN.findall(text)
     out = []
     for op, _, _, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
         piece = "".join(new[j1:j2])

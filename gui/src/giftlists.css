@@ -112,12 +112,12 @@
 
 /* The hover popover of a tile: fixed against the window, placed by GiftPopover's `place`. */
 .gl-tip {
-  --tip-w: 340px; --lv-w: 76px; --lv-gap: 8px;
+  --tip-w: 340px; --head-gap: 14px; --lv-w: 76px; --lv-gap: 8px;
   position: fixed; z-index: 60; width: var(--tip-w); max-height: calc(100vh - 12px); overflow: auto; padding: 10px 12px; font-size: 12.5px;
   background: var(--gl-panel); color: var(--gl-fg); border: 1px solid var(--line-2); border-radius: 10px 0 10px 0; corner-shape: bevel; box-shadow: 0 8px 24px #0006;
 }
 .gl-tip:focus { outline: none; }
-.gl-tip-head { display: flex; align-items: center; gap: 14px; padding: 2px 0 8px 2px; border-bottom: 1px solid var(--gl-line); }
+.gl-tip-head { display: flex; align-items: center; gap: var(--head-gap); padding: 2px 0 8px 2px; border-bottom: 1px solid var(--gl-line); }
 /* The gift's icon as the game's panel draws it: on its dark frame in both themes (a pale icon would fade on the light panel),
  * its tier at the top left, its keyword's icon at the bottom right. */
 .gl-tip-icon { position: relative; flex: none; width: 52px; height: 52px; padding: 3px; background: var(--art-top); border: 1px solid var(--line-2); border-radius: 4px; corner-shape: bevel; }
@@ -133,7 +133,7 @@
  * name keeps the width it has without one and the card is no taller for it (a 340 px card would wrap long names, #961). */
 .gl-tip:has(.gl-tip-lv) { width: calc(var(--tip-w) + var(--lv-w) + var(--lv-gap)); }
 .gl-tip .gl-tip-lv {
-  display: flex; flex: none; width: var(--lv-w); margin-left: calc(var(--lv-gap) - 14px); /* the head's gap is 14 px */ align-self: flex-start;
+  display: flex; flex: none; width: var(--lv-w); margin-left: calc(var(--lv-gap) - var(--head-gap)); align-self: flex-start;
   border: 1px solid var(--line-2); border-radius: 3px; overflow: hidden;
 }
 .gl-tip .gl-tip-lv button { flex: auto; min-width: 0; padding: 0 4px; border: 0; border-radius: 0; color: var(--gl-muted); font: 700 12px/18px var(--font-display); }
