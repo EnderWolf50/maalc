@@ -396,15 +396,17 @@ describe("hover card: the effect of the gift's + and ++, switched on the card (#
   /** What the effect marks as changed from the level below, in order. */
   const marked = () => [...effectOf().querySelectorAll("mark")].map((m) => m.textContent);
 
-  test("a gift with a ++ (Hellterfly's Dream) switches −, ＋ and ＋＋ under its effect, from − each time", async () => {
+  test("a gift with a ++ (Hellterfly's Dream) switches −, ＋ and ＋＋ under its name, from − each time", async () => {
     const r = await open([mine()]);
     await hover(r, 9001);
-    // a row of its own under the effect text, not on the name's row (the user, 2026-11-27): the card keeps main's width
-    expect(popover()!.querySelector(".gl-tip-head")!.contains(levels())).toBe(false);
-    expect(effectOf().nextElementSibling).toBe(levels());
+    // a row of its own between the name's row and the effect text (the user, 2026-11-27, the preview's B): the card keeps
+    // main's width
+    const head = popover()!.querySelector(".gl-tip-head")!;
+    expect(head.contains(levels())).toBe(false);
+    expect(head.nextElementSibling).toBe(levels());
+    expect(levels()!.nextElementSibling).toBe(effectOf());
     expect(style(popover()!, "width")).toBe("340px");
     expect(giftCss).not.toMatch(/\.gl-tip:has/); // no rule widens a card that has the switch (cssValueOf reads no :has)
-    expect(style(levels()!.nextElementSibling!, "border-top")).toBe("1px solid var(--gl-line)"); // "set to" keeps its separator
     expect(within(levels()!).getAllByRole("button").map((b) => b.textContent)).toEqual(["−", "＋", "＋＋"]);
     expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
     expect(effectOf()).toHaveTextContent(/隨機使敵方單位增加共計3級燒傷強度。/);
