@@ -141,7 +141,7 @@ pub enum Event {
     Log { t: String, source: Source, line: String },
     Devices {
         devices: Vec<Device>,
-        /// the PC windows a scan found (#939); no scan fills it yet. Left out or a list, never null, as the runner reads it
+        /// the PC windows a scan found (#939, #940). Left out or a list, never null, as the runner reads it
         #[serde(default, deserialize_with = "windows_list", skip_serializing_if = "Option::is_none")]
         windows: Option<Vec<PcWindow>>,
     },

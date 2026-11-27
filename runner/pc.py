@@ -18,6 +18,7 @@ driver are listed in FORBIDDEN and refused by name.
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import NamedTuple
 
@@ -217,7 +218,26 @@ class Controller:
 
 
 class Win32Windows:
-    """The windows as Windows says (user32, read through ctypes); off Windows it finds none."""
+    """The windows as Windows says (user32, read through ctypes); off Windows it finds none. Sizes are read and set
+    per-monitor DPI aware (aware): a DPI-unaware caller gets a scaled window's sizes scaled too."""
+
+    PER_MONITOR_AWARE_V2 = -4  # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+
+    @contextmanager
+    def aware(self):
+        """This thread per-monitor DPI aware while it lasts (SetThreadDpiAwarenessContext, Windows 10 1607 and later;
+        without it the thread stays as it is)."""
+        set_context = getattr(self.user32, "SetThreadDpiAwarenessContext", None)
+        if set_context is None:
+            yield
+            return
+        set_context.restype, set_context.argtypes = self.ctypes.c_void_p, [self.ctypes.c_void_p]
+        before = set_context(self.PER_MONITOR_AWARE_V2)
+        try:
+            yield
+        finally:
+            if before:
+                set_context(before)
 
     def __init__(self):
         self.user32 = None
@@ -255,6 +275,11 @@ class Win32Windows:
         u = self.user32
         if u is None or not u.IsWindow(self.wintypes.HWND(hwnd)):
             return None
+        with self.aware():
+            return self._look(hwnd)
+
+    def _look(self, hwnd) -> Look | None:
+        u = self.user32
         client, window = self._rect(u.GetClientRect, hwnd), self._rect(u.GetWindowRect, hwnd)
         if client is None or window is None:
             return None
@@ -290,13 +315,15 @@ class Win32Windows:
         if look is None:
             return False
         w, h = width + look.rect[2] - look.width, height + look.rect[3] - look.height
-        return bool(self.user32.SetWindowPos(self.wintypes.HWND(hwnd), None, 0, 0, w, h,
-                                             self.NOMOVE | self.NOZORDER | self.NOACTIVATE | self.NOOWNERZORDER))
+        with self.aware():
+            return bool(self.user32.SetWindowPos(self.wintypes.HWND(hwnd), None, 0, 0, w, h,
+                                                 self.NOMOVE | self.NOZORDER | self.NOACTIVATE | self.NOOWNERZORDER))
 
     def place(self, hwnd, rect) -> bool:
         """The window back at rect (x, y, width, height), nothing activated, its place in the stack kept."""
         if self.look(hwnd) is None:
             return False
         x, y, w, h = rect
-        return bool(self.user32.SetWindowPos(self.wintypes.HWND(hwnd), None, x, y, w, h,
-                                             self.NOZORDER | self.NOACTIVATE | self.NOOWNERZORDER))
+        with self.aware():
+            return bool(self.user32.SetWindowPos(self.wintypes.HWND(hwnd), None, x, y, w, h,
+                                                 self.NOZORDER | self.NOACTIVATE | self.NOOWNERZORDER))

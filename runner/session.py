@@ -69,6 +69,11 @@ def own(name: str, /, **params) -> tuple[str, dict]:
     return name, params
 
 
+def coded(problem: pc.Problem) -> tuple[str, dict]:
+    """The PC window's problem as one of the runner's own codes."""
+    return own(problem.code, **problem.params)
+
+
 def stop_code(text: str) -> tuple[str, dict] | None:
     """(code, params) of a code line of the bot, its prefix off: the code, then its params as JSON when it has any. None
     for a line the protocol could not carry (not JSON, params not text or whole numbers): the reason then goes alone."""
@@ -221,7 +226,7 @@ class Session:
         self.crash_code = self.halt_code = self.last_code = None
         # the PC window controller, whose problem stops the run, that problem's reason and code, and what puts the
         # window back as it was (#940)
-        self.watch = self.trouble = self.trouble_code = self.put_back = None
+        self.pc_ctl = self.pc_reason = self.pc_code = self.put_back = None
         self.timed_out = self.halt_awaited = False
         self.halted = threading.Event()
         self.tail = deque(maxlen=TAIL)
@@ -365,16 +370,16 @@ class Session:
             self.put_back = pc.resize(windows, hwnd, want.get("pc_size", "keep"), self.say)
             p = pc.trouble(look := windows.look(hwnd))
         if p is not None:
-            return self.fail("connect_failed", p.message, coded=own(p.code, **p.params))
+            return self.fail("connect_failed", p.message, coded=coded(p))
         self.out.send("connection", state="connecting", address=pc.TITLE)
         ctl = fw.pc_controller(hwnd, windows)
         # .succeeded, not .connected: a custom controller's connected is a method (maa/controller.py CustomController)
         if not ctl.post_connection().wait().succeeded:
             if (p := ctl.problem) is not None:
-                return self.fail("connect_failed", p.message, coded=own(p.code, **p.params))
+                return self.fail("connect_failed", p.message, coded=coded(p))
             return self.fail("connect_failed", f"could not connect to the {pc.TITLE} window",
                              coded=own("ConnectFailed", address=pc.TITLE))
-        self.watch = ctl
+        self.pc_ctl = ctl
         self.out.send("connection", state="connected", address=pc.TITLE)
         self.say(f"connected the {pc.TITLE} window {look.width}x{look.height}")
         return ctl
@@ -531,17 +536,22 @@ class Session:
             if not self.timed_out and self.now() - self.stop_posted >= STOP_LIMIT:
                 self.timed_out = True
                 self.error("stop_timeout", f"MaaFramework did not stop in {STOP_LIMIT:g} s: end the runner's process tree")
-        if self.trouble is None and self.watch is not None and (p := self.watch.problem) is not None:
-            self.trouble, self.trouble_code = p.message, own(p.code, **p.params)
-            self.error("device_lost", p.message)
-            if self.stop_posted is None:
-                self.post_stop()
+        self.take_pc_problem()
         if self.crash is None and self.agent.poll() is not None:
             self.reader.join(DRAIN)  # its last lines first
             code = self.agent.returncode
             self.crash, self.crash_code = f"the bot exited with code {code}", own("BotExited", code=code)
             self.error("agent_exit", self.crash, code=code, tail=list(self.tail))
             if self.stop_posted is None:
+                self.post_stop()
+
+    def take_pc_problem(self) -> None:
+        """The PC window controller's problem, the first time it is seen: its error, and MaaFramework stopped while it
+        still runs, so the rest of the list is cancelled with it."""
+        if self.pc_reason is None and self.pc_ctl is not None and (p := self.pc_ctl.problem) is not None:
+            self.pc_reason, self.pc_code = p.message, coded(p)
+            self.error("device_lost", p.message)
+            if self.stop_posted is None and self.tasker.running:
                 self.post_stop()
 
     def follow(self, jobs: list) -> None:
@@ -571,8 +581,9 @@ class Session:
         after: the job of the task that follows it in the list, None for the last."""
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
-        if ran and self.stop_at is None and self.trouble is not None:
-            self.task(i, "failed", self.trouble, self.trouble_code)
+        self.take_pc_problem()  # held in the task's last tick, after the runner's last look (a refused StopApp)
+        if ran and self.stop_at is None and self.pc_reason is not None:
+            self.task(i, "failed", self.pc_reason, self.pc_code)
         elif ran and self.stop_at is None and (halt := self.halt_reason(after)) is not None:
             self.task(i, "failed", halt, self.halt_code)
         elif self.stop_at is None and status and status.succeeded:
@@ -606,8 +617,8 @@ class Session:
         """Why a task never ran though nobody stopped the run, with the reason's code: the bot exited, or it stopped the
         whole list (its reason, which it logged before the post_stop that the tasker's stop came from), or the PC window
         controller held a problem."""
-        if self.trouble:
-            return self.trouble, self.trouble_code
+        if self.pc_reason:
+            return self.pc_reason, self.pc_code
         if self.crash:
             return self.crash, self.crash_code
         if halt := self.await_halt():

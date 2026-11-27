@@ -11,11 +11,10 @@ import sys
 import time
 
 import numpy as np
-from daily_child import ROOT, bind, game_class, load, result, run_child, screen
+from daily_child import GAME, ROOT, bind, game_class, load, result, run_child, screen
 from test_claim_mail import CLAIM_ALL, MAIL_ICON, MAILBOX_CLOSE, SCREENS, WINDOW_TAB
 
 sys.path.insert(0, str(ROOT))  # the runner package, for the child run as a script
-GAME = "com.ProjectMoon.LimbusCompany"
 SCALE = 1.5  # 1920x1080 over the 1280x720 the bot sees
 SHOTS = 20  # screencaps each timing takes
 
@@ -71,17 +70,16 @@ def child():
             return super().click(round(x / SCALE), round(y / SCALE))
 
     class Desk:
-        """One game window, 1920x1080, that a test may minimize or close."""
-        look = pc.Look(1920, 1080, rect=(0, 0, 1936, 1119))
+        """One game window, 1920x1080, that a test may minimize or close (state None)."""
+        state = pc.Look(1920, 1080, rect=(0, 0, 1936, 1119))
 
         def find(self):
-            return [(1, pc.CLASS, pc.TITLE)] if self.look else []
+            return [(1, pc.CLASS, pc.TITLE)] if self.state else []
 
-        def look_at(self, hwnd):
-            return self.look
+        def look(self, hwnd):
+            return self.state
 
     desk = Desk()
-    desk_view = type("View", (), {"find": lambda s: desk.find(), "look": lambda s, h: desk.look_at(h)})()
     out = {"error": None}
 
     straight = Mail()
@@ -92,7 +90,7 @@ def child():
     window = Window()
     window.set("main")
     made = []
-    ctl = PcController(1, desk_view, inner=lambda h: made.append(h) or pc.win32_controller(h, make=lambda *a: window))
+    ctl = PcController(1, desk, inner=lambda h: made.append(h) or pc.win32_controller(h, make=lambda *a: window))
     tasker = bind(resource, ctl)  # connects it
     out["made"] = made
     out["pc"] = {**result(tasker.post_task("ClaimMail", {"ClaimMailHub": {"timeout": 20000}}).wait().get(), window, actions),
@@ -129,21 +127,21 @@ def child():
 
     # minimized: no screencap of the model, a black frame, the problem held
     shots = window.shots
-    desk.look = pc.Look(1920, 1080, minimized=True, rect=(0, 0, 1936, 1119))
+    desk.state = pc.Look(1920, 1080, minimized=True, rect=(0, 0, 1936, 1119))
     frame = ctl.post_screencap().wait().get()
     out["minimized"] = {"shots": window.shots - shots, "black": not frame.any(), "shape": list(frame.shape),
                         "problem": ctl.problem}
 
     # gone: dumpsys window says no window has the focus
-    other = PcController(1, desk_view, inner=lambda h: pc.win32_controller(h, make=lambda *a: window))
-    desk.look = pc.Look(1920, 1080, rect=(0, 0, 1936, 1119))
+    other = PcController(1, desk, inner=lambda h: pc.win32_controller(h, make=lambda *a: window))
+    desk.state = pc.Look(1920, 1080, rect=(0, 0, 1936, 1119))
     other.post_connection().wait()
-    desk.look = None
+    desk.state = None
     out["gone"] = {"shell": other.post_shell("dumpsys window").wait().get(), "problem": other.problem}
 
     # the pipeline's StopApp (recovery.json RecoverRestart) and StartApp: refused, with their reason (#948 does them)
-    third = PcController(1, desk_view, inner=lambda h: pc.win32_controller(h, make=lambda *a: window))
-    desk.look = pc.Look(1920, 1080, rect=(0, 0, 1936, 1119))
+    third = PcController(1, desk, inner=lambda h: pc.win32_controller(h, make=lambda *a: window))
+    desk.state = pc.Look(1920, 1080, rect=(0, 0, 1936, 1119))
     job = bind(resource, third).post_task("PcRestart", {"PcRestart": {"action": "StopApp", "package": GAME}}).wait()
     out["restart"] = {"succeeded": job.get().status.succeeded, "problem": third.problem}
     out["seconds"] = time.monotonic() - began

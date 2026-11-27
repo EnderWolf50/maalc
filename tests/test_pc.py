@@ -228,6 +228,36 @@ def test_a_problem_after_the_first_task_leaves_that_task_as_it_ended(tmp_path):
     assert run.states()[2:] == [(0, "running"), (0, "succeeded"), (1, "running"), (1, "failed", "the game's window is gone")]
 
 
+@pytest.mark.parametrize("shot, states, codes", [
+    # a task of two ticks takes two screencaps: the 2nd is the first task's last tick, the 4th the last task's
+    (2, [(0, "failed", "restarting the game is off for the PC client"),
+         (1, "cancelled", "restarting the game is off for the PC client")],
+     [(0, "failed", "PcRestartOff", {}), (1, "cancelled", "PcRestartOff", {})]),
+    (4, [(0, "succeeded"), (1, "failed", "restarting the game is off for the PC client")],
+     [(1, "failed", "PcRestartOff", {})]),
+], ids=["first task", "last task"])
+def test_a_problem_held_in_a_tasks_last_tick_still_fails_it_with_its_code(tmp_path, shot, states, codes):
+    # the pipeline's StopApp (L3) is refused in the tick the task ends in, after the runner's last look while it ran
+    desk, inner, shots = Desk(game()), Inner(), []
+
+    class Restarting(Pc):
+        def screencap(self):
+            shots.append(1)
+            if len(shots) == shot:
+                self.stop_app(GAME)
+            return super().screencap()
+
+    def make(hwnd, windows):
+        world.pc = Restarting(hwnd, windows, inner=lambda h: inner)
+        return world.pc
+    world = World({"MirrorDungeon": (2, "succeeded"), "ExpLuxcavation": (2, "succeeded")}, desk=desk, make_pc=make)
+    run = start(tmp_path, world)
+    assert run.result == "failed"
+    assert [s for s in run.states() if s[1] not in ("pending", "running")] == states and run.codes() == codes
+    (error,) = run.of("error")
+    assert (error["kind"], error["message"]) == ("device_lost", "restarting the game is off for the PC client")
+
+
 def test_a_stop_of_the_caller_ends_a_pc_run_stopped_with_no_reason(tmp_path):
     world = pc_world({"MirrorDungeon": (100, "succeeded"), "ExpLuxcavation": (2, "succeeded")}, Desk(game()))
     run = Run(tmp_path, world)
@@ -438,6 +468,18 @@ def test_the_real_windows_object_finds_no_window_at_a_handle_that_is_not_one():
     windows = pc.Win32Windows()
     assert windows.look(0x7FFFFFF0) is None
     assert windows.resize_client(0x7FFFFFF0, 1280, 720) is False and windows.place(0x7FFFFFF0, (0, 0, 1, 1)) is False
+
+
+def test_the_real_windows_object_reads_sizes_per_monitor_dpi_aware_and_gives_the_thread_back_as_it_was():
+    windows = pc.Win32Windows()
+    u = windows.user32
+    u.GetThreadDpiAwarenessContext.restype = windows.ctypes.c_void_p
+    u.GetAwarenessFromDpiAwarenessContext.argtypes = [windows.ctypes.c_void_p]
+    awareness = lambda: u.GetAwarenessFromDpiAwarenessContext(u.GetThreadDpiAwarenessContext())  # noqa: E731
+    before = awareness()
+    with windows.aware():
+        assert awareness() == 2  # DPI_AWARENESS_PER_MONITOR_AWARE
+    assert awareness() == before
 
 
 def test_16_9_is_exact():
