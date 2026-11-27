@@ -39,7 +39,8 @@ FORBIDDEN = {
     "Interception": 1 << 9,  # a driver
 }
 NULL = 0  # MaaWin32InputMethodEnum.Null: no input unit
-BACKGROUND = (1 << 1) | (1 << 4)  # MaaWin32ScreencapMethodEnum.Background: FramePool | PrintWindow
+FRAME_POOL, PRINT_WINDOW = 1 << 1, 1 << 4  # MaaWin32ScreencapMethodEnum's background methods
+BACKGROUND = FRAME_POOL | PRINT_WINDOW  # MaaWin32ScreencapMethodEnum.Background
 
 
 class Problem(NamedTuple):
@@ -112,15 +113,21 @@ def resize(windows, hwnd, size: str, say):
     return restore
 
 
-def win32_controller(hwnd, mouse: int = NULL, keyboard: int = NULL, make=None):
-    """The inner controller of the window: MaaFramework's Win32 controller, background screencap, mouse and keyboard
-    Null unless named. A method of FORBIDDEN is refused (ValueError) before anything is made."""
+def win32_controller(hwnd, mouse: int = NULL, keyboard: int = NULL, make=None, screencap: int = BACKGROUND):
+    """The inner controller of the window: MaaFramework's Win32 controller, background screencap (both methods, or the
+    one named), mouse and keyboard Null unless named. A method of FORBIDDEN, or a screencap method that is not a
+    background one, is refused (ValueError) before anything is made."""
     for which, method in (("mouse", mouse), ("keyboard", keyboard)):
         if (name := next((n for n, v in FORBIDDEN.items() if v == method), None)) is not None:
             raise ValueError(f"the {which} method {name} is forbidden for the PC window")
+    if not screencap or screencap & ~BACKGROUND:
+        from maa.define import MaaWin32ScreencapMethodEnum
+
+        name = next((m.name for m in MaaWin32ScreencapMethodEnum if m.value == screencap), str(screencap))
+        raise ValueError(f"the screencap method {name} is not a background one")
     if make is None:
         from maa.controller import Win32Controller as make
-    ctl = make(hwnd, BACKGROUND, mouse, keyboard)
+    ctl = make(hwnd, screencap, mouse, keyboard)
     ctl.set_screenshot_use_raw_size(True)  # the outer controller scales; coordinates reach the inner one 1:1
     return ctl
 

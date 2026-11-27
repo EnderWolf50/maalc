@@ -9,7 +9,9 @@
   python tools/live/queue.py resume --task <task>
 
 `bench` is a timing or memory measurement, `emulator` is the user's game account on the
-emulator (see the maalc-live-test skill). A run takes one ticket, waits until it is first,
+emulator (see the maalc-live-test skill) or on the PC client's window: the same account, which logs the other side out,
+so the lane covers both (spec #922 D14), and a PC live tool acts only under the ticket that holds it (pc_shots.py
+lane_trouble). A run takes one ticket, waits until it is first,
 runs the command and leaves the queue, so a chain of runs interleaves with other tasks' runs.
 The tickets of dead processes are dropped. A `run` leaves `<name>.result` (exit code, `--log`) when its command ends,
 and hands the command its ticket's path in MAALC_QUEUE_TICKET: a `backup.py hold` keeps its state beside it (hold.py).
