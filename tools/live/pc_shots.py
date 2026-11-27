@@ -18,9 +18,12 @@ pages; the tool reads the window and its screen and sends it nothing: its Win32 
 
 Each shot goes through the PC window controller (runner/pc.py Controller), which looks at the window first (D5), and
 reads, before and after it, the foreground window, the cursor, the window rect and the window's styles (read only:
-GetForegroundWindow, GetCursorPos, GetWindowRect, GetWindowLongPtrW). Any of them different after the shot stops the
-tool, and so do: the window gone, minimized or not 16:9, a black shot, a shot not 16:9 (#941 stop conditions 1 and 2).
-Each shot and the stop go to DIR/events.jsonl, one JSON object a line. Exit 0 at a limit or Ctrl-C, 1 at a stop.
+GetForegroundWindow, GetCursorPos, GetWindowRect, GetWindowLongPtrW). The window rect or a style different after the
+shot stops the tool, and so do: the window gone, minimized or not 16:9, a black shot, a shot not 16:9 (#941 stop
+conditions 1 and 2). A foreground window or cursor that moved is only logged (MOVED): the user turns the pages with the
+mouse during stage 1, and the tool sends no input a move could disturb. A tool that sends input (stage 3, #943) stops
+on all four. Each shot and the stop go to DIR/events.jsonl, one JSON object a line. Exit 0 at a limit or Ctrl-C, 1 at
+a stop.
 
 Shots carry the account's identity (UID, e-mail, player name): they stay in the evidence archive. `mask` writes the
 copies to show or commit; it refuses until IDENTITY below is measured on PC shots (D15).
@@ -76,8 +79,9 @@ class Stop(Exception):
 
 @dataclass(frozen=True)
 class State:
-    """What a shot must leave as it was (#941 stop condition 1): the foreground window, the cursor, the game window's
-    rect (x, y, width, height) and its styles (GWL_STYLE, GWL_EXSTYLE)."""
+    """What a shot reads before and after it (#941 stop condition 1): the foreground window, the cursor, the game
+    window's rect (x, y, width, height) and its styles (GWL_STYLE, GWL_EXSTYLE). The rect and styles must stay as they
+    were; the foreground window and the cursor are only logged (MOVED)."""
     foreground: int
     cursor: tuple
     rect: tuple
@@ -85,8 +89,19 @@ class State:
     exstyle: int
 
 
+# The user's own moves during stage 1 (#941, the user 2026-11-27): logged as `moved`, never a stop. Stage 1 sends no
+# input, so the cursor and the foreground window cannot spoil a shot; a tool that sends input (stage 3, #943) stops on
+# these too, since its click lands where the cursor or the foreground window says.
+MOVED = ("foreground", "cursor")
+
+
 def differs(before: State, after: State) -> list[str]:
     return [f.name for f in fields(State) if getattr(before, f.name) != getattr(after, f.name)]
+
+
+def moved(before: State, after: State) -> list[str]:
+    """The fields of MOVED that differ: what the event logs."""
+    return [f for f in differs(before, after) if f in MOVED]
 
 
 def lane_trouble(env=os.environ, qdir: Path | None = None, is_alive=queue.alive) -> str | None:
@@ -165,7 +180,7 @@ def shot(ctl: pc.Controller, windows, hwnd) -> tuple[np.ndarray, float, State, S
     (Controller.usable, D5), then the inner controller screencaps, and its job says whether it succeeded:
     Controller.screencap drops that, and a failed job's get() is the controller's cached image (maa/controller.py
     _get_screencap), the last frame, which would read as a screen that did not change. Every stop condition the shot
-    meets raises StateStop."""
+    meets raises StateStop; a moved cursor or foreground window is not one (MOVED)."""
     before = windows.state(hwnd)
     t = time.perf_counter()
     job = ctl.inner.post_screencap().wait() if ctl.usable() else None
@@ -175,7 +190,7 @@ def shot(ctl: pc.Controller, windows, hwnd) -> tuple[np.ndarray, float, State, S
         raise StateStop(explain(ctl.problem), before, after)
     if before is None or after is None:
         raise StateStop(explain(pc.trouble(None)), before, after)
-    if d := differs(before, after):
+    if d := [f for f in differs(before, after) if f not in MOVED]:
         raise StateStop(f"the game's window changed during the screencap: {', '.join(d)}", before, after, d)
     image = job.get() if job.succeeded else None
     if not isinstance(image, np.ndarray) or image.ndim != 3:
@@ -226,7 +241,7 @@ def watch(windows, out: Path, method: str, make=None, every: float = EVERY, max_
                 save(image, out / file)
                 say(f"saved {file} ({share:.0%} changed, {ms:.0f} ms)")
             log("screencap", method=method, ms=round(ms, 2), changed=round(share, 4), saved=file,
-                client=client(windows, hwnd), before=asdict(before), after=asdict(after))
+                client=client(windows, hwnd), before=asdict(before), after=asdict(after), moved=moved(before, after))
             if saved >= max_shots:
                 reason = f"{max_shots} shots saved"
             elif clock() + every - start >= max_seconds:
@@ -264,7 +279,7 @@ def compare(windows, out: Path, make=None, count: int = 5, say=print) -> dict:
                 image, took, before, after = shot(ctl, windows, hwnd)
                 ms.append(round(took, 2))
                 log("screencap", method=name, ms=round(took, 2), client=client(windows, hwnd), before=asdict(before),
-                    after=asdict(after))
+                    after=asdict(after), moved=moved(before, after))
         except StateStop as stop:
             log("stop", method=name, **stop.event())
             raise

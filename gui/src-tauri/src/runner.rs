@@ -94,7 +94,6 @@ pub enum ErrorKind {
     AgentExit,
     StopTimeout,
     Internal,
-    Unsupported,
     DeviceLost,
 }
 

@@ -30,7 +30,7 @@ CONNECTION = ("launching", "waiting", "connecting", "connected")
 RESOURCE = ("loading", "loaded")
 RESULTS = ("succeeded", "failed", "stopped")
 ERRORS = ("protocol", "device_missing", "launch_failed", "device_timeout", "connect_failed", "resource_failed",
-          "agent_failed", "agent_exit", "stop_timeout", "internal", "unsupported", "device_lost")
+          "agent_failed", "agent_exit", "stop_timeout", "internal", "device_lost")
 KINDS = ("emulator", "pc")  # a start's device.kind (#939)
 PC_SIZES = ("keep", "720", "900", "1080", "1440")  # a start's device.pc_size (#940)
 
