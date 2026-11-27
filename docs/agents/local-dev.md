@@ -111,6 +111,8 @@ The main thread dispatches work in these steps:
 
 The MuMu instances the live tests use all log in to one game account, and starting the game on one instance kicks the others out (the user, 2026-10-20). So the `emulator` resource covers all instances: `tools/live/queue.py` describes it as the user's game account on the emulator. Take an `emulator` ticket before you drive any instance.
 
+The PC client's window (Limbus Company on Steam) logs in to the same account, and the PC and the emulator logged in at once log each other out (the user, 2026-11-25). So the `emulator` lane covers the PC window too (spec #922 D14): a PC live tool runs as `queue.py run --resource emulator --name <task> -- <tool>` and refuses to act unless its own ticket holds the lane (`tools/live/pc_shots.py` checks it before it looks at any window). Before a PC step, `queue.py status` shows no other `emulator` holder and the emulator's focus (a read-only `adb shell dumpsys window`) is not the game; while the user plays on the PC, a PC step starts only when the user says so (#941 "實機的共同規則").
+
 ## Game data
 
 `tools/live/dialogs.py` lists the confirm-style dialog strings of `.local/unpack/`, to diff against the pipeline's known dialogs; run it before an unattended run.

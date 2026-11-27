@@ -363,6 +363,24 @@ def test_the_inner_controller_is_the_background_win32_controller_with_mouse_and_
                      MaaWin32InputMethodEnum.Null), ("raw", True)]
 
 
+@pytest.mark.parametrize("method", ["FramePool", "PrintWindow"])
+def test_the_inner_controller_takes_one_background_screencap_method_by_name(method):
+    # #941: the screenshot tool tries each background method on its own (step 1-2)
+    made = []
+    pc.win32_controller(HWND, screencap=getattr(MaaWin32ScreencapMethodEnum, method),
+                        make=lambda *a: made.append(a) or SimpleNamespace(set_screenshot_use_raw_size=lambda on: None))
+    assert made == [(HWND, getattr(MaaWin32ScreencapMethodEnum, method), MaaWin32InputMethodEnum.Null,
+                     MaaWin32InputMethodEnum.Null)]
+
+
+@pytest.mark.parametrize("method", ["GDI", "DXGI_DesktopDup", "DXGI_DesktopDup_Window", "ScreenDC", "Foreground", "Null"])
+def test_a_screencap_method_that_is_not_a_background_one_is_refused_before_a_controller_is_made(method):
+    made = []
+    with pytest.raises(ValueError, match=f"the screencap method {method} is not a background one"):
+        pc.win32_controller(HWND, screencap=getattr(MaaWin32ScreencapMethodEnum, method), make=lambda *a: made.append(a))
+    assert made == []
+
+
 @pytest.mark.parametrize("name", list(pc.FORBIDDEN))
 @pytest.mark.parametrize("which", ["mouse", "keyboard"])
 def test_each_forbidden_input_method_is_refused_before_a_controller_is_made(name, which):
