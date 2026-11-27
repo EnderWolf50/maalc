@@ -595,7 +595,7 @@ class TaskStart(CustomAction):
             log(f"the last {argv.node_name} was interrupted: its run is picked up")
         TASK.clear()
         TASK.update(runs=0, done=None, entry=argv.node_name, ended=False)
-        STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
+        STUCK.update(node=None, kind=None, flag=None, still=False, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
         # before the line below: it names the package this task runs on

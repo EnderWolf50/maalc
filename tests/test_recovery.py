@@ -593,9 +593,7 @@ def stops(monkeypatch):
 
 
 def test_ten_runs_with_a_restart_each_never_stop(hub, stops):
-    # #520, for #34's 10 HARD runs in one launch. A live game: each screenshot differs, so no L1 finds it frozen (#960).
-    shots = iter(range(10**6))
-    hub.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: screen(next(shots) % 256)
+    # #520, for #34's 10 HARD runs in one launch.
     for _ in range(10):
         actions.STUCK["ladder"] = Ladder()
         for _ in range(2):
@@ -848,6 +846,18 @@ def test_recover_restarts_a_frozen_game_the_back_key_did_not_change(hub, monkeyp
     assert any(line.startswith("L1: the back key did not change the frozen screen") and line.endswith(": L3")
                for line in lines), lines
     assert "recovery L3: Connecting: the screen did not change for 80 s; the back key did not change the frozen screen" in lines
+
+
+@pytest.mark.parametrize("kind, passes, moving, levels", [
+    ("Connecting", 82, False, ["RecoverL1", "RecoverL3"]),  # the watchdog's "did not change for 80 s": a still screen
+    ("Loading", 152, True, ["RecoverL1"]),  # "still up after 150 s" on a load that moves: not a still screen
+])
+def test_the_watchdog_marks_only_its_still_stucks_for_the_freeze_check(hub, monkeypatch, kind, passes, moving, levels):
+    for i in range(passes):  # MirrorHub hands out a picture once a second
+        actions.StuckFlag.see(kind, screen(7 + i % 2 if moving else 7))
+        actions.time.sleep(1)
+    actions.STUCK["flag"] = (kind, *actions.STUCK["flag"][1:])  # as StuckFlag.analyze fills in the screen type
+    assert frozen_l1(hub, monkeypatch, still=actions.STUCK["still"], flag=actions.STUCK["flag"])[0] == levels
 
 
 def test_recover_restarts_a_frozen_game_mirrorhub_recognised_nothing_on(hub, monkeypatch):
