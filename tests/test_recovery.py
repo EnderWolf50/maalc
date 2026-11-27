@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import actions
-from recovery import (AWAY_AFTER, AWAY_POLL, GAME, L2_SCREENS, TRANSIT, WAIT_STILL, Away, Ladder, Restarts, Watchdog,
+from recovery import (AWAY_AFTER, AWAY_POLL, GAME, L2_SCREENS, L3_PER_RUN, TRANSIT, WAIT_STILL, Away, Ladder, Restarts, Watchdog,
                       floor_limit, focused_package, over_time, read_runs, run_limit, same_screen, thumb)
 from test_pipeline import hub_entries, load_nodes
 from agent_patch import patch_all
@@ -533,20 +533,25 @@ def test_ladder_a_game_not_in_front_goes_straight_to_l3():
 def hub(monkeypatch, tmp_path):
     """A fake Maa context for Recover and DailyRecover: a blank screen, every recovery level goes through and GoHome ends
     on the main window; a fresh ladder and task."""
-    monkeypatch.setattr(actions.time, "sleep", lambda s: None)
+    now = [1000.0]  # a fake clock that sleeps move on: L1's look for a frozen game (#960) waits no real time
+    monkeypatch.setattr(actions.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(actions.time, "sleep", lambda s: now.__setitem__(0, now[0] + s))
     patch_all(monkeypatch, "ROOT", tmp_path)
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # the module's own back after the test
     ctx = MagicMock()
     ctx.tasker.controller.post_screencap.return_value.wait.return_value.get.return_value = np.zeros((720, 1280, 3), np.uint8)
     ctx.tasker.get_node_detail.return_value.name = "HomeReached"  # go_home() reads GoHome's last node (#514)
+    ctx.tasker.stopping = False
     actions.RUN.clear()
     actions.STUCK["flag"] = None
+    actions.STUCK["still"] = False
     actions.STUCK["watch"].reset()
     actions.STUCK["ladder"].__init__()
     actions.STUCK["restarts"].__init__()
     yield ctx
     actions.RUN.clear()
     actions.STUCK["flag"] = None
+    actions.STUCK["still"] = False
     actions.STUCK["ladder"].__init__()
     actions.STUCK["restarts"].__init__()
 
@@ -588,7 +593,9 @@ def stops(monkeypatch):
 
 
 def test_ten_runs_with_a_restart_each_never_stop(hub, stops):
-    # #520, for #34's 10 HARD runs in one launch.
+    # #520, for #34's 10 HARD runs in one launch. A live game: each screenshot differs, so no L1 finds it frozen (#960).
+    shots = iter(range(10**6))
+    hub.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = lambda: screen(next(shots) % 256)
     for _ in range(10):
         actions.STUCK["ladder"] = Ladder()
         for _ in range(2):
@@ -815,3 +822,58 @@ def test_a_daily_hub_restarts_a_game_out_of_front_and_goes_on(hub, clock, stops)
     assert actions.DailyRecover().run(hub, PASS_STUCK) is True
     assert [c.args for c in hub.run_task.call_args_list] == [("RecoverL3",), ("GoHome",)]
     assert stops == []
+
+
+def frozen_l1(hub, monkeypatch, still=True, flag=("Connecting", 1, "Connecting: the screen did not change for 80 s"),
+              shots=(7,)):
+    """Recover a stuck that starts at L1, its screenshots filled with shots in turn (the last one repeats): the levels
+    it ran and what it logged. still: the stuck came from a screen that stood still (#960)."""
+    images = [screen(v) for v in shots]
+    hub.tasker.controller.post_screencap.return_value.wait.return_value.get.side_effect = \
+        lambda: images.pop(0) if len(images) > 1 else images[0]
+    shell = hub.tasker.controller.post_shell.return_value.wait.return_value
+    shell.get.return_value = f"  mCurrentFocus=Window{{1 u0 {GAME}/x}}\n"  # a hub timeout reads the focus
+    actions.STUCK["flag"], actions.STUCK["still"] = flag, still
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    actions.Recover().run(hub, None)
+    return [c.args[0] for c in hub.run_task.call_args_list], lines
+
+
+def test_recover_restarts_a_frozen_game_the_back_key_did_not_change(hub, monkeypatch):
+    # #960: live 2026-11-25, CONNECTING stood the same to the pixel through L1, and L3 came a stuck (83 s) later.
+    levels, lines = frozen_l1(hub, monkeypatch)
+    assert levels == ["RecoverL1", "RecoverL3"]
+    assert actions.STUCK["ladder"].counts == {1: 1, 2: 0, 3: 1}
+    assert any(line.startswith("L1: the back key did not change the frozen screen") and line.endswith(": L3")
+               for line in lines), lines
+    assert "recovery L3: Connecting: the screen did not change for 80 s; the back key did not change the frozen screen" in lines
+
+
+def test_recover_restarts_a_frozen_game_mirrorhub_recognised_nothing_on(hub, monkeypatch):
+    # #960: live 2026-11-25, WAVE 1 stood the same to the pixel through MirrorHub's timeout and L1.
+    levels, _ = frozen_l1(hub, monkeypatch, still=False, flag=None)
+    assert levels == ["RecoverL1", "RecoverL3"]
+
+
+@pytest.mark.parametrize("still, shots", [
+    (True, (7, 7, 9)),  # a still page that waits for input closes or changes on the back key
+    (False, (7,)),  # an action's stuck (a tap that did nothing): L1 -> L3 as before, whatever the screen
+])
+def test_recover_stays_at_l1_unless_the_back_key_left_a_still_screen_frozen(hub, monkeypatch, still, shots):
+    levels, _ = frozen_l1(hub, monkeypatch, still=still, flag=("StartingGift", 1, "Select did not take the starting gift"),
+                          shots=shots)
+    assert levels == ["RecoverL1"]
+
+
+def test_recover_does_not_restart_a_task_that_is_stopping(hub, monkeypatch):
+    hub.tasker.stopping = True  # the runner's stop: until() ends at once, which tells nothing about the game
+    levels, _ = frozen_l1(hub, monkeypatch)
+    assert levels == ["RecoverL1"]
+
+
+def test_recover_stops_with_the_freeze_named_once_the_restarts_are_used(hub, monkeypatch, stops):
+    actions.STUCK["ladder"].counts[3] = L3_PER_RUN
+    levels, _ = frozen_l1(hub, monkeypatch)
+    assert levels == ["RecoverL1"]
+    assert "the back key did not change the frozen screen" in str(stops[0])

@@ -21,8 +21,7 @@
     },
     // L1: the back key; the global popups come first in MirrorHub anyway. Its 2 s stay (#58): L1 runs on a screen the hub
     // knows but got stuck on, so a screen the hub knows cannot tell the key's page from the one before it, and the hub
-    // would act on that one again; nothing else is known to wait for. 6 L1s in the archived logs. Recover then looks
-    // recovery.FROZEN_LOOK s more: a screen the same to the pixel all along is a frozen game, restarted at once (#960).
+    // would act on that one again; nothing else is known to wait for. 6 L1s in the archived logs.
     "RecoverL1": {
         "action": "Custom",
         "custom_action": "DismissShot",
