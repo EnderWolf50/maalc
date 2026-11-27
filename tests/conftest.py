@@ -35,13 +35,14 @@ def pytest_sessionfinish(session, exitstatus):
 
 
 def child_timeout(item):
-    """Seconds a test of a file that runs a MaaFramework child may take: `run_child`'s own timeout and a minute. The
-    file's first test pays for the whole child run (about 380 s on CI on 2026-10-30), over the 300 s default, and the
-    child's TimeoutExpired names the file where pytest-timeout would end the whole shard. A file is one when its module
-    holds the name `run_child` (`from daily_child import run_child`); the marker also outranks `--timeout` given on the
-    command line."""
-    run_child = getattr(getattr(item, "module", None), "run_child", None)
-    return inspect.signature(run_child).parameters["timeout"].default + 60 if run_child else None
+    """Seconds a test of a file that runs a MaaFramework child may take: the child's own timeout and a minute. The
+    file's first test pays for the whole child run (about 380 s on CI on 2026-10-30; test_gift_cells.py 102-298 s,
+    #964), over the 300 s default, and the child's timeout fails the file with its output where pytest-timeout would end
+    the whole shard. A file is one when its module holds the name `run_child` or `run_script` (`from daily_child import
+    run_child`); the marker also outranks `--timeout` given on the command line."""
+    module = getattr(item, "module", None)
+    run = getattr(module, "run_child", None) or getattr(module, "run_script", None)
+    return inspect.signature(run).parameters["timeout"].default + 60 if run else None
 
 
 def pytest_collection_modifyitems(config, items):

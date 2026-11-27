@@ -207,17 +207,29 @@ def probe_child(body, image=None):
 
 
 CHILD_RUNS = {}  # path -> the child's JSON line, or the exception its run raised
+CHILD_TIMEOUT = 600
 
 
-def run_child(path, timeout=600):
+def run_script(args, timeout=CHILD_TIMEOUT, **kwargs):
+    """A child's finished run, its output captured as text. One that outlasts timeout fails with its output so far, so the
+    failure shows where the child was (#964); pytest-timeout would end the whole shard with that output lost. A
+    TimeoutExpired's output is str on Windows, bytes elsewhere, None when nothing came."""
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout, **kwargs)
+    except subprocess.TimeoutExpired as e:
+        err, out = (o.decode("utf-8", "replace") if isinstance(o, bytes) else o or "" for o in (e.stderr, e.stdout))
+        raise AssertionError(f"the child did not end in {timeout:g} s\nstdout ends: {out[-1500:]}\n"
+                             f"stderr ends: {err[-8000:]}") from None
+
+
+def run_child(path, timeout=CHILD_TIMEOUT):
     """Run the test file at path as a script; its one JSON line, which has no error. One child run serves all the tests
     of a file, a failed one too: after a child that timed out, the file's other tests fail at once instead of each
     starting it again for another `timeout`."""
     if path not in CHILD_RUNS:
         try:
             # faulthandler: a crash inside MaaFramework leaves no Python traceback, only the threads' stacks it prints
-            run = subprocess.run([sys.executable, "-X", "faulthandler", str(path)], capture_output=True, text=True,
-                                 timeout=timeout, cwd=ROOT)
+            run = run_script([sys.executable, "-X", "faulthandler", str(path)], timeout, cwd=ROOT)
             assert run.returncode == 0, f"exit {run.returncode}\nstdout ends: {run.stdout[-1500:]}\nstderr ends: {run.stderr[-8000:]}"
             out = json.loads(run.stdout.strip().splitlines()[-1])
             assert out["error"] is None, out["error"]
