@@ -94,7 +94,6 @@ pub enum ErrorKind {
     AgentExit,
     StopTimeout,
     Internal,
-    Unsupported,
     DeviceLost,
 }
 
@@ -670,9 +669,16 @@ fn each_line(pipe: Box<dyn Read + Send>, mut each: impl FnMut(&str)) {
     }
 }
 
-/// Scan for devices with a runner of its own: the devices it found, MuMu first, or why there are none. A scan that has not
-/// ended `limit` later is ended.
-pub fn scan(spawn: &Spawn, limit: Duration) -> Result<Vec<Device>, String> {
+/// What a scan found: the emulators, MuMu first, and the PC windows (#947; none when the runner sent no list).
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct Found {
+    pub devices: Vec<Device>,
+    pub windows: Vec<PcWindow>,
+}
+
+/// Scan for devices with a runner of its own: the emulators and the PC windows it found, or why there are none. A scan that
+/// has not ended `limit` later is ended.
+pub fn scan(spawn: &Spawn, limit: Duration) -> Result<Found, String> {
     let (tx, rx) = mpsc::channel::<Message>();
     let tx = Mutex::new(tx);
     let run = Run::spawn(spawn, &Command::Scan {}, limit, Box::new(move |m| { let _ = tx.lock().unwrap().send(m); }))?;
@@ -683,7 +689,9 @@ pub fn scan(spawn: &Spawn, limit: Duration) -> Result<Vec<Device>, String> {
     let (mut devices, mut errors, mut tail) = (None, Vec::new(), Vec::new());
     for m in rx.try_iter() {
         match m {
-            Message::Event(Event::Devices { devices: found, .. }) => devices = Some(found),
+            Message::Event(Event::Devices { devices: found, windows }) => {
+                devices = Some(Found { devices: found, windows: windows.unwrap_or_default() })
+            }
             Message::Event(Event::Error { message, .. }) => errors.push(message),
             Message::Killed { reason } => errors.push(reason),
             Message::Exit { tail: last, .. } => tail = last,
@@ -944,11 +952,24 @@ mod tests {
             r#"echo {"v":1,"event":"devices","devices":[{"name":"MuMu","address":"127.0.0.1:16384","adb_path":"C:/MuMu/adb.exe","mumu":{"index":0,"manager":"C:/MuMu/MuMuManager.exe","path":"C:/MuMu"}}]}"#,
             r#"echo {"v":1,"event":"end","result":"succeeded"}"#]);
         let found = scan(&spawn, SCAN_WAIT).unwrap();
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].mumu.as_ref().map(|m| m.index), Some(0));
+        assert_eq!(found.devices.len(), 1);
+        assert_eq!(found.devices[0].mumu.as_ref().map(|m| m.index), Some(0));
+        assert_eq!(found.windows, vec![], "a runner that sent no windows found none");
         let broken = fake("scan-broken", &[READY, "1>&2 echo no module named maa", "exit /b 1"]);
         let err = scan(&broken, SCAN_WAIT).unwrap_err();
         assert!(err.contains("no module named maa"), "{err}");
+    }
+
+    #[test]
+    fn a_scan_returns_the_pc_windows_its_runner_found_too() {
+        let spawn = fake("scan-pc", &[READY,
+            r#"echo {"v":1,"event":"devices","devices":[],"windows":[{"title":"LimbusCompany","width":1920,"height":1080,"minimized":false}]}"#,
+            r#"echo {"v":1,"event":"end","result":"succeeded"}"#]);
+        let found = scan(&spawn, SCAN_WAIT).unwrap();
+        assert_eq!(found.devices, vec![]);
+        assert_eq!(found.windows, vec![PcWindow { title: "LimbusCompany".into(), width: 1920, height: 1080, minimized: false }]);
+        let page = serde_json::to_value(&found).unwrap();
+        assert_eq!(page, serde_json::json!({"devices": [], "windows": [{"title": "LimbusCompany", "width": 1920, "height": 1080, "minimized": false}]}));
     }
 
     #[test]

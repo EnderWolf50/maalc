@@ -401,9 +401,9 @@ fn attach_run(runs: tauri::State<Runs>, on_message: Channel<Message>) -> bool {
     active.under_way()
 }
 
-/// The devices a scan finds, MuMu first (runner/devices.py), each with its MuMu instance.
+/// The emulators a scan finds, MuMu first (runner/devices.py), each with its MuMu instance, and the PC windows (#947).
 #[tauri::command]
-async fn scan_devices() -> Result<Vec<runner::Device>, String> {
+async fn scan_devices() -> Result<runner::Found, String> {
     let spawn = runner::runner_spawn(&root()?)?;
     tauri::async_runtime::spawn_blocking(move || runner::scan(&spawn, runner::SCAN_WAIT)).await.map_err(|e| e.to_string())?
 }

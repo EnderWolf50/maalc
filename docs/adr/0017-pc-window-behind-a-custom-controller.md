@@ -13,7 +13,7 @@ status: accepted（#922；第一步 #939）
 - **PC 視窗控制器**：執行器裡一個 MaaFramework 自訂控制器，裡面包 MaaFramework 的 Win32 控制器。它對 MaaFramework 說的仍是 pipeline 已經在說的話（Android 套件名、返回鍵 4、`dumpsys window`），在裡面換成 PC 的做法（Esc、視窗在不在），所以任務流程與 base pipeline 不為 PC 改。
 - **PC 資源層**：PC 畫面和 Android 不同的節點與模板放在另一個資源資料夾，裝置是 PC 時接在 base 之後載入；同名節點由 MaaFramework 逐欄位合併，以它寫的欄位為準。模擬器不載入它。
 - **Agent 只動三處**，模擬器的行為都不變：設定檔 schema 與遷移、熱更新重載時補載 PC 資源層、新的停止原因句子（`agent/stop_reasons.json`）。
-- **分階段**：#939 只放骨架（設定檔、協定、選 PC 時執行器以 `PcNotSupported` 取消整個清單），之後的票照 #922 的六個階段做；每一階段停不停由使用者決定。
+- **分階段**：照 #922 的六個階段做，每一階段停不停由使用者決定。#939 放骨架（設定檔、協定），#940 接上 PC 視窗控制器（截圖、調整大小，還沒有輸入）。#939 時選 PC 會以停止原因 `PcNotSupported`、錯誤種類 `unsupported` 取消整個清單；#940 之後沒有任何程式送它們，兩個都已刪掉（#941）。
 
 ## Considered Options
 

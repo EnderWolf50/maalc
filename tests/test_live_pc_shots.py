@@ -178,6 +178,25 @@ def test_the_watch_makes_no_input_call_and_its_controller_has_no_input(tmp_path)
 @pytest.mark.parametrize("change, field", [
     (lambda d: setattr(d, "foreground", 0x999), "foreground"),
     (lambda d: setattr(d, "cursor", (501, 400)), "cursor"),
+])
+def test_the_user_moving_the_mouse_or_another_window_is_logged_and_the_watch_goes_on(tmp_path, change, field):
+    # Stage 1 sends no input and the user turns the pages: the cursor and the foreground window only go to the log.
+    desk = PcDesk(game())
+    _, events, shots, _ = watch(tmp_path, desk, FakeCtl(during=lambda: change(desk)), max_seconds=6)
+    caps = [e for e in events if e["action"] == "screencap"]
+    assert len(caps) == 3 and events[-1]["action"] == "end" and shots
+    assert caps[0]["moved"] == [field] and caps[0]["before"][field] != caps[0]["after"][field]
+
+
+def test_compare_logs_a_moved_cursor_and_goes_on(tmp_path):
+    desk = PcDesk(game())
+    ps.compare(desk, tmp_path, make=lambda *a: FakeCtl(during=lambda: setattr(desk, "cursor", (desk.cursor[0] + 1, 400))),
+               count=2, say=lambda _: None)
+    caps = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(caps) == 4 and all(c["moved"] == ["cursor"] for c in caps)
+
+
+@pytest.mark.parametrize("change, field", [
     (lambda d: d.set(HWND, rect=(5, 0, 1936, 1119)), "rect"),
     (lambda d: setattr(d, "style", 0x14CA0001), "style"),
     (lambda d: setattr(d, "exstyle", 0x80020), "exstyle"),  # WS_EX_LAYERED | WS_EX_TRANSPARENT: a pseudo-minimize
@@ -199,6 +218,7 @@ def test_each_shot_logs_the_state_before_and_after_it_and_how_long_it_took(tmp_p
     assert shot["client"] == [1920, 1080]
     assert shot["before"] == shot["after"] == {"foreground": HWND, "cursor": [500, 400], "rect": [0, 0, 1936, 1119],
                                                "style": 0x14CA0000, "exstyle": 0x100}
+    assert shot["moved"] == []
 
 
 def test_a_black_shot_stops_the_watch(tmp_path):
