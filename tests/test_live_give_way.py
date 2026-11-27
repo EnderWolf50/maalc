@@ -466,3 +466,11 @@ def test_the_bots_processes_leave_the_adb_server_out_and_have_the_root(monkeypat
             for n, name in ((1, "python.exe"), (2, "adb.exe"))]
     monkeypatch.setattr(device, "bot_tree", lambda pid: tree)
     assert [p.pid for p in gw.bot_processes(os.getpid())] == [1, os.getpid()]
+
+
+def test_giving_way_on_the_pc_window_is_refused_with_why_before_anything_is_read(tmp_path, monkeypatch, capsys):
+    # #949: leaving at a safe point takes the Back key and RecoverL2's taps, which the PC window controller does not
+    # take in this version (spec #922 D6, until #946)
+    monkeypatch.setattr(gw, "run", lambda a: pytest.fail("the watch started"))
+    assert gw.main(["watch", "--device", "pc", "--task", "t", "--install", str(tmp_path), "--now"]) == 1
+    assert "refused" in (out := capsys.readouterr().out) and "#946" in out

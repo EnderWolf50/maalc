@@ -215,3 +215,13 @@ def test_a_give_up_from_the_entry_page_ends_on_the_entry_page():
 def test_the_entry_page_before_any_give_up_is_no_run_to_end():
     game = Game(["MirrorEntryNewRun"])
     assert game.run() == 1 and game.taps == []
+
+
+def test_giving_up_on_the_pc_window_is_refused_with_why_before_any_window_is_looked_at(tmp_path, monkeypatch, capsys):
+    # #949: it taps the game, and the PC window controller takes no input in this version (spec #922 D6, until #946)
+    from live import device
+
+    monkeypatch.setattr(device, "connect", lambda port: pytest.fail("the emulator was connected to"))
+    monkeypatch.setattr(device, "connect_pc", lambda: pytest.fail("a window was looked at"))
+    assert gu.main(["--device", "pc", "run", "--out", str(tmp_path)]) == 1
+    assert "refused" in (out := capsys.readouterr().out) and "#946" in out

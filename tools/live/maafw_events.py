@@ -7,6 +7,11 @@ Two sources, both in the log's own wall-clock time:
     touch_down/touch_up -> down/up (an up carries the last point the contact reached);
   - MuMuPlayerExtras touch_down/touch_up, which also see presses the pipeline made on its own
     (device pixels, scaled to 1280x720): a press no agent call explains becomes a tap, ms = how long it was held.
+
+A PC run (#949) is not supported: this version's PC window controller takes no input (spec #922 D6), so its maafw.log
+has no touch to read. Once it takes input (#946), the PC window controller prints each touch to the console in the
+emulator's format (D7), which tools/live/evidence.py reads from run.log as it is; the MuMuPlayerExtras lines here stay
+the emulator's.
 """
 import argparse
 import json

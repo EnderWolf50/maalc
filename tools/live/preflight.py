@@ -1,6 +1,6 @@
 """Cheap checks before a costly step of a live test, and two that run during the run (the maalc-live-test skill).
 
-    uv run --group probe python tools/live/preflight.py screen [--install DIR] [--port 16384] [--shot OUT.png]
+    uv run --group probe python tools/live/preflight.py screen [--install DIR] [--port 16384 | --device pc] [--shot OUT.png]
     uv run python tools/live/preflight.py recording --out DIR [--seconds 15]
     uv run python tools/live/preflight.py plan --log run.log [--within 60] [--resumed]
 
@@ -9,6 +9,10 @@
 to accept on 2026-10-21 (exit 0, the line says which; the bot's nodes do it when `run.auto_download` /
 `run.auto_accept_terms` are on); `stop` a resumable Mirror Dungeon run, an outdated client or any other screen (exit 1
 with the reason). Run it before any pytest or install rebuild: a game update found after 21 minutes of prep cost a run.
+`--device pc` reads the PC client's window (#949) through the PC window controller, with the PC resource layer over
+resource/base as a PC run loads it (runner/layers.py), under the ticket that holds the emulator lane only
+(tools/live/device.py). There Steam updates the client: an update notice is a `stop` (the PC layer stops the run at it,
+#944), and an outdated client is updated in Steam.
 
 **recording** says whether the recording in progress in `--out` (the `.mkv` its live `rec_<profile>.state.json` names)
 grew over `--seconds`. A file that did not grow, or that ffmpeg has not written yet because no frame came, is a `note:`
@@ -33,11 +37,13 @@ import time
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parents[1]
-if str(TOOLS) not in sys.path:
-    sys.path.insert(0, str(TOOLS))
+for path in (TOOLS, TOOLS.parent):  # tools/ for live and local_dir, the repo for runner/'s layers
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
-from live import screen_probe  # noqa: E402
+from live import device, screen_probe  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
+from runner import layers  # noqa: E402
 
 # Pipeline node -> (verdict, what it means), in the order the probe tries them: the first that hits names the screen.
 SCREENS = {
@@ -49,13 +55,19 @@ SCREENS = {
     "MirrorEntryPaused": ("stop", "the entry page of a resumable Mirror Dungeon run; forfeiting or continuing it is the user's call"),
     "HomeReached": ("ok", "the main screen"),
 }
+# what differs on the PC client: Steam updates it, not the bot (#922 D11, the PC layer's UpdateDialog)
+PC_SCREENS = {
+    "UpdateDialog": ("stop", "a game update: update the game in Steam (the PC layer stops a run at this notice)"),
+    "ClientOutdated": ("stop", "the game client is out of date: update it in Steam (the user's call)"),
+}
 PROBE = "PreflightProbe"
 PROBE_TIMEOUT_MS = 4000
 
 
-def classify(hit: str | None) -> tuple[str, str]:
-    """(verdict, reason) for the node that hit; None when no node of SCREENS did."""
-    return SCREENS.get(hit) or ("stop", "not the main screen and none of the known dialogs: look at a screenshot")
+def classify(hit: str | None, kind: str = "emulator") -> tuple[str, str]:
+    """(verdict, reason) for the node that hit on the device kind; None when no node of SCREENS did."""
+    return ((PC_SCREENS.get(hit) if kind == "pc" else None) or SCREENS.get(hit)
+            or ("stop", "not the main screen and none of the known dialogs: look at a screenshot"))
 
 
 def probe_override() -> dict:
@@ -67,8 +79,9 @@ def first_hit(node_names: list[str]) -> str | None:
     return screen_probe.first_hit(node_names, SCREENS)
 
 
-def look(root: Path, port: int, shot: Path | None) -> str | None:
-    """The name of the first known node that reads the emulator's screen now (None: none of them)."""
+def look(root: Path, port: int, shot: Path | None, kind: str = "emulator") -> str | None:
+    """The name of the first known node that reads the device's screen now (None: none of them): the emulator at port,
+    or the PC window with the PC layer loaded over base."""
     import os
 
     os.environ["MAAFW_BINARY_PATH"] = str(root / "maafw")
@@ -76,24 +89,25 @@ def look(root: Path, port: int, shot: Path | None) -> str | None:
     from maa.tasker import Tasker
     from maa.toolkit import Toolkit
 
-    from live.device import connect
+    from live.device import connect, connect_pc
     from live.device import shot as save
 
     Toolkit.init_option(str(root / "debug"))
-    ctl = connect(port)
+    ctl = connect_pc() if kind == "pc" else connect(port)
     if shot:
         save(ctl, shot)
     res = Resource()
-    res.post_bundle(str(root / "resource/base")).wait()
+    for bundle in layers.bundles(root, kind):
+        res.post_bundle(str(bundle)).wait()
     t = Tasker()
     t.bind(res, ctl)
     return screen_probe.look(t, PROBE, probe_override(), SCREENS)
 
 
-def screen(root: Path, port: int, shot: Path | None, say=print, see=look) -> int:
+def screen(root: Path, port: int, shot: Path | None, say=print, see=look, kind: str = "emulator") -> int:
     if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)  # the archive folder of a new topic is made at step 5, after this
-    verdict, reason = classify(see(root, port, shot))
+    verdict, reason = classify(see(root, port, shot) if kind == "emulator" else see(root, port, shot, kind=kind), kind)
     say(f"{verdict}: {reason}")
     return 1 if verdict == "stop" else 0
 
@@ -185,6 +199,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("screen")
     s.add_argument("--install", type=Path, default=main_checkout() / "install")
     s.add_argument("--port", type=int, default=16384)
+    device.add_device(s)
     s.add_argument("--shot", type=Path)
     r = sub.add_parser("recording")
     r.add_argument("--out", type=Path, required=True)
@@ -197,7 +212,10 @@ def main(argv=None) -> int:
     which.add_argument("--resumed", action="store_true", help="the bot is to pick up a run in progress")
     a = ap.parse_args(argv)
     if a.command == "screen":
-        return screen(a.install.resolve(), a.port, a.shot)
+        if a.device == "pc" and (why := device.pc_refusal()) is not None:
+            print(f"refused: {why}", flush=True)
+            return 1
+        return screen(a.install.resolve(), a.port, a.shot, see=look, kind=a.device)
     if a.command == "recording":
         return recording_check(a.out, a.seconds)
     return plan_line(a.log, a.within, a.pattern, resumed=a.resumed)

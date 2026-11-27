@@ -1,6 +1,6 @@
 """The emulator through MaaFramework's adb controller: screenshots, taps, keys, starting or restarting an app, freezing the bot.
 
-    uv run --group probe python tools/live/device.py [--port 16384] <command> ...
+    uv run --group probe python tools/live/device.py [--port 16384 | --device pc] <command> ...
 
   shot OUT.png                          one screenshot, 1280x720
   tap X Y [--wait S] [--shot OUT.png]   a tap in game pixels (1280x720), then a screenshot after S seconds
@@ -15,6 +15,13 @@
 
 `--port` picks the MuMu instance: 16384 is instance 0, 16416 instance 1. A live test owns the emulator
 first (the maalc-live-test skill); these commands act on the user's game account.
+
+`--device pc` acts on the PC client's window instead (#949), through the PC window controller (runner/pc.py), whose
+screenshots MaaFramework scales to 1280x720 as the emulator's. The window is the emulator lane's (the same account,
+spec #922 D14): the command runs as `queue.py run --resource emulator --name <task> -- ...` and refuses otherwise, as
+tools/live/pc_shots.py does. This version's controller has no input (mouse and keyboard Null, D6; the input is #946's)
+and does not start the game (#948's): `tap`, `press`, `key`, `start` and `restart` are refused, `shot` works, and
+`freeze` suspends the whole bot tree (no adb server serves the window) and refuses the same lines of its file.
 
 **freeze** waits for a line of the bot's run.log matching `--fire` (after one matching `--arm`, when given),
 suspends every process under `--pid` (the `bot.py run` pid the detach printed) except an adb server (below), then runs the commands written
@@ -50,6 +57,53 @@ if str(TOOLS) not in sys.path:  # run as a script, `live` is not importable unti
     sys.path.insert(0, str(TOOLS))
 
 GAME = "com.ProjectMoon.LimbusCompany"
+DEVICES = ("emulator", "pc")  # --device: the MuMu instance at --port, or the PC client's window (#949)
+NO_INPUT = ("the PC window controller takes no input in this version (mouse and keyboard Null, spec #922 D6); "
+            "its input comes with #946")
+NO_START = "starting and stopping the game is off for the PC client until #948"
+# what a command on the PC window cannot do, by its name (a command here, a line of the freeze's file)
+PC_REFUSED = {"tap": NO_INPUT, "press": NO_INPUT, "key": NO_INPUT, "start": NO_START, "restart": NO_START}
+
+
+def add_device(ap) -> None:
+    ap.add_argument("--device", choices=DEVICES, default="emulator",
+                    help="emulator: the MuMu instance at --port; pc: the PC client's window, only under the ticket "
+                         "that holds the emulator lane (--port unused)")
+
+
+def pc_refusal(cannot: str | None = None, lane=None) -> str | None:
+    """Why a command may not act on the PC window: `cannot` says what it needs that the PC client lacks (PC_REFUSED);
+    else its process does not hold the emulator lane (pc_shots.lane_trouble). None: it may."""
+    if cannot:
+        return cannot
+    if lane is None:
+        from live.pc_shots import lane_trouble as lane
+    return lane()
+
+
+def connect_pc_on(windows, controller):
+    """controller(hwnd, windows), the PC window controller of the one game window, connected; SystemExit with why when
+    there is no such window, more than one, or it is minimized."""
+    from live import pc_shots
+
+    try:
+        hwnd = pc_shots.one_window(windows)
+    except pc_shots.Stop as e:
+        sys.exit(f"stop: {e}")
+    ctl = controller(hwnd, windows)
+    # .succeeded, not .connected: a custom controller's connected is a method (maa/controller.py CustomController)
+    if not ctl.post_connection().wait().succeeded:
+        sys.exit("stop: " + (pc_shots.explain(ctl.problem) if ctl.problem else "the connect to the game's window failed"))
+    return ctl
+
+
+def connect_pc():
+    """The PC window controller (runner/pc_controller.py) of the game's window, as a run has it: background screencap,
+    mouse and keyboard Null."""
+    from live import pc_shots  # puts the repo, runner/'s, on the path
+    from runner.pc_controller import PcController
+
+    return connect_pc_on(pc_shots.Win32Desk(), PcController)
 
 
 def pick(devices, port: int):
@@ -72,6 +126,10 @@ def connect(port: int):
 def shot(ctl, out) -> np.ndarray:
     """Save a screenshot; returns it as MaaFramework hands it out (BGR)."""
     img = ctl.post_screencap().wait().get()
+    if (problem := getattr(ctl, "problem", None)) is not None:  # the PC window's guard held it; the frame is black
+        from live import pc_shots
+
+        sys.exit(f"stop: {pc_shots.explain(problem)}; no screenshot saved")
     Image.fromarray(img[..., ::-1]).save(out)
     print("saved", out, flush=True)
     return img
@@ -175,8 +233,10 @@ def bot_tree(pid: int):
     return psutil.Process(pid).children(recursive=True)
 
 
-def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) -> None:
-    """Run the lines written to cmd until `resume` or the deadline; each read empties the file."""
+def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2, refused: dict | None = None) -> None:
+    """Run the lines written to cmd until `resume` or the deadline; each read empties the file. A line whose command
+    `refused` names is refused with why (PC_REFUSED on the PC window)."""
+    refused = refused or {}
     while time.time() < deadline:
         lines = cmd.read_text().splitlines() if cmd.exists() else []
         if lines:
@@ -187,6 +247,9 @@ def run_commands(ctl, cmd: Path, out: Path, deadline: float, poll: float = 0.2) 
                 continue
             if a[0] == "resume":
                 return
+            if a[0] in refused:
+                print(f"refused {line.strip()}: {refused[a[0]]}", flush=True)
+                continue
             if a[0] == "tap":
                 ctl.post_click(int(a[1]), int(a[2])).wait()
             elif a[0] == "press":
@@ -217,13 +280,15 @@ def freeze(a, ctl) -> None:
     procs = []
     try:
         tree = bot_tree(a.pid)
-        kept = below_adb(tree)  # the freeze's own shot and tap need the adb server (#687)
+        # the freeze's own shot and tap need the adb server (#687); none serves the PC window
+        kept = below_adb(tree) if a.device == "emulator" else []
         for p in tree:
             if p not in kept and each(p.suspend):
                 procs.append(p)
         print("frozen", stamp(), labels(procs), flush=True)
         print("kept running", stamp(), labels(kept), flush=True)
-        run_commands(ctl, cmd, Path(a.out or Path(a.log).parent), time.time() + a.max)
+        run_commands(ctl, cmd, Path(a.out or Path(a.log).parent), time.time() + a.max,
+                     refused=PC_REFUSED if a.device == "pc" else None)
     finally:
         for p in procs:
             each(p.resume)
@@ -255,6 +320,7 @@ def restart(ctl, package: str) -> None:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=16384)
+    add_device(ap)
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("shot").add_argument("out")
     for name, args in (("tap", ("x", "y")), ("press", ("x", "y")), ("key", ("code",))):
@@ -283,7 +349,13 @@ def main(argv=None) -> None:
     p.add_argument("--out")
     p.add_argument("--max", type=float, default=150)
     a = ap.parse_args(argv)
-    command, ctl = a.command, connect(a.port)
+    command = a.command
+    if a.device == "pc":
+        if (why := pc_refusal(PC_REFUSED.get(command))) is not None:
+            sys.exit(f"refused: {why}")
+        ctl = connect_pc()
+    else:
+        ctl = connect(a.port)
     if command == "shot":
         shot(ctl, a.out)
     elif command in ("tap", "press", "key"):

@@ -16,6 +16,9 @@ bot, which acts on the planning phase too.
 and where it matched, on each image.
 
 The card and the planning phase are read with the pipeline's own nodes, EgoCard and BattleTurn, from this checkout.
+
+`--device pc` (#949): `open` is refused on the PC client's window, with why: the press is input, which this version's
+PC window controller does not take (spec #922 D6; its input comes with #946).
 """
 from __future__ import annotations
 
@@ -34,6 +37,7 @@ for path in (REPO / "tools", REPO / "agent"):
         sys.path.insert(0, str(path))
 
 import battle  # noqa: E402
+from live import device  # noqa: E402
 
 PIPELINE = REPO / "assets/resource/base/pipeline"
 IMAGES = REPO / "assets/resource/base/image"
@@ -159,6 +163,7 @@ def open_card(grab, press, say, slot: int, hold: float, attempts: int, timeout: 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=16384)
+    device.add_device(ap)
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("open")
     p.add_argument("--slot", type=int, required=True, help="the skill slot whose portrait is pressed, 0 the leftmost")
@@ -176,6 +181,9 @@ def main(argv=None) -> int:
             hit = all(s >= threshold for (s, _, _), (_, _, threshold) in zip(scores, parts("EgoCard")))
             print(f"{Path(f).name}: " + ", ".join(f"{s:.3f} at ({x}, {y})" for s, x, y in scores) + (" hit" if hit else " miss"))
         return 0
+    if a.device == "pc":
+        print(f"refused: ego_card.py open long-presses a portrait, and {device.NO_INPUT}", flush=True)
+        return 1
     from live.device import connect, press, stamp
 
     ctl = connect(a.port)

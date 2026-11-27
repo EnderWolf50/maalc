@@ -184,3 +184,32 @@ def test_screen_makes_the_folder_of_its_shot(tmp_path):
 def test_no_plan_line_in_time_stops_after_the_wait(tmp_path):
     code, said, clock = plan(tmp_path, "10:00:01.000 [maalc] stuck: something\n", within=60)
     assert code == 1 and clock.t >= 60 and "no line matching" in said[-1]
+
+
+# the PC window (#949)
+def test_on_the_pc_window_a_game_update_is_a_stop_for_steam_and_the_rest_reads_as_on_the_emulator():
+    # the PC resource layer stops the run at the update notice (#944, D11): Steam updates the client, not the bot
+    assert pf.classify("UpdateDialog", "pc")[0] == "stop" and "Steam" in pf.classify("UpdateDialog", "pc")[1]
+    verdict, reason = pf.classify("ClientOutdated", "pc")
+    assert verdict == "stop" and "Steam" in reason and "Play Store" not in reason
+    assert [pf.classify(n, "pc") for n in ("DownloadDialog", "UserAgreement", "ResumeDialog", "HomeReached", None)] == [
+        pf.classify(n) for n in ("DownloadDialog", "UserAgreement", "ResumeDialog", "HomeReached", None)]
+
+
+def test_a_pc_screen_check_without_the_emulator_lane_looks_at_no_window(monkeypatch, capsys):
+    from live import queue
+
+    monkeypatch.delenv(queue.TICKET_ENV, raising=False)
+    monkeypatch.setattr(pf, "look", lambda *a, **kw: pytest.fail("a window was looked at"))
+    assert pf.main(["screen", "--device", "pc"]) == 1
+    assert "emulator lane" in capsys.readouterr().out
+
+
+def test_a_pc_screen_check_reads_the_pc_window_with_the_pc_layer_and_names_the_screen_for_it(tmp_path, monkeypatch, capsys):
+    from test_live_pc_shots import hold_lane
+
+    hold_lane(tmp_path, monkeypatch)
+    seen = []
+    monkeypatch.setattr(pf, "look", lambda root, port, shot, kind="emulator": seen.append(kind) or "UpdateDialog")
+    assert pf.main(["screen", "--device", "pc", "--install", str(tmp_path)]) == 1
+    assert seen == ["pc"] and "Steam" in capsys.readouterr().out

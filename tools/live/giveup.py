@@ -34,6 +34,9 @@ before its tap goes to --out, and one of the end screen (the main window or the 
 shows for --timeout seconds (60), one screen stays after its looks, or the main window or the entry page shows before any give-up.
 
 **look** names the screen of each image with the same probe: the tests' seam, and a check on a capture.
+
+`--device pc` (#949): `run` is refused on the PC client's window, with why: it taps the game, and this version's PC
+window controller takes no input (spec #922 D6; its input comes with #946). `look` reads captures of either.
 """
 from __future__ import annotations
 
@@ -49,7 +52,7 @@ TOOLS = REPO / "tools"
 if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
-from live import screen_probe  # noqa: E402
+from live import device, screen_probe  # noqa: E402
 
 BATTLE_GEAR = (1235, 40)  # the pause menu's gear, top right of the planning phase (tests/screens/BattleTurn.png)
 GIVE_UP = (640, 428)  # the pause menu's Give Up bar (BattleMenu.png)
@@ -260,6 +263,7 @@ def run(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=16384)
+    device.add_device(ap)
     ap.add_argument("--resource", type=Path, default=REPO / "assets/resource/base")
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("run")
@@ -270,6 +274,9 @@ def main(argv=None) -> int:
     p.add_argument("images", nargs="+")
     a = ap.parse_args(argv)
     if a.command == "run":
+        if a.device == "pc":
+            print(f"refused: giveup.py run taps Give Up, Forfeit and GiveUpRewards, and {device.NO_INPUT}", flush=True)
+            return 1
         return run(a)
     if a.command == "look":
         named = look_files(a.images, a.resource)

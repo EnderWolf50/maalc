@@ -7,8 +7,9 @@ import threading
 from pathlib import Path
 
 import pytest
+from test_live_pc_shots import hold_lane
 
-from live import bot
+from live import bot, queue
 from runner import protocol
 
 
@@ -231,6 +232,134 @@ def test_run_reaches_the_real_runners_device_check_while_it_keeps_the_runners_st
     assert result == {"code": 1}, lines  # the start failed: no device
     assert any(" [run] error device_missing: no device at 127.0.0.1:1" in line for line in lines), lines
     assert lines[-1].endswith(" [run] exit 1")
+
+
+# the PC window (#949): the real runner and MaaFramework on a fake desk of one game window and a fake inner controller
+# of it (no real window is looked at or sent anything), a stand-in bot, and a bundle whose task taps once
+PC_RUNNER = """
+import importlib.util, json, sys
+from pathlib import Path
+here = Path(__file__).resolve().parent
+spec = importlib.util.spec_from_file_location("runner", here / "__init__.py", submodule_search_locations=[str(here)])
+sys.modules["runner"] = package = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(package)
+import numpy as np
+from runner import cli, framework, pc
+
+NOTES = here.parent / "pc.jsonl"
+
+def note(**what):
+    with NOTES.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(what) + "\\n")
+
+class Desk:
+    look_ = pc.Look(1280, 720, rect=(10, 10, 1296, 759))
+    def find(self):
+        return [(77, pc.CLASS, pc.TITLE)]
+    def look(self, hwnd):
+        return self.look_ if hwnd == 77 else None
+    def resize_client(self, hwnd, w, h):
+        note(resize=[hwnd, w, h])
+        self.look_ = pc.Look(w, h, rect=(10, 10, w + 16, h + 39))
+    def place(self, hwnd, rect):
+        note(place=[hwnd, *rect])
+
+class Job:
+    def __init__(self, ok=True, value=None):
+        self.succeeded, self.value = ok, value
+    def wait(self):
+        return self
+    def get(self):
+        return self.value
+
+class Inner:
+    # MaaFramework's Win32 controller with mouse and keyboard Null: a screencap, no input unit
+    def set_screenshot_use_raw_size(self, on):
+        pass
+    def post_connection(self):
+        return Job()
+    def post_screencap(self):
+        return Job(value=np.full((1080, 1920, 3), 90, np.uint8))
+    def post_inactive(self):
+        return Job()
+    def __getattr__(self, name):
+        if not name.startswith("post_"):
+            raise AttributeError(name)
+        return lambda *args: note(input=name) or Job(ok=False)
+
+def make(hwnd, screencap, mouse, keyboard):
+    note(made=[hwnd, mouse, keyboard])
+    return Inner()
+
+class Fake(framework.Framework):
+    def pc_controller(self, hwnd, windows):
+        from runner.pc_controller import PcController
+        return PcController(hwnd, windows, inner=lambda h: pc.win32_controller(h, make=make))
+
+pc.Win32Windows = Desk
+sys.exit(cli.main(framework=Fake))
+"""
+STAND_IN_BOT = """
+import os, sys
+from maa.agent.agent_server import AgentServer
+print("[maalc] stand-in bot, layers " + os.environ.get("MAALC_RESOURCE_LAYERS", "none"), flush=True)
+AgentServer.start_up(sys.argv[-1])
+AgentServer.join()
+AgentServer.shut_down()
+"""
+
+
+def pc_install(tmp_path):
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "interface.json").write_text(
+        '{"interface_version": 2, "task": [{"name": "Tap", "entry": "PcDryRun"}]}', encoding="utf-8")
+    shutil.copytree(REPO / "runner", tmp_path / "runner", ignore=shutil.ignore_patterns("__pycache__"))
+    (tmp_path / "runner/__main__.py").write_text(PC_RUNNER, encoding="utf-8")
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "agent/main.py").write_text(STAND_IN_BOT, encoding="utf-8")
+    for layer, nodes in (("base", {"PcDryRun": {"action": "Click", "target": [600, 300, 80, 80]}}), ("pc", {})):
+        (tmp_path / "resource" / layer / "pipeline").mkdir(parents=True)
+        (tmp_path / "resource" / layer / "pipeline/dry.json").write_text(json.dumps(nodes), encoding="utf-8")
+    return tmp_path
+
+
+def test_a_pc_run_goes_through_the_runners_start_on_the_game_window_and_stops_at_the_first_input(tmp_path, monkeypatch):
+    # acceptance 3 of #949: the offline dry run of `bot.py run --device pc`. The start names the PC window and the run's
+    # client area; the runner finds the window, sets its size, connects the PC window controller (mouse and keyboard
+    # Null), loads base and the PC layer, starts the bot with both named, and the task's first tap stops the run
+    hold_lane(tmp_path, monkeypatch, "pc-dry-run")
+    root, log = pc_install(tmp_path / "install"), tmp_path / "run.log"
+    code = bot.main(["run", "--device", "pc", "--pc-size", "1080", "--install", str(root), "--log", str(log),
+                     "--task", "Tap"])
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert code == 1, lines
+    text = "\n".join(lines)
+    assert "[run] the game's client area 1280x720 -> 1920x1080 for the run" in text
+    assert "[run] connected the LimbusCompany window 1920x1080" in text
+    assert "[maalc] stand-in bot, layers base,pc" in text
+    assert "[run] start PcDryRun" in text
+    assert "the game's window did not take an input" in text  # PcInputFailed
+    notes = [json.loads(n) for n in (root / "pc.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert notes[0] == {"resize": [77, 1920, 1080]}
+    assert {"made": [77, 0, 0]} in notes  # MaaWin32InputMethodEnum.Null, mouse and keyboard
+    assert notes[-1] == {"place": [77, 10, 10, 1296, 759]}  # the window put back as it was
+
+
+def test_a_pc_run_without_the_emulator_lane_starts_no_runner(tmp_path, monkeypatch, capsys):
+    # spec #922 D14: the PC window is the emulator lane's, as tools/live/pc_shots.py checks it
+    monkeypatch.delenv(queue.TICKET_ENV, raising=False)
+    root, log = pc_install(tmp_path / "install"), tmp_path / "run.log"
+    assert bot.main(["run", "--device", "pc", "--install", str(root), "--log", str(log), "--task", "Tap"]) == 1
+    assert "emulator lane" in capsys.readouterr().out
+    assert not log.exists() and not (root / "pc.jsonl").exists()
+
+
+def test_an_emulator_run_needs_no_lane_of_its_own(tmp_path, monkeypatch):
+    # the emulator's tools run beside the hold that holds the lane (the maalc-live-test skill), as they did before
+    monkeypatch.delenv(queue.TICKET_ENV, raising=False)
+    root, log = fake_install(tmp_path), tmp_path / "run.log"
+    assert bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror"]) == 0
+    assert json.loads((root / "runner/start.json").read_text(encoding="utf-8"))["device"] == {"address": "127.0.0.1:16384"}
 
 
 def test_a_runner_that_cannot_stop_has_its_process_tree_ended():

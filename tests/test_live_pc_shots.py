@@ -1,6 +1,7 @@
 """tools/live/pc_shots.py offline (#941): a fake desk of windows (test_pc's Desk, with the state the tool compares) and a
 FakeCtl for MaaFramework's Win32 controller; no real window is looked at or sent anything."""
 import json
+import os
 
 import numpy as np
 import pytest
@@ -263,6 +264,13 @@ def ticket_in(qdir, name, pid=None):
     p = queue.Ticket(str(len(list(qdir.glob("*.ticket"))) + 1).zfill(3), str(pid or 1), name).path(qdir)
     p.write_text(json.dumps({"cmd": "x", "start": None}), encoding="utf-8")
     return p
+
+
+def hold_lane(tmp_path, monkeypatch, name="pc-tool"):
+    """This process under a ticket that holds the emulator lane, in a queue folder of tmp_path (the other live tools'
+    PC tests, #949)."""
+    monkeypatch.setattr(queue, "queue_dir", lambda resource, root=None: tmp_path / "queue" / resource)
+    monkeypatch.setenv(queue.TICKET_ENV, str(ticket_in(tmp_path / "queue" / "emulator", name, os.getpid())))
 
 
 def test_the_tool_runs_only_under_the_ticket_that_holds_the_emulator_lane(tmp_path):
