@@ -347,7 +347,7 @@ export interface Settings {
   emulator: { address: string | null; mumu_index: number | null; mumu_manager: string | null };
   schedules: { id: string; days: string[]; time: string; wake: boolean }[];
   /** The kind of device the runner drives (#939): the emulator (the emulator section), or the PC client's window (#940);
-   * pc_size the window's client area for a run, by its height. No editor shows it yet, a save keeps it. */
+   * pc_size the window's client area for a run, by its height. The Run tab's device frame edits both (#947). */
   device: DeviceSetting;
 }
 export interface DeviceSetting { kind: "emulator" | "pc"; pc_size: "keep" | "720" | "900" | "1080" | "1440" }

@@ -16,9 +16,11 @@ import {
 } from "react";
 import { fill, type Key } from "./i18n";
 import { LockIcon } from "./KeywordGrid";
-import { TASK_ORDER, nextRuns, placeBack, schema, type Difficulty, type LuxOptions, type NextRun, type Settings } from "./model";
 import {
-  LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
+  TASK_ORDER, nextRuns, placeBack, schema, type DeviceSetting, type Difficulty, type LuxOptions, type NextRun, type Settings,
+} from "./model";
+import {
+  LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type Found, type LogLine, type PcWindow, type RunView,
 } from "./runner";
 import * as api from "./api";
 import { sayReason } from "./reasons";
@@ -31,6 +33,8 @@ import {
 const RUN = schema.properties.run.properties as Record<string, { enum?: (string | number)[] }>;
 const runEnum = (k: string) => RUN[k].enum!.map(String);
 const LUX_MODES: string[] = schema.$defs.luxcavation.properties.mode.enum;
+/** The PC window's sizes for a run (device.pc_size, #940), keep first. */
+const PC_SIZES: string[] = schema.properties.device.properties.pc_size.enum;
 /** The task ids (agent/settings.schema.json $defs.task); a new file lists them as model.ts newSections says. */
 export const TASKS: string[] = schema.$defs.task.enum;
 /** The run keys every task reads (the global options): the rest of run is the Mirror Dungeon task's. */
@@ -169,7 +173,7 @@ export function RunTab() {
         {narrow ? <RunControls /> : (
           <div className="run-console" ref={keep}>
             <RunControls />
-            <EmulatorFields scan={scan} manual={manual} />
+            <DeviceFields scan={scan} manual={manual} />
             <RunLog raw={raw} />
           </div>
         )}
@@ -179,7 +183,7 @@ export function RunTab() {
             <TaskList rows={rows} pickedAt={i} setSel={setSel} />
             <section className="task-options">{picked && <TaskOptions id={picked.id} />}</section>
           </div>
-          {narrow && <><EmulatorFields scan={scan} manual={manual} /><RunLog folded raw={raw} boxRef={keep} /></>}
+          {narrow && <><DeviceFields scan={scan} manual={manual} /><RunLog folded raw={raw} boxRef={keep} /></>}
           <GlobalOptions />
           {/* the run reads no schedule: they stay open to edits during a run (#816) */}
           <LockContext.Provider value={false}><SchedulesSection /></LockContext.Provider>
@@ -886,11 +890,12 @@ function GlobalOptions() {
   );
 }
 
-/** The last device scan: none yet, under way, the devices it found, or why it found none. */
-type Scan = { state: "none" } | { state: "scanning" } | { state: "found"; devices: Device[] } | { state: "failed"; error: string };
+/** The last device scan: none yet, under way, the emulators and PC windows it found, or why it found none. */
+type Scan = { state: "none" } | { state: "scanning" } | ({ state: "found" } & Found) | { state: "failed"; error: string };
 
 /** The device scan (#876): once as the tab opens, unless a run is under way or starting then (偵測 is locked until it ends;
- * the user's call, 2026-11-20), and at each press of 偵測 or 重新偵測. It lists the adb devices only and connects to none.
+ * the user's call, 2026-11-20), and at each press of 偵測 or 重新偵測. It lists the adb devices and the game's PC windows
+ * (#947), and connects to none.
  * The first scan waits until the window knows whether a run is under way or starting (Runner.settled: a page loaded again
  * during a run, a window a schedule opened). A tab that opens to a scan shows it under way from its first frame, so 偵測
  * does not flash before 偵測中…; the development build's second start of the effect does not scan again. */
@@ -900,7 +905,7 @@ function useScan() {
   const [scan, setScan] = useState<Scan>(() => (busy ? { state: "none" } : { state: "scanning" }));
   const find = () => {
     setScan({ state: "scanning" });
-    api.scanDevices().then((devices) => setScan({ state: "found", devices }), (e) => setScan({ state: "failed", error: String(e) }));
+    api.scanDevices().then((found) => setScan({ state: "found", ...found }), (e) => setScan({ state: "failed", error: String(e) }));
   };
   const asked = useRef(false);
   useEffect(() => {
@@ -925,21 +930,49 @@ const pickOf = (d: Device): Settings["emulator"] => ({ address: d.address, mumu_
 /** The pick list's entry for the emulator the settings name, while it lists no device that is that one: the MuMu instance at
  * its address, the address alone, or none set. */
 const currentLabel = (t: (k: Key) => string, e: Settings["emulator"]) => e.address === null ? t("emu.unset")
-  : fill(t("emu.current"), { device: e.mumu_index === null ? e.address : mumuName(t, e.mumu_index, e.address) });
+  : fill(t("emu.current"), { device: emulatorName(t, e.address, e.mumu_index) });
 
-/** The emulator the runner connects to (4A, spec 04 section 14): one pick list of the emulators the scan found, MuMu first,
- * 偵測 beside it; before a scan's devices come, the list holds what the settings name. A pick fills in the three values,
- * saved with the rest. A scan under way says so on its button, not on a line of its own (it moved the log 26 px at each
- * open of the tab), and what it found is the list itself: only finding none, or failing, takes a line under them. The three
- * values' own fields fold under 手動設定 (`manual`, open or not). During a run the whole frame is locked. */
-function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
+/** The emulator the settings name, by its MuMu instance and address, or its address alone. */
+const emulatorName = (t: (k: Key) => string, address: string, mumuIndex: number | null) =>
+  mumuIndex === null ? address : mumuName(t, mumuIndex, address);
+
+/** The pick list's PC entry (#947), after the emulators: the game's window the scan found, by its title and client area, or
+ * 「PC 視窗」 alone before a scan and when it found none or more than one. */
+function pcName(t: (k: Key) => string, windows: PcWindow[]) {
+  if (windows.length !== 1) return t("device.pc");
+  const [w] = windows;
+  return w.minimized ? fill(t("device.pc_minimized"), { title: w.title }) : fill(t("device.pc_found"), { title: w.title, width: w.width, height: w.height });
+}
+
+/** Why the PC windows a scan found keep a run from starting (#947), as the runner stops on them (runner/session.py pc):
+ * none, more than one, minimized, or a client area not 16:9 while the run keeps the window's size. Undefined: it can run. */
+function pcTrouble(t: (k: Key) => string, windows: PcWindow[], size: DeviceSetting["pc_size"]) {
+  if (!windows.length) return t("device.pc_none");
+  if (windows.length > 1) return fill(t("device.pc_many"), { count: windows.length });
+  const [w] = windows;
+  if (w.minimized) return t("device.pc_minimized_note");
+  if (size === "keep" && (w.width <= 0 || w.width * 9 !== w.height * 16)) return fill(t("device.pc_not_16_9"), { width: w.width, height: w.height });
+  return undefined;
+}
+
+/** The device the runner connects to (4A, spec 04 section 14): one pick list of the emulators the scan found, MuMu first,
+ * then the PC window (#947, the user's call of 2026-11-25), 偵測 beside it; before a scan's devices come, the list holds what
+ * the settings name. An emulator's pick fills in the three values and sets device.kind emulator, the PC window's sets it pc
+ * and keeps the three; each is saved with the rest. A scan under way says so on its button, not on a line of its own (it
+ * moved the log 26 px at each open of the tab), and what it found is the list itself: only finding none, failing, or a PC
+ * window that cannot run takes a line under them. With the PC window picked, PC 解析度 (device.pc_size) shows under them.
+ * The three values' own fields fold under 手動設定 (`manual`, open or not). During a run the whole frame is locked. */
+function DeviceFields({ scan: { scan, find }, manual: [open, setOpen] }: {
   scan: ReturnType<typeof useScan>; manual: [boolean, (open: boolean) => void];
 }) {
-  const { s, update, t, bad } = useEditor();
+  const { s, update, t, tv, bad } = useEditor();
   const set = (patch: Partial<Settings["emulator"]>) => update((d) => { Object.assign(d.emulator, patch); });
+  const setDevice = (patch: Partial<DeviceSetting>) => update((d) => { Object.assign(d.device, patch); });
+  const pick = (d: Device) => update((x) => { Object.assign(x.emulator, pickOf(d)); x.device.kind = "emulator"; });
   const text = (v: string) => (v.trim() === "" ? null : v);
   const running = isRunning(useRunner().view);
   const found = scan.state === "found" ? scan.devices : [];
+  const pc = s.device.kind === "pc";
   // The list shows a device only when the fields already hold all that a pick of it writes, and the settings' own entry to
   // pick from otherwise. A select fires no change for the option it shows, so a list that showed the device at the address
   // alone (after MXU's read-back, which keeps no instance or MuMuManager) could not fill the other two (#833).
@@ -949,21 +982,33 @@ function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
     return current.address !== null && sameAddress(d.address, current.address)
       && writes.mumu_index === current.mumu_index && writes.mumu_manager === current.mumu_manager;
   });
-  const label = currentLabel(t, current);
+  // the settings' own entry, while the scan found no device that is theirs: with the PC window picked, the emulator they
+  // name, to go back to it with the three values kept (a scanned device that is theirs goes back to it as well)
+  const label = pc ? (current.address === null ? t("emu.unset")
+    : fill(t("device.emulator"), { device: emulatorName(t, current.address, current.mumu_index) }))
+    : currentLabel(t, current);
   // a scan that found none, or failed, says so on a line under the list, which describes the list to a screen reader too;
-  // what to do next after finding none is that line's tooltip, and read after it
+  // what to do next after finding none is that line's tooltip, and read after it. With the PC window picked, the line says
+  // why its window cannot run instead of the emulators found
   const outcomeId = useId(), nextId = `${outcomeId}-next`;
-  const none = scan.state === "found" && !found.length;
-  const described = none ? `${outcomeId} ${nextId}` : scan.state === "failed" ? outcomeId : "";
+  const none = !pc && scan.state === "found" && !found.length;
+  const pcLine = pc && scan.state === "found" ? pcTrouble(t, scan.windows, s.device.pc_size) : undefined;
+  const described = none ? `${outcomeId} ${nextId}` : scan.state === "failed" || pcLine ? outcomeId : "";
+  const choose = (v: string) => {
+    if (v === "pc") setDevice({ kind: "pc" });
+    else if (v === "") setDevice({ kind: "emulator" }); // the settings' own entry, which only the PC window's pick leaves
+    else pick(found[Number(v)]);
+  };
   return (
     <fieldset className="emulator" data-path="emulator">
       <legend>{t("emu.title")}</legend>
       <div className="emu-line">
         <DescribeContext.Provider value={described}>
-          <Choice value={at >= 0 ? String(at) : ""} aria-label={t("emu.title")} title={found.length ? t("emu.found_note") : undefined}
-            onChange={(e) => { if (e.target.value !== "") set(pickOf(found[Number(e.target.value)])); }}>
-            {at < 0 && <option value="">{found.length ? fill(t("emu.pick"), { current: label }) : label}</option>}
+          <Choice value={pc ? "pc" : at >= 0 ? String(at) : ""} aria-label={t("emu.title")} title={found.length ? t("emu.found_note") : undefined}
+            onChange={(e) => choose(e.target.value)}>
+            {at < 0 && <option value="">{!pc && found.length ? fill(t("emu.pick"), { current: label }) : label}</option>}
             {found.map((d, j) => <option key={j} value={j}>{deviceName(t, d)}</option>)}
+            <option value="pc">{pcName(t, scan.state === "found" ? scan.windows : [])}</option>
           </Choice>
         </DescribeContext.Provider>
         <button type="button" disabled={scan.state === "scanning" || running} onClick={find}>
@@ -973,6 +1018,13 @@ function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
       {none && <p className="muted" id={outcomeId} title={t("emu.none_found_note")}>{t("emu.none_found")}</p>}
       {none && <span id={nextId} hidden>{t("emu.none_found_note")}</span>}
       {scan.state === "failed" && <p className="caution" id={outcomeId}>{fill(t("emu.scan_failed"), { error: scan.error })}</p>}
+      {pcLine && <p className="caution" id={outcomeId}>{pcLine}</p>}
+      {pc && (
+        <KeyField path="device/pc_size" label={t("device.pc_size")} help={t("device.pc_size_note")}>
+          <Select value={s.device.pc_size} options={PC_SIZES} label={(v) => tv("pc_size", v)}
+            onChange={(v) => setDevice({ pc_size: v as DeviceSetting["pc_size"] })} />
+        </KeyField>
+      )}
       {/* folded, its title turns red when a field inside has a problem; a problem's jump opens it (ui.tsx focusPath) */}
       <details className={"emu-manual" + (bad("emulator") ? " bad" : "")} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary title={t("emu.manual_note")}>{t("emu.manual")}</summary>

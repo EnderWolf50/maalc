@@ -17,18 +17,21 @@ import App from "./App";
 import { TEXT, fill } from "./i18n";
 import { newSettings, newTeam, type Settings } from "./model";
 import { REASONS } from "./reasons";
-import { IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message } from "./runner";
+import {
+  IDLE, LINK_STATES, LOG_LINES, RESOURCE_STATES, RESULTS, SOURCES, TASK_STATES, reduce, sameAddress, type Device, type Message, type PcWindow,
+} from "./runner";
 import css from "./index.css?raw";
 import { altMove, cssValueOf, dragOnto, queuedTeams } from "./testing";
 
 const zh = TEXT.zh_tw;
 // text: the settings file; saved: each text written; starts: each start the page asked for; send: the last run's channel;
-// stops: Stop's calls; devices: what a scan finds (an Error: it fails); history: what a page loaded again gets of the run so
-// far, with whether it is under way; keepOpen: the close handler; hid: hide-to-tray's calls
+// stops: Stop's calls; devices: the emulators a scan finds (an Error: it fails); windows: the PC windows it finds (#947);
+// history: what a page loaded again gets of the run so far, with whether it is under way; keepOpen: the close handler; hid:
+// hide-to-tray's calls
 const back = vi.hoisted(() => ({
   text: "", saved: [] as string[], starts: [] as { entries: string[]; device: unknown }[],
   send: undefined as ((m: Message) => void) | undefined, startFail: "", stops: 0,
-  devices: [] as unknown, scans: 0, history: null as null | { messages: Message[]; active: boolean },
+  devices: [] as unknown, windows: [] as PcWindow[], scans: 0, history: null as null | { messages: Message[]; active: boolean },
   keepOpen: undefined as undefined | (() => boolean | Promise<boolean>), hid: 0, hideFail: "",
 }));
 vi.mock("./api", async (original) => ({
@@ -50,7 +53,11 @@ vi.mock("./api", async (original) => ({
     setTimeout(() => messages.forEach(onMessage)); // a channel's messages come after the call, as the backend's do
     return Promise.resolve(active);
   },
-  scanDevices: () => { back.scans++; return back.devices instanceof Error ? Promise.reject(back.devices) : Promise.resolve(back.devices); },
+  scanDevices: () => {
+    back.scans++;
+    return back.devices instanceof Error ? Promise.reject(back.devices)
+      : Promise.resolve(back.devices as Device[]).then((devices) => ({ devices, windows: back.windows }));
+  },
   onCloseRequested: (keepOpen: () => boolean | Promise<boolean>) => { back.keepOpen = keepOpen; return () => {}; },
   hideToTray: () => { back.hid++; return back.hideFail ? Promise.reject(new Error(back.hideFail)) : Promise.resolve(true); },
 }));
@@ -77,6 +84,7 @@ beforeEach(() => {
   back.startFail = "";
   back.stops = 0;
   back.devices = [];
+  back.windows = [];
   back.scans = 0;
   back.history = null;
   back.keepOpen = undefined;
@@ -603,11 +611,13 @@ const pickOne = (current: string) => fill(zh["emu.pick"], { current });
 const emuFrame = () => screen.getByRole("group", { name: zh["emu.title"] });
 const emuPick = () => within(emuFrame()).getByRole("combobox", { name: zh["emu.title"] });
 const scanButton = () => within(emuFrame()).getByRole("button", { name: new RegExp(`^(${zh["emu.scan"]}|${zh["emu.scanning"]}|${zh["emu.rescan"]})$`) });
-const options = (select: HTMLElement) => [...select.querySelectorAll("option")].map((o) => o.textContent);
-/** What the emulator's frame says above 手動設定: its title, the pick list's entries, the button, and a scan's outcome. */
+/** The pick list's emulator entries: all but the PC window's, which is always the last (#947, "the PC window" below) */
+const options = (select: HTMLElement) => [...select.querySelectorAll("option:not([value=pc])")].map((o) => o.textContent);
+/** What the device frame says above 手動設定: its title, the pick list's emulator entries, the button, and a scan's outcome. */
 const emuText = () => {
   const frame = emuFrame().cloneNode(true) as HTMLElement;
   frame.querySelector("details")!.remove();
+  frame.querySelector("option[value=pc]")!.remove();
   return frame.textContent;
 };
 /** Until the scan the tab started has come back. */
@@ -812,6 +822,157 @@ describe("the device scan (#876)", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+/** A PC window a scan found (#947): the game's, at 1920x1080 and not minimized unless `w` says otherwise. */
+const GAME = (w: Partial<PcWindow> = {}): PcWindow => ({ title: "LimbusCompany", width: 1920, height: 1080, minimized: false, ...w });
+/** The pick list's entries, the PC window's too; its PC window entry; PC 解析度's pick list, when it shows. */
+const allOptions = () => [...emuPick().querySelectorAll("option")].map((o) => o.textContent);
+const pcSize = () => within(emuFrame()).queryByRole("combobox", { name: new RegExp(`^${zh["device.pc_size"]}`) });
+/** The PC window entry of a scan that found GAME() as it is. */
+const PC_FOUND = fill(zh["device.pc_found"], { title: "LimbusCompany", width: 1920, height: 1080 });
+/** What settings() names as the emulator, with the PC window picked: the entry that goes back to it. */
+const BACK = fill(zh["device.emulator"], { device: MUMU_1_NAME });
+
+describe("the PC window (#947)", () => {
+  test("the PC window is the list's last entry, after the emulators: by itself before a scan, by its title and size after", async () => {
+    const end = slowScan();
+    back.windows = [GAME()];
+    await open();
+    expect(allOptions()).toEqual([CURRENT, zh["device.pc"]]);
+    await end([MUMU]);
+    expect(allOptions()).toEqual([pickOne(CURRENT), MUMU_0_NAME, PC_FOUND]);
+    expect(emuFrame()).toHaveTextContent(new RegExp(`^${zh["emu.title"]}`));
+  });
+
+  test("picking it writes device.kind pc and leaves the emulator's three values; PC 解析度 shows, and writes device.pc_size", async () => {
+    back.devices = [MUMU];
+    back.windows = [GAME()];
+    const user = await open();
+    await scanned();
+    expect(pcSize()).toBeNull();
+    const pc = PC_FOUND;
+    await user.selectOptions(emuPick(), pc);
+    expect(emuPick()).toHaveDisplayValue(pc);
+    // the emulator the settings name stays first, to go back to; no line under the list: the window can run
+    expect(allOptions()).toEqual([BACK, MUMU_0_NAME, pc]);
+    expect(emuPick()).not.toHaveAccessibleDescription(zh["device.pc_none"]);
+    expect(emuFrame().querySelectorAll("p")).toHaveLength(0);
+    // the schema's default, 2560x1440; each size by its pixels, keep first
+    expect(pcSize()).toHaveDisplayValue(zh["pc_size.1440"]);
+    expect(options(pcSize()!)).toEqual([zh["pc_size.keep"], "1280×720", "1600×900", "1920×1080", "2560×1440"]);
+    expect(pcSize()).toHaveAccessibleDescription(`device/pc_size ${zh["device.pc_size_note"]}`);
+    await user.selectOptions(pcSize()!, zh["pc_size.1080"]);
+    expect(screen.getByRole("textbox", { name: zh["emu.address"] })).toHaveValue("127.0.0.1:16416");
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(back.saved).toHaveLength(1));
+    expect(lastSaved().device).toEqual({ kind: "pc", pc_size: "1080" });
+    expect(lastSaved().emulator).toEqual(settings().emulator);
+  });
+
+  test("going back to the emulator: its own entry keeps the three values, a scanned one fills them in; PC 解析度 hides", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "720" } });
+    back.devices = [MUMU];
+    back.windows = [GAME()];
+    const user = await open();
+    await scanned();
+    expect(pcSize()).toHaveDisplayValue(zh["pc_size.720"]);
+    await user.selectOptions(emuPick(), BACK);
+    expect(pcSize()).toBeNull();
+    // the settings' emulator is no device the scan found: the list starts on its entry, as before the PC window was picked
+    expect(emuPick()).toHaveDisplayValue(pickOne(CURRENT));
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(back.saved).toHaveLength(1));
+    // pc_size stays as it was, for the next pick of the PC window
+    expect(lastSaved().device).toEqual({ kind: "emulator", pc_size: "720" });
+    expect(lastSaved().emulator).toEqual(settings().emulator);
+    await user.selectOptions(emuPick(), PC_FOUND);
+    await user.selectOptions(emuPick(), MUMU_0_NAME);
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(back.saved).toHaveLength(2));
+    expect(lastSaved().device.kind).toBe("emulator");
+    expect(lastSaved().emulator).toEqual({ address: "127.0.0.1:16384", mumu_index: 0, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" });
+  });
+
+  test("with the PC window picked, a scanned device that is the settings' emulator has no second entry of their own; its pick goes back", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1440" } });
+    back.devices = [MUMU, MUMU_1];
+    back.windows = [GAME()];
+    const user = await open();
+    await scanned();
+    const pc = PC_FOUND;
+    expect(allOptions()).toEqual([MUMU_0_NAME, MUMU_1_NAME, pc]);
+    await user.selectOptions(emuPick(), MUMU_1_NAME);
+    expect(pcSize()).toBeNull();
+    await user.click(screen.getByRole("button", { name: zh.save }));
+    await waitFor(() => expect(back.saved).toHaveLength(1));
+    expect(lastSaved().device.kind).toBe("emulator");
+    expect(lastSaved().emulator).toEqual(settings().emulator);
+  });
+
+  test("with the PC window picked and no game window found, the line under the list says so; the emulators' none-found does not show", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1440" } });
+    await open();
+    await scanned();
+    expect(emuPick()).toHaveDisplayValue(zh["device.pc"]);
+    expect(screen.getByText(zh["device.pc_none"])).toBeVisible();
+    expect(emuPick()).toHaveAccessibleDescription(zh["device.pc_none"]);
+    expect(screen.queryByText(zh["emu.none_found"])).toBeNull();
+  });
+
+  test("a minimized game window says so in its entry and on the line under the list", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1440" } });
+    back.windows = [GAME({ width: 0, height: 0, minimized: true })];
+    await open();
+    await scanned();
+    expect(emuPick()).toHaveDisplayValue(fill(zh["device.pc_minimized"], { title: "LimbusCompany" }));
+    expect(screen.getByText(zh["device.pc_minimized_note"])).toBeVisible();
+    expect(emuPick()).toHaveAccessibleDescription(zh["device.pc_minimized_note"]);
+  });
+
+  test("two game windows: the entry is the PC window alone, the line says how many are open", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1440" } });
+    back.windows = [GAME(), GAME({ width: 1280, height: 720 })];
+    await open();
+    await scanned();
+    expect(emuPick()).toHaveDisplayValue(zh["device.pc"]);
+    expect(screen.getByText(fill(zh["device.pc_many"], { count: 2 }))).toBeVisible();
+  });
+
+  test("a client area not 16:9 says so only while PC 解析度 keeps the window's size: another size sets it 16:9 for the run", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "keep" } });
+    back.windows = [GAME({ width: 1904, height: 1041 })];
+    const user = await open();
+    await scanned();
+    const line = fill(zh["device.pc_not_16_9"], { width: 1904, height: 1041 });
+    expect(screen.getByText(line)).toBeVisible();
+    await user.selectOptions(pcSize()!, zh["pc_size.1080"]);
+    expect(screen.queryByText(line)).toBeNull();
+  });
+
+  test("the texts have both languages: the window's English names the PC window and its size", async () => {
+    const en = TEXT.en_us;
+    back.text = fileOf({ ...settings(), language: "en_us", device: { kind: "pc", pc_size: "keep" } });
+    back.windows = [GAME({ minimized: true })];
+    render(<App />);
+    await screen.findByRole("button", { name: en["runner.start"] });
+    const pick = await screen.findByRole("combobox", { name: en["emu.title"] });
+    await waitFor(() => expect(pick).toHaveDisplayValue("PC window: LimbusCompany (minimized)"));
+    expect(screen.getByText(en["device.pc_minimized_note"])).toBeVisible();
+    expect(screen.getByRole("combobox", { name: new RegExp(`^${en["device.pc_size"]}`) })).toHaveDisplayValue(en["pc_size.keep"]);
+  });
+
+  test("during a run PC 解析度 is locked with the rest of the frame", async () => {
+    back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1440" } });
+    back.windows = [GAME()];
+    const user = await open();
+    await scanned();
+    await started(user);
+    expect(emuPick()).toBeDisabled();
+    expect(pcSize()).toBeDisabled();
+    send(exit(0, true));
+    expect(pcSize()).toBeEnabled();
   });
 });
 
