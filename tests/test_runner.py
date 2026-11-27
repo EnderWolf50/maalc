@@ -3,6 +3,7 @@ that prints what a test needs and ends when the runner disconnects from it."""
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -539,6 +540,56 @@ def test_a_start_without_an_address_takes_the_first_device_mumu_first(tmp_path):
     run = Run(tmp_path, world)
     run.session.start(protocol.command(json.dumps({"v": 1, "cmd": "start", "root": str(run.root), "tasks": TWO[:1]})))
     assert world.controllers == ["127.0.0.1:16416"]
+
+
+def masked_events(run):
+    """The run's events with what differs between two runs of one test masked: the install's folder and the bot's pid."""
+    def masked(e):
+        if not (isinstance(e, dict) and e["event"] == "log"):
+            return e
+        return {**e, "line": re.sub(r" agent \d+ ", " agent <pid> ", e["line"].replace(str(run.root), "<root>"))}
+    return [masked(e) for e in run.events]
+
+
+# (World, the bot's lines, the start's device besides its address): a run to its end, no device, a MuMu started
+EMULATOR_RUNS = {
+    "to its end": (lambda: World({"MirrorDungeon": (3, "succeeded"), "ExpLuxcavation": (2, "succeeded")}),
+                   ("[maalc] task MirrorDungeon started",), {}),
+    "no device": (lambda: World({"MirrorDungeon": (1, "succeeded")}, found=(MUMU1,)), (), {}),
+    "mumu started": (lambda: World({"MirrorDungeon": (1, "succeeded")}, found=(OTHER,), appear=(1010.0, MUMU0)), (),
+                     {"mumu_index": 0, "mumu_manager": MANAGER}),
+}
+
+
+@pytest.mark.parametrize("name", EMULATOR_RUNS)
+def test_a_start_that_names_the_emulator_sends_the_same_events_as_one_that_names_no_kind(tmp_path, name):
+    # #939: an omitted kind is the emulator, and naming it changes nothing the runner does or says
+    make, lines, more = EMULATOR_RUNS[name]
+    runs = []
+    for folder, kind in (("omitted", {}), ("named", {"kind": "emulator"})):
+        world = make()
+        run = Run(tmp_path / folder, world, *lines)
+        result = run.start(TWO, **more, **kind)
+        runs.append({"result": result, "events": masked_events(run), "posted": world.posted,
+                     "controllers": world.controllers, "bundles": len(world.bundles), "launched": run.launched})
+    omitted, named = runs
+    assert omitted == named
+    assert len(omitted["events"]) > 6  # the run said something to compare
+
+
+def test_a_pc_start_cancels_every_task_with_the_coded_reason_that_the_pc_client_is_not_supported_yet(tmp_path):
+    # #939: the device kind reaches the runner, which fails the run the way it fails one with no device, before it loads
+    # MaaFramework or looks for a device
+    world = World({"MirrorDungeon": (1, "succeeded"), "ExpLuxcavation": (1, "succeeded")})
+    run = Run(tmp_path, world)
+    assert run.start(TWO, kind="pc") == "failed"
+    (error,) = run.of("error")
+    assert error == {"v": 1, "event": "error", "kind": "unsupported", "message": "the PC client is not supported yet"}
+    reason = "the PC client is not supported yet"
+    assert run.states() == [(0, "pending"), (1, "pending"), (0, "cancelled", reason), (1, "cancelled", reason)]
+    assert run.codes() == [(0, "cancelled", "PcNotSupported", {}), (1, "cancelled", "PcNotSupported", {})]
+    assert run.of("end") == [{"v": 1, "event": "end", "result": "failed"}]
+    assert world.roots == [] and world.controllers == [] and run.launched == []
 
 
 def test_a_mumu_not_running_is_started_and_waited_for_then_connected_after_it_settles(tmp_path):

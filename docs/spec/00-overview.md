@@ -38,7 +38,6 @@
 
 - Refraction Railway、免費抽卡（Extraction）、自動換腦啡肽模組的常駐工具。v1.0.0 的排程與結束後動作由 MXU／MFAAvalonia 提供；v2.0.0 起的定時執行由設定視窗寫進 Windows 工作排程器（#811）。（#362）
 - 安裝程式。發佈只用 GitHub Actions 產出一個 zip：bot、resource、內嵌 Python、設定 GUI 的執行檔放在同一個發佈目錄（做法參考 MaaPracticeBoilerplate 的 workflow）；v1.0.0 的 zip 另附 MXU，v2.0.0 不附，改由設定視窗執行並自動更新（#811、#813）。（#1、#4、#19，2026-10-14 定案；內嵌 Python 見 #33）
-- Windows 原生客戶端（Win32 控制器）。
 - 中文或其他語言的遊戲畫面辨識。
 - 戰鬥防禦選項、技能配置與配卡決策。
 - 必買／必棄清單、第二體系等進階飾品策略。
@@ -60,6 +59,7 @@
 | 依星期換隊伍 | 每個日常用一支固定隊伍 | #362 |
 | 選關功能 | 一律打最難的關 | #362 |
 | 通行證等級獎勵 | 只領每日、每週、季度（Seasonal）任務獎勵 | #362 |
+| PC 版客戶端（PC 視窗：MaaFramework 自訂控制器包 Win32 控制器，[ADR 0017](../adr/0017-pc-window-behind-a-custom-controller.md)），原本列在 Out of scope，2026-11-23 納入 v2 | 只跑 Android 模擬器；設定檔與執行器協定已有裝置種類，選 PC 時執行器回「還不支援」（#939） | #922、#939 |
 
 ## 目標環境
 

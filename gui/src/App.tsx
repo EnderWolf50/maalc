@@ -25,7 +25,7 @@ import { LeavePrompt, TitleBar, WindowButtons, type Leave } from "./WindowContro
 
 export const TABS = [
   // the team queue is arranged in the Mirror Dungeon task's options (#878): a problem in it opens the Run tab on that task
-  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules", "team_queue"]],
+  ["run", "tab.run", RunTab, ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "device", "schedules", "team_queue"]],
   ["teams", "tab.teams", TeamsTab, ["teams"]],
   ["gifts", "tab.gifts", GiftListsTab, ["gift_lists"]],
   ["deployment", "tab.deployment", DeploymentTab, ["deployment_order_plans"]],
@@ -465,7 +465,10 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       const begin = { type: "begin", entries, list: now!.tasks } as const;
       runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
       dispatch(begin);
-      return await api.startRun(entries, now!.emulator, dispatch).then(() => null, (e: unknown) => {
+      // the device kind goes only when it is pc (#939): the runner refuses that as not supported yet; an emulator start's
+      // command is the one it was before the field
+      const device = now!.device.kind === "pc" ? { kind: "pc" as const, ...now!.emulator } : now!.emulator;
+      return await api.startRun(entries, device, dispatch).then(() => null, (e: unknown) => {
         dispatch({ type: "refused", error: String(e) });
         return { error: String(e) };
       });

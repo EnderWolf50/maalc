@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import libRs from "../src-tauri/src/lib.rs?raw";
 import App from "./App";
 import { TEXT, fill } from "./i18n";
-import { newSettings, newTeam } from "./model";
+import { VERSION, newSettings, newTeam } from "./model";
 import { READ_BACK_FILES } from "./readBack";
 import { queuedTeams, sideList } from "./testing";
 import { cases, olderFile, v20File, v21File } from "./settingsCases";
@@ -157,13 +157,13 @@ test("a problem in a task list entry picks that entry, the second of a task list
 describe("an older file (#782, #813)", () => {
   const write = (data: unknown) => (file.text = JSON.stringify(data, null, 2) + "\n");
 
-  test("a version 20 file is kept beside it, then written back as version 24 with its own run options", async () => {
+  test("a version 20 file is kept beside it, then written back as the current version with its own run options", async () => {
     const text = write(v20File([{ set: "run/difficulty", value: "hard" }, { set: "luxcavation/exp/team", value: "b" }]));
     render(<App start="teams" />);
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect([file.old, file.writes]).toEqual([[[20, text]], ["old", "settings"]]);
     const saved = JSON.parse(file.saved[0]);
-    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([24, ["a", "b"], "hard", "b"]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([VERSION, ["a", "b"], "hard", "b"]);
     expect(saved.tasks).toEqual(cases.valid.tasks); // the sections version 23 added, at their defaults
   });
 
@@ -176,7 +176,7 @@ describe("an older file (#782, #813)", () => {
     expect({ ...saved, gift_lists: null }).toEqual({ ...cases.valid, gift_lists: null });
   });
 
-  test("a version 23 file is kept beside it, then written back as version 24 with its own values, nothing read back (#954)", async () => {
+  test("a version 23 file is kept beside it, then written back as the current version with its own values, nothing read back (#954)", async () => {
     // the start team a, second in the queue, moves nothing; the run options of version 23 are the file's own
     const text = write(olderFile(23, [
       { set: "team_queue", value: ["b", "a"] }, { set: "run/start_team", value: "a" },
@@ -208,7 +208,7 @@ describe("an older file (#782, #813)", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
-    expect([saved.version, saved.team_queue, saved.run.difficulty]).toEqual([24, ["b", "a"], "hard"]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty]).toEqual([VERSION, ["b", "a"], "hard"]);
   });
 
   test("a version 21 file is written back with the queue in the order of its list", async () => {
@@ -232,7 +232,7 @@ describe("an older file (#782, #813)", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     expect(file.writes).toEqual(["old", "settings"]);
-    expect(JSON.parse(file.saved[0]).version).toBe(24);
+    expect(JSON.parse(file.saved[0]).version).toBe(VERSION);
   });
 
   test("when it cannot be kept aside the window says why and writes nothing", async () => {
@@ -271,7 +271,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
   });
   const notice = () => screen.findByRole("region", { name: zh["rb.title"] });
 
-  test("a version 22 file is written as 24 with MXU's values, and the notice lists what came back and what did not, once", async () => {
+  test("a version 22 file is written as the current version with MXU's values, and the notice lists what came back and what did not, once", async () => {
     write(olderFile(22));
     file.back = { "mxu-maalc.json": mxu };
     const user = userEvent.setup();
@@ -279,7 +279,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
     expect([saved.version, saved.run.difficulty, saved.luxcavation.exp.team, saved.luxcavation.thread.team, saved.emulator.address])
-      .toEqual([24, "hard", "a", null, "127.0.0.1:16384"]);
+      .toEqual([VERSION, "hard", "a", null, "127.0.0.1:16384"]);
     expect(saved.run).not.toHaveProperty("start_team");
     // MXU's three, then each task MXU did not list, unticked though a new file ticks it, in a new file's order (#874)
     expect(saved.tasks).toEqual([
@@ -364,7 +364,7 @@ describe("the read-back of a v1.0.0 install's run values (#814)", () => {
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(file.saved).toHaveLength(1));
     const saved = JSON.parse(file.saved[0]);
-    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([24, ["b", "a"], "hard", "a"]);
+    expect([saved.version, saved.team_queue, saved.run.difficulty, saved.luxcavation.exp.team]).toEqual([VERSION, ["b", "a"], "hard", "a"]);
     expect(await notice()).toBeVisible();
   });
 

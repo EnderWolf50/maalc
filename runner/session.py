@@ -50,7 +50,7 @@ STOP_LINE = "[maalc] stop: "
 HALT_LINE = "[maalc] account-level stop"
 CODE_LINE = "[maalc] stop code: "  # agent/reasons.py code_line, right after its stop line: that stop's code (#881)
 # the codes of agent/stop_reasons.json the runner's own reasons send, with their params
-OWN_CODES = {"NoEmulator": (), "ConnectFailed": ("address",), "ResourceFailed": (), "BotNotStarted": (),
+OWN_CODES = {"PcNotSupported": (), "NoEmulator": (), "ConnectFailed": ("address",), "ResourceFailed": (), "BotNotStarted": (),
              "TaskerFailed": (), "RunnerFailed": ("error",), "BotExited": ("code",), "ListStopped": ()}
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
 
@@ -280,6 +280,8 @@ class Session:
         return self.cancel_rest("failed", reason or message, coded)
 
     def run(self, root: Path, want: dict) -> str:
+        if want.get("kind") == "pc":  # #939: the kind is in the protocol, the PC window controller not yet (#922)
+            return self.fail("unsupported", "the PC client is not supported yet", coded=own("PcNotSupported"))
         fw = self.framework(root)
         device, until = self.device(fw, want)
         if device is None:

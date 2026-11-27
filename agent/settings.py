@@ -79,12 +79,23 @@ def _queue_as_put_in(data):
     return data
 
 
+def device_defaults():
+    """The device section version 25 added (#939) at the schema's defaults: the emulator."""
+    return {k: p["default"] for k, p in SCHEMA["properties"]["device"]["properties"].items()}
+
+
+def _device_in(data):
+    """24 -> 25 (#939): the device section at its defaults, the emulator; a hand-made one gets each key it lacks, and the
+    emulator section stays as it was. What a hand edit broke stays, for the schema check to name it."""
+    return {**data, "device": _with_missing(device_defaults(), data["device"]) if "device" in data else device_defaults()}
+
+
 # MIGRATIONS[n] turns a version-n dict into a version-(n + 1) dict, one for each n from OLDEST_VERSION up; keep in step with
 # gui/src/model.ts. 20 -> 21 is the identity now: version 21 dropped run, luxcavation and charge_enkephalin while the
 # client held their values (#782), and 22 -> 23 brings them back, so a version-20 file keeps its own (#813).
-MIGRATIONS = {20: dict, 21: _queue_in_list_order, 22: _sections_back, 23: _queue_as_put_in}
+MIGRATIONS = {20: dict, 21: _queue_in_list_order, 22: _sections_back, 23: _queue_as_put_in, 24: _device_in}
 # NOTES[n]: the line a task's start logs (TaskStart) while the file on disk is at version n or older, until the GUI writes
-# it back: what its migration changed about what the task reads.
+# it back: what its migration changed about what the task reads. 24 has none: no task reads the device, the emulator.
 NOTES = {
     22: "settings older than version 23: the task options are read from its run, luxcavation and "
         "charge_enkephalin again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; "

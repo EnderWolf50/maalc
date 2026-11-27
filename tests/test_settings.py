@@ -59,7 +59,7 @@ def custom_skills():
 
 
 VALID = {
-    "version": 24,
+    "version": 25,
     "language": "zh_tw",
     "deployment_order_plans": [{"id": "d1", "name": "Bleed order", "order": ORDER}],
     "starlight_plans": [{"id": "s1", "name": "Cheap", **STARLIGHT}],
@@ -74,6 +74,7 @@ VALID = {
     "event_overrides": [{"question": "Q?", "option": "Yes"}],
     "trial_risk_overrides": [{"trial": "Growth I", "risk": 1.5}],
     **copy.deepcopy(ADDED),
+    "device": {"kind": "emulator", "pc_size": "1440"},
 }
 
 
@@ -207,16 +208,19 @@ def test_a_trial_override_is_a_score_of_0_or_more(tmp_path, risk, ok):
 
 NOTE_23 = ("settings older than version 23: the task options are read from its run, luxcavation and charge_enkephalin "
         "again (#813), each value it lacks at its default; values set in MXU or MFAAvalonia are not read; open the "
-        "settings GUI once: it writes the file as version 24")
+        "settings GUI once: it writes the file as version 25")
 NOTE_24 = ("settings older than version 24: the disabled teams are left out of the team queue, and run.start_team is not "
-           "read (#954); open the settings GUI once: it writes the file as version 24")
+           "read (#954); open the settings GUI once: it writes the file as version 25")
 
 
 def older(version, edits=()):
-    """settings_cases' valid file at an older version, these edits made: each team with the switch version 24 dropped, and
-    run with version 23's start_team (#954); below version 23 without the sections it added (#813), below 22 without its
-    team_queue (#803), and version 20's with the three sections it had."""
-    old = copy.deepcopy(CASES["valid"])
+    """settings_cases' valid file at an older version, these edits made: without the device section version 25 added (#939);
+    below version 24 each team with the switch version 24 dropped, and run with version 23's start_team (#954); below
+    version 23 without the sections it added (#813), below 22 without its team_queue (#803), and version 20's with the three
+    sections it had."""
+    old = {k: v for k, v in copy.deepcopy(CASES["valid"]).items() if k not in CASES["added_v25"]}
+    if version == 24:
+        return apply_edits({**old, "version": version}, list(edits))
     for t in old["teams"]:
         t["enabled"] = True
     if version == 23:
@@ -231,11 +235,11 @@ def v20(edits=()):
 
 
 @pytest.mark.parametrize("version, said", [(20, [NOTE_23, NOTE_24]), (21, [NOTE_23, NOTE_24]), (22, [NOTE_23, NOTE_24]),
-                                           (23, [NOTE_24])])
+                                           (23, [NOTE_24]), (24, [])])
 def test_an_older_file_is_read_as_the_current_version_in_memory_and_says_what_is_read_anew(tmp_path, version, said):
     # #813: the options are the file's again, at their defaults where it has none (a version 20 file has its own); #954: no
-    # team switch and no start team. The file on disk stays as it was, and a task's start logs the lines (TaskStart) until
-    # the GUI writes the file back.
+    # team switch and no start team; #939: the device is the emulator, which no task reads. The file on disk stays as it
+    # was, and a task's start logs the lines (TaskStart) until the GUI writes the file back.
     old = older(version)
     notes = []
     got = load(tmp_path, old, notes=notes)
@@ -372,11 +376,12 @@ def test_shared_valid_loads(tmp_path):
     assert {**loaded, "gift_lists": None} == {**CASES["valid"], "gift_lists": None}  # the list is cleaned on load
 
 
-@pytest.mark.parametrize("version, case", [(v, c) for v in (20, 22, 23) for c in CASES[f"migrate_v{v}"]],
+@pytest.mark.parametrize("version, case", [(v, c) for v in (20, 22, 23, 24) for c in CASES[f"migrate_v{v}"]],
                          ids=lambda x: x if isinstance(x, int) else x["name"])
-def test_shared_v20_v22_and_v23_migration(tmp_path, version, case):
+def test_shared_v20_v22_v23_and_v24_migration(tmp_path, version, case):
     """#813: a version 20 file keeps its run, luxcavation and charge_enkephalin, a version 22 file gets them at their
-    defaults, both every other section version 23 added; #954: the disabled teams leave the queue, the start team goes; a
+    defaults, both every other section version 23 added; #954: the disabled teams leave the queue, the start team goes;
+    #939: every older file gets the device section at its defaults, the emulator, its emulator section as it was; a
     value broken by hand stays, for the schema to name. The GUI migrates the same cases to the same file
     (gui/src/validate.test.ts)."""
     old = older(version, case["edits"])
@@ -395,7 +400,8 @@ def test_shared_v21_migration(tmp_path, case):
     old = older(21, case["edits"])
     loaded = load(tmp_path, old)
     teams = [{k: v for k, v in t.items() if k != "enabled"} for t in old["teams"]]
-    want = {**old, "version": 24, "teams": teams, "team_queue": case["team_queue"], **ADDED, "gift_lists": None}
+    want = {**old, "version": settings.CURRENT_VERSION, "teams": teams, "team_queue": case["team_queue"], **ADDED,
+            **{k: CASES["valid"][k] for k in CASES["added_v25"]}, "gift_lists": None}
     assert {**loaded, "gift_lists": None} == want
     assert json.loads((tmp_path / "config" / "settings.json").read_text(encoding="utf-8")) == old
 

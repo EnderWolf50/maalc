@@ -226,6 +226,15 @@ _Avoid_: client（v1.0.0 的 MXU／MFAAvalonia）
 設定檔 `schedules` 的一項：星期、時間、要不要叫醒電腦。每個排程是 Windows 工作排程器裡的一個工作，名稱帶 maalc 資料夾的鍵（`maalc-<鍵>-<id>`），時間到時執行 `maalc-gui.exe --run <id>`，跑設定檔的任務清單。這個功能叫定時執行（#816）。
 _Avoid_: 排程任務、定時任務（和任務清單的任務混淆）
 
+**裝置種類**：
+執行器要跑在哪一種裝置上：`emulator`（Android 模擬器，連線照設定檔的 `emulator` 段）或 `pc`（PC 視窗），預設 `emulator`。存在設定檔的 `device.kind`（版本 25 起，#939），執行器開始命令的 `device.kind` 省略就是模擬器。PC 版還在規劃（#922，[ADR 0017](docs/adr/0017-pc-window-behind-a-custom-controller.md)）：目前選 `pc` 時，執行器以「還不支援 PC 版客戶端」（代碼 `PcNotSupported`）取消整個任務清單。
+
+**PC 視窗**：
+Steam 版 Limbus Company 在電腦上開的遊戲視窗：頂層、看得見、類別 `UnityWndClass`、標題 `LimbusCompany`（#922）。裝置種類是 `pc` 時執行器要連的對象；設定檔只存它執行時的客戶區大小（`device.pc_size`），不存視窗代號（HWND），因為遊戲重開後代號就變了。
+
+**PC 資源層**：
+裝置種類是 `pc` 時，接在 base 資源之後載入的另一個資源資料夾：只放 PC 畫面和 Android 畫面不同的節點與模板，同名節點以它為準。模擬器不載入它；資源熱更新重載 base 時要一起重載（#922）。還沒有這個資料夾，由 #922 之後的票加上。
+
 ## 資料
 
 **遊戲資料**：

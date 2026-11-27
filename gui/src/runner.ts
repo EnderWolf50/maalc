@@ -28,11 +28,14 @@ export interface Device {
   mumu: { index: number; manager: string; path: string } | null;
 }
 
+/** A PC window a scan found (runner.rs PcWindow, #939): its title, its client area's size, whether it is minimized. */
+export interface PcWindow { title: string; width: number; height: number; minimized: boolean }
+
 /** An event of the runner, as the backend relays it under `type: "event"` (an error event has a field named kind). */
 export type RunnerEvent =
   | { event: "ready"; pid: number }
   | { event: "log"; t: string; source: Source; line: string }
-  | { event: "devices"; devices: Device[] }
+  | { event: "devices"; devices: Device[]; windows?: PcWindow[] }
   | { event: "connection"; state: LinkState; address: string }
   | { event: "resource"; state: ResourceState }
   | { event: "task"; index: number; entry: string; state: TaskState; reason?: string | null; reason_code?: string;

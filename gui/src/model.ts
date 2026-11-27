@@ -346,7 +346,12 @@ export interface Settings {
   tasks: { id: string; enabled: boolean }[];
   emulator: { address: string | null; mumu_index: number | null; mumu_manager: string | null };
   schedules: { id: string; days: string[]; time: string; wake: boolean }[];
+  /** The kind of device the runner drives (#939): the emulator (the emulator section), or the PC client's window, which the
+   * runner refuses as not supported yet; pc_size the window's client area for a run, by its height. No editor shows it yet,
+   * a save keeps it. */
+  device: DeviceSetting;
 }
+export interface DeviceSetting { kind: "emulator" | "pc"; pc_size: "keep" | "720" | "900" | "1080" | "1440" }
 export interface RunOptions {
   difficulty: string; target_floor: number; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
   stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number; after_retries: string;
@@ -375,12 +380,15 @@ export function newSections(): Pick<Settings, "run" | "luxcavation" | "charge_en
   };
 }
 
-/** A new settings file: empty lists (spec 04 section 4), the task options at their defaults, every task ticked. */
+/** The device section version 25 added (#939) at the schema's defaults (agent/settings.py device_defaults): the emulator. */
+export const newDevice = () => defaultsOf(P.device.properties) as unknown as DeviceSetting;
+
+/** A new settings file: empty lists (spec 04 section 4), the task options at their defaults, every task ticked, the emulator. */
 export function newSettings(): Settings {
   return {
     version: VERSION, language: "zh_tw",
     deployment_order_plans: [], starlight_plans: [], theme_pack_plans: [], gift_lists: [], teams: [], team_queue: [],
-    event_overrides: [], trial_risk_overrides: [], ...newSections(),
+    event_overrides: [], trial_risk_overrides: [], ...newSections(), device: newDevice(),
   };
 }
 
@@ -409,12 +417,15 @@ export function freeName(base: string, taken: string[]) {
 export const OLDEST_VERSION = 20;
 /** MIGRATIONS[n] turns a version-n file into a version-(n + 1) file, one for each n from OLDEST_VERSION up; keep in step with
  * agent/settings.py. 20 -> 21 changes nothing now: version 21 dropped run, luxcavation and charge_enkephalin while the
- * client held their values (#782), and 22 -> 23 brings them back, so a version 20 file keeps its own (#813). */
+ * client held their values (#782), and 22 -> 23 brings them back, so a version 20 file keeps its own (#813). 24 -> 25
+ * (#939): the device section at its defaults, the emulator; a hand-made one gets each key it lacks (agent/settings.py
+ * _device_in). */
 export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<string, unknown>> = {
   20: (d) => ({ ...d }),
   21: (d) => ({ ...d, team_queue: queueInListOrder(d.teams) }),
   22: (d) => sectionsBack(d),
   23: (d) => queueAsPutIn(d),
+  24: (d) => ({ ...d, device: "device" in d ? withMissing(newDevice(), d.device) : newDevice() }),
 };
 /** The first version whose file holds its run values (#813): an older one's come back from outside the file once (readBack.ts). */
 export const SECTIONS_VERSION = 23;

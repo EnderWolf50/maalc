@@ -1,7 +1,7 @@
 {
-  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order. added_v23 names the sections version 23 brought back or added (#813); valid has them at their defaults, as a new file and the migration give them. v20 holds the three of them version 20 had, as a new v0.1.0 file had them. An older file is valid at that version: each team with enabled true (below version 24, #954), run with start_team null at version 23, without added_v23 below it, without team_queue below version 22 (#803), and with v20 at version 20. Each migrate_v20, migrate_v21, migrate_v22 and migrate_v23 case applies its edits to the file at that version, and the migration, the agent's and the GUI's, gives valid with the case's gives edits made (migrate_v21: the file itself at the current version, its teams without enabled, with team_queue the ids of those that were on, in the order of teams, and added_v23 as valid has them); a case with schema gives a file whose errors sit there instead. skill_replacement_default is what a new team gets, no sinner listed, and the schema's default is the same. task_start holds the cases of the rules that cross a task's options with the teams (the target floor's, a Luxcavation task's team): the agent checks them at that task's start (tests/test_task_options.py), so a team deleted stops only the task that names it; the GUI does not check them. task is the task, edits the settings file's, cross that start's errors in order ([] when it passes them). Each next_run case applies its edits to valid and gives the team of the next hard run and of the next normal run (null: none), the first team of team_queue whose usage fits that difficulty: the agent's pick_team (tests/test_team_queue.py) and the next-run marks of the settings GUI's team queue (gui/src/teamQueue.test.tsx) both give it (#804, #878). too_old gives valid at an older version than the oldest both read and the one error both give for it, word for word. clean_gift_list cases give a list (want, keep, gorder; an unset gorder is {}) and what cleaning it gives (want, keep, dropped, gorder_head: a keyword's first ids, gorder_size: how many ids each keyword has).",
+  "description": "Shared by tests/test_settings.py and gui/src/validate.test.ts so the agent and the GUI reject the same files. Each case applies edits to valid: set (a last path segment of - appends) or delete. schema lists the error paths; every error must sit at or under one of them. cross lists the exact cross-check messages, in order. added_v23 names the sections version 23 brought back or added (#813), added_v25 the one version 25 added (#939); valid has them at their defaults, as a new file and the migration give them. v20 holds the three of them version 20 had, as a new v0.1.0 file had them. An older file is valid at that version: without added_v25 below version 25, each team with enabled true (below version 24, #954), run with start_team null at version 23, without added_v23 below it, without team_queue below version 22 (#803), and with v20 at version 20. Each migrate_v20, migrate_v21, migrate_v22, migrate_v23 and migrate_v24 case applies its edits to the file at that version, and the migration, the agent's and the GUI's, gives valid with the case's gives edits made (migrate_v21: the file itself at the current version, its teams without enabled, with team_queue the ids of those that were on, in the order of teams, and added_v23 and added_v25 as valid has them); a case with schema gives a file whose errors sit there instead. skill_replacement_default is what a new team gets, no sinner listed, and the schema's default is the same. task_start holds the cases of the rules that cross a task's options with the teams (the target floor's, a Luxcavation task's team): the agent checks them at that task's start (tests/test_task_options.py), so a team deleted stops only the task that names it; the GUI does not check them. task is the task, edits the settings file's, cross that start's errors in order ([] when it passes them). Each next_run case applies its edits to valid and gives the team of the next hard run and of the next normal run (null: none), the first team of team_queue whose usage fits that difficulty: the agent's pick_team (tests/test_team_queue.py) and the next-run marks of the settings GUI's team queue (gui/src/teamQueue.test.tsx) both give it (#804, #878). too_old gives valid at an older version than the oldest both read and the one error both give for it, word for word. clean_gift_list cases give a list (want, keep, gorder; an unset gorder is {}) and what cleaning it gives (want, keep, dropped, gorder_head: a keyword's first ids, gorder_size: how many ids each keyword has).",
   "valid": {
-    "version": 24,
+    "version": 25,
     "language": "zh_tw",
     "deployment_order_plans": [
       {"id": "d1", "name": "Bleed order", "order": ["Yi Sang", "Faust", "Don Quixote", "Ryōshū", "Meursault", "Hong Lu", "Heathcliff", "Ishmael", "Rodion", "Sinclair", "Outis", "Gregor"]}
@@ -67,9 +67,11 @@
       {"id": "MirrorDungeon", "enabled": true}
     ],
     "emulator": {"address": null, "mumu_index": null, "mumu_manager": null},
-    "schedules": []
+    "schedules": [],
+    "device": {"kind": "emulator", "pc_size": "1440"}
   },
   "added_v23": ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator", "schedules"],
+  "added_v25": ["device"],
   "v20": {
     "run": {
       "difficulty": "auto", "target_floor": 5, "runs": 1, "weekly_bonus_use": "hard", "weekly_bonus_amount": "all",
@@ -151,7 +153,25 @@
     {"name": "a disabled team broken by hand to have no id takes no place out",
      "edits": [{"set": "team_queue", "value": ["a", null]}, {"set": "teams/1/enabled", "value": false}, {"delete": "teams/1/id"}], "schema": ["team_queue/1", "teams/1"]}
   ],
+  "migrate_v24": [
+    {"name": "the device is the emulator, the PC window size the largest (#939)", "edits": [], "gives": []},
+    {"name": "the emulator section stays key for key",
+     "edits": [{"set": "emulator", "value": {"address": "127.0.0.1:16416", "mumu_index": 1, "mumu_manager": "C:/MuMu/nx_main/MuMuManager.exe"}}],
+     "gives": [{"set": "emulator", "value": {"address": "127.0.0.1:16416", "mumu_index": 1, "mumu_manager": "C:/MuMu/nx_main/MuMuManager.exe"}}]},
+    {"name": "a hand-made device section is filled, not replaced", "edits": [{"set": "device", "value": {"kind": "pc"}}],
+     "gives": [{"set": "device/kind", "value": "pc"}]},
+    {"name": "a hand-broken device section stays, for the check to name it", "edits": [{"set": "device", "value": "pc"}], "schema": ["device"]},
+    {"name": "a device kind broken by hand stays, for the check to name it", "edits": [{"set": "device", "value": {"kind": "android"}}],
+     "schema": ["device/kind"]}
+  ],
   "cases": [
+    {"name": "the PC window left at its size, the emulator's fields kept (#939)",
+     "edits": [{"set": "device", "value": {"kind": "pc", "pc_size": "keep"}}, {"set": "emulator/address", "value": "127.0.0.1:16384"}], "cross": []},
+    {"name": "the PC window at 720p", "edits": [{"set": "device/kind", "value": "pc"}, {"set": "device/pc_size", "value": "720"}], "cross": []},
+    {"name": "a device kind is emulator or pc", "edits": [{"set": "device/kind", "value": "android"}], "schema": ["device/kind"]},
+    {"name": "a PC window size is one of the five, as text", "edits": [{"set": "device/pc_size", "value": 1080}], "schema": ["device/pc_size"]},
+    {"name": "a PC window size not offered", "edits": [{"set": "device/pc_size", "value": "2160"}], "schema": ["device/pc_size"]},
+    {"name": "a device section takes no window handle", "edits": [{"set": "device/hwnd", "value": 1}], "schema": ["device"]},
     {"name": "a team out of the queue may share a slot, plan names are per kind, empty weights",
      "edits": [
        {"set": "teams/1/game_team", "value": 1}, {"set": "team_queue", "value": ["a"]},
