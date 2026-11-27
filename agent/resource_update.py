@@ -34,6 +34,9 @@ MANIFEST_LIMIT = 8 << 20  # bytes: a manifest larger than this is not one
 STAGING = ".update"  # beside resource/base: the same volume, so a swap is a rename
 SHA256 = re.compile(r"[0-9a-f]{64}")
 PREFIX = "resource update: "
+# The bundles the runner loaded, by their folder names under resource/ (runner/layers.py, whose LAYERS_ENV this is): on
+# a PC run base and the PC resource layer, which a reload loads again, or the PC run goes on with Android's nodes (#944).
+LAYERS_ENV = "MAALC_RESOURCE_LAYERS"
 
 # (the parts one version covers, the manifest field that versions them, the version this program knows). The parts whose
 # remote version differs are skipped and keep their files.
@@ -312,14 +315,22 @@ def needs_reload(plans):
     return any(p for p in plans if p.part != "data")  # a plan with no change is falsy
 
 
+def bundles(base):
+    """The bundles the runner loaded, in their order: the folders beside `base` LAYERS_ENV names, else `base` alone."""
+    base = Path(base)
+    return [base.parent / name for name in os.environ.get(LAYERS_ENV, "").split(",") if name] or [base]
+
+
 def reload_bundle(tasker, base):
-    """Drop what the resource holds and load `base` again, waiting for the load. MaaFramework has no guard against doing
-    this inside a running task: the task goes on with the new pipeline and templates (the test in test_task_chain.py)."""
+    """Drop what the resource holds and load `base` again, and the PC resource layer after it on a PC run (bundles), waiting
+    for each load. MaaFramework has no guard against doing this inside a running task: the task goes on with the new
+    pipeline and templates (the test in test_task_chain.py)."""
     resource = tasker.resource
     if not resource.clear():
         raise ClearRefused("resource.clear() failed (a load is still running)")
-    if not resource.post_bundle(base).wait().succeeded:
-        raise UpdateError("resource.post_bundle() did not load the bundle")
+    for bundle in bundles(base):
+        if not resource.post_bundle(bundle).wait().succeeded:
+            raise UpdateError(f"resource.post_bundle() did not load resource/{bundle.name}")
 
 
 def refresh(plans, tasker, base, undo, log):

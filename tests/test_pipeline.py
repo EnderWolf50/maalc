@@ -8,9 +8,9 @@ import hub_text
 PIPELINE = Path(__file__).resolve().parent.parent / "assets/resource/base/pipeline"
 
 
-def load_nodes(pattern="*.json"):
+def load_nodes(pattern="*.json", folder=PIPELINE):
     nodes = {}
-    for path in sorted(PIPELINE.glob(pattern)):
+    for path in sorted(folder.glob(pattern)):
         lines = path.read_text(encoding="utf-8").splitlines()
         nodes |= json.loads("\n".join(ln for ln in lines if not ln.strip().startswith("//")))
     return nodes

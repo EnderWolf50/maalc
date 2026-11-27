@@ -77,6 +77,14 @@ def test_bundled_python_loads_maafw_through_the_runners_framework(tmp_path):
     assert (tmp_path / "debug").is_dir()
 
 
+def test_the_pc_resource_layer_ships_beside_base_and_outside_the_package():
+    """#944: the PC resource layer goes out with the zip alone; the package (resource/base's manifest) does not list it."""
+    layer, repo = TREE / "resource" / "pc", Path(__file__).resolve().parent.parent / "assets" / "resource" / "pc"
+    files = {p.relative_to(layer).as_posix(): p.read_bytes() for p in layer.rglob("*") if p.is_file()}
+    assert files and files == {p.relative_to(repo).as_posix(): p.read_bytes() for p in repo.rglob("*") if p.is_file()}
+    assert all((TREE / "resource" / "base" / name).is_file() for name in rp.read_manifest(TREE / "resource" / "base")["files"])
+
+
 def test_resource_base_holds_the_package_and_its_manifest():
     """The zip works on first use and offline (#766): data/, image/ and pipeline/ with a manifest that lists each file by
     sha256, the real sources, and no OCR model."""

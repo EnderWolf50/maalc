@@ -31,7 +31,7 @@ from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
-from runner import devices, pc, protocol, runlog
+from runner import devices, layers, pc, protocol, runlog
 
 ROOT = Path(__file__).resolve().parent.parent  # the install: runner/ sits beside agent/ and resource/
 
@@ -302,7 +302,8 @@ class Session:
 
     def run(self, root: Path, want: dict) -> str:
         fw = self.framework(root)
-        ctl = self.pc(fw, want) if want.get("kind") == "pc" else self.emulator(fw, want)
+        kind = want.get("kind", "emulator")
+        ctl = self.pc(fw, want) if kind == "pc" else self.emulator(fw, want)
         if isinstance(ctl, str):  # the run ended before it connected: its result
             return ctl
         self.poll()
@@ -310,13 +311,15 @@ class Session:
             return self.cancel_rest("stopped", None)
         self.out.send("resource", state="loading")
         res = fw.resource()
-        if not res.post_bundle(str(root / "resource" / "base")).wait().succeeded:
-            return self.fail("resource_failed", f"could not load {root / 'resource' / 'base'}", "the resource did not load",
-                             own("ResourceFailed"))
+        bundles = layers.bundles(root, kind)  # base, and the PC resource layer after it on a PC run (#944)
+        for bundle in bundles:
+            if not res.post_bundle(str(bundle)).wait().succeeded:
+                return self.fail("resource_failed", f"could not load {bundle}", "the resource did not load",
+                                 own("ResourceFailed"))
         self.out.send("resource", state="loaded")
         self.client = fw.agent_client()
         self.client.bind(res)
-        self.start_agent(root, self.client.identifier)
+        self.start_agent(root, self.client.identifier, bundles)
         if not self.client.connect():
             code = self.agent.poll()
             return self.fail("agent_failed", "the bot did not connect" + (f": it exited with code {code}" if code is not None else ""),
@@ -467,9 +470,11 @@ class Session:
             self.sleep(min(TICK, end - self.now()))
 
     # the bot
-    def start_agent(self, root: Path, identifier: str) -> None:
-        # MAALC_TASKER_PID: this process recognises, so the bot logs its memory at each floor (agent/memlog.py, #391)
-        env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "MAALC_TASKER_PID": str(os.getpid())}
+    def start_agent(self, root: Path, identifier: str, bundles: list[Path]) -> None:
+        # MAALC_TASKER_PID: this process recognises, so the bot logs its memory at each floor (agent/memlog.py, #391);
+        # the bundles this run loaded, which a hot update loads again (runner/layers.py, #944)
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "MAALC_TASKER_PID": str(os.getpid()),
+               **layers.agent_env(bundles)}
         self.agent = subprocess.Popen(self.agent_command(root, identifier), stdin=subprocess.DEVNULL,
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

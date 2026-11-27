@@ -1,0 +1,12 @@
+{
+    // The PC resource layer (#944, ADR 0017): loaded after resource/base on a PC run only. MaaFramework merges a node of
+    // a base node's name over it field by field, so a node here writes only the fields the PC client needs changed.
+    //
+    // Steam updates the PC client, not the bot (#922 D11): the base node presses the game's update notice and restarts
+    // the game (AcceptUpdate). Here it stops the whole list instead, with base's recognition.
+    "UpdateDialog": {
+        "action": "Custom",
+        "custom_action": "Halt",
+        "custom_action_param": "the game has an update: update it in Steam, then start the bot again"
+    }
+}
