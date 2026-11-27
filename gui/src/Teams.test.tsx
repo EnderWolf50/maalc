@@ -389,7 +389,10 @@ describe("the E.G.O Gift Search gifts: icon first, details on hover (#721)", () 
     const r = renderEditor(<TeamsTab />, burnFirst());
     await r.user.hover(tile(DUST.zh));
     const level = (l: string) => within(card()!).getByRole("button", { name: zh[`gl.tip_level_${l}` as keyof typeof zh] });
-    expect(within(card()!).getByRole("group", { name: zh["gl.tip_level_group"] })).toBeInTheDocument();
+    const group = within(card()!).getByRole("group", { name: zh["gl.tip_level_group"] });
+    // as on the gift list tab's card: a row of its own between the name's row and the effect text
+    expect(card()!.querySelector(".gl-tip-head")!.nextElementSibling).toBe(group);
+    expect(group.nextElementSibling).toHaveClass("gl-tip-effect");
     expect(level("base")).toHaveAttribute("aria-pressed", "true");
     await r.user.click(level("plus"));
     const effect = card()!.querySelector(".gl-tip-effect")!;
