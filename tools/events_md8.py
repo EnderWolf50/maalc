@@ -33,6 +33,12 @@ def tag(s):
     return re.sub(r"</?[a-z][^>]*>", "", s or "").replace("\n", " ").strip()
 
 
+def has_text(loc):
+    """Whether a localization record has the event's story or options: EN_AbEvents repeats some EN_ActionEvents ids with
+    only prevDesc and a title."""
+    return bool(loc.get("desc") or loc.get("options"))
+
+
 @dataclass
 class Tables:
     """The event, gift, battle and text tables by id: load reads them once, and the builders below look them up."""
@@ -63,8 +69,11 @@ def load(root: Path) -> Tables:
             t.battle_rows.setdefault(row["id"], row)
     for f in sorted(glob.glob(str(lz / "EN_ActionEvents*.json")) + glob.glob(str(lz / "EN_AbEvents*.json"))):
         for x in ld(f).get("dataList", []):
-            t.loc.setdefault(x["id"], x)
-            t.loc_file.setdefault(x["id"], os.path.basename(f))
+            kept = t.loc.get(x["id"])
+            if kept is None or (has_text(x) and not has_text(kept)):
+                # an id in both files: the record with the story and options wins over the one read before it, which
+                # fills the fields it lacks (EN_AbEvents sorts first: 863301's title, #969)
+                t.loc[x["id"]], t.loc_file[x["id"]] = {**(kept or {}), **x}, os.path.basename(f)
     for f in glob.glob(str(lz / "*EGOgift*.json")):
         for x in ld(f).get("dataList", []):
             if x.get("name"):
@@ -164,9 +173,11 @@ def build_event(t, eid):
     ae = ev["actionEvent"]
     rec["hideHint"] = bool(ae.get("isHideHint"))
     rec["options"] = []
-    for o in ae["eachOptionList"]:
+    texts = loc.get("options", [])
+    for place, o in enumerate(ae["eachOptionList"]):
         i = o["index"]
-        lo = loc.get("options", [])[i] if i < len(loc.get("options", [])) else {}
+        # the text at the option's place in the list: 863301's indices skip 2 and its four texts are in order (#969)
+        lo = texts[place] if place < len(texts) else {}
         rs = results(t, o.get("resultList", []))
         found = []
         walk_gifts(t, rs, "direct", found, {eid}, [])

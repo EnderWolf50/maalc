@@ -82,6 +82,41 @@ def test_the_other_files_count_and_list_what_the_table_holds(out):
     assert len(rows) == 1 + 4  # the header, then an option a row (event 101 is a check: it has none)
 
 
+def edit(path, change):
+    """Rewrite the JSON file at path with change(data) applied to its data."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    change(data)
+    write(path, data)
+
+
+def event_out(root, tmp_path, eid):
+    """Event eid as run writes it for the unpack folder root."""
+    md8.run(root, tmp_path / "out")
+    return {e["id"]: e for e in json.loads((tmp_path / "out/events-md8.json").read_text(encoding="utf-8"))["events"]}[eid]
+
+
+def test_an_event_in_both_localization_files_takes_the_one_with_its_text_and_the_earlier_ones_other_fields(tmp_path):
+    # #969: EN_AbEvents sorts ahead of EN_ActionEvents and holds only prevDesc (and a title) for 801202 and eight more.
+    root = unpack(tmp_path)
+    en = root / md8.LOCALIZE
+    edit(en / "EN_ActionEvents.json", lambda d: d["dataList"][0].update(name="", prevDesc="(placeholder)"))  # 863301's: no name
+    write(en / "EN_AbEvents.json", {"dataList": [{"id": 100, "title": "Four Roses", "prevDesc": "Something stirs."}]})
+    event = event_out(root, tmp_path, 100)
+    assert (event["locFile"], event["desc"]) == ("EN_ActionEvents.json", "A story.")
+    assert [(o["text"], o["hint"]) for o in event["options"]] == [("Take it.", "Gain a Burn gift"), ("Look closer.", "???"), ("Leave.", None)]
+    assert event["title"] == "Four Roses"  # a field only the other record has stays
+
+
+def test_an_options_text_is_the_localizations_at_its_place_in_the_list_when_the_indices_skip_one(tmp_path):
+    # #969: 863301's options are indices 0, 1, 3, 4 and its localization lists four, in order.
+    root = unpack(tmp_path)
+    edit(root / md8.STATIC / "abnormality-event/a.json",
+         lambda d: d["list"][2]["actionEvent"].update(eachOptionList=[{"index": 0}, {"index": 2}]))
+    edit(root / md8.LOCALIZE / "EN_ActionEvents.json", lambda d: d["dataList"][2].update(options=[{"message": "Fine."}, {"message": "Leave."}]))
+    event = event_out(root, tmp_path, 200)
+    assert [(o["index"], o["text"]) for o in event["options"]] == [(0, "Fine."), (2, "Leave.")]
+
+
 def test_main_reads_the_main_checkouts_unpack_and_writes_to_its_out_by_default(tmp_path, monkeypatch):
     root = unpack(tmp_path)
     monkeypatch.setattr(md8, "local_dir", lambda *parts: root)
