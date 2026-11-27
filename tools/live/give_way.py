@@ -33,6 +33,9 @@ paused for PAUSE minutes, the emulator is the caller's, look at the screenshots.
 does not hold the emulator, no bot runs, T2 was used before, the emulator did not answer). Exit 3: the bot ended by itself before a safe point: the skill's steps 7
 and 9 let the daily in.
 
+`watch --device pc` (#949) is refused on the PC client's window, with why: leaving takes the Back key and RecoverL2's
+taps, which this version's PC window controller does not take (spec #922 D6; its input comes with #946).
+
 **look** names the screen of each image as step 1 reads it (--glance: as the wait for it does, the map and the panel alone;
 --home: as the wait for the main window does): the tests' seam.
 """
@@ -52,7 +55,7 @@ TOOLS = REPO / "tools"
 if str(TOOLS) not in sys.path:  # run as a script, `live` is not importable until tools/ is on the path
     sys.path.insert(0, str(TOOLS))
 
-from live import giveup, hold, queue, screen_probe  # noqa: E402
+from live import device, giveup, hold, queue, screen_probe  # noqa: E402
 from live.preflight import BOT_START  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
 
@@ -401,7 +404,7 @@ def run(a) -> int:
     os.environ["MAAFW_BINARY_PATH"] = str(a.install.resolve() / "maafw")
     from maa.toolkit import Toolkit
 
-    from live import backup, device
+    from live import backup
 
     out = a.out or folder / "give-way"
     out.mkdir(parents=True, exist_ok=True)
@@ -444,6 +447,7 @@ def main(argv=None) -> int:
     p.add_argument("--recording", help="the screenrec profile to stop before the hold ends, and the next hold's --stop-recording")
     p.add_argument("--timeout", type=float, default=7200, help="the next hold's --timeout")
     p.add_argument("--port", type=int, default=16384)
+    device.add_device(p)
     p.add_argument("--out", type=Path)
     p.add_argument("--bot-log", type=Path)
     p.add_argument("--run-log", type=Path)
@@ -457,6 +461,9 @@ def main(argv=None) -> int:
     if a.command == "watch":
         if a.now and a.recording:
             ap.error("--now keeps the hold and its recording: no --recording")
+        if a.device == "pc":
+            device.pc_refused(f"give_way.py watch leaves with the Back key and RecoverL2's taps, and {device.NO_INPUT}")
+            return 1
         return run(a)
     named = giveup.look_files(a.images, REPO / "assets/resource/base", a.look)
     if a.json:

@@ -29,7 +29,7 @@ user's own work).
 
 **record** runs screen-record's `start` on one window and refuses when more than one visible window matches:
 `--hwnd H` records that window by its title (from **open**, or **title**), `--window SUBSTR` the one window that holds
-SUBSTR (MuMu's "Android Device"). `--wait S` waits up to S seconds for the window to appear (MuMu starts when the run
+SUBSTR (MuMu's "Android Device", or the PC client's "LimbusCompany", #949). `--wait S` waits up to S seconds for the window to appear (MuMu starts when the run
 does). After the start it reads the recording's state file: a recording of another window is stopped, exit 1. The other
 options go to screen-record as they are; `--height` defaults to 720 (the maalc-live-test skill, step 5).
 

@@ -1,6 +1,6 @@
 ---
 name: maalc-live-test
-description: Run maalc against the MuMu emulator and report it with evidence. Use for a live test, an experiment, live verification of a PR, or an unattended run on the emulator.
+description: Run maalc against the MuMu emulator or the PC client's window and report it with evidence. Use for a live test, an experiment, live verification of a PR, or an unattended run on the emulator.
 ---
 
 A **live test** drives the user's real game account. It owns the emulator alone, starts from a known screen, and leaves the account, the game settings and `install/` as it found them. Emulator settings (resolution, window) stay the user's. Machine-local state lives in `.local/` of the main checkout, never of your worktree (`docs/agents/local-dev.md`); `install/` is the main checkout's too.
@@ -73,6 +73,19 @@ A run of several hours whose brief says so (#853) gives way to the daily task in
 - **G3 The next leg.** `<task>-b` already waits behind the daily: do not queue it again. Wait for `[queue] start` in `<local>/scratch/<task>-b/hold.log`, then steps 2, 5 and 6 under `<task>-b`: the same install and no new `prep` (the settings of the run in progress stay), `preflight.py plan --resumed --within 600` in place of `plan`, and G1 again with a fresh `--next`. Done: `plan --resumed` printed `ok`, and the floor the log names next is the one the first leg stopped on.
 
 A deliberate break, to check that Resume picks the run up when no daily came: when `run.log` shows `floor <N> memory:` for the floor the brief names, end the G1 watch (`taskkill /T /F` on the pid in `give-way.log.pid`; two watches would both stop the bot) and run the same `watch` with `--now` in place of `--next` and `--recording`. The hold stays; then the bot again under `bot-b.log` with its own run log `run-b.log`, `plan --resumed` on that, and G1 again with `--bot-log` and `--run-log` naming the two. Check the recording first (step 5): under `--stop-recording` it stopped when the bot was away over 60 s.
+
+## On the PC window
+
+The PC client's window (Limbus Company on Steam, title `LimbusCompany`) logs in to the same account, so the `emulator` lane covers it: `docs/agents/local-dev.md` "The emulator lane" has the checks before a PC step and when the user plays. A tool's PC command is its `--device pc` (pc_shots.py has no other), and it acts only under a ticket of its own that holds the lane: `uv run python tools/live/queue.py run --resource emulator --name <task>-<step> -- <tool command>`; without one it prints `refused:` and touches no window. Step 1's hold is a ticket of the same lane, and a PC command's ticket would wait behind it until it ends, so a PC session takes no hold: its bot runs on a test install (W1's, or a copy under `<local>/scratch/<task>/`), never the main checkout's `install/`. The steps above change so:
+
+| Step | On the PC window |
+| --- | --- |
+| 2 Pre-flight | `preflight.py screen --device pc --install <install>` under its own ticket: the window's screen named with the PC resource layer over base; an update notice is a `stop` (Steam updates the client, #944) |
+| 5 Record | `screenrec.py start --window LimbusCompany --height 720` (or `gui_run.py record --window LimbusCompany`). How much of a windowed window's title bar `--crop-top` cuts is not measured yet: measure it on the first PC recording and write it here |
+| 6 Run | `queue.py detach --log <local>/scratch/<task>/bot.log -- uv run python tools/live/queue.py run --resource emulator --name <task> -- uv run python tools/live/bot.py run --device pc [--pc-size 720\|900\|1080\|1440] --install <install> --log <local>/scratch/<task>/run.log`. `--pc-size` sets the client area for the run and the runner puts the window back after it; leave it at `keep` unless the brief names a size. This version's controller takes no input (spec #922 D6), so the run ends at the task's first tap with `the game's window did not take an input` (PcInputFailed); `tests/test_live_bot.py` dry-runs it on a fake window |
+| 8 Evidence | the PC identity regions are not measured yet (`IDENTITY` in `tools/live/pc_shots.py`), and `<local>/evidence/masks.json` is the emulator's layout: no PC still or clip leaves `.local/` until they are measured (D15). `pc_shots.py mask` refuses until then. `maafw_events.py` reads no PC touches (none exist yet) |
+
+The other tools on the PC window: `pc_shots.py` takes the shots of #941 (`info`, `compare`, `watch`), and `device.py --device pc shot` one shot. `device.py`'s `tap`, `press` and `key` are refused until the controller takes input (#946), and so are `giveup.py run`, `ego_card.py open` and `give_way.py watch`; `start` and `restart` until #948; `freeze` for now, since its ticket would wait behind the bot's. Each says why.
 
 ## Asks the user first
 

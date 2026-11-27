@@ -68,3 +68,15 @@ def test_a_press_that_opens_no_card_is_tried_again_3_s_later():
 def test_a_card_that_stays_is_a_failure():
     bot = Bot(["BattleTurn.png", "BattleEgoCard.png"])
     assert bot.run() == 1 and bot.said[-1].startswith("card still up")
+
+
+def test_opening_a_card_on_the_pc_window_is_refused_with_why_before_any_window_is_looked_at(tmp_path, monkeypatch, capsys):
+    # #949: the press is input, which the PC window controller does not take in this version (spec #922 D6, until #946)
+    import pytest
+
+    from live import device
+
+    monkeypatch.setattr(device, "connect", lambda port: pytest.fail("the emulator was connected to"))
+    monkeypatch.setattr(device, "connect_pc", lambda: pytest.fail("a window was looked at"))
+    assert ec.main(["--device", "pc", "open", "--slot", "0", "--out", str(tmp_path)]) == 1
+    assert "refused" in (out := capsys.readouterr().out) and "#946" in out

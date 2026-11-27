@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import cv2
+import pytest
 import numpy as np
 from PIL import Image
 
@@ -278,3 +279,96 @@ def test_commands_after_plan_run_once_it_ends(tmp_path, monkeypatch):
     monkeypatch.setattr(dv, "PLAN_EVERY", 0)
     dv.run_commands(ctl, cmd, tmp_path, deadline=float("inf"), poll=0)
     assert ctl.calls == [("click", 10, 20)]
+
+
+# the PC window (#949): a fake desk (test_pc's) and the PC window controller on a fake inner controller; no real window
+# is looked at or sent anything
+class PcCtl:
+    """MaaFramework's custom controller over runner/pc.py's Controller, as runner/pc_controller.py makes it: post_*
+    answer through its callbacks."""
+
+    def __init__(self, hwnd, windows):
+        from test_live_pc_shots import FakeCtl as Inner
+
+        from runner import pc
+
+        self.inner_ctl = Inner()
+        self.pc = pc.Controller(hwnd, windows, inner=lambda h: pc.win32_controller(h, make=lambda *a: self.inner_ctl))
+
+    @property
+    def problem(self):
+        return self.pc.problem
+
+    def post_connection(self):
+        return SimpleNamespace(wait=lambda: SimpleNamespace(succeeded=self.pc.connect()))
+
+    def post_screencap(self):
+        return Job(self.pc.screencap())
+
+
+def pc_desk(**state):
+    from test_live_pc_shots import PcDesk
+    from test_pc import game
+
+    return PcDesk(game(**state))
+
+
+def test_a_pc_command_without_the_emulator_lane_touches_no_window(tmp_path, monkeypatch, capsys):
+    # spec #922 D14: the PC window is the emulator lane's, as tools/live/pc_shots.py checks it
+    from live import queue
+
+    monkeypatch.delenv(queue.TICKET_ENV, raising=False)
+    monkeypatch.setattr(dv, "connect_pc", lambda: pytest.fail("a window was looked at"))
+    with pytest.raises(SystemExit):
+        dv.main(["--device", "pc", "shot", str(tmp_path / "s.png")])
+    assert "emulator lane" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("argv, why", [
+    (["tap", "1", "2"], "#946"), (["press", "1", "2"], "#946"), (["key", "4"], "#946"),
+    (["start"], "#948"), (["restart"], "#948"),
+    (["freeze", "--log", "run.log", "--fire", "x", "--pid", "9"], "would wait until the bot ended"),
+])
+def test_a_command_the_pc_window_cannot_take_yet_is_refused_with_why(tmp_path, monkeypatch, capsys, argv, why):
+    # the PC window controller takes no input in this version (D6), starting the game is #948's, and a freeze would
+    # wait behind the bot's ticket, which holds the lane
+    from test_live_pc_shots import hold_lane
+
+    hold_lane(tmp_path, monkeypatch)
+    monkeypatch.setattr(dv, "connect_pc", lambda: pytest.fail("a window was looked at"))
+    with pytest.raises(SystemExit):
+        dv.main(["--device", "pc", *argv])
+    assert re.search(f"refused: .*{why}", capsys.readouterr().out)
+
+
+def test_a_pc_shot_goes_through_the_pc_window_controller(tmp_path, monkeypatch):
+    from test_live_pc_shots import hold_lane
+
+    hold_lane(tmp_path, monkeypatch)
+    made = []
+    monkeypatch.setattr(dv, "connect_pc", lambda: made.append(dv.connect_pc_on(pc_desk(), PcCtl)) or made[0])
+    dv.main(["--device", "pc", "shot", str(tmp_path / "s.png")])
+    assert Image.open(tmp_path / "s.png").size == (1920, 1080)  # the fake inner's frame; MaaFramework scales a real one
+    assert [c[0] for c in made[0].inner_ctl.calls] == ["raw", "connection", "screencap"]
+
+
+def test_a_minimized_pc_window_is_not_connected_to(monkeypatch):
+    with pytest.raises(SystemExit, match="minimized"):
+        dv.connect_pc_on(pc_desk(minimized=True), PcCtl)
+
+
+def test_a_pc_window_minimized_after_the_connect_gets_no_screencap_and_no_shot_is_saved(tmp_path):
+    desk = pc_desk()
+    ctl = dv.connect_pc_on(desk, PcCtl)
+    desk.set(0x1234, minimized=True)
+    with pytest.raises(SystemExit, match="minimized"):
+        dv.shot(ctl, tmp_path / "s.png")
+    assert not (tmp_path / "s.png").exists() and ("screencap",) not in ctl.inner_ctl.calls
+
+
+@pytest.mark.parametrize("frame", [None, np.zeros((720, 1280, 3), np.uint8)])
+def test_a_pc_screencap_with_no_image_or_a_black_one_saves_no_shot(tmp_path, frame):
+    ctl = SimpleNamespace(problem=None, post_screencap=lambda: Job(frame))
+    with pytest.raises(SystemExit, match="no image or a black one"):
+        dv.shot(ctl, tmp_path / "s.png")
+    assert not (tmp_path / "s.png").exists()

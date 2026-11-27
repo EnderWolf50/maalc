@@ -1,6 +1,7 @@
 """Run maalc headless from an install, and the chores around a live run.
 
     uv run python tools/live/bot.py run --install DIR --log run.log [--task MirrorDungeon[,ExpLuxcavation...]] [--port 16384]
+        [--device pc [--pc-size keep|720|900|1080|1440]]
     uv run python tools/live/bot.py prep --install DIR [--source INSTALL] [--set KEY=VALUE ...]
     uv run python tools/live/bot.py awake [--minutes 240]
 
@@ -14,6 +15,12 @@ queues its task list, and runs them in turn (#364). It exits 0 when every task s
 `config/settings.json` at its start (#813): `prep --set` sets them; the runner gets each task by its entry alone. A task
 DIR's interface.json lacks stops it, exit 1, before the runner starts. A runner that reports it cannot stop
 MaaFramework (after the bot exited mid-run) has its process tree ended.
+
+`--device pc` runs on the PC client's window instead of the emulator (#949): the start names the device kind pc and
+`--pc-size`, the client area the runner sets for the run and puts back after it (runner/pc.py, spec #922 D17); `--port`
+is unused. The window is the emulator lane's (D14): the run goes under its own `queue.py run --resource emulator` ticket
+and refuses, exit 1 before the runner starts, otherwise (tools/live/pc_shots.py lane_trouble). This version's PC window
+controller takes no input (D6, until #946), so a PC run ends at the task's first tap with the reason PcInputFailed.
 
 **prep** copies `config/settings.json` and, when the source still has one, `state/`
 from `--source` (default the main checkout's install/) into DIR; the bot's first start turns the old rotation cursor
@@ -45,6 +52,7 @@ for path in (TOOLS, TOOLS.parent):  # tools/ for local_dir, the repo for runner/
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from live import device  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
 from runner import protocol  # noqa: E402
 from runner.runlog import clock  # noqa: E402
@@ -154,8 +162,16 @@ class RunnerEvents:
         return None
 
 
-def run(root: Path, tasks: list[str], port: int, log: Path) -> int:
-    """The tasks through root's runner, its log lines in log; the runner's exit code (0: every task succeeded)."""
+def start_device(kind: str, port: int, pc_size: str = "keep") -> dict:
+    """The start's device: the MuMu instance at port, or the PC client's window at pc_size (runner/protocol.py)."""
+    if kind == "pc":
+        return {"kind": "pc", **({"pc_size": pc_size} if pc_size != "keep" else {})}
+    return {"address": f"127.0.0.1:{port}"}
+
+
+def run(root: Path, tasks: list[str], port: int, log: Path, kind: str = "emulator", pc_size: str = "keep") -> int:
+    """The tasks through root's runner on the device (start_device()), its log lines in log; the runner's exit code (0:
+    every task succeeded)."""
     said = []
     try:
         jobs = plan(root, tasks)
@@ -170,7 +186,7 @@ def run(root: Path, tasks: list[str], port: int, log: Path) -> int:
         f.writelines(f"{clock()} {line}\n" for line in said)
     if jobs is None:
         return 1
-    start = {"v": protocol.VERSION, "cmd": "start", "root": str(root), "device": {"address": f"127.0.0.1:{port}"},
+    start = {"v": protocol.VERSION, "cmd": "start", "root": str(root), "device": start_device(kind, port, pc_size),
              "tasks": [{"entry": entry} for _, entry in jobs]}
     return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),
                    line=RunnerEvents())
@@ -229,6 +245,9 @@ def main(argv=None) -> int:
     p.add_argument("--install", type=Path, required=True)
     p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
     p.add_argument("--port", type=int, default=16384)
+    device.add_device(p)
+    p.add_argument("--pc-size", choices=protocol.PC_SIZES, default="keep",
+                   help="the PC window's client area for the run, by its height at 16:9 (keep: as it is)")
     p.add_argument("--log", type=Path, required=True)
     p = sub.add_parser("prep")
     p.add_argument("--install", type=Path, required=True)
@@ -238,7 +257,11 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.command == "run":
-        return run(a.install.resolve(), a.task.split(","), a.port, a.log)
+        if a.pc_size != "keep" and a.device != "pc":
+            ap.error("--pc-size is the PC window's: give --device pc")
+        if a.device == "pc" and device.pc_refused():
+            return 1
+        return run(a.install.resolve(), a.task.split(","), a.port, a.log, a.device, a.pc_size)
     if a.command == "prep":
         prep(a.install, a.source or main_checkout() / "install", a.set)
         print(f"prep: {a.install / 'config/settings.json'} written, {len(a.set)} key(s) set", flush=True)
