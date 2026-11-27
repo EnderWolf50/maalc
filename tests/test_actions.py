@@ -573,6 +573,38 @@ def test_recover_keeps_the_screen_when_the_hub_recognised_nothing(context, clock
     actions.STUCK["ladder"].__init__()
 
 
+def recover_l1(context, monkeypatch, values):
+    """Recover a stuck that starts at L1 on a fresh Ladder, the screenshots filled with values (screens()): the levels
+    it ran and what it logged."""
+    monkeypatch.setitem(actions.STUCK, "ladder", actions.recovery.Ladder())
+    monkeypatch.setitem(actions.STUCK, "restarts", actions.recovery.Restarts())
+    actions.STUCK["flag"] = ("Connecting", 1, "Connecting: the screen did not change for 80 s")
+    screens(context, values)
+    lines = []
+    monkeypatch.setattr(actions, "log", lines.append)
+    assert actions.Recover().run(context, None)
+    return [c.args[0] for c in context.run_task.call_args_list], lines
+
+
+def test_recover_restarts_a_frozen_game_the_back_key_did_not_change(context, monkeypatch):
+    # #960: live 2026-11-25, CONNECTING and WAVE 1 stood the same to the pixel through L1, and L3 came a stuck later.
+    levels, lines = recover_l1(context, monkeypatch, [7])
+    assert levels == ["RecoverL1", "RecoverL3"]
+    assert any("back key did not change the frozen screen" in line and "L3" in line for line in lines), lines
+
+
+def test_recover_stays_at_l1_when_the_back_key_changed_the_screen(context, monkeypatch):
+    # A still page that waits for input (the wipe dialog, the starting gift page) closes or changes on the back key.
+    levels, _ = recover_l1(context, monkeypatch, [7, 7, 9])
+    assert levels == ["RecoverL1"]
+
+
+def test_recover_does_not_restart_a_task_that_is_stopping(context, monkeypatch):
+    context.tasker.stopping = True  # the runner's stop: until() ends at once, which tells nothing about the game
+    levels, _ = recover_l1(context, monkeypatch, [7])
+    assert levels == ["RecoverL1"]
+
+
 # The run's opening (#115): every wait is a look at the next page, never a fixed delay.
 def page(context, rules):
     """OCR reads rules[roi] there and nothing elsewhere. A rule is a text, [(text, box)], or f(clicks, looks) -> either or None."""

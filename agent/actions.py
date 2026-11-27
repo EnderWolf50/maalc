@@ -895,15 +895,27 @@ class Recover(CustomAction):
             if level is None:
                 return stop(context, Reason(f"{reason}; {why}", "Stuck"))
             log(f"recovery L{level}: {reason}")
+            before = screen(context) if level == 1 else None
             detail = context.run_task(f"RecoverL{level}")
             if STUCK["halted"]:  # the restarted game showed what ends the list (DeviceRooted's Halt): it has run stop()
                 return False
             if detail and detail.status.succeeded:
+                if before is not None and back_key_ignored(context, before):
+                    log(f"L1: the back key did not change the frozen screen in {recovery.FROZEN_LOOK} s after it: L3")
+                    start, reason = 3, f"{reason}; the back key did not change the frozen screen"
+                    continue
                 break
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         forget_game_state()
         return True
+
+
+def back_key_ignored(context, before):
+    """After RecoverL1: whether every screenshot for recovery.FROZEN_LOOK s is the very same as before its back key, a
+    frozen game (#960). Not while the task is stopping: until() then ends at once and tells nothing about the game."""
+    changed = until(context, lambda image: not np.array_equal(image, before), timeout=recovery.FROZEN_LOOK)
+    return changed is None and not context.tasker.stopping
 
 
 def nothing_recognised():
