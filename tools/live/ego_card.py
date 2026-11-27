@@ -182,7 +182,7 @@ def main(argv=None) -> int:
             print(f"{Path(f).name}: " + ", ".join(f"{s:.3f} at ({x}, {y})" for s, x, y in scores) + (" hit" if hit else " miss"))
         return 0
     if a.device == "pc":
-        print(f"refused: ego_card.py open long-presses a portrait, and {device.NO_INPUT}", flush=True)
+        device.pc_refused(f"ego_card.py open long-presses a portrait, and {device.NO_INPUT}")
         return 1
     from live.device import connect, press, stamp
 

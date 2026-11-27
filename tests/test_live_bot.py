@@ -354,12 +354,10 @@ def test_a_pc_run_without_the_emulator_lane_starts_no_runner(tmp_path, monkeypat
     assert not log.exists() and not (root / "pc.jsonl").exists()
 
 
-def test_an_emulator_run_needs_no_lane_of_its_own(tmp_path, monkeypatch):
-    # the emulator's tools run beside the hold that holds the lane (the maalc-live-test skill), as they did before
-    monkeypatch.delenv(queue.TICKET_ENV, raising=False)
-    root, log = fake_install(tmp_path), tmp_path / "run.log"
-    assert bot.main(["run", "--install", str(root), "--log", str(log), "--task", "Mirror"]) == 0
-    assert json.loads((root / "runner/start.json").read_text(encoding="utf-8"))["device"] == {"address": "127.0.0.1:16384"}
+def test_the_pc_size_needs_the_pc_window(tmp_path):
+    with pytest.raises(SystemExit):
+        bot.main(["run", "--pc-size", "1080", "--install", str(tmp_path), "--log", str(tmp_path / "run.log")])
+    assert not (tmp_path / "run.log").exists()
 
 
 def test_a_runner_that_cannot_stop_has_its_process_tree_ended():

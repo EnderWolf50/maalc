@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from functools import partial
 import re
 import subprocess
 import sys
@@ -107,7 +108,7 @@ def look(root: Path, port: int, shot: Path | None, kind: str = "emulator") -> st
 def screen(root: Path, port: int, shot: Path | None, say=print, see=look, kind: str = "emulator") -> int:
     if shot:
         shot.parent.mkdir(parents=True, exist_ok=True)  # the archive folder of a new topic is made at step 5, after this
-    verdict, reason = classify(see(root, port, shot) if kind == "emulator" else see(root, port, shot, kind=kind), kind)
+    verdict, reason = classify(see(root, port, shot), kind)
     say(f"{verdict}: {reason}")
     return 1 if verdict == "stop" else 0
 
@@ -212,10 +213,9 @@ def main(argv=None) -> int:
     which.add_argument("--resumed", action="store_true", help="the bot is to pick up a run in progress")
     a = ap.parse_args(argv)
     if a.command == "screen":
-        if a.device == "pc" and (why := device.pc_refusal()) is not None:
-            print(f"refused: {why}", flush=True)
+        if a.device == "pc" and device.pc_refused():
             return 1
-        return screen(a.install.resolve(), a.port, a.shot, see=look, kind=a.device)
+        return screen(a.install.resolve(), a.port, a.shot, see=partial(look, kind=a.device), kind=a.device)
     if a.command == "recording":
         return recording_check(a.out, a.seconds)
     return plan_line(a.log, a.within, a.pattern, resumed=a.resumed)

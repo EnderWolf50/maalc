@@ -275,7 +275,7 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.command == "run":
         if a.device == "pc":
-            print(f"refused: giveup.py run taps Give Up, Forfeit and GiveUpRewards, and {device.NO_INPUT}", flush=True)
+            device.pc_refused(f"giveup.py run taps Give Up, Forfeit and GiveUpRewards, and {device.NO_INPUT}")
             return 1
         return run(a)
     if a.command == "look":

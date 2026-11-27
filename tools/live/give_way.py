@@ -462,8 +462,7 @@ def main(argv=None) -> int:
         if a.now and a.recording:
             ap.error("--now keeps the hold and its recording: no --recording")
         if a.device == "pc":
-            print(f"refused: give_way.py watch leaves with the Back key and RecoverL2's taps, and {device.NO_INPUT}",
-                  flush=True)
+            device.pc_refused(f"give_way.py watch leaves with the Back key and RecoverL2's taps, and {device.NO_INPUT}")
             return 1
         return run(a)
     named = giveup.look_files(a.images, REPO / "assets/resource/base", a.look)

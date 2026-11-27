@@ -52,7 +52,7 @@ for path in (TOOLS, TOOLS.parent):  # tools/ for local_dir, the repo for runner/
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from live import device as devices  # noqa: E402
+from live import device  # noqa: E402
 from local_dir import main_checkout  # noqa: E402
 from runner import protocol  # noqa: E402
 from runner.runlog import clock  # noqa: E402
@@ -162,7 +162,7 @@ class RunnerEvents:
         return None
 
 
-def device(kind: str, port: int, pc_size: str = "keep") -> dict:
+def start_device(kind: str, port: int, pc_size: str = "keep") -> dict:
     """The start's device: the MuMu instance at port, or the PC client's window at pc_size (runner/protocol.py)."""
     if kind == "pc":
         return {"kind": "pc", **({"pc_size": pc_size} if pc_size != "keep" else {})}
@@ -170,8 +170,8 @@ def device(kind: str, port: int, pc_size: str = "keep") -> dict:
 
 
 def run(root: Path, tasks: list[str], port: int, log: Path, kind: str = "emulator", pc_size: str = "keep") -> int:
-    """The tasks through root's runner on the device (device()), its log lines in log; the runner's exit code (0: every
-    task succeeded)."""
+    """The tasks through root's runner on the device (start_device()), its log lines in log; the runner's exit code (0:
+    every task succeeded)."""
     said = []
     try:
         jobs = plan(root, tasks)
@@ -186,7 +186,7 @@ def run(root: Path, tasks: list[str], port: int, log: Path, kind: str = "emulato
         f.writelines(f"{clock()} {line}\n" for line in said)
     if jobs is None:
         return 1
-    start = {"v": protocol.VERSION, "cmd": "start", "root": str(root), "device": device(kind, port, pc_size),
+    start = {"v": protocol.VERSION, "cmd": "start", "root": str(root), "device": start_device(kind, port, pc_size),
              "tasks": [{"entry": entry} for _, entry in jobs]}
     return stamped([sys.executable, "-u", str(runner)], log, send=json.dumps(start, ensure_ascii=False),
                    line=RunnerEvents())
@@ -245,7 +245,7 @@ def main(argv=None) -> int:
     p.add_argument("--install", type=Path, required=True)
     p.add_argument("--task", default="MirrorDungeon", help="a PI task, or several, comma-separated, run in turn")
     p.add_argument("--port", type=int, default=16384)
-    devices.add_device(p)
+    device.add_device(p)
     p.add_argument("--pc-size", choices=protocol.PC_SIZES, default="keep",
                    help="the PC window's client area for the run, by its height at 16:9 (keep: as it is)")
     p.add_argument("--log", type=Path, required=True)
@@ -257,8 +257,9 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.command == "run":
-        if a.device == "pc" and (why := devices.pc_refusal()) is not None:
-            print(f"refused: {why}", flush=True)
+        if a.pc_size != "keep" and a.device != "pc":
+            ap.error("--pc-size is the PC window's: give --device pc")
+        if a.device == "pc" and device.pc_refused():
             return 1
         return run(a.install.resolve(), a.task.split(","), a.port, a.log, a.device, a.pc_size)
     if a.command == "prep":
