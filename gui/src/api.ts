@@ -4,7 +4,7 @@ import { Channel, convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { DeviceSetting, Settings } from "./model";
-import type { Device, Message } from "./runner";
+import type { Found, Message } from "./runner";
 
 const tauri = isTauri();
 
@@ -123,8 +123,8 @@ export const stopRun = (): Promise<boolean> => (tauri ? invoke("stop_run") : Pro
 export const attachRun = (onMessage: (m: Message) => void): Promise<boolean> =>
   tauri ? invoke("attach_run", { onMessage: channel(onMessage) }) : Promise.resolve(false);
 
-/** The emulators a scan finds, MuMu first (lib.rs scan_devices). */
-export const scanDevices = (): Promise<Device[]> =>
+/** The emulators a scan finds, MuMu first, and the PC windows (lib.rs scan_devices, #947). */
+export const scanDevices = (): Promise<Found> =>
   tauri ? invoke("scan_devices") : Promise.reject(new Error("the device scan runs only in the app"));
 
 /** During a run, hide the window in the tray, its icon's tooltip and items in the page's language (lib.rs hide_to_tray): true

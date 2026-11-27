@@ -33,7 +33,7 @@ vi.mock("./api", async (original) => ({
     return Promise.resolve();
   },
   attachRun: () => Promise.resolve(false),
-  scanDevices: () => { back.scans++; return Promise.resolve([]); },
+  scanDevices: () => { back.scans++; return Promise.resolve({ devices: [], windows: [] }); },
   onCloseRequested: () => () => {},
   takeScheduled: () => { const all = back.scheduled; back.scheduled = []; return Promise.resolve(all); },
   onScheduled: (more: () => void) => { back.more = more; return () => {}; },

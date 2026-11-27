@@ -31,6 +31,9 @@ export interface Device {
 /** A PC window a scan found (runner.rs PcWindow, #939): its title, its client area's size, whether it is minimized. */
 export interface PcWindow { title: string; width: number; height: number; minimized: boolean }
 
+/** What a scan found (runner.rs Found, #947): the emulators, MuMu first, and the PC windows. */
+export interface Found { devices: Device[]; windows: PcWindow[] }
+
 /** An event of the runner, as the backend relays it under `type: "event"` (an error event has a field named kind). */
 export type RunnerEvent =
   | { event: "ready"; pid: number }
