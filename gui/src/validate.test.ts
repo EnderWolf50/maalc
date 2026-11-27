@@ -114,7 +114,7 @@ test("parseSettings refuses a newer version", () => {
 });
 
 type MigrateCase = { name: string; edits: Edit[]; gives?: Edit[]; schema?: string[] };
-describe.each([20, 22, 23, 24] as const)("tests/settings_cases.json migrate_v%i: the sections version 23 added come back (#813), the queue as version 24 has it (#954), the device the emulator (#939)", (version) => {
+describe.each([20, 22, 23, 24] as const)("tests/settings_cases.json migrate_v%i: the file as the current version has it: the sections version 23 added (#813), the queue as version 24 has it (#954), the device the emulator (#939)", (version) => {
   for (const c of cases[`migrate_v${version}`] as MigrateCase[]) {
     test(c.name, () => {
       const old = olderFile(version, c.edits);

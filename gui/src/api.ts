@@ -104,10 +104,11 @@ const channel = (onMessage: (m: Message) => void) => {
   return c;
 };
 
-/** Start the runner on `entries` (the ticked tasks' entry nodes, in run order) and `device` (lib.rs start_run): each message
+/** Start the runner on `entries` (the ticked tasks' entry nodes, in run order) and `device` (lib.rs start_run; its kind only
+ * for the PC window, #939): each message
  * of the run goes to `onMessage`, the exit last. Each task reads its options from the settings file at its start, so the
  * page saves first. Refused while a run is under way, and in a plain browser, which has no runner. */
-export function startRun(entries: string[], device: Settings["emulator"], onMessage: (m: Message) => void): Promise<void> {
+export function startRun(entries: string[], device: Settings["emulator"] & { kind?: "pc" }, onMessage: (m: Message) => void): Promise<void> {
   if (!tauri) return Promise.reject(new Error("the runner runs only in the app"));
   return invoke("start_run", { tasks: entries, device, onMessage: channel(onMessage) });
 }

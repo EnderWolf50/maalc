@@ -349,9 +349,9 @@ export interface Settings {
   /** The kind of device the runner drives (#939): the emulator (the emulator section), or the PC client's window, which the
    * runner refuses as not supported yet; pc_size the window's client area for a run, by its height. No editor shows it yet,
    * a save keeps it. */
-  device: Device;
+  device: DeviceSetting;
 }
-export interface Device { kind: "emulator" | "pc"; pc_size: "keep" | "720" | "900" | "1080" | "1440" }
+export interface DeviceSetting { kind: "emulator" | "pc"; pc_size: "keep" | "720" | "900" | "1080" | "1440" }
 export interface RunOptions {
   difficulty: string; target_floor: number; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
   stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number; after_retries: string;
@@ -381,7 +381,7 @@ export function newSections(): Pick<Settings, "run" | "luxcavation" | "charge_en
 }
 
 /** The device section version 25 added (#939) at the schema's defaults (agent/settings.py device_defaults): the emulator. */
-export const newDevice = () => defaultsOf(P.device.properties) as unknown as Device;
+export const newDevice = () => defaultsOf(P.device.properties) as unknown as DeviceSetting;
 
 /** A new settings file: empty lists (spec 04 section 4), the task options at their defaults, every task ticked, the emulator. */
 export function newSettings(): Settings {

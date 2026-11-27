@@ -542,7 +542,7 @@ def test_a_start_without_an_address_takes_the_first_device_mumu_first(tmp_path):
     assert world.controllers == ["127.0.0.1:16416"]
 
 
-def sent(run):
+def masked_events(run):
     """The run's events with what differs between two runs of one test masked: the install's folder and the bot's pid."""
     def masked(e):
         if not (isinstance(e, dict) and e["event"] == "log"):
@@ -570,9 +570,11 @@ def test_a_start_that_names_the_emulator_sends_the_same_events_as_one_that_names
         world = make()
         run = Run(tmp_path / folder, world, *lines)
         result = run.start(TWO, **more, **kind)
-        runs.append((result, sent(run), world.posted, world.controllers, len(world.bundles), run.launched))
-    assert runs[0] == runs[1]
-    assert len(runs[0][1]) > 6  # the run said something to compare
+        runs.append({"result": result, "events": masked_events(run), "posted": world.posted,
+                     "controllers": world.controllers, "bundles": len(world.bundles), "launched": run.launched})
+    omitted, named = runs
+    assert omitted == named
+    assert len(omitted["events"]) > 6  # the run said something to compare
 
 
 def test_a_pc_start_cancels_every_task_with_the_coded_reason_that_the_pc_client_is_not_supported_yet(tmp_path):

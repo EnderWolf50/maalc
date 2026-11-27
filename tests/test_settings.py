@@ -238,8 +238,8 @@ def v20(edits=()):
                                            (23, [NOTE_24]), (24, [])])
 def test_an_older_file_is_read_as_the_current_version_in_memory_and_says_what_is_read_anew(tmp_path, version, said):
     # #813: the options are the file's again, at their defaults where it has none (a version 20 file has its own); #954: no
-    # team switch and no start team; #939: the device is the emulator, which no task reads. The file on disk stays as it was, and a task's start logs the lines (TaskStart) until
-    # the GUI writes the file back.
+    # team switch and no start team; #939: the device is the emulator, which no task reads. The file on disk stays as it
+    # was, and a task's start logs the lines (TaskStart) until the GUI writes the file back.
     old = older(version)
     notes = []
     got = load(tmp_path, old, notes=notes)
