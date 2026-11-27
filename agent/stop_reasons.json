@@ -8,6 +8,7 @@
     "DownloadOff": {"zh_tw": "遊戲要下載資料，但「自動接受下載與更新」是關閉的。", "en_us": "The game asks to download data, but \"Accept downloads and updates\" is off."},
     "UpdateOff": {"zh_tw": "遊戲有更新，但「自動接受下載與更新」是關閉的。", "en_us": "The game has an update, but \"Accept downloads and updates\" is off."},
     "UpdateRepeats": {"zh_tw": "bot 啟動後，遊戲已經要求更新 {times} 次。", "en_us": "The game asked for an update {times} times since the bot started."},
+    "UpdateDialog": {"zh_tw": "遊戲要更新，請在 Steam 更新，再按「開始」。", "en_us": "The game has an update. Update it in Steam, then press Start again."},
     "TermsOff": {"zh_tw": "遊戲要同意使用者條款，但「自動同意使用者條款」是關閉的。", "en_us": "The game shows the User Agreement, but \"Accept the User Agreement\" is off."},
     "AssembleLost": {"zh_tw": "沒有到達換腦啡肽的視窗或主畫面。", "en_us": "The Charge Enkephalin window or the main window did not come up."},
     "ChargeLost": {"zh_tw": "沒有到達換腦啡肽的視窗或主畫面。", "en_us": "The Charge Enkephalin window or the main window did not come up."},

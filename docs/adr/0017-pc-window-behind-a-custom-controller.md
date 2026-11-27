@@ -11,7 +11,7 @@ status: accepted（#922；第一步 #939）
 - **裝置種類**：設定檔版本 25 加一段 `device`（`kind`：`emulator` 或 `pc`，預設 `emulator`；`pc_size`：`keep`、`720`、`900`、`1080`、`1440`，預設 `1440`）。`emulator` 段不改，遷移只補預設值。不存視窗代號（HWND）：遊戲重開後代號會變，存了會指到別的視窗。
 - **執行器協定**：開始命令的 `device.kind` 可以省略，省略就是模擬器；解析後的命令只在 `pc` 時帶它，所以模擬器的命令行與既有的共用案例一字不變。偵測的 `devices` 事件可以多帶 PC 視窗清單。協定版本不變：Python 與 Rust 兩邊、共用案例在同一個 PR 更新。
 - **PC 視窗控制器**：執行器裡一個 MaaFramework 自訂控制器，裡面包 MaaFramework 的 Win32 控制器。它對 MaaFramework 說的仍是 pipeline 已經在說的話（Android 套件名、返回鍵 4、`dumpsys window`），在裡面換成 PC 的做法（Esc、視窗在不在），所以任務流程與 base pipeline 不為 PC 改。
-- **PC 資源層**：PC 畫面和 Android 不同的節點與模板放在另一個資源資料夾，裝置是 PC 時接在 base 之後載入，同名節點以它為準；模擬器不載入它。
+- **PC 資源層**：PC 畫面和 Android 不同的節點與模板放在另一個資源資料夾，裝置是 PC 時接在 base 之後載入；同名節點由 MaaFramework 逐欄位合併，以它寫的欄位為準。模擬器不載入它。
 - **Agent 只動三處**，模擬器的行為都不變：設定檔 schema 與遷移、熱更新重載時補載 PC 資源層、新的停止原因句子（`agent/stop_reasons.json`）。
 - **分階段**：#939 只放骨架（設定檔、協定、選 PC 時執行器以 `PcNotSupported` 取消整個清單），之後的票照 #922 的六個階段做；每一階段停不停由使用者決定。
 
@@ -26,4 +26,4 @@ status: accepted（#922；第一步 #939）
 
 - 舊版 Agent 讀到版本 25 會報「比自己新」；舊版的執行器收到帶 `kind` 的開始命令會報協定錯誤（未知欄位）。視窗送出的模擬器命令不帶 `kind`，所以新視窗配舊執行器照舊能跑模擬器。
 - 選 PC 一定連 PC 視窗，連不上就停下並寫明原因，不會改去跑模擬器。#940 的控制器還沒有輸入（內層的滑鼠與鍵盤方法是 Null），第一次輸入就停下。
-- PC 資源層第一版只隨 zip 出貨，不進資源包（資源包的格式只有 base 的 `data`、`image`、`pipeline`，ADR 0012）。
+- PC 資源層第一版只隨 zip 出貨，不進資源包（資源包的格式只有 base 的 `data`、`image`、`pipeline`，ADR 0012）。所以改 PC 資源層不加模板版本：它和配它的 Agent 同在一個 zip（#944）。base 的改動讓 PC 資源層蓋過的節點改名、消失或欄位不再適用時，模板版本加一，因為舊安裝的 PC 資源層不會跟著換。執行器把它載入的資源清單放進 bot 的環境變數 `MAALC_RESOURCE_LAYERS`，熱更新重載時 Agent 照它重載。

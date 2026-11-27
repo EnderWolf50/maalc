@@ -9,6 +9,7 @@ run as a script, as test_map_cost.py does.
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -40,9 +41,11 @@ if __name__ != "__main__":  # pytest; the script (child) imports actions itself,
     from fake_resource import install, publish, tree
 
 
-def child(work=None):
+def child(work=None, pc=False):
     """Run MirrorDungeon until TaskDone; print its status and nodes. With `work` (a folder update_scene made): the install
-    in it is the bundle and the data folder, and two tasks run on it, each starting with an update from its fake remote."""
+    in it is the bundle and the data folder, and two tasks run on it, each starting with an update from its fake remote.
+    With `pc`: a PC run's, the PC resource layer loaded after base and the device kind in the environment as the runner
+    has them (runner/layers.py, #944)."""
     from maa.controller import CustomController
     from maa.custom_action import CustomAction
     from maa.custom_recognition import CustomRecognition
@@ -77,7 +80,7 @@ def child(work=None):
         def __getattr__(self, name):  # start_app, click, swipe, touch_*, keys, text, scroll: nothing moves
             return lambda *args: True
 
-    out = {"error": None, "starts": 0, "seen": [], "nodes": [], "probe": 0}
+    out = {"error": None, "starts": 0, "seen": [], "nodes": [], "probe": 0, "update_dialog": []}
 
     def seen():
         """What the agent holds of data/ at this moment."""
@@ -93,6 +96,7 @@ def child(work=None):
                 out["done_was"] = actions.TASK["done"]  # TaskStart cleared the last task's
                 if work:
                     out["seen"].append(seen())
+                    out["update_dialog"].append(resource.get_node_data("UpdateDialog")["action"]["param"]["custom_action"])
                 actions.done("nothing left to do")
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
@@ -115,7 +119,15 @@ def child(work=None):
     resource.register_custom_recognition("StuckFlag", actions.StuckFlag())
     resource.register_custom_recognition("DoneFlag", actions.DoneFlag())
     resource.register_custom_recognition("HubText", HubText())
-    resource.post_bundle(settings.ROOT / "resource" / "base" if work else ROOT / "assets" / "resource" / "base").wait()
+    if pc:
+        sys.path.insert(0, str(ROOT))
+        from runner import layers
+
+        os.environ.update(layers.agent_env("pc"))
+        for bundle in layers.bundles(settings.ROOT, "pc"):
+            resource.post_bundle(bundle).wait()
+    else:
+        resource.post_bundle(settings.ROOT / "resource" / "base" if work else ROOT / "assets" / "resource" / "base").wait()
     controller = Still()
     controller.post_connection().wait()
     tasker = Tasker()
@@ -525,6 +537,19 @@ def test_the_pipeline_a_task_found_is_the_pipeline_it_runs(tmp_path):
     assert (base / "image" / "probe.png").read_bytes() == b"a template the install lacks"
 
 
+def test_the_pc_resource_layer_stands_after_the_reload_of_an_update(tmp_path):
+    # #944: the reload drops what the resource holds and loads base again; on a PC run the PC resource layer is loaded
+    # again after it, or the PC run goes on with Android's nodes (UpdateDialog would press the update and restart the game)
+    update_scene(tmp_path)
+    shutil.copytree(ROOT / "assets" / "resource" / "pc", tmp_path / "root" / "resource" / "pc")
+    run = subprocess.run([sys.executable, __file__, "update-pc", str(tmp_path)], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    assert run.returncode == 0, run.stderr[-2000:]
+    out = json.loads(run.stdout.strip().splitlines()[-1])
+    assert out["error"] is None, out["error"]
+    assert [s["probe"] for s in out["seen"]] == [1, 2]  # each task ran on the bundle its update reloaded
+    assert out["update_dialog"] == ["Halt", "Halt"]
+
+
 def update_install(monkeypatch, tmp_path, remote_files, **fields):
     """An install of one data file and a fake remote publishing remote_files; TaskStart logs into the list returned."""
     base, remote = tmp_path / "resource" / "base", tmp_path / "remote"
@@ -569,4 +594,4 @@ def test_a_task_starts_after_its_update_and_names_the_package_it_runs_on(context
 
 
 if __name__ == "__main__":
-    child(Path(sys.argv[2]) if sys.argv[1:2] == ["update"] else None)
+    child(Path(sys.argv[2]) if sys.argv[1:2] in (["update"], ["update-pc"]) else None, pc=sys.argv[1:2] == ["update-pc"])
