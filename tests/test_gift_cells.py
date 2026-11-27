@@ -197,6 +197,18 @@ CASES = {  # name: (crop under tests/shop, the page's cells, the page)
 
 PLATE_CASES = ["offers", "offers_super", "offers_red", "offers_short"]
 GET_WINDOWS = {"GiftGet": 9005, "GiftGetOverMap": 9014, "GiftSearchGet": 9843}  # Wound Clerid, Rusty Commemorative Coin, Hardblood Glaive
+# #964: the child took 102-298 s on CI's runners (junit of 28 runs, 2026-11-25 to 27) against pytest's 300 s default, so the
+# file gets the bound the other MaaFramework child files have (tests/conftest.py child_timeout): the child's own timeout,
+# whose failure shows where it was, and a minute.
+CHILD_TIMEOUT = 600
+pytestmark = pytest.mark.timeout(CHILD_TIMEOUT + 60)
+STARTED = time.perf_counter()
+
+
+def stage(what):
+    """The child's progress on stderr, seconds since it started: the fixture shows its tail when the child fails or times
+    out (#964)."""
+    print(f"[child {time.perf_counter() - STARTED:6.1f} s] {what}", file=sys.stderr, flush=True)
 
 
 def child():
@@ -237,15 +249,18 @@ def child():
     class Probe(CustomAction):
         def run(self, context, argv):
             try:
+                stage("probe started")
                 for case, (crop, cells, page) in CASES.items():
                     found = shop_actions.read_cells(context, screen_with(crop), cells if isinstance(cells, list) else getattr(shop_actions, cells), page)
                     out["cases"][case] = [c["id"] for c in found]
                     out["ex"][case] = [shop_actions.cell_line(c, "keep") for c in found if c["ex"]]
+                    stage(f"case {case}")
                 actions.ocr(context, screen_with("offers"), shop_actions.OFFER_GRID)  # the agent's order: a det+rec pass reads before any plate
                 first = shop_actions.Shop.read_offers(context, screen_with("offers_super"))  # a Super Shop at rest, then scrolled (#341)
                 more = shop_actions.Shop.read_offers(context, screen_with("offers_super_scrolled"), first)
                 out["super"] = [[[s["name"], s["price"], s["plate"]["id"], s["cell"]["id"] if "cell" in s else None] for s in page]
                                 for page in (first, more)]
+                stage("super shop offers")
                 for case in PLATE_CASES:  # the offers' name plates (#329), one per filled cell
                     image = screen_with(case)
                     cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
@@ -262,11 +277,14 @@ def child():
                     out["page_ms"].append(min(page_ms))
                     out["plate_ms"].append(min(plate_ms))
                     out["plates"][case] = [[i, p["text"], p["id"]] for i, p in enumerate(plates)]
+                    stage(f"plates {case}")
                 for name in GET_WINDOWS:  # the GET! window's plate (#623)
                     image = np.ascontiguousarray(np.array(Image.open(ROOT / "tests" / "screens" / f"{name}.png").convert("RGB"))[:, :, ::-1])
                     plate = actions.get_plate(context, image)
                     out["got"][name] = [g.name_id(plate, actions.GIFT_IDS), plate]
+                stage("get windows")
                 for path in sorted((ROOT / "tests" / "screens").glob("*.png")):
+                    stage(f"sweep {path.stem}")
                     image = np.ascontiguousarray(np.array(Image.open(path).convert("RGB"))[:, :, ::-1])
                     cells = [(x, y) for x, y in shop_actions.OFFER_CELLS if shop.filled(image, x, y)]
                     if actions.get_window(context, image):  # #623: Event asks it on every screenshot that moved
@@ -287,9 +305,12 @@ def child():
                             out["sweep"][f"{path.stem} {page}"] = [[c["i"], c["id"]] for c in found if c["id"]]
             except Exception:  # MaaFramework swallows it: hand it to the test
                 out["error"] = traceback.format_exc()
+            stage("probe ended")
             return True
 
+    stage("loading the resource")
     resource.post_bundle(ROOT / "assets" / "resource" / "base").wait()
+    stage("resource loaded")
     resource.register_custom_action("Probe", Probe())
     controller = Still()
     controller.post_connection().wait()
@@ -299,11 +320,27 @@ def child():
     print(json.dumps(out))
 
 
+def run_probe(args, timeout, **kw):
+    """The child's finished run; one that outlasts timeout fails the test with its output so far, the stage it was in
+    (#964). A TimeoutExpired's output is str on Windows, bytes elsewhere, None when nothing came."""
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=timeout, **kw)
+    except subprocess.TimeoutExpired as e:
+        said = [o.decode("utf-8", "replace") if isinstance(o, bytes) else o or "" for o in (e.stderr, e.stdout)]
+        pytest.fail(f"the child did not end in {timeout} s\nstderr ends: {said[0][-6000:]}\nstdout ends: {said[1][-1500:]}")
+
+
+def test_a_child_that_outlasts_its_timeout_fails_with_the_stage_it_was_in():
+    script = "import sys, time\nprint('[child    0.0 s] sweep Shop', file=sys.stderr, flush=True)\ntime.sleep(60)\n"
+    with pytest.raises(pytest.fail.Exception, match=r"did not end in 2 s\nstderr ends: \[child    0\.0 s\] sweep Shop"):
+        run_probe([sys.executable, "-c", script], 2)
+
+
 @pytest.fixture(scope="module")
 def read():
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "agent"), str(ROOT / "tests")])}
-    done = subprocess.run([sys.executable, __file__], capture_output=True, text=True, timeout=600, cwd=ROOT, env=env)
-    assert done.returncode == 0, done.stderr[-2000:]
+    done = run_probe([sys.executable, "-X", "faulthandler", __file__], CHILD_TIMEOUT, cwd=ROOT, env=env)
+    assert done.returncode == 0, done.stderr[-6000:]
     out = json.loads(done.stdout.strip().splitlines()[-1])
     assert "error" not in out, out["error"]
     return out
