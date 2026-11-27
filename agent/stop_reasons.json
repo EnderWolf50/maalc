@@ -32,6 +32,13 @@
     "TaskerFailed": {"zh_tw": "MaaFramework 沒有啟動。", "en_us": "MaaFramework did not start."},
     "RunnerFailed": {"zh_tw": "執行器出錯了（{error}）。", "en_us": "The runner failed ({error})."},
     "BotExited": {"zh_tw": "bot 意外結束（結束碼 {code}）。", "en_us": "The bot exited with code {code}."},
-    "ListStopped": {"zh_tw": "MaaFramework 停止了任務清單。", "en_us": "MaaFramework stopped the task list."}
+    "ListStopped": {"zh_tw": "MaaFramework 停止了任務清單。", "en_us": "MaaFramework stopped the task list."},
+    "PcNoWindow": {"zh_tw": "找不到遊戲視窗。先開好 Limbus Company，再按「開始」。", "en_us": "The game's window is not open. Open Limbus Company, then press Start again."},
+    "PcManyWindows": {"zh_tw": "開著 {count} 個遊戲視窗。只留一個，再按「開始」。", "en_us": "{count} game windows are open. Leave one open, then press Start again."},
+    "PcMinimized": {"zh_tw": "遊戲視窗最小化了。把它還原，再按「開始」。", "en_us": "The game's window is minimized. Restore it, then press Start again."},
+    "PcNot16By9": {"zh_tw": "遊戲視窗的畫面是 {width}×{height}，不是 16:9。把視窗調成 16:9，或在設定選一個 PC 視窗大小，再按「開始」。", "en_us": "The game's window shows {width}x{height}, not 16:9. Make the window 16:9, or pick a PC window size in the settings, then press Start again."},
+    "PcWindowGone": {"zh_tw": "遊戲視窗不見了。", "en_us": "The game's window is gone."},
+    "PcRestartOff": {"zh_tw": "PC 版還不會自己重開遊戲。手動重開遊戲，再按「開始」。", "en_us": "The PC client cannot restart the game yet. Restart the game by hand, then press Start again."},
+    "PcInputFailed": {"zh_tw": "遊戲視窗沒有收下輸入。PC 版還不會送輸入。", "en_us": "The game's window did not take an input. The PC client sends no input yet."}
   }
 }

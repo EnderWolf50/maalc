@@ -11,6 +11,11 @@ MaaFramework says of it (#832); failed, with the reason the bot logged, when the
 ran, whatever MaaFramework says of it (#870); cancelled when it never ran: after a stop, after the bot stopped the whole
 list (the reason it logged comes with it), after the bot exited, or when the run failed before its first task.
 A reason comes with its code (#881): the one the bot logged after its stop line, or the runner's own (OWN_CODES).
+
+On the PC client (device kind pc, #940) the device is the game's window (runner/pc.py) and the controller the PC
+window controller: the window found, its client area set to the start's pc_size and put back when the run ends, however
+it ends. A problem the controller holds (the window gone, minimized, not 16:9, an input it did not take) stops the run
+as the bot's exit does: the task it ran fails with that reason and code, the rest are cancelled with them.
 """
 from __future__ import annotations
 
@@ -26,7 +31,7 @@ from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
 
-from runner import devices, protocol, runlog
+from runner import devices, pc, protocol, runlog
 
 ROOT = Path(__file__).resolve().parent.parent  # the install: runner/ sits beside agent/ and resource/
 
@@ -50,8 +55,11 @@ STOP_LINE = "[maalc] stop: "
 HALT_LINE = "[maalc] account-level stop"
 CODE_LINE = "[maalc] stop code: "  # agent/reasons.py code_line, right after its stop line: that stop's code (#881)
 # the codes of agent/stop_reasons.json the runner's own reasons send, with their params
-OWN_CODES = {"PcNotSupported": (), "NoEmulator": (), "ConnectFailed": ("address",), "ResourceFailed": (), "BotNotStarted": (),
-             "TaskerFailed": (), "RunnerFailed": ("error",), "BotExited": ("code",), "ListStopped": ()}
+OWN_CODES = {"NoEmulator": (), "ConnectFailed": ("address",), "ResourceFailed": (), "BotNotStarted": (),
+             "TaskerFailed": (), "RunnerFailed": ("error",), "BotExited": ("code",), "ListStopped": (),
+             # the PC window's (#940, runner/pc.py)
+             "PcNoWindow": (), "PcManyWindows": ("count",), "PcMinimized": (), "PcNot16By9": ("width", "height"),
+             "PcWindowGone": (), "PcRestartOff": (), "PcInputFailed": ()}
 ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x1, 0x2
 
 
@@ -195,19 +203,25 @@ def agent_command(root: Path, identifier: str) -> list[str]:
 class Session:
     """framework(root) gives MaaFramework (runner/framework.py, or a test's fake); sleep and monotonic its clock;
     launch(manager, index) starts a MuMu instance (devices.launch); adb_state(device, timeout) says what adb says of
-    it (devices.adb_state); awake() keeps the machine on (keep_awake)."""
+    it (devices.adb_state); awake() keeps the machine on (keep_awake); windows says what Windows says of its windows, for
+    the PC client (runner/pc.py Win32Windows)."""
 
     def __init__(self, out: Out, framework, commands: Commands, *, sleep=time.sleep, monotonic=time.monotonic,
-                 agent_command=agent_command, launch=devices.launch, awake=keep_awake, adb_state=devices.adb_state):
+                 agent_command=agent_command, launch=devices.launch, awake=keep_awake, adb_state=devices.adb_state,
+                 windows=None):
         self.out, self.framework, self.commands = out, framework, commands
         self.sleep, self.now, self.agent_command, self.launch, self.awake = sleep, monotonic, agent_command, launch, awake
         self.adb_state = adb_state
+        self.windows = windows if windows is not None else pc.Win32Windows()
         self.tasker = self.client = self.agent = self.reader = None
         # stop_at: when the caller's stop came; stop_posted, reposted: the first post_stop (the caller's or the
         # runner's own once the bot exited) and the last one
         self.stop_at = self.stop_posted = self.reposted = self.crash = self.halt = self.last_stop = None
         # the codes of crash, halt and last_stop (#881): (code, params), or None for a reason with none
         self.crash_code = self.halt_code = self.last_code = None
+        # the PC window controller, whose problem stops the run, that problem's reason and code, and what puts the
+        # window back as it was (#940)
+        self.watch = self.trouble = self.trouble_code = self.put_back = None
         self.timed_out = self.halt_awaited = False
         self.halted = threading.Event()
         self.tail = deque(maxlen=TAIL)
@@ -230,8 +244,9 @@ class Session:
 
     # scan
     def scan(self) -> str:
-        found = devices.ordered(self.framework(ROOT).devices())
-        self.out.send("devices", devices=[devices.describe(d) for d in found])
+        fw = self.framework(ROOT)
+        found = devices.ordered(fw.devices())
+        self.out.send("devices", devices=[devices.describe(d) for d in found], windows=pc.listed(self.windows))
         self.out.settle()
         self.out.send("end", result="succeeded")
         return "succeeded"
@@ -254,6 +269,7 @@ class Session:
                                               own("RunnerFailed", error=type(e).__name__))
                 finally:
                     self.close_agent()
+                    self.restore_window()
             self.out.settle()
             self.say(f"end {result}")
             self.out.send("end", result=result)
@@ -280,21 +296,10 @@ class Session:
         return self.cancel_rest("failed", reason or message, coded)
 
     def run(self, root: Path, want: dict) -> str:
-        if want.get("kind") == "pc":  # #939: the kind is in the protocol, the PC window controller not yet (#922)
-            return self.fail("unsupported", "the PC client is not supported yet", coded=own("PcNotSupported"))
         fw = self.framework(root)
-        device, until = self.device(fw, want)
-        if device is None:
-            return self.cancel_rest("failed", "no emulator to run on", own("NoEmulator"))
-        self.out.send("connection", state="connecting", address=device.address)
-        ctl = self.connect(fw, device, until)
-        if ctl is None:
-            if self.stop_at is not None:
-                return self.cancel_rest("stopped", None)
-            return self.fail("connect_failed", f"could not connect to {device.address}",
-                             coded=own("ConnectFailed", address=device.address))
-        self.out.send("connection", state="connected", address=device.address)
-        self.say(f"connected {device.name} {device.address}")
+        ctl = self.pc(fw, want) if want.get("kind") == "pc" else self.emulator(fw, want)
+        if isinstance(ctl, str):  # the run ended before it connected: its result
+            return ctl
         self.poll()
         if self.stop_at is not None:
             return self.cancel_rest("stopped", None)
@@ -328,6 +333,61 @@ class Session:
         return "succeeded" if set(self.states) == {"succeeded"} else "failed"
 
     # the device
+    def emulator(self, fw, want: dict):
+        """A controller connected to the emulator the start asks for, or the run's result when there is none."""
+        device, until = self.device(fw, want)
+        if device is None:
+            return self.cancel_rest("failed", "no emulator to run on", own("NoEmulator"))
+        self.out.send("connection", state="connecting", address=device.address)
+        ctl = self.connect(fw, device, until)
+        if ctl is None:
+            if self.stop_at is not None:
+                return self.cancel_rest("stopped", None)
+            return self.fail("connect_failed", f"could not connect to {device.address}",
+                             coded=own("ConnectFailed", address=device.address))
+        self.out.send("connection", state="connected", address=device.address)
+        self.say(f"connected {device.name} {device.address}")
+        return ctl
+
+    def pc(self, fw, want: dict):
+        """The PC window controller connected to the game's window, its client area set to the start's pc_size (the
+        window put back at the run's end, restore_window), or the run's result when it cannot be: no window, more than
+        one, minimized, not 16:9 once the size is set, or a connect that fails."""
+        windows = self.windows
+        found = pc.games(windows)
+        if not found:
+            return self.fail("device_missing", f"no {pc.TITLE} window is open", coded=own("PcNoWindow"))
+        if len(found) > 1:
+            return self.fail("connect_failed", f"{len(found)} {pc.TITLE} windows are open",
+                             coded=own("PcManyWindows", count=len(found)))
+        hwnd = found[0]
+        if (p := pc.trouble(windows.look(hwnd), aspect=False)) is None:
+            self.put_back = pc.resize(windows, hwnd, want.get("pc_size", "keep"), self.say)
+            p = pc.trouble(look := windows.look(hwnd))
+        if p is not None:
+            return self.fail("connect_failed", p.message, coded=own(p.code, **p.params))
+        self.out.send("connection", state="connecting", address=pc.TITLE)
+        ctl = fw.pc_controller(hwnd, windows)
+        # .succeeded, not .connected: a custom controller's connected is a method (maa/controller.py CustomController)
+        if not ctl.post_connection().wait().succeeded:
+            if (p := ctl.problem) is not None:
+                return self.fail("connect_failed", p.message, coded=own(p.code, **p.params))
+            return self.fail("connect_failed", f"could not connect to the {pc.TITLE} window",
+                             coded=own("ConnectFailed", address=pc.TITLE))
+        self.watch = ctl
+        self.out.send("connection", state="connected", address=pc.TITLE)
+        self.say(f"connected the {pc.TITLE} window {look.width}x{look.height}")
+        return ctl
+
+    def restore_window(self) -> None:
+        """The PC window back where and as large as it was before the run, when the run changed it."""
+        if self.put_back is None:
+            return
+        try:
+            self.put_back()
+        except Exception as e:  # the run is over either way
+            self.say(f"the game's window was not put back: {type(e).__name__}: {e}")
+
     def device(self, fw, want: dict):
         """The device to run on, MuMu started first when it is not running and the start names its instance, and when
         the connect to a MuMu it started must be done by (None for one that was running); (None, None) when there is
@@ -471,6 +531,11 @@ class Session:
             if not self.timed_out and self.now() - self.stop_posted >= STOP_LIMIT:
                 self.timed_out = True
                 self.error("stop_timeout", f"MaaFramework did not stop in {STOP_LIMIT:g} s: end the runner's process tree")
+        if self.trouble is None and self.watch is not None and (p := self.watch.problem) is not None:
+            self.trouble, self.trouble_code = p.message, own(p.code, **p.params)
+            self.error("device_lost", p.message)
+            if self.stop_posted is None:
+                self.post_stop()
         if self.crash is None and self.agent.poll() is not None:
             self.reader.join(DRAIN)  # its last lines first
             code = self.agent.returncode
@@ -506,7 +571,9 @@ class Session:
         after: the job of the task that follows it in the list, None for the last."""
         status = detail and detail.status
         ran = self.states[i] == "running" or bool(status and status.done)
-        if ran and self.stop_at is None and (halt := self.halt_reason(after)) is not None:
+        if ran and self.stop_at is None and self.trouble is not None:
+            self.task(i, "failed", self.trouble, self.trouble_code)
+        elif ran and self.stop_at is None and (halt := self.halt_reason(after)) is not None:
             self.task(i, "failed", halt, self.halt_code)
         elif self.stop_at is None and status and status.succeeded:
             self.task(i, "succeeded")
@@ -537,7 +604,10 @@ class Session:
 
     def why_unrun(self) -> tuple[str, tuple[str, dict] | None]:
         """Why a task never ran though nobody stopped the run, with the reason's code: the bot exited, or it stopped the
-        whole list (its reason, which it logged before the post_stop that the tasker's stop came from)."""
+        whole list (its reason, which it logged before the post_stop that the tasker's stop came from), or the PC window
+        controller held a problem."""
+        if self.trouble:
+            return self.trouble, self.trouble_code
         if self.crash:
             return self.crash, self.crash_code
         if halt := self.await_halt():

@@ -125,12 +125,12 @@ describe("Start and Stop", () => {
     expect(back.starts[0].device).toEqual({ address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" });
   });
 
-  test("a file whose device is the PC window starts with kind pc, for the runner to refuse it; the emulator's start names no kind (#939)", async () => {
-    // no editor shows the device yet: a file edited by hand. The runner cancels the list as not supported, not the emulator run
+  test("a file whose device is the PC window starts with kind pc and the window's size; the emulator's start names neither (#939, #940)", async () => {
+    // no editor shows the device yet: a file edited by hand. The runner connects to the game's window, not the emulator
     back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1080" } });
     const user = await open();
     await started(user);
-    expect(back.starts[0].device).toEqual({ kind: "pc", address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" });
+    expect(back.starts[0].device).toEqual({ kind: "pc", pc_size: "1080", address: "127.0.0.1:16416", mumu_index: 1, mumu_manager: "C:/MuMu/nx_main/MuMuManager.exe" });
   });
 
   test("with nothing unsaved, Start writes nothing", async () => {

@@ -55,10 +55,12 @@ class World:
     once and ends the running task stop_ends (failed, or succeeded as MaaFramework says when the agent's action returns
     normally after post_stop, #832) stop_ticks ticks later (None: never, until free()). at: {time: call}.
     adb says `offline` to the first `offline` looks at a device's state, and a connect fails while it does, as
-    MaaFramework's does (its get-state); each look takes `asks` s; the first `refusals` connects fail besides."""
+    MaaFramework's does (its get-state); each look takes `asks` s; the first `refusals` connects fail besides.
+    The PC client (#940, tests/test_pc.py): desk the windows (runner/pc.py's Win32Windows; none open by default),
+    make_pc(hwnd, windows) the PC window controller; a task that runs takes a screencap each tick, as the bot's does."""
 
     def __init__(self, plan, *, found=(MUMU0,), appear=None, stop_ticks=1, at=None, connects=True, halt_when=None,
-                 offline=0, asks=0.0, refusals=0, stop_ends="failed", halt_ends="succeeded"):
+                 offline=0, asks=0.0, refusals=0, stop_ends="failed", halt_ends="succeeded", desk=None, make_pc=None):
         self.plan, self.found, self.appear, self.stop_ticks = plan, list(found), appear, stop_ticks
         self.stop_ends, self.halt_ends, self.asks = stop_ends, halt_ends, asks
         self.at, self.connects, self.halt_when = dict(at or {}), connects, halt_when or (lambda: True)
@@ -67,6 +69,7 @@ class World:
         self.posted, self.stops, self.roots, self.bundles, self.controllers = [], [], [], [], []
         self.looks, self.timeouts, self.connected_at = [], [], []
         self.disconnected = False
+        self.desk, self.make_pc, self.bound = desk or SimpleNamespace(find=lambda: []), make_pc, None
 
     # the clock
     def monotonic(self):
@@ -93,6 +96,8 @@ class World:
             self.current.state, self.current.left = "running", self.plan[self.current.entry][0]
             return
         if self.current is not None:
+            if (shot := getattr(self.bound, "screencap", None)) is not None:
+                shot()
             self.current.left -= 1
             outcome = self.plan[self.current.entry][1]
             if self.current.left > 0 or (outcome == "halt" and not self.halt_when()):
@@ -130,6 +135,9 @@ class World:
         self.offline -= 1
         return "error: device offline" if self.offline >= 0 else "device"
 
+    def pc_controller(self, hwnd, windows):
+        return self.make_pc(hwnd, windows)
+
     def resource(self):
         def post_bundle(path):
             self.bundles.append(path)
@@ -161,7 +169,7 @@ class World:
             inited = True
 
             def bind(self, res, ctl):
-                pass
+                world.bound = ctl
 
             def post_task(self, entry):  # no pipeline override: each task reads the settings file (#813)
                 job = Job(entry)
@@ -210,7 +218,7 @@ class Run:
 
         self.session = Session(self.out, world, self.commands, sleep=world.sleep, monotonic=world.monotonic,
                                agent_command=bot(world.bye, *bot_lines, code=code), launch=launch_mumu, awake=awake,
-                               adb_state=world.adb_state)
+                               adb_state=world.adb_state, windows=world.desk)
 
     def start(self, tasks, **device):
         line = {"v": 1, "cmd": "start", "root": str(self.root), "tasks": tasks,
@@ -575,21 +583,6 @@ def test_a_start_that_names_the_emulator_sends_the_same_events_as_one_that_names
     omitted, named = runs
     assert omitted == named
     assert len(omitted["events"]) > 6  # the run said something to compare
-
-
-def test_a_pc_start_cancels_every_task_with_the_coded_reason_that_the_pc_client_is_not_supported_yet(tmp_path):
-    # #939: the device kind reaches the runner, which fails the run the way it fails one with no device, before it loads
-    # MaaFramework or looks for a device
-    world = World({"MirrorDungeon": (1, "succeeded"), "ExpLuxcavation": (1, "succeeded")})
-    run = Run(tmp_path, world)
-    assert run.start(TWO, kind="pc") == "failed"
-    (error,) = run.of("error")
-    assert error == {"v": 1, "event": "error", "kind": "unsupported", "message": "the PC client is not supported yet"}
-    reason = "the PC client is not supported yet"
-    assert run.states() == [(0, "pending"), (1, "pending"), (0, "cancelled", reason), (1, "cancelled", reason)]
-    assert run.codes() == [(0, "cancelled", "PcNotSupported", {}), (1, "cancelled", "PcNotSupported", {})]
-    assert run.of("end") == [{"v": 1, "event": "end", "result": "failed"}]
-    assert world.roots == [] and world.controllers == [] and run.launched == []
 
 
 def test_a_mumu_not_running_is_started_and_waited_for_then_connected_after_it_settles(tmp_path):

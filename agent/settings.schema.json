@@ -388,7 +388,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "pc_size"],
-      "description": "the kind of device the runner drives (#939, spec #922): the emulator (the emulator section), or the PC client's window, which the runner refuses as not supported yet. No window handle: it changes when the game restarts",
+      "description": "the kind of device the runner drives (#939, spec #922): the emulator (the emulator section), or the PC client's window (#940). No window handle: it changes when the game restarts",
       "properties": {
         "kind": { "enum": ["emulator", "pc"], "default": "emulator" },
         "pc_size": { "enum": ["keep", "720", "900", "1080", "1440"], "default": "1440", "description": "the PC window's client area for a run, by its height at 16:9 (1280x720 to 2560x1440), restored after it; keep: left as it is" }
