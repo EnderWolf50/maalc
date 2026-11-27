@@ -100,8 +100,13 @@ def differs(before: State, after: State) -> list[str]:
 
 
 def moved(before: State, after: State) -> list[str]:
-    """The fields of MOVED that differ: what the event logs."""
+    """The fields of MOVED that differ (a cursor moved, another window came to the front): what the event logs."""
     return [f for f in differs(before, after) if f in MOVED]
+
+
+def stops(before: State, after: State) -> list[str]:
+    """The fields that differ and stop the tool: the game window's rect and styles."""
+    return [f for f in differs(before, after) if f not in MOVED]
 
 
 def lane_trouble(env=os.environ, qdir: Path | None = None, is_alive=queue.alive) -> str | None:
@@ -190,7 +195,7 @@ def shot(ctl: pc.Controller, windows, hwnd) -> tuple[np.ndarray, float, State, S
         raise StateStop(explain(ctl.problem), before, after)
     if before is None or after is None:
         raise StateStop(explain(pc.trouble(None)), before, after)
-    if d := [f for f in differs(before, after) if f not in MOVED]:
+    if d := stops(before, after):
         raise StateStop(f"the game's window changed during the screencap: {', '.join(d)}", before, after, d)
     image = job.get() if job.succeeded else None
     if not isinstance(image, np.ndarray) or image.ndim != 3:
