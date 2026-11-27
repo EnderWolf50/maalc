@@ -16,6 +16,6 @@ def bundles(root: Path, kind: str) -> list[Path]:
     return [Path(root) / "resource" / name for name in LAYERS[kind]]
 
 
-def agent_env(kind: str) -> dict[str, str]:
-    """What the bot's environment gets for a run on `kind`, over whatever the runner's own environment holds."""
-    return {LAYERS_ENV: ",".join(LAYERS[kind])}
+def agent_env(bundles: list[Path]) -> dict[str, str]:
+    """What the bot's environment gets for a run that loaded `bundles`, over whatever the runner's own environment holds."""
+    return {LAYERS_ENV: ",".join(b.name for b in bundles)}

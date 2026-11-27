@@ -23,7 +23,8 @@ if __name__ != "__main__":
     import resource_update
     from test_pipeline import load_nodes
     from install import mirror_repo, write_resource_manifest
-    from test_runner import Run, World
+    from test_pc import ONE, Desk, game, pc_world
+    from test_runner import TWO, Run, World
 
     from runner import layers
 
@@ -109,23 +110,26 @@ def test_the_bot_reloads_the_bundles_its_runner_loaded(monkeypatch, tmp_path, ki
     assert resource_update.LAYERS_ENV == layers.LAYERS_ENV
     monkeypatch.delenv(layers.LAYERS_ENV, raising=False)
     assert resource_update.bundles(tmp_path / "resource" / "base") == [tmp_path / "resource" / "base"]  # a bot of no runner
-    for name, value in layers.agent_env(kind).items():
+    for name, value in layers.agent_env(layers.bundles(tmp_path, kind)).items():
         monkeypatch.setenv(name, value)
     base = tmp_path / "resource" / "base"
     assert resource_update.bundles(base) == layers.bundles(tmp_path, kind) == [tmp_path / "resource" / b for b in bundles]
 
 
-@pytest.mark.parametrize("kind, names", [("emulator", "base"), ("pc", "base,pc")])
-def test_the_runner_starts_the_bot_with_the_bundles_of_the_run(monkeypatch, tmp_path, kind, names):
-    # a PC run stops before its bot starts until the PC window controller is there (#940): start_agent is called here
+@pytest.mark.parametrize("world, device, names", [
+    (lambda: World(ONE), {}, ["base"]),
+    (lambda: pc_world(ONE, Desk(game())), {"kind": "pc", "address": None}, ["base", "pc"]),
+], ids=["emulator", "pc"])
+def test_a_run_loads_the_bundles_of_its_device_kind_and_hands_their_names_to_its_bot(monkeypatch, tmp_path, world, device, names):
     monkeypatch.delenv(layers.LAYERS_ENV, raising=False)
-    session = Run(tmp_path, World({})).session
-    session.agent_command = lambda root, identifier: [
-        sys.executable, "-c", f"import os; print('[maalc] layers ' + os.environ.get({layers.LAYERS_ENV!r}, 'none'))"]
-    session.start_agent(tmp_path, "id", kind)
-    session.agent.wait(timeout=60)
-    session.reader.join(timeout=60)
-    assert list(session.tail) == [f"[maalc] layers {names}"]
+    world = world()
+    run = Run(tmp_path, world)
+    script = f"import os; print('[maalc] layers ' + os.environ.get({layers.LAYERS_ENV!r}, 'none'), flush=True)\n"
+    script += f"import time\nwhile not os.path.exists({str(world.bye)!r}): time.sleep(0.02)\n"
+    run.session.agent_command = lambda root, identifier: [sys.executable, "-c", script]
+    assert run.start(TWO, **device) == "succeeded"
+    assert world.bundles == [str(run.root / "resource" / name) for name in names]
+    assert f"[maalc] layers {','.join(names)}" in run.lines("agent")
 
 
 if __name__ == "__main__":

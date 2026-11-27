@@ -123,8 +123,9 @@ def child(work=None, pc=False):
         sys.path.insert(0, str(ROOT))
         from runner import layers
 
-        os.environ.update(layers.agent_env("pc"))
-        for bundle in layers.bundles(settings.ROOT, "pc"):
+        bundles = layers.bundles(settings.ROOT, "pc")
+        os.environ.update(layers.agent_env(bundles))
+        for bundle in bundles:
             resource.post_bundle(bundle).wait()
     else:
         resource.post_bundle(settings.ROOT / "resource" / "base" if work else ROOT / "assets" / "resource" / "base").wait()
