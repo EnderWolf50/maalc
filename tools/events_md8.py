@@ -69,10 +69,11 @@ def load(root: Path) -> Tables:
             t.battle_rows.setdefault(row["id"], row)
     for f in sorted(glob.glob(str(lz / "EN_ActionEvents*.json")) + glob.glob(str(lz / "EN_AbEvents*.json"))):
         for x in ld(f).get("dataList", []):
-            had = t.loc.get(x["id"])
-            if had is None or has_text(x) and not has_text(had):
-                # an id in both files: the record with the story and options wins, the other fills the fields it lacks (#969)
-                t.loc[x["id"]], t.loc_file[x["id"]] = {**(had or {}), **x}, os.path.basename(f)
+            kept = t.loc.get(x["id"])
+            if kept is None or (has_text(x) and not has_text(kept)):
+                # an id in both files: the record with the story and options wins over the one read before it, which
+                # fills the fields it lacks (EN_AbEvents sorts first: 863301's title, #969)
+                t.loc[x["id"]], t.loc_file[x["id"]] = {**(kept or {}), **x}, os.path.basename(f)
     for f in glob.glob(str(lz / "*EGOgift*.json")):
         for x in ld(f).get("dataList", []):
             if x.get("name"):

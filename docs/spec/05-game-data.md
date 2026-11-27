@@ -230,7 +230,7 @@ Hidden Battle 不在上表（#868）：遊戲資料的 `HIDDEN_BATTLE` cost（�
 
 飾品的體系取自靜態資料 `ego-gift-mirrordungeon` 的 `keyword`：`events_md8.py` 取到的是同 id 第一筆、沒有 keyword 的紀錄，會把 Grimy Iron Stake 這類飾品讀成 Keywordless，`tools/event_table.py` 重新查一次。沒有敘事文字的 5 個選擇頁（Boss 戰中途與部分後續頁）不在 `events`，照提示文字規則處理；它們的選項寫在 `pages`。
 
-事件的故事與選項文字取自英文在地化的 `EN_ActionEvents*` 與 `EN_AbEvents*`。同一個 id 兩邊都有時，用有故事或選項的那筆，另一筆只補它沒有的欄位（如 863301 的標題）：`EN_AbEvents` 裡有 9 筆只有 `prevDesc`，檔名又排在前面，先前這 9 個事件因此沒有選項文字，只能落到 `pages`（#969）。選項文字依選項在 `eachOptionList` 裡的位置取，不依 `index`：863301 的 `index` 是 0、1、3、4，在地化依序列了 4 個選項（依位置對應是推論，遊戲實際顯示待實機確認，#969）。
+事件的故事與選項文字取自英文在地化的 `EN_ActionEvents*` 與 `EN_AbEvents*`。同一個 id 兩邊都有時，用有故事或選項的那筆，不論檔名排序；在它之前讀到的那筆（`EN_AbEvents` 檔名排在前面）只補它沒有的欄位（如 863301 的標題）：`EN_AbEvents` 裡有 9 筆只有 `prevDesc`，檔名又排在前面，先前這 9 個事件因此沒有選項文字，只能落到 `pages`（#969）。選項文字依選項在 `eachOptionList` 裡的位置取，不依 `index`：863301 的 `index` 是 0、1、3、4，在地化依序列了 4 個選項（依位置對應是推論，遊戲實際顯示待實機確認，#969）。
 
 **分支**（`odds`、`fail` 的每一項）：`{"p": 機率, "gets": [...]}`；機率隨選過的次數累加時寫 `{"p_per_pick": 每次的增量, ...}`（另一分支寫負的增量，表示其餘）；其他條件（如隊伍平均 SP）寫 `{"if": "遊戲的條件", ...}`。`gets` 是效果：`[hp|sp|hp%|sp%, 量, 對象]`（`%` 是佔最大值的比例）（扣為負，`max` 為補滿）、`[cost, 量]`、`[gift|win_gift|buff|win_buff, id]`（`win_` 打贏才給，`buff` 是隱藏的戰鬥 buff）、`[battle, 戰鬥 id]`（開戰）、`[next, 事件 id]`；`Nothing` 不寫，效果本身的條件（如只對沒有某罪孽 affinity 攻擊技能的人格）不留。例：971055 `???` 是 `[{"p": 0.01, "gets": [["gift", 9800]]}, {"p": 0.99, "gets": [["cost", 50]]}]`。`tools/event_table.py` 遇到不認得的效果就停下，換季時補上。
 
