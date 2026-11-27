@@ -99,7 +99,7 @@ def watch(tmp_path, desk, ctl, **kw):
         return ctl
     kw = {"max_shots": 500, "max_seconds": 1200, **kw}
     try:
-        ps.watch(desk, tmp_path, pc.FRAME_POOL, make=make, clock=clock, sleep=clock.sleep, say=said.append, **kw)
+        ps.watch(desk, tmp_path, "FramePool", make=make, clock=clock, sleep=clock.sleep, say=said.append, **kw)
     finally:
         events = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()] \
             if (tmp_path / "events.jsonl").exists() else []
@@ -137,18 +137,34 @@ def test_a_minimized_window_stops_the_watch_with_why_and_gets_no_screencap(tmp_p
         clock.sleep(s)
         desk.set(HWND, minimized=True)  # the user minimizes the game after the first shot
     with pytest.raises(ps.Stop, match="minimized") as stop:
-        ps.watch(desk, tmp_path, pc.FRAME_POOL, make=lambda *a: ctl, clock=clock, sleep=sleep, say=print)
+        ps.watch(desk, tmp_path, "FramePool", make=lambda *a: ctl, clock=clock, sleep=sleep, say=print)
     assert "transparent" in str(stop.value) and "restore" in str(stop.value)
     assert ctl.calls.count(("screencap",)) == 1  # the minimized window got none
     last = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert last["action"] == "stop" and "minimized" in last["reason"]
 
 
-def test_a_window_minimized_at_the_start_is_not_connected_to(tmp_path):
+def test_a_window_minimized_at_the_start_is_not_connected_to_and_the_stop_is_logged(tmp_path):
     ctl = FakeCtl()
     with pytest.raises(ps.Stop, match="minimized"):
         watch(tmp_path, PcDesk(game(minimized=True)), ctl)
     assert ctl.calls == []
+    last = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert last["action"] == "stop" and "minimized" in last["reason"]
+
+
+class FailingCtl(FakeCtl):
+    """A Win32 controller whose screencap fails: its job did not succeed, and get() hands back the last cached frame."""
+
+    def post_screencap(self):
+        self.calls.append(("screencap",))
+        return Job(frame(100), succeeded=False)
+
+
+def test_a_screencap_that_failed_stops_the_watch_rather_than_reading_as_an_unchanged_screen(tmp_path):
+    with pytest.raises(ps.Stop, match="the screencap failed"):
+        watch(tmp_path, PcDesk(game()), FailingCtl())
+    assert not list(tmp_path.glob("shot-*.png"))
 
 
 def test_the_watch_makes_no_input_call_and_its_controller_has_no_input(tmp_path):
@@ -176,8 +192,10 @@ def test_a_state_that_differs_after_a_screencap_from_before_it_stops_the_watch(t
 
 def test_each_shot_logs_the_state_before_and_after_it_and_how_long_it_took(tmp_path):
     _, events, _, _ = watch(tmp_path, PcDesk(game()), FakeCtl(), max_seconds=2)
-    shot = events[0]
+    start, shot = events[:2]
+    assert start == {**start, "action": "start", "method": "FramePool", "client": [1920, 1080], "dpi": 96}
     assert shot["action"] == "screencap" and shot["method"] == "FramePool" and shot["ms"] >= 0
+    assert shot["client"] == [1920, 1080]
     assert shot["before"] == shot["after"] == {"foreground": HWND, "cursor": [500, 400], "rect": [0, 0, 1936, 1119],
                                                "style": 0x14CA0000, "exstyle": 0x100}
 
@@ -206,7 +224,7 @@ def test_the_user_stopping_it_ends_the_watch_as_a_stop_of_theirs(tmp_path):
 
     def sleep(s):
         raise KeyboardInterrupt
-    ps.watch(PcDesk(game()), tmp_path, pc.FRAME_POOL, make=lambda *a: FakeCtl(), clock=clock, sleep=sleep, say=print)
+    ps.watch(PcDesk(game()), tmp_path, "FramePool", make=lambda *a: FakeCtl(), clock=clock, sleep=sleep, say=print)
     last = json.loads((tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert last == {**last, "action": "end", "reason": "stopped by the user"}
 
@@ -273,15 +291,37 @@ def test_a_command_on_the_window_without_the_lane_touches_no_window(tmp_path, mo
 
 # the identity masks (D15)
 def test_masking_is_refused_while_the_pc_identity_regions_are_not_measured(tmp_path, capsys):
-    assert ps.IDENTITY is None  # measured on the first PC shots of stage 1; nothing guesses them
+    # measured on the first PC shots of stage 1; nothing guesses them
+    assert ps.IDENTITY == {"uid": None, "email": None, "name": None}
     Image.new("RGB", (1920, 1080), (200, 200, 200)).save(tmp_path / "shot-0001.png")
     assert ps.main(["mask", str(tmp_path), str(tmp_path / "masked")]) == 1
     assert "not measured" in capsys.readouterr().out and not (tmp_path / "masked").exists()
 
 
+def test_masking_is_refused_while_one_of_the_three_regions_is_not_measured(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(ps, "IDENTITY", {"uid": (1, 1, 1, 1), "email": (1, 1, 1, 1), "name": None})
+    Image.new("RGB", (1920, 1080), (200, 200, 200)).save(tmp_path / "shot-0001.png")
+    assert ps.main(["mask", str(tmp_path), str(tmp_path / "masked")]) == 1
+    assert "not measured yet (name;" in capsys.readouterr().out and not (tmp_path / "masked").exists()
+
+
 def test_once_measured_every_region_is_blacked_out_at_the_shots_own_size(tmp_path, monkeypatch):
-    monkeypatch.setattr(ps, "IDENTITY", {"uid": (100, 200, 300, 40)})  # at 1920x1080
+    monkeypatch.setattr(ps, "IDENTITY", {"uid": (100, 200, 300, 40), "email": (0, 0, 3, 3), "name": (0, 0, 3, 3)})
     Image.new("RGB", (1280, 720), (200, 200, 200)).save(tmp_path / "shot-0001.png")
     assert ps.main(["mask", str(tmp_path), str(tmp_path / "masked")]) == 0
     out = np.asarray(Image.open(tmp_path / "masked" / "shot-0001.png"))
     assert out[134:160, 67:266].max() == 0 and out[132, 67].min() == 200 and out[134, 267].min() == 200
+
+
+def test_the_steam_build_is_read_from_the_app_manifest_in_any_library_folder(tmp_path):
+    steam, library = tmp_path / "Steam", tmp_path / "Games"
+    (steam / "steamapps").mkdir(parents=True)
+    (library / "steamapps").mkdir(parents=True)
+    escaped = str(library).replace("\\", "\\\\")  # libraryfolders.vdf escapes its backslashes
+    (steam / "steamapps" / "libraryfolders.vdf").write_text(
+        f'"libraryfolders"\n{{\n\t"0"\n\t{{\n\t\t"path"\t\t"{escaped}"\n\t}}\n}}\n', encoding="utf-8")
+    (library / "steamapps" / "appmanifest_1973530.acf").write_text(
+        '"AppState"\n{\n\t"appid"\t\t"1973530"\n\t"installdir"\t\t"Limbus Company"\n\t"LastUpdated"\t\t"1795669411"\n'
+        '\t"buildid"\t\t"26652290"\n}\n', encoding="utf-8")
+    assert ps.steam_build(steam) == {"buildid": "26652290", "LastUpdated": "1795669411", "installdir": "Limbus Company"}
+    assert ps.steam_build(tmp_path / "nowhere") == {}

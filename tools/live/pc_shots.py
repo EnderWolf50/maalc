@@ -61,9 +61,13 @@ STEAM_APP = "1973530"  # Limbus Company on Steam
 # The account's identity on a PC shot (D15, AGENTS.md "Public repo"): the UID plate, the account e-mail and the player
 # name above the LV panel, each (x, y, width, height) in a 1920x1080 shot's pixels, scaled to a shot's own size. Not
 # measured yet: stage 1 measures them on the first PC shots (#941); the Android ones (tests/test_screens_privacy.py) do
-# not carry over. Until then `mask` refuses, so no PC shot leaves the archive unmasked.
-IDENTITY: dict[str, tuple] | None = None
+# not carry over. Until all three are, `mask` refuses, so no PC shot leaves the archive unmasked.
+IDENTITY: dict[str, tuple | None] = {"uid": None, "email": None, "name": None}
 IDENTITY_WIDTH = 1920
+
+
+def wide(width: int, height: int) -> bool:
+    return width > 0 and width * 9 == height * 16
 
 
 class Stop(Exception):
@@ -130,25 +134,41 @@ class Log:
         out.mkdir(parents=True, exist_ok=True)
         self.path = out / "events.jsonl"
 
-    def __call__(self, action: str, **fields) -> None:
+    def __call__(self, action: str, **data) -> None:
         with self.path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"time": stamp(), "action": action, **fields}) + "\n")
+            f.write(json.dumps({"time": stamp(), "action": action, **data}) + "\n")
 
 
-def controller(windows, hwnd, method: int, make=None) -> pc.Controller:
-    """The PC window controller on a Win32 controller of `method`, mouse and keyboard Null, connected."""
-    ctl = pc.Controller(hwnd, windows, inner=lambda h: pc.win32_controller(h, screencap=method, make=make))
+def controller(windows, hwnd, method: str, make=None) -> pc.Controller:
+    """The PC window controller on a Win32 controller of `method` (a name of METHODS), mouse and keyboard Null,
+    connected."""
+    ctl = pc.Controller(hwnd, windows, inner=lambda h: pc.win32_controller(h, screencap=METHODS[method], make=make))
     if not ctl.connect():
         raise Stop(explain(ctl.problem) if ctl.problem else "the connect to the game's window failed")
     return ctl
 
 
+class StateStop(Stop):
+    """A stop condition a shot met, with the state before and after it and the fields that differ."""
+
+    def __init__(self, reason: str, before: State | None, after: State | None, differ: list[str] | None = None):
+        super().__init__(reason)
+        self.before, self.after, self.differ = before, after, differ or []
+
+    def event(self) -> dict:
+        return {"reason": str(self), "before": self.before and asdict(self.before),
+                "after": self.after and asdict(self.after), "differs": self.differ}
+
+
 def shot(ctl: pc.Controller, windows, hwnd) -> tuple[np.ndarray, float, State, State]:
-    """One screencap through the controller: (image BGR, ms, the state before it, after it). Every stop condition the
-    shot meets raises Stop, carrying the states."""
+    """One screencap: (image BGR, ms, the state before it, after it). The controller's guard looks at the window first
+    (Controller.usable, D5), then the inner controller screencaps, and its job says whether it succeeded:
+    Controller.screencap drops that, and a failed job's get() is the controller's cached image (maa/controller.py
+    _get_screencap), the last frame, which would read as a screen that did not change. Every stop condition the shot
+    meets raises StateStop."""
     before = windows.state(hwnd)
     t = time.perf_counter()
-    image = ctl.screencap()
+    job = ctl.inner.post_screencap().wait() if ctl.usable() else None
     ms = (time.perf_counter() - t) * 1000
     after = windows.state(hwnd)
     if ctl.problem is not None:
@@ -157,22 +177,15 @@ def shot(ctl: pc.Controller, windows, hwnd) -> tuple[np.ndarray, float, State, S
         raise StateStop(explain(pc.trouble(None)), before, after)
     if d := differs(before, after):
         raise StateStop(f"the game's window changed during the screencap: {', '.join(d)}", before, after, d)
+    image = job.get() if job.succeeded else None
+    if not isinstance(image, np.ndarray) or image.ndim != 3:
+        raise StateStop("the screencap failed: no image", before, after)
     h, w = image.shape[:2]
-    if w * 9 != h * 16:
+    if not wide(w, h):
         raise StateStop(f"the shot is {w}x{h}, not 16:9", before, after)
     if image.max() <= BLACK:
         raise StateStop("the shot is black", before, after)
     return image, ms, before, after
-
-
-class StateStop(Stop):
-    def __init__(self, reason: str, before: State | None, after: State | None, differ: list[str] | None = None):
-        super().__init__(reason)
-        self.before, self.after, self.differ = before, after, differ or []
-
-    def fields(self) -> dict:
-        return {"reason": str(self), "before": self.before and asdict(self.before),
-                "after": self.after and asdict(self.after), "differs": self.differ}
 
 
 def changed(a: np.ndarray | None, b: np.ndarray) -> float:
@@ -187,15 +200,22 @@ def save(image: np.ndarray, path: Path) -> None:
     Image.fromarray(np.ascontiguousarray(image[..., ::-1])).save(path)  # BGR as MaaFramework hands it out
 
 
-def watch(windows, out: Path, method: int, make=None, every: float = EVERY, max_shots: int = MAX_SHOTS,
+def client(windows, hwnd) -> list[int] | None:
+    look = windows.look(hwnd)
+    return None if look is None else [look.width, look.height]
+
+
+def watch(windows, out: Path, method: str, make=None, every: float = EVERY, max_shots: int = MAX_SHOTS,
           max_seconds: float = MAX_MINUTES * 60, clock=time.monotonic, sleep=time.sleep, say=print) -> None:
-    """Step 1-3: a shot every `every` s, saved as shot-NNNN.png when the screen changed, until a limit or Ctrl-C; a stop
-    condition raises Stop. Every shot and the end go to out/events.jsonl."""
-    log, name = Log(out), next(n for n, v in METHODS.items() if v == method)
-    hwnd = one_window(windows)
-    ctl = controller(windows, hwnd, method, make)
-    start, last, saved, reason = clock(), None, 0, None
+    """Step 1-3: a shot every `every` s with `method` (a name of METHODS), saved as shot-NNNN.png when the screen
+    changed, until a limit or Ctrl-C; a stop condition raises Stop. The start (the window's client area and DPI), every
+    shot (its client area too: the user may resize the window, step 1-4), the stop and the end go to out/events.jsonl."""
+    log, ctl, saved, reason = Log(out), None, 0, None
     try:
+        hwnd = one_window(windows)
+        log("start", method=method, client=client(windows, hwnd), dpi=windows.dpi(hwnd))
+        ctl = controller(windows, hwnd, method, make)
+        start, last = clock(), None
         while reason is None:
             image, ms, before, after = shot(ctl, windows, hwnd)
             share = changed(last, image)
@@ -205,8 +225,8 @@ def watch(windows, out: Path, method: int, make=None, every: float = EVERY, max_
                 file = f"shot-{saved:04d}.png"
                 save(image, out / file)
                 say(f"saved {file} ({share:.0%} changed, {ms:.0f} ms)")
-            log("screencap", method=name, ms=round(ms, 2), changed=round(share, 4), saved=file,
-                before=asdict(before), after=asdict(after))
+            log("screencap", method=method, ms=round(ms, 2), changed=round(share, 4), saved=file,
+                client=client(windows, hwnd), before=asdict(before), after=asdict(after))
             if saved >= max_shots:
                 reason = f"{max_shots} shots saved"
             elif clock() + every - start >= max_seconds:
@@ -214,7 +234,7 @@ def watch(windows, out: Path, method: int, make=None, every: float = EVERY, max_
             else:
                 sleep(every)
     except StateStop as stop:
-        log("stop", **stop.fields())
+        log("stop", **stop.event())
         raise
     except Stop as stop:
         log("stop", reason=str(stop))
@@ -222,28 +242,38 @@ def watch(windows, out: Path, method: int, make=None, every: float = EVERY, max_
     except KeyboardInterrupt:
         reason = "stopped by the user"
     finally:
-        ctl.inactive()
+        if ctl is not None:
+            ctl.inactive()
     log("end", reason=reason, saved=saved)
     say(f"ended: {reason}, {saved} shots saved in {out}")
 
 
 def compare(windows, out: Path, make=None, count: int = 5, say=print) -> dict:
     """Step 1-2: `count` shots with each background method; the last of each saved, the ms of all, the mean grey
-    difference of the two last ones. out/compare.json."""
-    hwnd, log, doc, last = one_window(windows), Log(out), {"methods": {}}, {}
-    for name, method in METHODS.items():
-        ctl = controller(windows, hwnd, method, make)
+    difference of the two last ones. out/compare.json; each shot and a stop go to out/events.jsonl."""
+    if count < 1:
+        raise ValueError("compare takes at least one shot a method")
+    log, doc, last = Log(out), {"methods": {}}, {}
+    for name in METHODS:
+        ctl = None
         try:
+            hwnd = one_window(windows)
+            ctl = controller(windows, hwnd, name, make)
             ms = []
             for _ in range(count):
                 image, took, before, after = shot(ctl, windows, hwnd)
                 ms.append(round(took, 2))
-                log("screencap", method=name, ms=round(took, 2), before=asdict(before), after=asdict(after))
+                log("screencap", method=name, ms=round(took, 2), client=client(windows, hwnd), before=asdict(before),
+                    after=asdict(after))
         except StateStop as stop:
-            log("stop", method=name, **stop.fields())
+            log("stop", method=name, **stop.event())
+            raise
+        except Stop as stop:
+            log("stop", method=name, reason=str(stop))
             raise
         finally:
-            ctl.inactive()
+            if ctl is not None:
+                ctl.inactive()
         save(image, out / f"compare-{name}.png")
         last[name] = image
         doc["methods"][name] = {"ms": ms, "median_ms": statistics.median(ms), "shape": list(image.shape)}
@@ -256,10 +286,9 @@ def compare(windows, out: Path, make=None, count: int = 5, say=print) -> dict:
 
 def info(windows, out: Path, steam=None) -> dict:
     """Step 1-1: the one game window as Windows says; out/info.json."""
-    found = pc.games(windows)
     hwnd = one_window(windows)
     look, state = windows.look(hwnd), windows.state(hwnd)
-    doc = {"windows": len(found), "title": pc.TITLE, "class": pc.CLASS, "client": [look.width, look.height],
+    doc = {"title": pc.TITLE, "class": pc.CLASS, "client": [look.width, look.height],
            "rect": list(look.rect), "minimized": look.minimized, "maximized": look.maximized,
            "fullscreen": look.fullscreen, "dpi": windows.dpi(hwnd), "style": hex(state.style),
            "exstyle": hex(state.exstyle), "hdr": windows.hdr(hwnd), "steam": (steam or steam_build)()}
@@ -305,12 +334,14 @@ def masked(img: Image.Image, regions: dict[str, tuple]) -> Image.Image:
 
 
 def mask(src: Path, dest: Path, say=print) -> int:
-    if IDENTITY is None:
-        say("refused: the identity regions of a PC shot are not measured yet (IDENTITY in tools/live/pc_shots.py, "
-            "spec #922 D15): measure them on PC shots first; no PC shot is shown to anyone or committed unmasked")
+    """SRC's shots masked into DEST; refused (1) while a region of IDENTITY is not measured or a shot is not 16:9."""
+    if unmeasured := [k for k, box in IDENTITY.items() if box is None]:
+        say(f"refused: the identity regions of a PC shot are not measured yet ({', '.join(unmeasured)}; IDENTITY in "
+            f"tools/live/pc_shots.py, spec #922 D15): measure them on PC shots first; no PC shot is shown to anyone or "
+            f"committed unmasked")
         return 1
     shots = sorted(src.glob("*.png"))
-    bad = [p.name for p in shots if (s := Image.open(p).size)[0] * 9 != s[1] * 16]
+    bad = [p.name for p in shots if not wide(*Image.open(p).size)]
     if bad:
         say(f"refused: not 16:9, so the regions do not scale onto them: {', '.join(bad)}")
         return 1
@@ -405,7 +436,7 @@ def main(argv=None) -> int:
     i.add_argument("--out", type=Path, required=True)
     c = sub.add_parser("compare")
     c.add_argument("--out", type=Path, required=True)
-    c.add_argument("--count", type=int, default=5)
+    c.add_argument("--count", type=int, choices=range(1, 101), metavar="1..100", default=5)
     w = sub.add_parser("watch")
     w.add_argument("--method", choices=[m.lower() for m in METHODS], required=True)
     w.add_argument("--out", type=Path, required=True)
@@ -428,11 +459,13 @@ def main(argv=None) -> int:
         elif a.cmd == "compare":
             compare(windows, a.out, count=a.count)
         else:
-            method = next(v for n, v in METHODS.items() if n.lower() == a.method)
+            method = next(n for n in METHODS if n.lower() == a.method)
             watch(windows, a.out, method, every=a.every, max_shots=a.max_shots, max_seconds=a.max_minutes * 60)
     except Stop as stop:
         print(f"stop: {stop}")
         return 1
+    except KeyboardInterrupt:
+        print("stopped by the user")
     return 0
 
 
