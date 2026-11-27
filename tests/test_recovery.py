@@ -833,7 +833,7 @@ def frozen_l1(hub, monkeypatch, still=True, flag=("Connecting", 1, "Connecting: 
     shell.get.return_value = f"  mCurrentFocus=Window{{1 u0 {GAME}/x}}\n"  # a hub timeout reads the focus
     actions.STUCK["flag"], actions.STUCK["still"] = flag, still
     lines = []
-    monkeypatch.setattr(actions, "log", lines.append)
+    patch_all(monkeypatch, "log", lines.append)
     actions.Recover().run(hub, None)
     return [c.args[0] for c in hub.run_task.call_args_list], lines
 
