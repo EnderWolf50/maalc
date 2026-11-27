@@ -119,7 +119,7 @@
     {"event": {"v": 1, "event": "error", "kind": "resource_failed", "message": "the resource did not load"}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "agent_failed", "message": "the bot did not start", "code": 1, "tail": []}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "internal", "message": "Traceback (most recent call last):"}, "valid": true},
-    {"event": {"v": 1, "event": "error", "kind": "unsupported", "message": "the PC client is not supported yet"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "unsupported", "message": "a kind the protocol dropped (#922)"}, "valid": false},
     {"event": {"v": 1, "event": "error", "kind": "device_lost", "message": "the game's window is minimized"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "succeeded"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "failed"}, "valid": true},
