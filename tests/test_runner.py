@@ -69,6 +69,7 @@ class World:
         self.posted, self.stops, self.roots, self.bundles, self.controllers = [], [], [], [], []
         self.looks, self.timeouts, self.connected_at = [], [], []
         self.disconnected = False
+        self.ran = None  # a file the first task to run writes as it starts (Run sets it), for a bot that waits on it
         self.desk, self.make_pc, self.bound = desk or SimpleNamespace(find=lambda: []), make_pc, None
 
     # the clock
@@ -94,6 +95,8 @@ class World:
         if self.current is None and self.queue:
             self.current = self.queue.pop(0)
             self.current.state, self.current.left = "running", self.plan[self.current.entry][0]
+            if self.ran is not None and not self.ran.exists():
+                self.ran.write_text("")
             return
         if self.current is not None:
             if (shot := getattr(self.bound, "screencap", None)) is not None:
@@ -189,20 +192,27 @@ class World:
         return Tasker()
 
 
-def bot(bye, *lines, code=None):
-    """The bot's command: print lines, then exit with code, or wait until the runner's disconnect writes bye."""
+def bot(bye, *lines, code=None, after=None):
+    """The bot's command: print lines, then exit with code (once the file after exists, when given), or wait until the
+    runner's disconnect writes bye."""
     script = "".join(f"print({line!r}, flush=True)\n" for line in lines)
+    if after is not None:
+        script += f"import os, time\nwhile not os.path.exists({str(after)!r}): time.sleep(0.02)\n"
     script += (f"raise SystemExit({code})\n" if code is not None else
                f"import os, time\nwhile not os.path.exists({str(bye)!r}): time.sleep(0.02)\n")
     return lambda root, identifier: [sys.executable, "-c", script]
 
 
 class Run:
-    """A runner session on a World, its events in order (marks of the keep-awake among them)."""
+    """A runner session on a World, its events in order (marks of the keep-awake among them). exits_in_task: the bot
+    exits with code only once the first task runs, so the runner has seen it running whatever the machine's load
+    (#976: a bot that exits at once may be gone by the runner's first look, before any task started)."""
 
-    def __init__(self, tmp_path, world, *bot_lines, code=None, launch=None):
+    def __init__(self, tmp_path, world, *bot_lines, code=None, launch=None, exits_in_task=False):
         self.world, self.events, self.root = world, [], tmp_path / "install"
         world.bye = tmp_path / "bye"
+        if exits_in_task:
+            world.ran = tmp_path / "ran"
         self.out = Out(lambda text: self.events.append(json.loads(text)), clock=lambda: "12:00:00.000")
         self.commands, self.launched = Commands(), []
 
@@ -217,8 +227,8 @@ class Run:
             return launch(manager, index) if launch else (0, "")
 
         self.session = Session(self.out, world, self.commands, sleep=world.sleep, monotonic=world.monotonic,
-                               agent_command=bot(world.bye, *bot_lines, code=code), launch=launch_mumu, awake=awake,
-                               adb_state=world.adb_state, windows=world.desk)
+                               agent_command=bot(world.bye, *bot_lines, code=code, after=world.ran),
+                               launch=launch_mumu, awake=awake, adb_state=world.adb_state, windows=world.desk)
 
     def start(self, tasks, **device):
         line = {"v": 1, "cmd": "start", "root": str(self.root), "tasks": tasks,
@@ -479,8 +489,8 @@ def test_the_runners_own_reasons_have_codes(tmp_path):
     assert run.start(TWO[:1], mumu_index=0, mumu_manager=MANAGER) == "failed"
     assert run.codes() == [(0, "cancelled", "ConnectFailed", {"address": "127.0.0.1:16384"})]
 
-    world = World({"MirrorDungeon": (1000, "succeeded"), "ExpLuxcavation": (2, "succeeded")})
-    run = Run(tmp_path / "c", world, "[maalc] task MirrorDungeon started", code=3)
+    world = World({"MirrorDungeon": (100_000, "succeeded"), "ExpLuxcavation": (2, "succeeded")})  # until the bot exits
+    run = Run(tmp_path / "c", world, "[maalc] task MirrorDungeon started", code=3, exits_in_task=True)
     assert run.start(TWO) == "failed"
     assert run.codes() == [(1, "cancelled", "BotExited", {"code": 3})]
 
@@ -512,9 +522,9 @@ def test_nothing_follows_the_end_event_and_a_line_after_the_run_log_closed_goes_
 
 
 def test_the_bot_exiting_mid_run_fails_the_run_with_its_code_and_last_lines(tmp_path):
-    world = World({"MirrorDungeon": (1000, "succeeded"), "ExpLuxcavation": (2, "succeeded")})
+    world = World({"MirrorDungeon": (100_000, "succeeded"), "ExpLuxcavation": (2, "succeeded")})  # until the bot exits
     run = Run(tmp_path, world, "[maalc] task MirrorDungeon started", "Traceback (most recent call last):",
-              "RuntimeError: boom", code=3)
+              "RuntimeError: boom", code=3, exits_in_task=True)
     assert run.start(TWO) == "failed"
     (error,) = run.of("error")
     assert (error["kind"], error["code"], error["message"]) == ("agent_exit", 3, "the bot exited with code 3")
