@@ -830,6 +830,8 @@ const GAME = (w: Partial<PcWindow> = {}): PcWindow => ({ title: "LimbusCompany",
 /** The pick list's entries, the PC window's too; its PC window entry; PC 解析度's pick list, when it shows. */
 const allOptions = () => [...emuPick().querySelectorAll("option")].map((o) => o.textContent);
 const pcSize = () => within(emuFrame()).queryByRole("combobox", { name: new RegExp(`^${zh["device.pc_size"]}`) });
+/** The PC window entry of a scan that found GAME() as it is. */
+const PC_FOUND = fill(zh["device.pc_found"], { title: "LimbusCompany", width: 1920, height: 1080 });
 /** What settings() names as the emulator, with the PC window picked: the entry that goes back to it. */
 const BACK = fill(zh["device.emulator"], { device: MUMU_1_NAME });
 
@@ -840,7 +842,7 @@ describe("the PC window (#947)", () => {
     await open();
     expect(allOptions()).toEqual([CURRENT, zh["device.pc"]]);
     await end([MUMU]);
-    expect(allOptions()).toEqual([pickOne(CURRENT), MUMU_0_NAME, fill(zh["device.pc_found"], { title: "LimbusCompany", width: 1920, height: 1080 })]);
+    expect(allOptions()).toEqual([pickOne(CURRENT), MUMU_0_NAME, PC_FOUND]);
     expect(emuFrame()).toHaveTextContent(new RegExp(`^${zh["emu.title"]}`));
   });
 
@@ -850,7 +852,7 @@ describe("the PC window (#947)", () => {
     const user = await open();
     await scanned();
     expect(pcSize()).toBeNull();
-    const pc = fill(zh["device.pc_found"], { title: "LimbusCompany", width: 1920, height: 1080 });
+    const pc = PC_FOUND;
     await user.selectOptions(emuPick(), pc);
     expect(emuPick()).toHaveDisplayValue(pc);
     // the emulator the settings name stays first, to go back to; no line under the list: the window can run
@@ -885,7 +887,7 @@ describe("the PC window (#947)", () => {
     // pc_size stays as it was, for the next pick of the PC window
     expect(lastSaved().device).toEqual({ kind: "emulator", pc_size: "720" });
     expect(lastSaved().emulator).toEqual(settings().emulator);
-    await user.selectOptions(emuPick(), fill(zh["device.pc_found"], { title: "LimbusCompany", width: 1920, height: 1080 }));
+    await user.selectOptions(emuPick(), PC_FOUND);
     await user.selectOptions(emuPick(), MUMU_0_NAME);
     await user.click(screen.getByRole("button", { name: zh.save }));
     await waitFor(() => expect(back.saved).toHaveLength(2));
@@ -899,7 +901,7 @@ describe("the PC window (#947)", () => {
     back.windows = [GAME()];
     const user = await open();
     await scanned();
-    const pc = fill(zh["device.pc_found"], { title: "LimbusCompany", width: 1920, height: 1080 });
+    const pc = PC_FOUND;
     expect(allOptions()).toEqual([MUMU_0_NAME, MUMU_1_NAME, pc]);
     await user.selectOptions(emuPick(), MUMU_1_NAME);
     expect(pcSize()).toBeNull();
@@ -909,7 +911,7 @@ describe("the PC window (#947)", () => {
     expect(lastSaved().emulator).toEqual(settings().emulator);
   });
 
-  test("with the PC window picked and no game window found,the line under the list says so; the emulators' none-found does not show", async () => {
+  test("with the PC window picked and no game window found, the line under the list says so; the emulators' none-found does not show", async () => {
     back.text = fileOf({ ...settings(), device: { kind: "pc", pc_size: "1440" } });
     await open();
     await scanned();

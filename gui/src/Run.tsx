@@ -173,7 +173,7 @@ export function RunTab() {
         {narrow ? <RunControls /> : (
           <div className="run-console" ref={keep}>
             <RunControls />
-            <EmulatorFields scan={scan} manual={manual} />
+            <DeviceFields scan={scan} manual={manual} />
             <RunLog raw={raw} />
           </div>
         )}
@@ -183,7 +183,7 @@ export function RunTab() {
             <TaskList rows={rows} pickedAt={i} setSel={setSel} />
             <section className="task-options">{picked && <TaskOptions id={picked.id} />}</section>
           </div>
-          {narrow && <><EmulatorFields scan={scan} manual={manual} /><RunLog folded raw={raw} boxRef={keep} /></>}
+          {narrow && <><DeviceFields scan={scan} manual={manual} /><RunLog folded raw={raw} boxRef={keep} /></>}
           <GlobalOptions />
           {/* the run reads no schedule: they stay open to edits during a run (#816) */}
           <LockContext.Provider value={false}><SchedulesSection /></LockContext.Provider>
@@ -930,7 +930,11 @@ const pickOf = (d: Device): Settings["emulator"] => ({ address: d.address, mumu_
 /** The pick list's entry for the emulator the settings name, while it lists no device that is that one: the MuMu instance at
  * its address, the address alone, or none set. */
 const currentLabel = (t: (k: Key) => string, e: Settings["emulator"]) => e.address === null ? t("emu.unset")
-  : fill(t("emu.current"), { device: e.mumu_index === null ? e.address : mumuName(t, e.mumu_index, e.address) });
+  : fill(t("emu.current"), { device: emulatorName(t, e.address, e.mumu_index) });
+
+/** The emulator the settings name, by its MuMu instance and address, or its address alone. */
+const emulatorName = (t: (k: Key) => string, address: string, mumuIndex: number | null) =>
+  mumuIndex === null ? address : mumuName(t, mumuIndex, address);
 
 /** The pick list's PC entry (#947), after the emulators: the game's window the scan found, by its title and client area, or
  * 「PC 視窗」 alone before a scan and when it found none or more than one. */
@@ -958,7 +962,7 @@ function pcTrouble(t: (k: Key) => string, windows: PcWindow[], size: DeviceSetti
  * moved the log 26 px at each open of the tab), and what it found is the list itself: only finding none, failing, or a PC
  * window that cannot run takes a line under them. With the PC window picked, PC 解析度 (device.pc_size) shows under them.
  * The three values' own fields fold under 手動設定 (`manual`, open or not). During a run the whole frame is locked. */
-function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
+function DeviceFields({ scan: { scan, find }, manual: [open, setOpen] }: {
   scan: ReturnType<typeof useScan>; manual: [boolean, (open: boolean) => void];
 }) {
   const { s, update, t, tv, bad } = useEditor();
@@ -981,7 +985,7 @@ function EmulatorFields({ scan: { scan, find }, manual: [open, setOpen] }: {
   // the settings' own entry, while the scan found no device that is theirs: with the PC window picked, the emulator they
   // name, to go back to it with the three values kept (a scanned device that is theirs goes back to it as well)
   const label = pc ? (current.address === null ? t("emu.unset")
-    : fill(t("device.emulator"), { device: current.mumu_index === null ? current.address : mumuName(t, current.mumu_index, current.address) }))
+    : fill(t("device.emulator"), { device: emulatorName(t, current.address, current.mumu_index) }))
     : currentLabel(t, current);
   // a scan that found none, or failed, says so on a line under the list, which describes the list to a screen reader too;
   // what to do next after finding none is that line's tooltip, and read after it. With the PC window picked, the line says
