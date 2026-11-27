@@ -114,7 +114,7 @@ test("parseSettings refuses a newer version", () => {
 });
 
 type MigrateCase = { name: string; edits: Edit[]; gives?: Edit[]; schema?: string[] };
-describe.each([20, 22, 23] as const)("tests/settings_cases.json migrate_v%i: the sections version 23 added come back (#813), the queue as version 24 has it (#954)", (version) => {
+describe.each([20, 22, 23, 24] as const)("tests/settings_cases.json migrate_v%i: the sections version 23 added come back (#813), the queue as version 24 has it (#954), the device the emulator (#939)", (version) => {
   for (const c of cases[`migrate_v${version}`] as MigrateCase[]) {
     test(c.name, () => {
       const old = olderFile(version, c.edits);
@@ -142,7 +142,7 @@ test("the sections version 23 added are what a new file has, as the shared valid
   expect(Object.fromEntries(cases.added_v23.map((k) => [k, (newSettings() as unknown as Record<string, unknown>)[k]]))).toEqual(added);
 });
 
-describe("tests/settings_cases.json migrate_v21: a version 21 file reads with the queue in the order of teams (#803), on to version 24", () => {
+describe("tests/settings_cases.json migrate_v21: a version 21 file reads with the queue in the order of teams (#803), on to the current version", () => {
   const added = Object.fromEntries(cases.added_v23.map((k) => [k, (cases.valid as Record<string, unknown>)[k]]));
   for (const c of cases.migrate_v21 as { name: string; edits: Edit[]; team_queue: string[] }[]) {
     test(c.name, () => {
@@ -151,7 +151,8 @@ describe("tests/settings_cases.json migrate_v21: a version 21 file reads with th
       const { gift_lists: _, ...rest } = data;
       const { gift_lists: __, ...was } = old;
       const teams = (was.teams as { enabled?: boolean }[]).map(({ enabled: ___, ...team }) => team);
-      expect([rest, read]).toEqual([{ ...was, version: 24, teams, team_queue: c.team_queue, ...added }, { version: 21, data: old }]);
+      const device = Object.fromEntries(cases.added_v25.map((k) => [k, (cases.valid as Record<string, unknown>)[k]]));
+      expect([rest, read]).toEqual([{ ...was, version: VERSION, teams, team_queue: c.team_queue, ...added, ...device }, { version: 21, data: old }]);
     });
   }
 });

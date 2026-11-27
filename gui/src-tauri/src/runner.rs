@@ -94,6 +94,7 @@ pub enum ErrorKind {
     AgentExit,
     StopTimeout,
     Internal,
+    Unsupported,
 }
 
 /// A MuMu device's instance: its number, MuMuManager.exe, the MuMu folder.
@@ -116,13 +117,33 @@ pub struct Device {
     pub mumu: Option<Mumu>,
 }
 
+/// A PC window a scan found (#939): its title, its client area's size, whether it is minimized.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct PcWindow {
+    pub title: String,
+    pub width: i64,
+    pub height: i64,
+    pub minimized: bool,
+}
+
+/// A devices event's windows when it has them: a list, null refused (runner/protocol.py EVENTS).
+fn windows_list<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Vec<PcWindow>>, D::Error> {
+    Vec::<PcWindow>::deserialize(d).map(Some)
+}
+
 /// An event of the runner, without its "v".
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "event", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Event {
     Ready { pid: i64 },
     Log { t: String, source: Source, line: String },
-    Devices { devices: Vec<Device> },
+    Devices {
+        devices: Vec<Device>,
+        /// the PC windows a scan found (#939); no scan fills it yet. Left out or a list, never null, as the runner reads it
+        #[serde(default, deserialize_with = "windows_list", skip_serializing_if = "Option::is_none")]
+        windows: Option<Vec<PcWindow>>,
+    },
     Connection { state: LinkState, address: String },
     Resource { state: ResourceState },
     Task {
@@ -148,10 +169,28 @@ pub enum Event {
     End { result: RunResult },
 }
 
-/// The device a start asks for; each part null for none (the runner then takes the first device it finds).
+/// A start's kind of device (#939): an emulator unless it says pc.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceKind {
+    #[default]
+    Emulator,
+    Pc,
+}
+
+impl DeviceKind {
+    fn is_emulator(&self) -> bool {
+        *self == DeviceKind::Emulator
+    }
+}
+
+/// The device a start asks for; each emulator part null for none (the runner then takes the first device it finds). The
+/// kind goes out only when it is pc, so an emulator start's line is the one it was before the field (#939).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct DeviceWant {
+    #[serde(skip_serializing_if = "DeviceKind::is_emulator")]
+    pub kind: DeviceKind,
     pub address: Option<String>,
     pub mumu_index: Option<i64>,
     pub mumu_manager: Option<String>,
@@ -618,7 +657,7 @@ pub fn scan(spawn: &Spawn, limit: Duration) -> Result<Vec<Device>, String> {
     let (mut devices, mut errors, mut tail) = (None, Vec::new(), Vec::new());
     for m in rx.try_iter() {
         match m {
-            Message::Event(Event::Devices { devices: found }) => devices = Some(found),
+            Message::Event(Event::Devices { devices: found, .. }) => devices = Some(found),
             Message::Event(Event::Error { message, .. }) => errors.push(message),
             Message::Killed { reason } => errors.push(reason),
             Message::Exit { tail: last, .. } => tail = last,

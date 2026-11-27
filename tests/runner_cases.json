@@ -1,5 +1,5 @@
 {
-  "about": "The runner's JSON-lines protocol (runner/protocol.py, #812): what a command line parses to and which events are well-formed. tests/test_runner_protocol.py runs every case; the window's backend runs them too, and the page folds the valid events. An error case's `error` is a part of the runner's message; another reader only checks that the line is refused. `addresses`: two adb addresses and whether the runner takes them for one device (runner/devices.py same_address; the page's runner.ts sameAddress picks the scanned device by it).",
+  "about": "The runner's JSON-lines protocol (runner/protocol.py, #812): what a command line parses to and which events are well-formed. tests/test_runner_protocol.py runs every case; the window's backend runs them too, and the page folds the valid events. An error case's `error` is a part of the runner's message; another reader only checks that the line is refused. A start's `device.kind` (#939) is emulator or pc, emulator when left out; a parsed start names it only when it is pc, so an emulator start parses as it did before the field. A devices event may carry `windows`, the PC windows a scan found (none yet). `addresses`: two adb addresses and whether the runner takes them for one device (runner/devices.py same_address; the page's runner.ts sameAddress picks the scanned device by it).",
   "version": 1,
   "commands": [
     {"line": "{\"v\": 1, \"cmd\": \"scan\"}", "command": {"cmd": "scan"}},
@@ -20,6 +20,22 @@
       "command": {"cmd": "start", "root": null, "device": {"address": "127.0.0.1:16416", "mumu_index": null, "mumu_manager": null},
                   "tasks": [{"entry": "ClaimMail"}]}
     },
+    {
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"emulator\", \"address\": \"127.0.0.1:16416\"}, \"tasks\": [{\"entry\": \"ClaimMail\"}]}",
+      "command": {"cmd": "start", "root": null, "device": {"address": "127.0.0.1:16416", "mumu_index": null, "mumu_manager": null},
+                  "tasks": [{"entry": "ClaimMail"}]}
+    },
+    {
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\"}, \"tasks\": [{\"entry\": \"ClaimMail\"}]}",
+      "command": {"cmd": "start", "root": null, "device": {"kind": "pc", "address": null, "mumu_index": null, "mumu_manager": null},
+                  "tasks": [{"entry": "ClaimMail"}]}
+    },
+    {
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\", \"address\": \"127.0.0.1:16384\", \"mumu_index\": 0, \"mumu_manager\": \"C:/MuMu/nx_main/MuMuManager.exe\"}, \"tasks\": [{\"entry\": \"ClaimMail\"}]}",
+      "command": {"cmd": "start", "root": null,
+                  "device": {"kind": "pc", "address": "127.0.0.1:16384", "mumu_index": 0, "mumu_manager": "C:/MuMu/nx_main/MuMuManager.exe"},
+                  "tasks": [{"entry": "ClaimMail"}]}
+    },
     {"line": "not json", "error": "not JSON"},
     {"line": "[1, 2]", "error": "not a JSON object"},
     {"line": "{\"cmd\": \"scan\"}", "error": "protocol version None"},
@@ -33,7 +49,11 @@
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"tasks\": [{\"entry\": \"MirrorDungeon\", \"options\": {}}]}", "error": "start: tasks[0]: unknown field 'options'"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"address\": 16384}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.address"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"mumu_index\": \"0\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.mumu_index"},
-    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"port\": 16384}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device: unknown field 'port'"}
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"port\": 16384}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device: unknown field 'port'"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"android\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"PC\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": null}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": 1}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"}
   ],
   "addresses": [
     ["127.0.0.1:16384", "127.0.0.1:16384", true],
@@ -55,6 +75,10 @@
        "mumu": {"index": 0, "manager": "C:/MuMu/nx_main/MuMuManager.exe", "path": "C:/MuMu"}},
       {"name": "emulator-5554", "address": "emulator-5554", "adb_path": "C:/adb/adb.exe", "mumu": null}]}, "valid": true},
     {"event": {"v": 1, "event": "devices", "devices": []}, "valid": true},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": [
+      {"title": "LimbusCompany", "width": 1920, "height": 1080, "minimized": false},
+      {"title": "LimbusCompany", "width": 160, "height": 28, "minimized": true}]}, "valid": true},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": []}, "valid": true},
     {"event": {"v": 1, "event": "connection", "state": "launching", "address": "127.0.0.1:16384"}, "valid": true},
     {"event": {"v": 1, "event": "connection", "state": "waiting", "address": "127.0.0.1:16384"}, "valid": true},
     {"event": {"v": 1, "event": "connection", "state": "connecting", "address": "127.0.0.1:16384"}, "valid": true},
@@ -82,6 +106,7 @@
     {"event": {"v": 1, "event": "error", "kind": "resource_failed", "message": "the resource did not load"}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "agent_failed", "message": "the bot did not start", "code": 1, "tail": []}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "internal", "message": "Traceback (most recent call last):"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "unsupported", "message": "the PC client is not supported yet"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "succeeded"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "failed"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "stopped"}, "valid": true},
@@ -97,6 +122,11 @@
     {"event": {"v": 1, "event": "task", "index": 0, "entry": "MirrorDungeon", "state": "failed", "reason": "x", "reason_code": "Stuck", "reason_params": {"n": 1.5}}, "valid": false},
     {"event": {"v": 1, "event": "connection", "state": "connected"}, "valid": false},
     {"event": {"v": 1, "event": "devices", "devices": [{"name": "x", "address": "y", "adb_path": "z"}]}, "valid": false},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": [{"title": "LimbusCompany", "width": 1920, "height": 1080}]}, "valid": false},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": [{"title": "LimbusCompany", "width": 1920, "height": 1080, "minimized": "no"}]}, "valid": false},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": [{"title": "LimbusCompany", "width": 1920.5, "height": 1080, "minimized": false}]}, "valid": false},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": [{"title": "LimbusCompany", "width": 1920, "height": 1080, "minimized": false, "hwnd": 1}]}, "valid": false},
+    {"event": {"v": 1, "event": "devices", "devices": [], "windows": null}, "valid": false},
     {"event": {"v": 1, "event": "error", "kind": "oops", "message": "?"}, "valid": false},
     {"event": {"v": 1, "event": "end", "result": "done"}, "valid": false},
     {"event": {"v": 1, "event": "end", "result": "stopped", "extra": 1}, "valid": false}

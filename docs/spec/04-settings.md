@@ -60,10 +60,14 @@
     - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `migrate_v20`、`migrate_v21`、`migrate_v22`），新段落的預設值也是兩邊共用的 `valid`。舊版 Agent 讀到版本 23 會報「比自己新」。
   - 版本 24（#954）：隊伍佇列由使用者自己加（第 9 節「輪替」，[ADR 0016](../adr/0016-team-queue-put-together-by-the-user.md)）：`team_queue` 是 `teams` 的 id 的陣列，可以重複、可以少、可以空。隊伍拿掉 `enabled`，`run` 拿掉 `start_team`。
     - 從版本 23 遷移：佇列照舊順序，去掉停用的隊伍（`enabled` 是 `false`）；`start_team` 直接丟掉，不移動佇列。Agent 在記憶體裡遷移、每次讀檔都重做，移動的話那一隊會一直排第一。手改壞的值照留，由 schema 報錯。更舊的檔一路遷移到 23 再照這條，所以版本 20、21 的佇列是 `teams` 的順序去掉停用的。
-    - Agent 在記憶體裡遷移，不寫回。檔案還是版本 23 以前時，每個任務開始時記一行 `settings older than version 24: the disabled teams are left out of the team queue, and run.start_team is not read (#954); open the settings GUI once: it writes the file as version 24`；版本 22 以前的接在上面版本 23 那一行之後。
+    - Agent 在記憶體裡遷移，不寫回。檔案還是版本 23 以前時，每個任務開始時記一行 `settings older than version 24: the disabled teams are left out of the team queue, and run.start_team is not read (#954); open the settings GUI once: it writes the file as version 25`（最後的數字是目前的版本）；版本 22 以前的接在上面版本 23 那一行之後。
     - Agent 領獎後移動佇列時，照檔案原本的版本與格式寫回：版本 22、23 改 `team_queue`，版本 20、21 改 `teams` 的順序；停用的隊伍留在原位。
     - GUI 先把舊檔原樣另存成 `config/settings.v23.json`，通過檢查就寫回版本 24。版本 23 的檔不讀回 v1.0.0 的值，沒有提示。
     - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `migrate_v23`）。舊版 Agent 讀到版本 24 會報「比自己新」。
+  - 版本 25（#939）：頂層新增 `device`（裝置種類與 PC 視窗大小，第 14 節），PC 版的第一步（#922，[ADR 0017](../adr/0017-pc-window-behind-a-custom-controller.md)）。`emulator` 段一字不改。
+    - 從版本 24 遷移：補上 `device`，兩個鍵都是預設值（`kind` 是 `emulator`，`pc_size` 是 `1440`），所以升級後照舊跑模擬器。手寫的 `device` 段只補它缺的鍵；手改壞的值照留，由 schema 報錯。更舊的檔一路遷移到 24 再照這條，從 MXU 讀回（版本 20–22）的也一樣：讀回只動任務選項、任務清單與 `emulator.address`，不碰 `device`。
+    - Agent 在記憶體裡遷移，不寫回，也不記提示行：沒有任務讀 `device`。GUI 先把舊檔原樣另存成 `config/settings.v24.json`，通過檢查就寫回版本 25，沒有提示。
+    - 兩邊用同一組遷移案例（`tests/settings_cases.json` 的 `migrate_v24`，以及 `migrate_v20`–`migrate_v23` 的結果都帶預設的 `device`）。舊版 Agent 讀到版本 25 會報「比自己新」。
   - 版本 14（#291、#292）：商店留哪些飾品的設定從隊伍搬到飾品清單（第 13 節，#291、#292）。頂層新增 `gift_lists`；隊伍新增 `gift_list`，移除 `keyword`、`keep_keywords`、`keywordless`、`keep_gifts`、`fusion_condition`（主要體系改由清單決定，見第 13 節）。從版本 13 以前的檔案遷移時（版本 10 以前先照上面的步驟升到 13），每支隊伍產生一份清單，保留的東西完全相同的隊伍共用同一份（名稱用第一支隊伍的名稱，撞名加 ` 2`；id 是 `gift-list-1`、`gift-list-2`、…），隊伍的 `gift_list` 指向它。清單內容：
     - `order`：隊伍原本的主要體系第一，其餘照預設順序，`Keywordless` 最後，所以遷移後的主要體系和遷移前相同；
     - `want`：主要體系的所有可購買飾品（`gift_search.json` 裡該體系的 I–III 階）；
@@ -131,10 +135,11 @@
 | `tasks` | 陣列 | 任務清單：要跑的任務與順序，見第 14 節 | #811、#813 |
 | `emulator` | 物件 | 要連的模擬器，見第 14 節 | #811、#813 |
 | `schedules` | 陣列 | 定時執行，見第 14 節 | #811、#813 |
+| `device` | 物件 | 裝置種類（模擬器或 PC 視窗）與 PC 視窗大小，見第 14 節 | #922、#939 |
 
 - 鍵名用 snake_case。（#19）
 - 版本 21、22 沒有 `run`、`luxcavation`、`charge_enkephalin`（它們的值在 client，#782）；版本 23 加回來（#813）。
-- 新的設定檔：`run`、`luxcavation`、`charge_enkephalin`、`emulator` 用各節表裡的預設值，`tasks` 照第 14 節的新檔清單（README 的建議順序，每個任務一項）、全部勾選，`schedules` 是空的。
+- 新的設定檔：`run`、`luxcavation`、`charge_enkephalin`、`emulator`、`device` 用各節表裡的預設值，`tasks` 照第 14 節的新檔清單（README 的建議順序，每個任務一項）、全部勾選，`schedules` 是空的。
 - 新的設定檔：上面以外的各陣列都是空的。沒有隊伍，所以 Agent 會報「先設定隊伍」。（#19）
 
 ## 5. 執行選項（`run`）
@@ -431,6 +436,16 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 - 還沒偵測、偵測中、沒找到、偵測失敗時，下拉選單只有一項，寫目前的設定：「目前：MuMu 實例 0（127.0.0.1:16384）」，沒有實例編號時「目前：<位址>」，沒有位址時「還沒設定模擬器」。
 - 找到的模擬器就是下拉選單的選項，不另寫找到幾台：MuMu 排前面（下拉選單的滑鼠提示），MuMu 寫實例編號與位址，其他寫名稱與位址。設定的三個值和選某一項會填的相同時預先選它（位址照執行器的認法，`localhost` 與 `127.0.0.1` 同一個埠算同一台），否則第一項是「目前：…・選一台…」。只有位址相同時（例如讀回 MXU 後：MXU 不存實例編號與 MuMuManager 路徑）也從「…・選一台…」開始，因為下拉選單選它目前顯示的那一項不會觸發變更，選了等於沒選（#833）。選一台就填入三個值：MuMu 的位址、實例編號與 MuMuManager 路徑，其他模擬器的位址，實例編號與路徑清成 `null`。和其他欄位一樣，存檔才寫入。
 - 沒找到時下拉選單下面寫「沒偵測到開著的模擬器。」（接下來怎麼做是它的滑鼠提示），偵測失敗時寫「偵測失敗：<原因>」。螢幕閱讀器把這一行念成下拉選單的說明，沒找到時接著念接下來怎麼做。（#815、#876）
+
+**裝置**（`device`，版本 25，#939）：執行器要跑在哪一種裝置上（GLOSSARY「裝置種類」）。PC 版還在規劃（#922）：「執行」分頁還不顯示這一段，存檔照原樣保留；視窗開始執行時照舊只送 `emulator` 三個值，所以執行的是模擬器。
+
+| 欄位 | 鍵 | 類型 | 值 | 預設 |
+|---|---|---|---|---|
+| 裝置種類 | `kind` | 字串 | `emulator`：Android 模擬器，連線照 `emulator` 段；`pc`：PC 視窗（GLOSSARY「PC 視窗」） | `emulator` |
+| PC 視窗大小 | `pc_size` | 字串 | 執行時把 PC 視窗的客戶區調成的大小，以 16:9 的高度表示：`720`（1280×720）、`900`（1600×900）、`1080`（1920×1080）、`1440`（2560×1440），執行結束後還原；`keep` 是不調整 | `1440` |
+
+- 選 PC 時 `emulator` 段照留，換回模擬器不必重填。不存視窗代號（HWND）：遊戲重開後代號會變。
+- 執行器協定（`runner/protocol.py`，共用案例 `tests/runner_cases.json`）：開始命令的 `device` 多一個可省略的 `kind`（`emulator` 或 `pc`，省略就是 `emulator`；`null` 和其他值都是協定錯誤）。視窗送出的模擬器命令不帶它，和版本 25 以前送的一字不差。`kind` 是 `pc` 時，執行器在載入 MaaFramework、找裝置之前就停下：送 `error unsupported`，任務全部取消，原因是「還不支援 PC 版客戶端」（代碼 `PcNotSupported`，中英句子在 `agent/stop_reasons.json`）。偵測（`scan`）的 `devices` 事件可以多帶 `windows`（PC 視窗清單：標題、客戶區寬高、是否最小化），目前的執行器不帶。
 
 **排程**（`schedules`）：陣列，每個排程一個 Windows 工作排程器的工作（#811「定時執行」）。
 

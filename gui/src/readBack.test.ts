@@ -298,3 +298,18 @@ test("the defaults it starts from are a new file's", () => {
   const fresh: Partial<Settings> = newSections();
   for (const k of ["run", "luxcavation", "charge_enkephalin", "tasks", "emulator"] as const) expect(data[k]).toEqual(fresh[k]);
 });
+
+describe.each([20, 21, 22] as const)("a version %i file read back (#939)", (version) => {
+  // the read-back runs on the migrated file: the device section is the migration's, the emulator, whatever came back
+  const emulator = { address: "127.0.0.1:16416", mumu_index: null, mumu_manager: null };
+  test("from MXU's file: the emulator section as the read-back gives it, the device the emulator", () => {
+    const { data } = readBack(migrated(version), version, { ...none, mxu: mxu([{ taskName: "ClaimMail", enabled: true }]) });
+    expect(data.emulator).toEqual(emulator);
+    expect(data.device).toEqual({ kind: "emulator", pc_size: "1440" });
+  });
+  test("from no file: the emulator section at its defaults, the device the emulator", () => {
+    const { data } = readBack(migrated(version), version, none);
+    expect(data.emulator).toEqual({ ...emulator, address: null });
+    expect(data.device).toEqual({ kind: "emulator", pc_size: "1440" });
+  });
+});

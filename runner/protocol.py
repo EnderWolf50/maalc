@@ -3,12 +3,14 @@
 Commands (one runner process takes one start or one scan, then ends):
 - scan: report the devices MaaFramework finds (`devices`), MuMu first, then `end`.
 - start: run `tasks` in turn, each {entry}: the task's entry node, which reads its options from the settings file at
-  its start (#813). `root` is the install (default: the folder that holds runner/). `device` picks the emulator:
-  `address` (default: the first device the scan finds), and `mumu_index` with `mumu_manager` to start a MuMu that is
-  not running.
+  its start (#813). `root` is the install (default: the folder that holds runner/). `device` picks the device:
+  `kind`, emulator or pc (default emulator, #939; a parsed start names it only when it is pc, so an emulator start reads
+  as it did before the field); for an emulator `address` (default: the first device the scan finds), and `mumu_index`
+  with `mumu_manager` to start a MuMu that is not running.
 - stop: during a start, stop MaaFramework; the running task ends `stopped`, the ones after it `cancelled`.
 
-Events: ready, log (a line of the run log, `source` runner, agent or console), devices, connection, resource, task (a
+Events: ready, log (a line of the run log, `source` runner, agent or console), devices (and `windows`, the PC
+windows a scan found, which no scan fills yet, #939), connection, resource, task (a
 task's `state`: pending, running, succeeded, failed, stopped or cancelled, with the bot's `reason` for one it cancelled
 and for the one it failed by stopping the whole list; a reason may come with its `reason_code` of agent/stop_reasons.json
 and that code's `reason_params`, text or whole numbers, which the window says the reason by in its language, #881),
@@ -27,7 +29,8 @@ CONNECTION = ("launching", "waiting", "connecting", "connected")
 RESOURCE = ("loading", "loaded")
 RESULTS = ("succeeded", "failed", "stopped")
 ERRORS = ("protocol", "device_missing", "launch_failed", "device_timeout", "connect_failed", "resource_failed",
-          "agent_failed", "agent_exit", "stop_timeout", "internal")
+          "agent_failed", "agent_exit", "stop_timeout", "internal", "unsupported")
+KINDS = ("emulator", "pc")  # a start's device.kind (#939)
 
 
 class ProtocolError(ValueError):
@@ -40,6 +43,10 @@ def _str(v):
 
 def _int(v):
     return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _bool(v):
+    return isinstance(v, bool)
 
 
 def _one_of(*values):
@@ -70,11 +77,13 @@ def params_ok(v) -> bool:
 
 DEVICE = _obj({"name": _str, "address": _str, "adb_path": _str,
                "mumu": _nullable(_obj({"index": _int, "manager": _str, "path": _str}))})
+# a PC window a scan found (#939): its title, its client area's size and whether it is minimized
+WINDOW = _obj({"title": _str, "width": _int, "height": _int, "minimized": _bool})
 # event: (required fields, optional fields), each with its check; "v" and "event" come on top
 EVENTS = {
     "ready": ({"pid": _int}, {}),
     "log": ({"t": _str, "source": _one_of(*SOURCES), "line": _str}, {}),
-    "devices": ({"devices": _list(DEVICE)}, {}),
+    "devices": ({"devices": _list(DEVICE)}, {"windows": _list(WINDOW)}),
     "connection": ({"state": _one_of(*CONNECTION), "address": _str}, {}),
     "resource": ({"state": _one_of(*RESOURCE)}, {}),
     "task": ({"index": _int, "entry": _str, "state": _one_of(*STATES)},
@@ -122,12 +131,16 @@ def _device(d) -> dict:
         d = {}
     if not isinstance(d, dict):
         raise ProtocolError("start: device must be an object")
-    _fields("start: device", d, ("address", "mumu_index", "mumu_manager"))
+    _fields("start: device", d, ("kind", "address", "mumu_index", "mumu_manager"))
+    kind = d.get("kind", "emulator")
+    if kind not in KINDS:
+        raise ProtocolError(f"start: device.kind must be one of {', '.join(KINDS)}, got {kind!r}")
     for key, check, what in (("address", _str, "an adb address"), ("mumu_index", _int, "a MuMu instance number"),
                              ("mumu_manager", _str, "MuMuManager.exe's path")):
         if d.get(key) is not None and not check(d[key]):
             raise ProtocolError(f"start: device.{key} must be {what} or null")
-    return {"address": d.get("address"), "mumu_index": d.get("mumu_index"), "mumu_manager": d.get("mumu_manager")}
+    return {**({"kind": kind} if kind != "emulator" else {}),
+            "address": d.get("address"), "mumu_index": d.get("mumu_index"), "mumu_manager": d.get("mumu_manager")}
 
 
 def command(text: str) -> dict:
