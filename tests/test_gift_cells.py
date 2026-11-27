@@ -3,7 +3,6 @@
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 import traceback
@@ -15,6 +14,7 @@ import pytest
 
 import gift_cells as g
 import settings
+from daily_child import run_script
 from test_shop import screen_with
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -197,17 +197,12 @@ CASES = {  # name: (crop under tests/shop, the page's cells, the page)
 
 PLATE_CASES = ["offers", "offers_super", "offers_red", "offers_short"]
 GET_WINDOWS = {"GiftGet": 9005, "GiftGetOverMap": 9014, "GiftSearchGet": 9843}  # Wound Clerid, Rusty Commemorative Coin, Hardblood Glaive
-# #964: the child took 102-298 s on CI's runners (junit of 28 runs, 2026-11-25 to 27) against pytest's 300 s default, so the
-# file gets the bound the other MaaFramework child files have (tests/conftest.py child_timeout): the child's own timeout,
-# whose failure shows where it was, and a minute.
-CHILD_TIMEOUT = 600
-pytestmark = pytest.mark.timeout(CHILD_TIMEOUT + 60)
 STARTED = time.perf_counter()
 
 
 def stage(what):
     """The child's progress on stderr, seconds since it started: the fixture shows its tail when the child fails or times
-    out (#964)."""
+    out (#964; run_script, whose name gives the file the child's timeout and a minute, tests/conftest.py)."""
     print(f"[child {time.perf_counter() - STARTED:6.1f} s] {what}", file=sys.stderr, flush=True)
 
 
@@ -320,27 +315,16 @@ def child():
     print(json.dumps(out))
 
 
-def run_probe(args, timeout, **kw):
-    """The child's finished run; one that outlasts timeout fails the test with its output so far, the stage it was in
-    (#964). A TimeoutExpired's output is str on Windows, bytes elsewhere, None when nothing came."""
-    try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=timeout, **kw)
-    except subprocess.TimeoutExpired as e:
-        said = [o.decode("utf-8", "replace") if isinstance(o, bytes) else o or "" for o in (e.stderr, e.stdout)]
-        pytest.fail(f"the child did not end in {timeout} s\nstderr ends: {said[0][-6000:]}\nstdout ends: {said[1][-1500:]}")
-
-
-def test_a_child_that_outlasts_its_timeout_fails_with_the_stage_it_was_in():
-    script = "import sys, time\nprint('[child    0.0 s] sweep Shop', file=sys.stderr, flush=True)\ntime.sleep(60)\n"
-    with pytest.raises(pytest.fail.Exception, match=r"did not end in 2 s\nstderr ends: \[child    0\.0 s\] sweep Shop"):
-        run_probe([sys.executable, "-c", script], 2)
+def test_a_stage_line_says_the_seconds_since_the_child_started(capsys):
+    stage("sweep Shop")
+    assert re.fullmatch(r"\[child +\d+\.\d s\] sweep Shop\n", capsys.readouterr().err)
 
 
 @pytest.fixture(scope="module")
 def read():
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(ROOT / "agent"), str(ROOT / "tests")])}
-    done = run_probe([sys.executable, "-X", "faulthandler", __file__], CHILD_TIMEOUT, cwd=ROOT, env=env)
-    assert done.returncode == 0, done.stderr[-6000:]
+    done = run_script([sys.executable, "-X", "faulthandler", __file__], cwd=ROOT, env=env)
+    assert done.returncode == 0, f"exit {done.returncode}\nstdout ends: {done.stdout[-1500:]}\nstderr ends: {done.stderr[-8000:]}"
     out = json.loads(done.stdout.strip().splitlines()[-1])
     assert "error" not in out, out["error"]
     return out
