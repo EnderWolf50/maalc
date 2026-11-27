@@ -59,7 +59,7 @@
 | 依星期換隊伍 | 每個日常用一支固定隊伍 | #362 |
 | 選關功能 | 一律打最難的關 | #362 |
 | 通行證等級獎勵 | 只領每日、每週、季度（Seasonal）任務獎勵 | #362 |
-| PC 版客戶端（PC 視窗：MaaFramework 自訂控制器包 Win32 控制器，[ADR 0017](../adr/0017-pc-window-behind-a-custom-controller.md)），原本列在 Out of scope，2026-11-23 納入 v2 | 只跑 Android 模擬器；設定檔與執行器協定已有裝置種類，選 PC 時執行器回「還不支援」（#939） | #922、#939 |
+| PC 版客戶端（PC 視窗：MaaFramework 自訂控制器包 Win32 控制器，[ADR 0017](../adr/0017-pc-window-behind-a-custom-controller.md)），原本列在 Out of scope，2026-11-23 納入 v2 | 只跑 Android 模擬器；設定檔與執行器協定已有裝置種類（#939）；選 PC 時執行器連上遊戲視窗、截圖，還不送輸入，第一次輸入就停下（#940） | #922、#939、#940 |
 
 ## 目標環境
 

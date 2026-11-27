@@ -27,6 +27,12 @@ class Framework:
         return AdbController(device.adb_path, device.address, device.screencap_methods, device.input_methods,
                              device.config)
 
+    def pc_controller(self, hwnd, windows):
+        """The PC window controller of the game's window hwnd (runner/pc_controller.py)."""
+        from runner.pc_controller import PcController
+
+        return PcController(hwnd, windows)
+
     def resource(self):
         from maa.resource import Resource
 

@@ -1,5 +1,5 @@
 {
-  "about": "The runner's JSON-lines protocol (runner/protocol.py, #812): what a command line parses to and which events are well-formed. tests/test_runner_protocol.py runs every case; the window's backend runs them too, and the page folds the valid events. An error case's `error` is a part of the runner's message; another reader only checks that the line is refused. A start's `device.kind` (#939) is emulator or pc, emulator when left out; a parsed start names it only when it is pc, so an emulator start parses as it did before the field. A devices event may carry `windows`, the PC windows a scan found (none yet). `addresses`: two adb addresses and whether the runner takes them for one device (runner/devices.py same_address; the page's runner.ts sameAddress picks the scanned device by it).",
+  "about": "The runner's JSON-lines protocol (runner/protocol.py, #812): what a command line parses to and which events are well-formed. tests/test_runner_protocol.py runs every case; the window's backend runs them too, and the page folds the valid events. An error case's `error` is a part of the runner's message; another reader only checks that the line is refused. A start's `device.kind` (#939) is emulator or pc, emulator when left out; a parsed start names it only when it is pc, so an emulator start parses as it did before the field. A start's `device.pc_size` (#940) is keep, 720, 900, 1080 or 1440, keep when left out; a parsed start names it only when it is not keep. A devices event may carry `windows`, the PC windows a scan found. `addresses`: two adb addresses and whether the runner takes them for one device (runner/devices.py same_address; the page's runner.ts sameAddress picks the scanned device by it).",
   "version": 1,
   "commands": [
     {"line": "{\"v\": 1, \"cmd\": \"scan\"}", "command": {"cmd": "scan"}},
@@ -36,6 +36,16 @@
                   "device": {"kind": "pc", "address": "127.0.0.1:16384", "mumu_index": 0, "mumu_manager": "C:/MuMu/nx_main/MuMuManager.exe"},
                   "tasks": [{"entry": "ClaimMail"}]}
     },
+    {
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\", \"pc_size\": \"1080\"}, \"tasks\": [{\"entry\": \"ClaimMail\"}]}",
+      "command": {"cmd": "start", "root": null, "device": {"kind": "pc", "address": null, "mumu_index": null, "mumu_manager": null, "pc_size": "1080"},
+                  "tasks": [{"entry": "ClaimMail"}]}
+    },
+    {
+      "line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\", \"pc_size\": \"keep\"}, \"tasks\": [{\"entry\": \"ClaimMail\"}]}",
+      "command": {"cmd": "start", "root": null, "device": {"kind": "pc", "address": null, "mumu_index": null, "mumu_manager": null},
+                  "tasks": [{"entry": "ClaimMail"}]}
+    },
     {"line": "not json", "error": "not JSON"},
     {"line": "[1, 2]", "error": "not a JSON object"},
     {"line": "{\"cmd\": \"scan\"}", "error": "protocol version None"},
@@ -53,7 +63,10 @@
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"android\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"PC\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
     {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": null}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
-    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": 1}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"}
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": 1}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.kind"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\", \"pc_size\": \"4k\"}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.pc_size"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\", \"pc_size\": 1080}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.pc_size"},
+    {"line": "{\"v\": 1, \"cmd\": \"start\", \"device\": {\"kind\": \"pc\", \"pc_size\": null}, \"tasks\": [{\"entry\": \"MirrorDungeon\"}]}", "error": "start: device.pc_size"}
   ],
   "addresses": [
     ["127.0.0.1:16384", "127.0.0.1:16384", true],
@@ -107,6 +120,7 @@
     {"event": {"v": 1, "event": "error", "kind": "agent_failed", "message": "the bot did not start", "code": 1, "tail": []}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "internal", "message": "Traceback (most recent call last):"}, "valid": true},
     {"event": {"v": 1, "event": "error", "kind": "unsupported", "message": "the PC client is not supported yet"}, "valid": true},
+    {"event": {"v": 1, "event": "error", "kind": "device_lost", "message": "the game's window is minimized"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "succeeded"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "failed"}, "valid": true},
     {"event": {"v": 1, "event": "end", "result": "stopped"}, "valid": true},

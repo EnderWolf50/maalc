@@ -6,11 +6,12 @@ Commands (one runner process takes one start or one scan, then ends):
   its start (#813). `root` is the install (default: the folder that holds runner/). `device` picks the device:
   `kind`, emulator or pc (default emulator, #939; a parsed start names it only when it is pc, so an emulator start reads
   as it did before the field); for an emulator `address` (default: the first device the scan finds), and `mumu_index`
-  with `mumu_manager` to start a MuMu that is not running.
+  with `mumu_manager` to start a MuMu that is not running; for the PC window `pc_size`, the client area a run sets
+  (PC_SIZES, the settings' device.pc_size; default keep, and a parsed start names it only when it is not keep, #940).
 - stop: during a start, stop MaaFramework; the running task ends `stopped`, the ones after it `cancelled`.
 
 Events: ready, log (a line of the run log, `source` runner, agent or console), devices (and `windows`, the PC
-windows a scan found, which no scan fills yet, #939), connection, resource, task (a
+windows a scan found, #940), connection, resource, task (a
 task's `state`: pending, running, succeeded, failed, stopped or cancelled, with the bot's `reason` for one it cancelled
 and for the one it failed by stopping the whole list; a reason may come with its `reason_code` of agent/stop_reasons.json
 and that code's `reason_params`, text or whole numbers, which the window says the reason by in its language, #881),
@@ -29,8 +30,9 @@ CONNECTION = ("launching", "waiting", "connecting", "connected")
 RESOURCE = ("loading", "loaded")
 RESULTS = ("succeeded", "failed", "stopped")
 ERRORS = ("protocol", "device_missing", "launch_failed", "device_timeout", "connect_failed", "resource_failed",
-          "agent_failed", "agent_exit", "stop_timeout", "internal", "unsupported")
+          "agent_failed", "agent_exit", "stop_timeout", "internal", "unsupported", "device_lost")
 KINDS = ("emulator", "pc")  # a start's device.kind (#939)
+PC_SIZES = ("keep", "720", "900", "1080", "1440")  # a start's device.pc_size (#940)
 
 
 class ProtocolError(ValueError):
@@ -131,16 +133,20 @@ def _device(d) -> dict:
         d = {}
     if not isinstance(d, dict):
         raise ProtocolError("start: device must be an object")
-    _fields("start: device", d, ("kind", "address", "mumu_index", "mumu_manager"))
+    _fields("start: device", d, ("kind", "address", "mumu_index", "mumu_manager", "pc_size"))
     kind = d.get("kind", "emulator")
     if kind not in KINDS:
         raise ProtocolError(f"start: device.kind must be one of {', '.join(KINDS)}, got {kind!r}")
+    size = d.get("pc_size", "keep")
+    if size not in PC_SIZES:
+        raise ProtocolError(f"start: device.pc_size must be one of {', '.join(PC_SIZES)}, got {size!r}")
     for key, check, what in (("address", _str, "an adb address"), ("mumu_index", _int, "a MuMu instance number"),
                              ("mumu_manager", _str, "MuMuManager.exe's path")):
         if d.get(key) is not None and not check(d[key]):
             raise ProtocolError(f"start: device.{key} must be {what} or null")
     return {**({"kind": kind} if kind != "emulator" else {}),
-            "address": d.get("address"), "mumu_index": d.get("mumu_index"), "mumu_manager": d.get("mumu_manager")}
+            "address": d.get("address"), "mumu_index": d.get("mumu_index"), "mumu_manager": d.get("mumu_manager"),
+            **({"pc_size": size} if size != "keep" else {})}
 
 
 def command(text: str) -> dict:

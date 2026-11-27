@@ -95,6 +95,7 @@ pub enum ErrorKind {
     StopTimeout,
     Internal,
     Unsupported,
+    DeviceLost,
 }
 
 /// A MuMu device's instance: its number, MuMuManager.exe, the MuMu folder.
@@ -140,7 +141,7 @@ pub enum Event {
     Log { t: String, source: Source, line: String },
     Devices {
         devices: Vec<Device>,
-        /// the PC windows a scan found (#939); no scan fills it yet. Left out or a list, never null, as the runner reads it
+        /// the PC windows a scan found (#939, #940). Left out or a list, never null, as the runner reads it
         #[serde(default, deserialize_with = "windows_list", skip_serializing_if = "Option::is_none")]
         windows: Option<Vec<PcWindow>>,
     },
@@ -184,8 +185,31 @@ impl DeviceKind {
     }
 }
 
+/// The PC window's client area a start sets for the run, by its height at 16:9 (#940): keep leaves it as it is.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PcSize {
+    #[default]
+    #[serde(rename = "keep")]
+    Keep,
+    #[serde(rename = "720")]
+    P720,
+    #[serde(rename = "900")]
+    P900,
+    #[serde(rename = "1080")]
+    P1080,
+    #[serde(rename = "1440")]
+    P1440,
+}
+
+impl PcSize {
+    fn is_keep(&self) -> bool {
+        *self == PcSize::Keep
+    }
+}
+
 /// The device a start asks for; each emulator part null for none (the runner then takes the first device it finds). The
-/// kind goes out only when it is pc, so an emulator start's line is the one it was before the field (#939).
+/// kind goes out only when it is pc, so an emulator start's line is the one it was before the field (#939); pc_size
+/// only when it is not keep (#940).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(default, deny_unknown_fields)]
 pub struct DeviceWant {
@@ -194,6 +218,8 @@ pub struct DeviceWant {
     pub address: Option<String>,
     pub mumu_index: Option<i64>,
     pub mumu_manager: Option<String>,
+    #[serde(skip_serializing_if = "PcSize::is_keep")]
+    pub pc_size: PcSize,
 }
 
 /// A task of a start: its entry node. It reads its options from the settings file at its start (#813).

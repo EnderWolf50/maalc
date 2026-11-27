@@ -445,7 +445,7 @@ GUI 的「試煉分數覆寫」分頁用表格編輯，存在設定檔，疊加�
 | PC 視窗大小 | `pc_size` | 字串 | 執行時把 PC 視窗的客戶區調成的大小，以 16:9 的高度表示：`720`（1280×720）、`900`（1600×900）、`1080`（1920×1080）、`1440`（2560×1440），執行結束後還原；`keep` 是不調整 | `1440` |
 
 - 選 PC 時 `emulator` 段照留，換回模擬器不必重填。不存視窗代號（HWND）：遊戲重開後代號會變。
-- 執行器協定（`runner/protocol.py`，共用案例 `tests/runner_cases.json`）：開始命令的 `device` 多一個可省略的 `kind`（`emulator` 或 `pc`，省略就是 `emulator`；`null` 和其他值都是協定錯誤）。視窗送出的模擬器命令不帶它，和版本 25 以前送的一字不差。`kind` 是 `pc` 時，執行器在載入 MaaFramework、找裝置之前就停下：送 `error unsupported`，任務全部取消，原因是「還不支援 PC 版客戶端」（代碼 `PcNotSupported`，中英句子在 `agent/stop_reasons.json`）。偵測（`scan`）的 `devices` 事件可以多帶 `windows`（PC 視窗清單：標題、客戶區寬高、是否最小化），目前的執行器不帶。
+- 執行器協定（`runner/protocol.py`，共用案例 `tests/runner_cases.json`）：開始命令的 `device` 多一個可省略的 `kind`（`emulator` 或 `pc`，省略就是 `emulator`；`null` 和其他值都是協定錯誤）。視窗送出的模擬器命令不帶它，和版本 25 以前送的一字不差。`device` 還有一個可省略的 `pc_size`（`keep`、`720`、`900`、`1080`、`1440`，省略就是 `keep`，#940）：視窗照設定檔的 `device.pc_size` 送，只在 `kind` 是 `pc` 時送。`kind` 是 `pc` 時，執行器找遊戲視窗、照 `pc_size` 調整客戶區（執行結束還原），再接上 PC 視窗控制器（`runner/pc.py`，#940）；找不到視窗、多於一個、最小化、客戶區不是 16:9 時任務全部取消，執行中視窗不見、最小化、不是 16:9 或收不下輸入時送 `error device_lost` 停下，原因代碼見 `agent/stop_reasons.json` 的 `Pc` 開頭幾個。這一版的控制器沒有輸入，第一次輸入就以 `PcInputFailed` 停下。偵測（`scan`）的 `devices` 事件帶 `windows`（PC 視窗清單：標題、客戶區寬高、是否最小化）。
 
 **排程**（`schedules`）：陣列，每個排程一個 Windows 工作排程器的工作（#811「定時執行」）。
 

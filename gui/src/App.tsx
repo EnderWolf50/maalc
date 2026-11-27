@@ -465,9 +465,9 @@ export default function App({ start = "run" }: { start?: TabId } = {}) {
       const begin = { type: "begin", entries, list: now!.tasks } as const;
       runRef.current = reduce(runRef.current, begin); // under way now, for a scheduled start right after this one
       dispatch(begin);
-      // the device kind goes only when it is pc (#939): the runner refuses that as not supported yet; an emulator start's
-      // command is the one it was before the field
-      const device = now!.device.kind === "pc" ? { kind: "pc" as const, ...now!.emulator } : now!.emulator;
+      // the device kind and the window's size go only when it is pc (#939, #940): the runner connects to the game's window
+      // and sets its size for the run; an emulator start's command is the one it was before the fields
+      const device = now!.device.kind === "pc" ? { kind: "pc" as const, pc_size: now!.device.pc_size, ...now!.emulator } : now!.emulator;
       return await api.startRun(entries, device, dispatch).then(() => null, (e: unknown) => {
         dispatch({ type: "refused", error: String(e) });
         return { error: String(e) };
