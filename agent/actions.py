@@ -59,7 +59,8 @@ STUCK = {"node": None, "kind": None, "flag": None, "watch": recovery.Watchdog(),
          "restarts": recovery.Restarts(), "taken": {},
          "away": recovery.Away(),  # the game out of front while the hub recognises nothing (#530)
          "updates": 0,  # game restarts for update notices since this agent started (AcceptUpdate)
-         "halted": None}
+         "halted": None,
+         "still": False}  # the pending stuck is on a screen that stood still, which L1 checks for a frozen game (#960)
 SCREENS = deque(maxlen=20)  # the last screens MirrorHub handed out: the evidence on a stop
 LOG = deque(maxlen=500)
 
@@ -456,14 +457,16 @@ def current_run(context):
 
 
 # Stuck detection, recovery and the stop procedure (spec 06).
-def stuck(reason, level=1):
+def stuck(reason, level=1, still=False):
     """Hand the screen being handled to recovery: the hub's Stuck node picks it up next (MirrorHub's Recover, a daily
-    hub's DailyRecover). level: the least recovery level it starts at.
+    hub's DailyRecover). level: the least recovery level it starts at. still: the screen stood still (the watchdog), so
+    L1 checks whether the game is frozen (#960).
 
     Returns True, for the action to return: its [JumpBack] leads to the hub.
     """
     log(f"stuck: {reason}")
     STUCK["flag"] = (None, level, reason)  # StuckFlag fills in the screen type
+    STUCK["still"] = still
     return True
 
 
@@ -592,7 +595,7 @@ class TaskStart(CustomAction):
             log(f"the last {argv.node_name} was interrupted: its run is picked up")
         TASK.clear()
         TASK.update(runs=0, done=None, entry=argv.node_name, ended=False)
-        STUCK.update(node=None, kind=None, flag=None, watch=recovery.Watchdog(), ladder=recovery.Ladder())
+        STUCK.update(node=None, kind=None, flag=None, still=False, watch=recovery.Watchdog(), ladder=recovery.Ladder())
         SCREENS.clear()
         log(f"task {argv.node_name} started")
         # before the line below: it names the package this task runs on
@@ -692,7 +695,7 @@ class StuckFlag(CustomRecognition):
         if kind == "Downloading":  # the game is away; the floor gets its whole time once the download is done
             restart_floor_clock()
         if why := STUCK["watch"].see(kind, recovery.thumb(image), time.monotonic()):
-            stuck(f"{kind}: {why}")
+            stuck(f"{kind}: {why}", still=why.startswith(recovery.STILL))
         elif recovery.over_time(kind, RUN.get("deadline"), time.time()):
             RUN.pop("deadline")  # once a floor: the next floor starts the clock again
             stuck(f"floor {RUN.get('floor', '?')} over its time limit", level=2)
@@ -879,7 +882,8 @@ class Recover(CustomAction):
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         unknown = STUCK["flag"] is None  # MirrorHub's own timeout: a screen it has no node for
         flag = STUCK["flag"] or (nothing_recognised(), 1, "MirrorHub recognised nothing for 60 s")
-        STUCK["flag"] = None
+        still = unknown or STUCK["still"]  # a screen that stood still: L1 checks it for a frozen game (#960)
+        STUCK["flag"], STUCK["still"] = None, False
         if unknown:  # also during a download: its progress screen is one to have a capture of
             keep_unknown(screen(context))
         if STUCK["watch"].held(time.monotonic()):
@@ -895,15 +899,28 @@ class Recover(CustomAction):
             if level is None:
                 return stop(context, Reason(f"{reason}; {why}", "Stuck"))
             log(f"recovery L{level}: {reason}")
+            before = screen(context) if level == 1 and still else None
             detail = context.run_task(f"RecoverL{level}")
             if STUCK["halted"]:  # the restarted game showed what ends the list (DeviceRooted's Halt): it has run stop()
                 return False
             if detail and detail.status.succeeded:
+                if before is not None and back_key_ignored(context, before):
+                    log(f"L1: the back key did not change the frozen screen, the same to the pixel {recovery.FROZEN_LOOK} s "
+                        "after RecoverL1: L3")
+                    start, reason = 3, f"{reason}; the back key did not change the frozen screen"
+                    continue
                 break
             log(f"L{level} did not go through")
             STUCK["ladder"].failed(level)
         forget_game_state()
         return True
+
+
+def back_key_ignored(context, before):
+    """After RecoverL1: whether every screenshot for recovery.FROZEN_LOOK s is the very same as before its back key, a
+    frozen game (#960). Not while the task is stopping: until() then ends at once and tells nothing about the game."""
+    changed = until(context, lambda image: not np.array_equal(image, before), timeout=recovery.FROZEN_LOOK)
+    return changed is None and not context.tasker.stopping
 
 
 def nothing_recognised():

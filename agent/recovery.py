@@ -54,6 +54,13 @@ FLOOR_FROM, FLOOR_KEEP = 6, 63
 # Seconds after confirming the title's download dialog in which nothing is stuck: until its progress screen
 # (Downloading, a waiting screen) is up, 22 s live 2026-10-21. 30 min ran out there before the download was done.
 DOWNLOAD_HOLD = 3 * 60
+# A stuck on a screen that stood still (see()'s why starts with STILL, or MirrorHub recognised nothing) may be a frozen
+# game (#960): after L1's back key and RecoverL1's 2 s the screen is looked at FROZEN_LOOK s more, and the very same
+# bytes all along restart it at once (L3) instead of a stuck later. Live 2026-11-25: CONNECTING and WAVE 1 stood the
+# same to the pixel through L1, and L3 came 83 and 63 s later. A still page that waits for input (the wipe dialog, the
+# starting gift page, Exploration Reward, the Compendium: 65-825 s still in the archived recordings) should close or
+# change on the key (unverified page by page), so stillness alone is not taken for a freeze.
+STILL, FROZEN_LOOK = "the screen did not change", 3
 L2_PER_RUN, L3_PER_RUN, L3_FAILED_IN_A_ROW = 3, 2, 3
 # A run with a target above 5 gets L2_PER_RUN and L3_PER_RUN again for each stretch of this many floors (6-10, 11-15): the
 # allowance was sized for a 5-floor run (#435). Not every floor: a run that keeps freezing would then go on for hours.
@@ -171,11 +178,11 @@ class Watchdog:
             return f"tapped {self.hits} times, its page did not open"
         if kind in WAIT_SCREENS:
             if now - self.moved >= WAIT_STILL:
-                return f"the screen did not change for {WAIT_STILL} s"
+                return f"{STILL} for {WAIT_STILL} s"
             cap = WAIT_CAP.get(kind)
             return f"still up after {cap} s" if cap and now - self.kind_since > cap else None
         if self.count >= SAME_SCREEN and now - self.since >= HASH_FLOOR.get(kind, 0):
-            return "the screen did not change"
+            return STILL
         return None
 
     def restart_streak(self):
