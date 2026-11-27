@@ -116,8 +116,9 @@ const LEVEL_GLYPHS: Record<Level, string> = { base: "−", plus: "＋", plus2: "
 
 /** The card's frame: the gift's icon with its tier at the top left and the icon of its keyword (its 體系) at the bottom right,
  * as the game's panel draws it; its name on the plate of its sin (#786) and, in Chinese, its English name under the plate;
- * beside the name, when the gift has a + (#961), a switch of the effect between −, ＋ and ＋＋ (the levels it has), at − each
- * time the card opens or shows another gift; its effect at that level; then `children` (on the Gift Search,
+ * its effect; under it, when the gift has a + (#961), a row that switches the effect between −, ＋ and ＋＋ (the levels it has),
+ * at − each time the card opens or shows another gift, the card as wide as without it (the user, 2026-11-27); then `children`
+ * (on the Gift Search,
  * why it cannot be picked). Placed against its tile (`place`) and kept open while the pointer is on it; focus going anywhere
  * but its tile or itself closes it. */
 export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children?: ReactNode }) {
@@ -156,16 +157,16 @@ export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HT
           <b className="gl-plate" data-ink={plate.ink} style={{ "--plate": `url(${plate.url})`, color: plate.colour } as CSSProperties}>{name}</b>
           {zh && <small>{g.en}</small>}
         </div>
-        {levels.length > 1 && (
-          <span className="gl-tip-lv" role="group" aria-label={t("gl.tip_level_group")}>
-            {levels.map((l) => (
-              <button type="button" key={l} aria-pressed={l === level} aria-label={t(`gl.tip_level_${l}`)} title={t(`gl.tip_level_${l}`)}
-                onClick={() => pick({ id, level: l })}>{LEVEL_GLYPHS[l]}</button>
-            ))}
-          </span>
-        )}
       </div>
       {effect && <EffectText runs={effect} zh={zh} />}
+      {levels.length > 1 && (
+        <div className="gl-tip-lv" role="group" aria-label={t("gl.tip_level_group")}>
+          {levels.map((l) => (
+            <button type="button" key={l} aria-pressed={l === level} aria-label={t(`gl.tip_level_${l}`)} title={t(`gl.tip_level_${l}`)}
+              onClick={() => pick({ id, level: l })}>{LEVEL_GLYPHS[l]}</button>
+          ))}
+        </div>
+      )}
       {children}
     </div>
   );
