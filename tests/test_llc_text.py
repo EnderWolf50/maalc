@@ -76,15 +76,23 @@ def test_every_gift_the_gui_shows_has_its_effect_in_english_and_chinese_as_runs(
     import llc_text
     effects, keywords = DATA["gift_effects"]["effects"], DATA["gift_effects"]["keywords"]
     assert list(effects) == [str(i) for i in llc_text.catalog_ids()] and len(effects) == 475  # 1.119.0 added 9292-9300
+    texts = []  # (gift id, level, language, runs)
     for gid, e in effects.items():
-        assert set(e) == {"sin", "en", "zh"} and e["sin"] in llc_text.ATTRIBUTE_TYPES, gid
-        for lang, runs in ((k, v) for k, v in e.items() if k != "sin"):
-            assert runs, (gid, lang)
-            for r in runs:  # plain text, a keyword the table names, or styled text
-                assert isinstance(r, str) and r or set(r) == {"kw"} and r["kw"] in keywords or r["text"] and set(r) <= {"text", "i", "colour"}, (gid, lang, r)
-            # no tag the game parses left in the text: [Combustion] is a keyword run, markup a run's style
-            assert "[Combustion]" not in str(runs) and "noparse" not in str(runs), (gid, lang)
-    used = {r["kw"] for e in effects.values() for runs in (e["en"], e["zh"]) for r in runs if isinstance(r, dict) and "kw" in r}
+        assert {"sin", "en", "zh"} <= set(e) <= {"sin", "en", "zh", "plus", "plus2"} and e["sin"] in llc_text.ATTRIBUTE_TYPES, gid
+        texts += [(gid, level, lang, t[lang]) for level, t in (("base", e), *((k, e[k]) for k in ("plus", "plus2") if k in e)) for lang in ("en", "zh")]
+    for gid, level, lang, runs in texts:
+        assert runs, (gid, level, lang)
+        for r in runs:  # plain text, a keyword the table names (marked up or not), or styled text
+            assert (isinstance(r, str) and r or set(r) <= {"kw", "up"} and r["kw"] in keywords and r.get("up", True)
+                    or "text" in r and r["text"] and set(r) <= {"text", "i", "colour", "up"} and r.get("up", True)), (gid, level, lang, r)
+        # no tag the game parses left in the text: [Combustion] is a keyword run, markup a run's style
+        assert "[Combustion]" not in str(runs) and "noparse" not in str(runs) and "style" not in str(runs), (gid, level, lang)
+        # what an enhanced gift changed is marked up, by the client or against the level below; the base text has no mark
+        assert any(isinstance(r, dict) and r.get("up") for r in runs) == (level != "base"), (gid, level, lang)
+    # #961, client 1.119.0: 111 gifts of the catalog have a +, 108 of them a ++; 9192, 9440 and 9757 only a +
+    plus, plus2 = ({int(i) for i, e in effects.items() if k in e} for k in ("plus", "plus2"))
+    assert (len(plus), len(plus2), sorted(plus - plus2), plus2 <= plus) == (111, 108, [9192, 9440, 9757], True)
+    used = {r["kw"] for _, _, _, runs in texts for r in runs if isinstance(r, dict) and "kw" in r}
     assert set(keywords) == used
     for k, v in keywords.items():  # each with the game's name in both languages, its buff's colour and its icon
         assert v["en"] and v["zh"] and v["colour"] in ("Positive", "Negative", "Neutral") and v["icon"], k
@@ -202,6 +210,17 @@ def test_markup_the_gui_does_not_draw_is_an_error(text):
         llc_text.effect_runs(f"heal 3 SP {text}", {})
 
 
+def test_what_an_enhanced_gift_changed_is_marked_up_as_the_game_s_upgrade_highlight():
+    # #961: the client marks what a + or ++ gift changed with <style="upgradeHighlight">, the game's yellow, around plain text
+    # or a keyword (client 1.119.0's Snake Slough+ and Hellterfly's Dream+, LLC's Chinese the same)
+    import llc_text
+    names = {"DefenseUp": "Protection", "Combustion": "烧伤"}
+    assert llc_text.effect_runs('gain <style="upgradeHighlight">4</style> [DefenseUp].', names) == [
+        "gain ", {"text": "4", "up": True}, " ", {"kw": "DefenseUp"}, "."]
+    assert llc_text.effect_runs('增加共计<style="upgradeHighlight">4级[Combustion]强度</style>。', names, llc_text.to_traditional) == [
+        "增加共計", {"text": "4級", "up": True}, {"kw": "Combustion", "up": True}, {"text": "強度", "up": True}, "。"]
+
+
 def test_a_tag_in_capitals_is_read_as_the_game_reads_it():
     import llc_text
     assert llc_text.effect_runs("a <I><COLOR=#A16A3B>b</COLOR></I>", {}) == ["a ", {"text": "b", "i": True, "colour": "Neutral"}]
@@ -287,6 +306,62 @@ def test_a_status_word_reads_the_same_in_a_gift_s_effect_and_in_a_grace(tmp_path
     static = {"list": [{"buffs": [{"baseId": 1, "localizeId": "title_1", "level": 1,
                                    "effects": [{"type": "Give", "referenceData": {"buffKeyword": "Paralysis", "stack": 2, "turn": 0}}]}]}]}
     assert llc_text.grace_texts(z, static) == ({1: "信息之星"}, {1: {"base": [[{"text": "獲得2層麻痺", "up": False}]]}})
+
+
+def enhanced_gift_data(tmp_path, en_rows, zh_rows):
+    """(release zip, unpack folder) of gift 9001 (CRIMSON) and the Combustion buff, with these English and LLC gift rows."""
+    z = llc_zip(tmp_path, {"Bufs_a.json": [{"id": "Combustion", "name": "烧伤"}], "EGOgift_a.json": zh_rows})
+    unpack = static_tables(tmp_path / "unpack", {"ego-gift-mirrordungeon/a.json": [{"id": 9001, "attributeType": "CRIMSON"}],
+                                                   "buff/a.json": [{"id": "Combustion", "buffType": "Negative"}]})
+    en = unpack / "raw/Localize/en"
+    en.mkdir(parents=True)
+    (en / "EN_EGOgift_a.json").write_text(json.dumps({"dataList": en_rows}), encoding="utf-8")
+    (en / "EN_Bufs_a.json").write_text(json.dumps({"dataList": [{"id": "Combustion", "name": "Burn"}]}), encoding="utf-8")
+    return z, unpack
+
+
+def test_a_gift_carries_its_enhanced_effects_the_gifts_of_id_plus_10000_and_plus_20000(tmp_path):
+    # #961: the client's + gift is the id + 10000, its ++ the id + 20000, each marking what it changed
+    import llc_text
+    hl = '<style="upgradeHighlight">{}</style>'.format
+    z, unpack = enhanced_gift_data(tmp_path, [{"id": 9001, "desc": "Gain 2 [Combustion]"}, {"id": 19001, "desc": f"Gain {hl(3)} [Combustion]"},
+                                              {"id": 29001, "desc": f"Gain {hl(4)} [Combustion]"}],
+                                   [{"id": 9001, "desc": "获得2层[Combustion]"}, {"id": 19001, "desc": f"获得{hl(3)}层[Combustion]"},
+                                    {"id": 29001, "desc": f"获得{hl('4层[Combustion]')}"}])
+    _, effects = llc_text.gift_effects(z, unpack, [9001])
+    assert effects["9001"] == {
+        "sin": "CRIMSON", "en": ["Gain 2 ", {"kw": "Combustion"}], "zh": ["獲得2層", {"kw": "Combustion"}],
+        "plus": {"en": ["Gain ", {"text": "3", "up": True}, " ", {"kw": "Combustion"}], "zh": ["獲得", {"text": "3", "up": True}, "層", {"kw": "Combustion"}]},
+        "plus2": {"en": ["Gain ", {"text": "4", "up": True}, " ", {"kw": "Combustion"}],
+                  "zh": ["獲得", {"text": "4層", "up": True}, {"kw": "Combustion", "up": True}]}}
+
+
+def test_a_gift_with_no_enhanced_one_or_only_a_plus_has_only_the_levels_it_has(tmp_path):
+    import llc_text
+    z, unpack = enhanced_gift_data(tmp_path, [{"id": 9001, "desc": "Gain 2 [Combustion]"}, {"id": 19001, "desc": "Gain 2 [Combustion]"}],
+                                   [{"id": 9001, "desc": "获得2层[Combustion]"}, {"id": 19001, "desc": "获得2层[Combustion]"}])
+    _, effects = llc_text.gift_effects(z, unpack, [9001])
+    assert set(effects["9001"]) == {"sin", "en", "zh", "plus"}
+    (tmp_path / "b").mkdir()
+    z, unpack = enhanced_gift_data(tmp_path / "b", [{"id": 9001, "desc": "Gain 2 [Combustion]"}], [{"id": 9001, "desc": "获得2层[Combustion]"}])
+    _, effects = llc_text.gift_effects(z, unpack, [9001])
+    assert set(effects["9001"]) == {"sin", "en", "zh"}
+
+
+def test_an_enhanced_text_the_client_does_not_mark_up_is_marked_where_it_differs_from_the_level_below(tmp_path):
+    # client 1.119.0's 19427 and 29427 carry no upgradeHighlight though they change the text: the words that differ from the
+    # level below are marked instead, keywords and whitespace as whole pieces
+    import llc_text
+    z, unpack = enhanced_gift_data(tmp_path, [{"id": 9001, "desc": "At less than 30% HP, gain 1 [Combustion]"},
+                                              {"id": 19001, "desc": "At less than 40% HP, gain 1 [Combustion]\nTurn End: gain 2 [Combustion]"},
+                                              {"id": 29001, "desc": "At less than 50% HP, gain 1 [Combustion]\nTurn End: gain 2 [Combustion]"}],
+                                   [{"id": 9001, "desc": "体力低于30%时获得1层[Combustion]"}, {"id": 19001, "desc": "体力低于40%时获得1层[Combustion]"},
+                                    {"id": 29001, "desc": "体力低于50%时获得1层[Combustion]"}])
+    _, effects = llc_text.gift_effects(z, unpack, [9001])
+    assert effects["9001"]["plus"]["en"] == ["At less than ", {"text": "40%", "up": True}, " HP, gain 1 ", {"kw": "Combustion"},
+                                             {"text": "\nTurn End: gain 2 ", "up": True}, {"kw": "Combustion", "up": True}]
+    assert effects["9001"]["plus2"]["en"][:3] == ["At less than ", {"text": "50%", "up": True}, " HP, gain 1 "]
+    assert effects["9001"]["plus2"]["zh"] == ["體力低於", {"text": "50%", "up": True}, "時獲得1層", {"kw": "Combustion"}]
 
 
 def test_the_data_matches_the_llc_release_when_it_is_downloaded():

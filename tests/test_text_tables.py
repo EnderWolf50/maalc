@@ -64,14 +64,28 @@ def test_event_text_reads_a_pages_story_from_eventDesc_when_desc_is_empty():
     assert out["1"]["story_cn"] == "页面"
 
 
-def test_gift_rows_carry_names_both_effects_and_the_enhanced_effect_by_id_plus_10000():
+def test_gift_rows_carry_names_both_effects_and_the_enhanced_effects_by_id_plus_10000_and_plus_20000():
     base = {9006: {"en": "Coffee and Cranes", "zh": "咖啡與紙鶴", "keyword": "Keywordless", "tier": 2}}
-    en = {9006: {"name": "x", "desc": "Gain [Combustion]"}, 19006: {"name": "x+", "desc": "Gain 2 [Combustion]"}}
-    cn = {9006: {"name": "咖啡与纸鹤", "desc": "获得[Combustion]，转化为信息素"}}  # a gift's effect: Taiwan's 為, LLC's 信息素 (#899)
+    en = {9006: {"name": "x", "desc": "Gain [Combustion]"}, 19006: {"name": "x+", "desc": 'Gain <style="upgradeHighlight">2</style> [Combustion]'},
+          29006: {"name": "x++", "desc": "Gain 3 [Combustion]"}}
+    cn = {9006: {"name": "咖啡与纸鹤", "desc": "获得[Combustion]，转化为信息素"},  # a gift's effect: Taiwan's 為, LLC's 信息素 (#899)
+          29006: {"name": "咖啡与纸鹤++", "desc": '获得<style="upgradeHighlight">3层</style>[Combustion]'}}
     rows = tt.gift_rows(base, en, cn, {9006: "咖啡与纸鹤"}, {"Combustion": "Burn"}, {"Combustion": "烧伤"})
     assert rows == {9006: {"en": "Coffee and Cranes", "zh": "咖啡與紙鶴", "cn": "咖啡与纸鹤", "keyword": "Keywordless", "tier": 2,
                            "desc_en": "Gain 「Burn」", "desc_cn": "获得「烧伤」，转化为信息素", "desc_zh": "獲得「燒傷」，轉化為信息素",
-                           "plus_en": "Gain 2 「Burn」", "plus_cn": "", "plus_zh": ""}}
+                           "plus_en": "Gain 2 「Burn」", "plus_cn": "", "plus_zh": "",
+                           "plus2_en": "Gain 3 「Burn」", "plus2_cn": "获得3层「烧伤」", "plus2_zh": "獲得3層「燒傷」"}}
+
+
+def test_the_gift_text_has_each_enhanced_effect_in_all_three_languages():
+    # #961, client 1.119.0: 111 gifts have a +, 108 of them a ++; 9192, 9440 and 9757 only a +
+    gifts = json.loads((tt.DATA / "gift_text.json").read_text(encoding="utf-8"))["gifts"]
+    has = {level: {int(i) for i, g in gifts.items() if g[f"{level}_en"]} for level in ("plus", "plus2")}
+    assert (len(has["plus"]), len(has["plus2"]), sorted(has["plus"] - has["plus2"])) == (111, 108, [9192, 9440, 9757])
+    for level, ids in has.items():
+        assert all(gifts[str(i)][f"{level}_cn"] and gifts[str(i)][f"{level}_zh"] for i in ids), level
+        assert not any(g[f"{level}_cn"] or g[f"{level}_zh"] for i, g in gifts.items() if int(i) not in ids), level
+    assert "upgradeHighlight" not in json.dumps(gifts)  # markup dropped, as plain() drops it
 
 
 def test_first_names_skips_a_row_without_a_name_and_takes_the_first_file_that_names_an_id():

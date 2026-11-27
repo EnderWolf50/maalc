@@ -256,6 +256,8 @@ const zh_tw = {
   "gl.tier_n": "{n} 個", "gl.tier_set": "已設 {n}",
   // hover popover, search and help (#307)
   "gl.tip_set": "設為", "gl.tip_set_group": "設定狀態",
+  // the card's switch between the gift's effect and its + and ++ (#961)
+  "gl.tip_level_group": "強化等級", "gl.tip_level_base": "未強化", "gl.tip_level_plus": "強化一次（＋）", "gl.tip_level_plus2": "強化兩次（＋＋）",
   "gl.tip_ro": "「預設」唯讀，複製一份才能改",
   "gl.tip_locked": "鎖住：要改成保留或不要，先取消「{by}」的想要。想要（要它本身）可以直接設",
   "gl.tip_locked_nowant": "鎖住：先取消「{by}」的想要，才能改。商店不賣它，所以不能標想要",
@@ -765,6 +767,8 @@ const en_us: typeof zh_tw = {
   "gl.tier_fusion_short": "Has fusion gifts (see the tier above)",
   "gl.tier_n": "{n} gifts", "gl.tier_set": "{n} set",
   "gl.tip_set": "Set to", "gl.tip_set_group": "Set the state",
+  "gl.tip_level_group": "Enhancement", "gl.tip_level_base": "Not enhanced", "gl.tip_level_plus": "Enhanced once (+)",
+  "gl.tip_level_plus2": "Enhanced twice (++)",
   "gl.tip_ro": "\"Default\" is read-only. Copy it to change it",
   "gl.tip_locked": "Locked: to set keep or drop, stop wanting \"{by}\" first. Want (the gift itself) can be set now",
   "gl.tip_locked_nowant": "Locked: stop wanting \"{by}\" first to change it. No shop sells it, so it cannot be wanted",

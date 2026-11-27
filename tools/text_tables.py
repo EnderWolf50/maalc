@@ -5,8 +5,8 @@ Reads the tables the other generators wrote (event_table.json, gift_search.json,
 `.local/unpack/out/events-md8.json`), the client's English localization (`.local/unpack/raw/Localize/en`, its static gift data) and
 the Localize Limbus Company (LLC) release's `LLC_zh-CN` files, and writes three id-keyed tables next to them:
   event_text.json  event id -> title, story and each option's text in English, Simplified (`_cn`, as LLC prints it) and Traditional (`_zh`)
-  gift_text.json   gift id -> names, keyword and tier, effect and enhanced effect (the id + 10000 gift) in the same three languages
-                   (desc_*, plus_*)
+  gift_text.json   gift id -> names, keyword and tier, effect and enhanced effects (the id + 10000 gift, +, and the id + 20000
+                   gift, ++) in the same three languages (desc_*, plus_*, plus2_*)
   trial_text.json  trial buff id -> the trial's English text, Simplified name and text, and Traditional name and text
 Every Traditional field is the Simplified one with markup dropped, converted by `llc_text.to_traditional` (OpenCC s2tw, Taiwan's
 glyphs and LLC's words, and its fix table, #899): the one conversion maalc's data files and lc-helper share. LLC is CC BY-NC-SA
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from llc_text import CONVERSION_NOTE, credit, current_release, files, read, release_zip, to_traditional
+from llc_text import CONVERSION_NOTE, ENHANCED, credit, current_release, files, read, release_zip, to_traditional
 from local_dir import local_dir
 
 REPO = Path(__file__).resolve().parent.parent
@@ -29,7 +29,6 @@ LOCALIZE_EN = "raw/Localize/en"
 STATIC = "static/Assets/Resources_moved/StaticData/static-data"
 UI_KW = {"Combustion": "Burn", "Laceration": "Bleed", "Vibration": "Tremor", "Burst": "Rupture", "Sinking": "Sinking",
          "Breath": "Poise", "Charge": "Charge", "Slash": "Slash", "Penetrate": "Pierce", "Hit": "Blunt"}
-ENHANCED = 10000  # an enhanced gift's id is the base gift's + this
 
 
 def plain(text):
@@ -69,15 +68,16 @@ def gift_info(ids, static, en_names, cn_names):
 
 def gift_rows(base, en_rows, cn_rows, cn_names, en_buffs, cn_buffs):
     """id -> the gift's names (`base`'s en, zh, keyword and tier; cn: LLC's Simplified name from `cn_names`), its effect `desc_*` and
-    its enhanced effect `plus_*` (the gift of id + 10000) in English, Simplified and Traditional; a gift without an enhanced one
-    has them empty. `cn_buffs`: buff id -> LLC's Simplified name; the Traditional effect is the whole Simplified one converted."""
+    its enhanced effects `plus_*` (the gift of id + 10000) and `plus2_*` (id + 20000) in English, Simplified and Traditional; a
+    gift without an enhanced one has them empty. `cn_buffs`: buff id -> LLC's Simplified name; the Traditional effect is the whole Simplified one converted."""
     def desc(rows, i, buffs):
         return gift_text(rows[i].get("desc"), buffs) if i in rows else ""
 
     return {i: {"en": g["en"].replace("’", "'"), "zh": g["zh"], "cn": cn_names.get(i, ""), "keyword": g["keyword"], "tier": g["tier"],
                 "desc_en": desc(en_rows, i, en_buffs), "desc_cn": desc(cn_rows, i, cn_buffs), "desc_zh": zh(desc(cn_rows, i, cn_buffs)),
-                "plus_en": desc(en_rows, i + ENHANCED, en_buffs), "plus_cn": desc(cn_rows, i + ENHANCED, cn_buffs),
-                "plus_zh": zh(desc(cn_rows, i + ENHANCED, cn_buffs))}
+                **{f"{level}_{lang}": text for level, plus in ENHANCED.items()
+                   for lang, text in (("en", desc(en_rows, i + plus, en_buffs)), ("cn", desc(cn_rows, i + plus, cn_buffs)),
+                                      ("zh", zh(desc(cn_rows, i + plus, cn_buffs))))}}
             for i, g in sorted(base.items())}
 
 
@@ -193,7 +193,7 @@ def notes(client, release):
               "_cn fields and cn), the Traditional Chinese (_zh fields and zh) converted from it with " + CONVERSION_NOTE + " "
               "(tools/llc_text.py), markup tags dropped. Chinese text licensed CC BY-NC-SA 4.0 (see NOTICE.md). Written by tools/text_tables.py.")
     return {"event_text.json": "Text of each event and page of event_table.json by event id (the table has the keys, hints and effects): " + common,
-            "gift_text.json": ("Names, keyword, tier, effect (desc_*) and enhanced effect (plus_*, the gift of id + 10000) of each gift of "
+            "gift_text.json": ("Names, keyword, tier, effect (desc_*) and enhanced effects (plus_*, the gift of id + 10000; plus2_*, id + 20000) of each gift of "
                                "gift_search.json and gift_recipes.json and of each gift an event option gives, by gift id; a [BuffId] in an effect "
                                "is named, as 「name」. From " + common),
             "trial_text.json": "Text of each trial of trials.yaml by its buff id (the table has the pools and scores): " + common}

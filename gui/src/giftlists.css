@@ -153,7 +153,15 @@
 .gl-pos { color: var(--kw-pos); }
 .gl-neg { color: var(--kw-neg); }
 .gl-neu { color: var(--kw-neu); }
+/* What a + or ++ changed (#961), in the game's yellow, as the game prints its upgradeHighlight; a status word's name too. */
+.gl-up, .gl-up .gl-kw-name { background: none; color: var(--kw-pos); }
 .gl-tip-effect + .gl-tip-set { margin-top: 8px; border-top: 1px solid var(--gl-line); padding-top: 9px; }
+/* The switch of the effect's level (#961): a row of its own between the name's row and the effect text, so the card keeps its
+ * width (the user, 2026-11-27); its buttons joined in one frame, the level shown in the game's yellow. */
+.gl-tip .gl-tip-lv { display: flex; width: fit-content; margin: 8px 0 0; border: 1px solid var(--line-2); border-radius: 3px; overflow: hidden; }
+.gl-tip .gl-tip-lv button { min-width: 34px; padding: 0 8px; border: 0; border-radius: 0; color: var(--gl-muted); font: 700 12px/20px var(--font-display); }
+.gl-tip .gl-tip-lv button + button { border-left: 1px solid var(--line-2); }
+.gl-tip .gl-tip-lv button[aria-pressed="true"] { background: var(--gl-panel2); color: var(--kw-pos); }
 .gl-tip-note { margin: 8px 0 0; padding-top: 7px; border-top: 1px solid var(--gl-line); color: var(--gl-muted); }
 .gl-tip-head small, .gl-tip-why { color: var(--gl-muted); }
 .gl-tip-set { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 2px; }
