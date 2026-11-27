@@ -1,3 +1,6 @@
 # Event overrides (docs/spec/05-game-data.md section 3): question text -> option text.
 # Only exceptions; every other event follows the general rule. Settings event_overrides win.
-{}
+
+# The augmentation factory's button pages, mid-battle (801202-801204, #959): No. three times shuts it down and the
+# cyborgs stop reviving; Yes. may blow it up with the Sinners inside.
+"<DO YOU LOVE THE CITY YOU LIVE IN?>": "No."

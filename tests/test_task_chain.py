@@ -255,8 +255,7 @@ def entry_page(context, teams=lambda teams: None, settings=lambda data: None, **
 @pytest.mark.parametrize("run, teams, done", [
     ({"runs": 1}, lambda teams: None, "1 of 1 runs done"),
     ({"stop_when_weekly_bonus_out": True}, lambda teams: None, "weekly bonuses used up"),
-    ({}, lambda teams: teams[0].update(usage="hard_only"), "no enabled team may run normal"),
-    ({}, lambda teams: [t.update(enabled=False) for t in teams], "no enabled team"),  # review S3: no team at all
+    ({}, lambda teams: teams[0].update(usage="hard_only"), "no team in the team queue may run normal"),
 ])
 def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, monkeypatch, run, teams, done):
     # #364: the run count reached, the weekly bonuses out, no team for the difficulty: the task is done, not failed, so
@@ -270,6 +269,21 @@ def test_a_mirror_dungeon_that_has_nothing_left_to_do_ends_a_success(context, mo
     assert not (actions.ROOT / "logs").exists() and not urlopen.called
     context.tasker.controller.post_click.assert_not_called()
     context.run_task.assert_called_once_with("GoHome")  # live-2 G4: the main window, not the entry page, for the next task
+
+
+@pytest.mark.parametrize("edit", [lambda data: data.update(team_queue=[]),  # #954: every team out of the queue
+                                  lambda data: data.update(teams=[], team_queue=[])])  # review S3: no team at all
+def test_a_mirror_dungeon_with_an_empty_team_queue_ends_a_success_and_opens_no_run(context, monkeypatch, edit):
+    entry_page(context, settings=edit)
+    urlopen = MagicMock()
+    monkeypatch.setattr(actions.urllib.request, "urlopen", urlopen)
+    actions.LOG.clear()
+    assert run_start_actions.PlanRun().run(context, None) is True
+    assert actions.TASK["done"] == "no team in the team queue"
+    assert [line.split(" ", 1)[1] for line in actions.LOG] == ["done: no team in the team queue"]  # one line, no error
+    assert not (actions.ROOT / "logs").exists() and not urlopen.called
+    context.tasker.controller.post_click.assert_not_called()
+    context.run_task.assert_called_once_with("GoHome")
 
 
 def test_plan_run_does_not_open_a_run_the_modules_cannot_claim(context):

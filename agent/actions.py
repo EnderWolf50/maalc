@@ -48,8 +48,7 @@ RUN = {}
 # run gate), "settled" (a mirror run claimed or given up: none is under way until the next is planned, #436),
 # "forfeits" (the forfeit reasons of the runs given up since the last claim: too many in a row stop the task, #560),
 # "assemble" (Assemble Modules' reads and confirms), "charge" (Charge Enkephalin's count and its steps), "l3"
-# (restart_game's restarts that went through, #520), "start_team" (a Mirror Dungeon task's start team, until its first new
-# run opened with it at the head of the queue, #805). "options": the task's options as its start read them (options()).
+# (restart_game's restarts that went through, #520). "options": the task's options as its start read them (options()).
 TASK = {"runs": 0, "done": None}
 # Stuck detection and recovery (spec 06), memory only: the last node seen ("node", its id) and the
 # screen type it handled ("kind"), a pending stuck for MirrorHub's Stuck node ("flag": (kind, start
@@ -176,10 +175,10 @@ def tap_then(context, x, y, done, timeout=2.0, lively="HomeReached"):
     return image
 
 
-def log_change(node, image, began):
+def log_change(node, image, began, unseen="no change"):
     """Log how long the screen after a node's tap or key took to come, from before it (image: until()'s, None when it
-    never did); a live run reads each wait from these lines (#254)."""
-    log(f"{node}: {'screen changed' if image is not None else 'no change'} after {time.monotonic() - began:.1f} s")
+    never did: then the line says unseen); a live run reads each wait from these lines (#254)."""
+    log(f"{node}: {'screen changed' if image is not None else unseen} after {time.monotonic() - began:.1f} s")
 
 
 def tap_moved(context, x, y, timeout=1.0):
@@ -625,19 +624,12 @@ class TaskStart(CustomAction):
 
     def begin(self, context, argv, settings):
         """The task's own start once its options are read. MirrorDungeon fails on a target floor past 5 its teams cannot
-        play (task_options.target_floor_errors), as PlanRun fails it on bad settings. A start team deleted or disabled
-        is ignored, and the log says so (task_options.start_team_ignored_line, #878); one it can play waits in TASK for the
-        task's first new run (PlanRun): a run under way plays the team of the queue as it is."""
+        play (task_options.target_floor_errors), as PlanRun fails it on bad settings."""
         if argv.node_name != "MirrorDungeon":
             return True
-        if errors := task_options.target_floor_errors(TASK["options"], settings["teams"]):
+        if errors := task_options.target_floor_errors(TASK["options"], settings):
             log(f"stop: {task_options.OptionsError(errors)}")
             return False
-        start = TASK["options"]["start_team"]
-        if ignored := task_options.start_team_ignored_line(start, settings["teams"]):
-            log(ignored)
-        elif start:
-            TASK["start_team"] = start
         return True
 
 
@@ -765,7 +757,7 @@ def restart_game(context, reason, kind=None):
         TASK["l3"] = TASK.get("l3", 0) + 1
     else:
         log("L3 did not go through")
-    for node in ("HomeBack", "HomeGameAway", "HomeWindowTab"):
+    for node in ("HomeBack", "HomeGameAway", "HomeWindowTab", "HomeMirror"):
         context.clear_hit_count(node)
     forget_game_state()
     return True
@@ -818,6 +810,18 @@ class HomeLost(CustomAction):
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
         return restart_game(context, param(argv.custom_action_param) or "the main window was not reached")
+
+
+@AgentServer.custom_action("HomeMirror")
+class HomeMirror(CustomAction):
+    """GoHome on the mirror's map or its Dungeon Progress panel (#958): L2's way out (RecoverL2), which pauses the run
+    and lands on the main window. GoHome goes on from wherever it left the game: HomeReached, or the node's second try."""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        detail = context.run_task("RecoverL2")
+        through = detail and detail.status.succeeded
+        log(f"{argv.node_name}: {'run paused (To Window)' if through else 'To Window did not go through'}")
+        return True
 
 
 @AgentServer.custom_action("DailyRecover")
@@ -1049,9 +1053,9 @@ class DismissShot(CustomAction):
             def closed(im):
                 return seen(context, im, p["until"]) is not None and seen(context, im, argv.node_name) is None
             log_change(argv.node_name, until(context, closed, timeout=p["timeout"]), began)
-        if "known" in p:
+        if "known" in p:  # a screen may change into one the hub does not know (the map's panel, #958): not "no change"
             log_change(argv.node_name, until(context, hub_knows(context, p["known"], argv.node_name),
-                                             timeout=p["timeout"]), began)
+                                             timeout=p["timeout"]), began, f"no screen {p['known']} knows")
         return True
 
 

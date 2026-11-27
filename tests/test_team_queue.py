@@ -8,8 +8,8 @@ import actions
 import run_start_actions
 import settings
 import test_actions
-from team_queue import headed, migrate_cursor, pick_team, requeue, resumed_team
-from test_resumed_run import claim
+from team_queue import migrate_cursor, pick_team, requeue, resumed_team
+from test_resumed_run import claim, last_line
 from test_settings import CASES, apply_edits
 from test_task_chain import entry_page
 from agent_patch import patch_all
@@ -19,11 +19,11 @@ clock, context = test_actions.clock, test_actions.context  # its fixtures: the f
 ADDR = "127.0.0.1:16384"
 
 
-def t(id, usage="any", enabled=True):
-    return {"id": id, "usage": usage, "enabled": enabled}
+def t(id, usage="any"):
+    return {"id": id, "usage": usage}
 
 
-TEAMS = [t("a"), t("b", "hard_only"), t("c", enabled=False), t("d", "normal_only")]
+TEAMS = [t("a"), t("b", "hard_only"), t("c"), t("d", "normal_only")]
 
 
 def settings_of(teams, order):
@@ -36,27 +36,28 @@ REVERSED = TEAMS[::-1]
 
 
 @pytest.mark.parametrize("order, difficulty, expected", [
-    ("abcd", "hard", "a"),
-    ("bcda", "hard", "b"),
-    ("bcda", "normal", "d"),  # skips hard_only b
-    ("cadb", "normal", "a"),  # skips the disabled c
+    ("abd", "hard", "a"),
+    ("bda", "hard", "b"),
+    ("bda", "normal", "d"),  # skips hard_only b
+    ("bd", "normal", "d"),  # a and c, which would fit, are not in the queue (#954)
+    ("aab", "hard", "a"),  # a team twice (#954)
+    ("bbda", "normal", "d"),  # skips b in both its places
 ])
-def test_a_run_plays_the_first_enabled_team_of_the_queue_that_fits_its_difficulty(order, difficulty, expected):
+def test_a_run_plays_the_first_team_of_the_queue_that_fits_its_difficulty(order, difficulty, expected):
     assert pick_team(settings_of(REVERSED, order), difficulty)["id"] == expected
 
 
 def test_no_team_fits():
-    assert pick_team(settings_of([t("b", "hard_only"), t("x", enabled=False)], "xb"), "normal") is None
+    assert pick_team(settings_of([t("b", "hard_only"), t("x")], "bb"), "normal") is None  # x is not in the queue
+    assert pick_team(settings_of([t("a")], ""), "hard") is None
     assert pick_team(settings_of([], ""), "hard") is None
 
 
 @pytest.mark.parametrize("case", CASES["next_run"], ids=lambda c: c["name"])
 def test_the_next_run_of_each_difficulty_is_the_one_the_settings_gui_marks(case):
-    # tests/settings_cases.json next_run: the GUI's team queue marks the same teams (#804, #878, gui/src/teamQueue.test.tsx),
-    # from the start team when one is set, as the Mirror Dungeon task picks its first new run (run_start_actions.py)
+    # tests/settings_cases.json next_run: the GUI's team queue marks the same teams (#804, #878, gui/src/teamQueue.test.tsx)
     settings = apply_edits(CASES["valid"], case["edits"])
-    start = settings["run"]["start_team"]
-    picked = [pick_team(headed(settings, start) if start else settings, d) for d in ("hard", "normal")]
+    picked = [pick_team(settings, d) for d in ("hard", "normal")]
     assert [team and team["id"] for team in picked] == [case["hard"], case["normal"]]
 
 
@@ -66,30 +67,38 @@ def test_the_next_run_of_each_difficulty_is_the_one_the_settings_gui_marks(case)
     (None, ("b", False)),  # auto: hard picks b, normal d; the run is counted as hard's b, not known
 ])
 def test_a_resumed_run_is_the_queue_heads_for_its_difficulty(difficulty, expected):
-    team, known = resumed_team(settings_of(REVERSED, "bcda"), difficulty)
+    team, known = resumed_team(settings_of(REVERSED, "bda"), difficulty)
     assert (team["id"], known) == expected
 
 
-def test_a_resumed_run_with_no_team_that_fits_is_the_first_enabled_teams():
-    team, known = resumed_team(settings_of([t("d", "hard_only"), t("c", enabled=False), t("b", "hard_only")], "cbd"), "normal")
+@pytest.mark.parametrize("order", ["ab", "aab", "abba"])
+def test_a_resumed_run_of_a_team_that_is_in_the_queue_twice_is_known(order):
+    assert resumed_team(settings_of([t("a"), t("b")], order), None) == (t("a"), True)
+
+
+def test_a_resumed_run_with_no_team_that_fits_is_the_queues_first_teams():
+    team, known = resumed_team(settings_of([t("d", "hard_only"), t("c"), t("b", "hard_only")], "bd"), "normal")
     assert (team["id"], known) == ("b", False)
 
 
-def settings_file(root, ids, disabled=(), order=None, **extra):
+def settings_file(root, ids, order=None, **extra):
     """A settings file as the GUI writes it: teams in the order ids, the queue in order (ids again when None)."""
     path = root / "config" / "settings.json"
     path.parent.mkdir(exist_ok=True)
-    teams = [{"id": i, "name": f"隊 {i}", "enabled": i not in disabled} for i in ids]
-    data = {"version": 22, "teams": teams, "team_queue": list(ids if order is None else order), **extra}
+    teams = [{"id": i, "name": f"隊 {i}"} for i in ids]
+    data = {"version": 24, "teams": teams, "team_queue": list(ids if order is None else order), **extra}
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
 
 
-def old_settings_file(root, version, ids):
-    """A file the GUI has not written back as version 22 yet: its queue is the order of its teams."""
+def old_settings_file(root, version, ids, disabled=()):
+    """A file the GUI has not written back: below version 22 its queue is the order of its teams; each team has the switch
+    version 24 dropped (#954)."""
     path = root / "config" / "settings.json"
     path.parent.mkdir(exist_ok=True)
-    data = {"version": version, "teams": [{"id": i, "name": f"隊 {i}", "enabled": True} for i in ids]}
+    data = {"version": version, "teams": [{"id": i, "name": f"隊 {i}", "enabled": i not in disabled} for i in ids]}
+    if version >= 22:
+        data["team_queue"] = list(ids)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -141,11 +150,48 @@ def test_a_file_the_gui_has_not_written_back_moves_the_team_in_its_list(tmp_path
     assert on_disk(tmp_path) == {**before, "teams": [before["teams"][i] for i in (1, 2, 0)]}
 
 
-@pytest.mark.parametrize("team", ["c", "gone"])
-def test_a_team_already_last_or_no_longer_listed_leaves_the_file_alone(tmp_path, team):
-    path = settings_file(tmp_path, ["a", "b", "c"])
+@pytest.mark.parametrize("version", [20, 21])
+def test_a_disabled_team_of_an_older_list_keeps_its_place(tmp_path, version):
+    old_settings_file(tmp_path, version, ["a", "x", "b", "c"], disabled={"x"})
+    requeue(tmp_path, "a")
+    assert listed(tmp_path) == ["x", "b", "c", "a"] and on_disk(tmp_path)["version"] == version
+
+
+@pytest.mark.parametrize("version", [22, 23])
+def test_a_file_with_a_queue_the_gui_has_not_written_back_moves_only_its_queue_and_a_disabled_team_keeps_its_place(tmp_path, version):
+    # #954: at its version, its teams with their switch; the migration to 24 leaves x out of the queue
+    old_settings_file(tmp_path, version, ["a", "x", "b"], disabled={"x"})
+    before = on_disk(tmp_path)
+    requeue(tmp_path, "a")
+    assert on_disk(tmp_path) == {**before, "team_queue": ["x", "b", "a"]}
+
+
+@pytest.mark.parametrize("order, after", [
+    # #954: the team's first place, the one the pick took, moves; its others stay
+    (["a", "a", "b"], ["a", "b", "a"]),
+    (["a", "b", "a"], ["b", "a", "a"]),
+    (["a", "a"], ["a", "a"]),
+    (["b", "a", "b", "a", "c"], ["b", "b", "a", "c", "a"]),  # b passed over for its usage keeps both its places
+])
+def test_a_claim_moves_the_first_place_of_a_team_that_has_several(tmp_path, order, after):
+    settings_file(tmp_path, ["a", "b", "c"], order=order)
+    requeue(tmp_path, "a")
+    assert queue(tmp_path) == after
+
+
+@pytest.mark.parametrize("team, why", [("c", "already last"), ("gone", "no longer in it"), ("x", "no longer in it")])
+def test_a_team_already_last_or_taken_out_of_the_queue_leaves_the_file_alone(tmp_path, team, why):
+    # x: taken out of the queue during its run, still a team (#954); gone: deleted
+    path = settings_file(tmp_path, ["a", "x", "b", "c"], order="abc")
     before = path.read_bytes()
-    assert team in requeue(tmp_path, team)
+    assert requeue(tmp_path, team) == f"team queue: {team!r} is {why}, the queue stays"
+    assert path.read_bytes() == before
+
+
+def test_a_claim_on_an_emptied_queue_leaves_the_file_alone(tmp_path):
+    path = settings_file(tmp_path, ["a"], order="")
+    before = path.read_bytes()
+    assert "no longer in it" in requeue(tmp_path, "a")
     assert path.read_bytes() == before
 
 
@@ -209,12 +255,12 @@ def test_the_old_cursor_becomes_the_queue_head_and_the_state_files_go(tmp_path):
 
 @pytest.mark.parametrize("name, cursor", [
     ("127.0.0.1_16384.json", "a"),  # already the head
-    ("127.0.0.1_16384.json", "gone"),  # a deleted team: the cursor started from the first enabled team
-    ("127.0.0.1_16384.json", "x"),  # a disabled team: the same
+    ("127.0.0.1_16384.json", "gone"),  # a deleted team: the cursor started from the first team
+    ("127.0.0.1_16384.json", "x"),  # a team that is not in the queue: the same
     ("127.0.0.1_16416.json", "c"),  # only another instance's cursor
 ])
 def test_a_cursor_that_changes_nothing_leaves_the_order_and_still_removes_the_state(tmp_path, name, cursor):
-    path = settings_file(tmp_path, ["a", "x", "b", "c"], disabled={"x"})
+    path = settings_file(tmp_path, ["a", "x", "b", "c"], order="abc")
     before = path.read_bytes()
     old_state(tmp_path, name, cursor)
     assert migrate_cursor(tmp_path, ADDR)
@@ -236,6 +282,14 @@ def test_the_cursor_of_a_file_the_gui_has_not_written_back_turns_its_list(tmp_pa
     old_state(tmp_path, "127.0.0.1_16384.json", "c")
     migrate_cursor(tmp_path, ADDR)
     assert listed(tmp_path) == ["c", "a", "b"] and "team_queue" not in on_disk(tmp_path)
+
+
+def test_the_cursor_on_a_disabled_team_of_an_older_file_changes_nothing(tmp_path):
+    path = old_settings_file(tmp_path, 21, ["a", "x", "b"], disabled={"x"})
+    before = path.read_bytes()
+    old_state(tmp_path, "127.0.0.1_16384.json", "x")
+    migrate_cursor(tmp_path, ADDR)
+    assert path.read_bytes() == before and not (tmp_path / "state").exists()
 
 
 def test_no_state_file_no_change(tmp_path):
@@ -260,6 +314,48 @@ def test_a_team_the_difficulty_skips_keeps_its_place_and_only_the_claimed_team_g
     assert queue(actions.ROOT) == ["b", "a", "c"]
     claim(context, monkeypatch)
     assert (queue(actions.ROOT), listed(actions.ROOT)) == (["b", "c", "a"], ["c", "a", "b"])
+
+
+def plan_run(context):
+    """PlanRun on the entry page, the Modules read on the way in: the run it plans."""
+    actions.TASK.update(modules=20)
+    assert run_start_actions.PlanRun().run(context, None) is True
+    return actions.RUN["team"]["id"]
+
+
+def test_a_queue_a_a_b_plays_a_a_b_and_comes_back_to_where_it_was(context, monkeypatch):
+    # #954: three claims in a row; each run plays the head, and its place goes to the end
+    def queue_a_a_b(data):
+        data["team_queue"] = ["a", "a", "b"]
+        data["teams"][1]["usage"] = "any"
+    entry_page(context, settings=queue_a_a_b, runs=None)  # auto, no weekly bonus left: normal runs
+    played, queues = [], []
+    for _ in range(3):
+        played.append(plan_run(context))
+        claim(context, monkeypatch)
+        assert last_line()["team"] == played[-1]
+        queues.append(queue(actions.ROOT))
+    assert played == ["a", "a", "b"]
+    assert queues == [["a", "b", "a"], ["b", "a", "a"], ["a", "a", "b"]]
+    assert listed(actions.ROOT) == ["a", "b"]
+
+
+def test_a_team_twice_whose_usage_does_not_fit_is_passed_over_and_keeps_both_places(context, monkeypatch):
+    entry_page(context, settings=lambda data: data.update(team_queue=["b", "a", "b", "a"]), runs=None)  # b is hard_only
+    assert plan_run(context) == "a"  # auto, no weekly bonus left: a normal run
+    claim(context, monkeypatch)
+    assert queue(actions.ROOT) == ["b", "b", "a", "a"]
+    assert plan_run(context) == "a"
+    claim(context, monkeypatch)
+    assert queue(actions.ROOT) == ["b", "b", "a", "a"]
+
+
+def test_a_task_that_opens_no_run_leaves_the_queue_alone(context):
+    entry_page(context, stop_when_weekly_bonus_out=True)  # none left
+    before = (actions.ROOT / "config" / "settings.json").read_bytes()
+    actions.TASK.update(modules=20)
+    assert run_start_actions.PlanRun().run(context, None) is True and actions.TASK["done"] == "weekly bonuses used up"
+    assert (actions.ROOT / "config" / "settings.json").read_bytes() == before
 
 
 def test_a_mirror_dungeon_task_turns_the_old_rotation_cursor_into_the_queue_head(context, monkeypatch):

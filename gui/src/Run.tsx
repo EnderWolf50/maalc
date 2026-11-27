@@ -1,7 +1,7 @@
 // The Run tab (#814, #815, #816, #875, spec #811 「設定視窗」, spec #871 「版面（L1 B）」, spec 04 sections 5, 12 and 14), in two
 // columns with no titles over them, whose first frames start on one line. Left, the task list (ticks, drag or Alt+↑↓: the run
 // order; a row copied or removed, any task added back, #811, #877; during a run each row's state) beside the picked task's
-// options (the Mirror Dungeon task's under the team queue and its start flags, #878), then the global options (folded) and the
+// options (the Mirror Dungeon task's under the team queue, #878, #954), then the global options (folded) and the
 // scheduled runs (Schedules.tsx). Right, held in view as the page scrolls,
 // the run console: Start, Stop and the run's status, the emulator with the device scan, and the live log, in that order idle
 // and running. A narrow window
@@ -12,11 +12,11 @@
 // still shows its options when clicked.
 import {
   memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
-  type KeyboardEvent as ReactKeyboardEvent, type ReactNode,
+  type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject,
 } from "react";
 import { fill, type Key } from "./i18n";
 import { LockIcon } from "./KeywordGrid";
-import { TASK_ORDER, nextRuns, schema, type Difficulty, type LuxOptions, type NextRun, type Settings } from "./model";
+import { TASK_ORDER, nextRuns, placeBack, schema, type Difficulty, type LuxOptions, type NextRun, type Settings } from "./model";
 import {
   LOG_LINES, crashed, isRunning, sameAddress, sameList, useRunner, type Device, type LogLine, type RunView,
 } from "./runner";
@@ -189,14 +189,14 @@ export function RunTab() {
   );
 }
 
-/** A small drawn icon of the task rows, the list's add button and the team queue's flags: a 16 px box, a 1.5 px line, drawn
- * `size` px; `filled` fills the shape too (a start team's lit flag). */
-const Glyph = ({ d, filled = false, size = 14 }: { d: string; filled?: boolean; size?: number }) => (
-  <svg viewBox="0 0 16 16" width={size} height={size} aria-hidden fill={filled ? "currentColor" : "none"} stroke="currentColor"
+/** A small drawn icon of the task rows, the team queue's rows and the add buttons: a 16 px box, a 1.5 px line, drawn 14 px. */
+const Glyph = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 16 16" width={14} height={14} aria-hidden fill="none" stroke="currentColor"
     strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
 );
 const COPY = "M5.5 5.5h7v7h-7z M3.5 10.5v-7h7", CROSS = "M4.5 4.5l7 7 M11.5 4.5l-7 7", PLUS = "M8 3.5v9 M3.5 8h9";
-const FLAG = "M4.5 14V2.5 M4.5 3h7l-1.75 2.75L11.5 8.5h-7z";
+/** An arrow up to a bar: to the top. */
+const TO_TOP = "M3.5 2.75h9 M8 13.25v-7.5 M4.5 9.25L8 5.75l3.5 3.5";
 
 /** Whether a one-line element shows all it holds, measured again after each render and as its width changes: false once its
  * content is wider than it is. True where nothing is laid out (the tests' DOM). Its CSS must give it the same width either
@@ -225,20 +225,14 @@ function DiffPlate({ d }: { d: Difficulty }) {
 /** Whether the next runs name two teams, one a difficulty: then each mark names its difficulty with its plate. */
 const splitRuns = (next: NextRun[]) => next.length === 2 && next[0].team !== next[1].team;
 
-/** Whether run.start_team counts: it names an enabled team, whose flag stays in the file. A flag on a disabled team, or on
- * a team deleted since (the next save drops it, App.tsx), has no effect: the task follows the queue as with no flag
- * (task_options.py start_team_ignored_line, #878). */
-const startTeamApplies = (s: Settings) => s.teams.some((x) => x.id === s.run.start_team && x.enabled);
-
 /** The next Mirror Dungeon run on the task's row (spec #871 「隊伍佇列」): 「下一局」, then each difficulty's plate and its team,
- * Normal first, or the one team alone that plays every difficulty the task plays; a lit flag after them while an enabled
- * start team is set (a flag on a disabled or deleted team has no effect, so none). One line: where the names do not fit, it leaves the
- * row, and a screen reader, rather than take a second line (the queue's own marks still say it); the row is then one line
- * high, as the others. */
+ * Normal first, or the one team alone that plays every difficulty the task plays; with an empty queue, that the task plays
+ * none. One line: where the names do not fit, it leaves the row, and a screen reader, rather than take a second line (the
+ * queue's own marks still say it); the row is then one line high, as the others. */
 function NextTeams() {
   const { s, t } = useEditor();
   const next = nextRuns(s);
-  const name = (id: string | null) => (id === null ? t("queue.no_team") : s.teams.find((x) => x.id === id)?.name || "—");
+  const name = (id: string | null) => (id === null ? t(s.team_queue.length ? "queue.no_team" : "queue.empty_next") : s.teams.find((x) => x.id === id)?.name || "—");
   const [line, fits] = useFits<HTMLSpanElement>();
   return (
     <span className={"tr-next" + (fits ? "" : " clipped")} ref={line} aria-hidden={fits ? undefined : true}>
@@ -246,9 +240,6 @@ function NextTeams() {
       {splitRuns(next)
         ? next.map((p) => <span key={p.difficulty} className="nt-team"><DiffPlate d={p.difficulty} />{name(p.team)}</span>)
         : <span className="nt-team">{name(next[0].team)}</span>}
-      {startTeamApplies(s) && (
-        <span className="flag-on" title={t("queue.flag_on")}><Glyph d={FLAG} filled /><span className="sr-only">{t("queue.flag_on")}</span></span>
-      )}
     </span>
   );
 }
@@ -264,6 +255,20 @@ function rowStates(tasks: Settings["tasks"], view: RunView) {
   return new Map(ticked.map((j, k) => [j, view.tasks[k]]));
 }
 
+/** The row of the sortable list inside `box` that takes the focus after the next render, by its place: a removed row's button,
+ * or the Undo note's, leaves with what it removed or put back, and the focus would drop to the page's top. Past the last row it
+ * is the last; with none left, the list's add button. */
+function useRowFocus(box: RefObject<HTMLElement | null>) {
+  const at = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (at.current === null) return;
+    const rows = box.current?.querySelectorAll<HTMLElement>("ol.reorder > li");
+    (rows?.[Math.min(at.current, rows.length - 1)] ?? box.current?.querySelector<HTMLElement>(".add-task > button"))?.focus();
+    at.current = null;
+  });
+  return (row: number) => { at.current = row; };
+}
+
 /** The task list (spec #871 「任務清單（3B）」): each entry a row with its tick and name (#n when its task is listed more than
  * once), dragged or moved with Alt to set the run order (ReorderList). A row's copy and remove show over its end under the
  * pointer or the keyboard's focus and take no room (index.css .tr-acts); 「加入任務」 under the list adds any task. During a
@@ -274,24 +279,16 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
   const states = rowStates(s.tasks, useRunner().view);
   // the row that says which team plays the next Mirror Dungeon run: the first ticked one, which a run plays first
   const firstMirror = s.tasks.findIndex((x) => x.id === "MirrorDungeon" && x.enabled);
-  // the row the focus goes to after the render: a removed row's button, or the Undo note's, leaves with what it removed or
-  // put back, and the focus would drop to the page's top; it goes to the row that took the removed one's place, or to the
-  // row put back (加入任務 when the list is empty)
+  // a removed row's focus goes to the row that took its place, an Undo's to the row put back
   const aside = useRef<HTMLElement>(null);
-  const focusAt = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    if (focusAt.current === null) return;
-    const rowEls = aside.current?.querySelectorAll<HTMLElement>("ol.reorder > li");
-    (rowEls?.[Math.min(focusAt.current, rowEls.length - 1)] ?? aside.current?.querySelector<HTMLElement>(".add-task > button"))?.focus();
-    focusAt.current = null;
-  });
+  const focusRow = useRowFocus(aside);
   // an Undo puts the entry back where it was and picks it, as the team list's does
-  const [undoNote, removeRow] = useUndoRow<Settings["tasks"][number]>((fn) => update((d) => fn(d.tasks)), "", (row, at) => {
+  const [undoNote, removeRow] = useUndoRow<Settings["tasks"][number]>((fn) => update((d) => fn(d.tasks)), "", { undone: (row, at) => {
     const tasks = [...s.tasks];
     tasks.splice(Math.min(at, tasks.length), 0, row);
     setSel(entryKey(tasks, Math.min(at, s.tasks.length)));
-    focusAt.current = Math.min(at, s.tasks.length);
-  });
+    focusRow(Math.min(at, s.tasks.length));
+  } });
   // a new entry of task `id` at place `at`, unticked (it runs only once ticked), and picked: a copy right under the row it
   // copies, an add at the end
   const insertAt = (at: number, id: string) => {
@@ -306,7 +303,7 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
     const tasks = s.tasks.filter((_, k) => k !== j);
     removeRow(s.tasks, j, taskName(t, s.tasks[j].id));
     if (tasks.length) setSel(entryKey(tasks, j === pickedAt ? Math.min(j, tasks.length - 1) : pickedAt > j ? pickedAt - 1 : pickedAt));
-    focusAt.current = j;
+    focusRow(j);
   };
   return (
     <aside className="task-list" data-path="tasks" ref={aside}>
@@ -365,27 +362,42 @@ function TaskList({ rows, pickedAt, setSel }: { rows: Row[]; pickedAt: number; s
   );
 }
 
-/** 「＋ 加入任務」 and its menu, which opens over the page and moves nothing under it: each task by name, in a new file's
- * order (the schema's default, model.ts TASK_ORDER), with how often the list has it where that is not once. Open, the focus
- * is on its first item; the arrows, Home and End step through it, Escape closes it back to the button, and Tab or a click
- * outside closes it too. A pick adds the task (TaskList append). */
+/** 「＋ 加入任務」: each task by name, in a new file's order (the schema's default, model.ts TASK_ORDER), with how often the list
+ * has it where that is not once. A pick adds the task (TaskList append). */
 function AddTask({ onPick }: { onPick: (id: string) => void }) {
   const { s, t } = useEditor();
-  const [open, setOpen] = useState(false);
+  const items = TASK_ORDER.map((id) => {
+    const n = s.tasks.filter((x) => x.id === id).length;
+    return { id, name: taskName(t, id), note: n === 0 ? t("tasks.absent") : n > 1 ? fill(t("tasks.listed"), { n }) : "" };
+  });
+  return <AddMenu label={t("tasks.add")} items={items} onPick={onPick} />;
+}
+
+/** A list's add button (＋) and its menu, which opens over the page and moves nothing under it: an item by its name, with a note.
+ * Open, the focus is on its first item; the arrows, Home and End step through it, Escape closes it back to the button, and Tab
+ * or a click outside closes it too. With no item, or locked by a run, the button is off. */
+function AddMenu({ label, items, onPick }: {
+  label: string; items: { id: string; name: string; note: string }[]; onPick: (id: string) => void;
+}) {
+  const locked = useContext(LockContext);
+  const [opened, setOpen] = useState(false);
+  const off = locked || !items.length;
+  const open = opened && !off;
   const box = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const menu = useId();
-  const items = () => [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
+  const itemEls = () => [...(box.current?.querySelectorAll<HTMLButtonElement>("[role=menuitem]") ?? [])];
   const close = (refocus: boolean) => { setOpen(false); if (refocus) button.current?.focus(); };
+  useEffect(() => { if (off) setOpen(false); }, [off]); // a run that starts with it open: it stays closed after the run
   useEffect(() => {
     if (!open) return;
-    items()[0]?.focus();
+    itemEls()[0]?.focus();
     const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("pointerdown", away);
     return () => document.removeEventListener("pointerdown", away);
   }, [open]);
   const onKey = (e: ReactKeyboardEvent) => {
-    const list = items(), at = list.indexOf(document.activeElement as HTMLButtonElement);
+    const list = itemEls(), at = list.indexOf(document.activeElement as HTMLButtonElement);
     const to = ({ ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: list.length - 1 } as Record<string, number>)[e.key];
     if (to !== undefined) { e.preventDefault(); list[(to + list.length) % list.length]?.focus(); }
     else if (e.key === "Escape") { e.preventDefault(); close(true); }
@@ -394,21 +406,18 @@ function AddTask({ onPick }: { onPick: (id: string) => void }) {
   return (
     <div className="add-task" ref={box}>
       <button type="button" ref={button} aria-haspopup="menu" aria-expanded={open} aria-controls={open ? menu : undefined}
-        onClick={() => setOpen(!open)}>
-        <Glyph d={PLUS} />{t("tasks.add")}
+        disabled={off} onClick={() => setOpen(!open)}>
+        <Glyph d={PLUS} />{label}
       </button>
       {open && (
-        <div className="add-menu" role="menu" id={menu} aria-label={t("tasks.add")} onKeyDown={onKey}>
-          {TASK_ORDER.map((id) => {
-            const n = s.tasks.filter((x) => x.id === id).length;
-            return (
-              // the pointer moves the focus as the arrows do: one item lit, the one a key acts on
-              <button type="button" role="menuitem" tabIndex={-1} key={id} onPointerEnter={(e) => e.currentTarget.focus()}
-                onClick={() => { onPick(id); close(true); }}>
-                <span>{taskName(t, id)}</span><small>{n === 0 ? t("tasks.absent") : n > 1 ? fill(t("tasks.listed"), { n }) : ""}</small>
-              </button>
-            );
-          })}
+        <div className="add-menu" role="menu" id={menu} aria-label={label} onKeyDown={onKey}>
+          {items.map((x) => (
+            // the pointer moves the focus as the arrows do: one item lit, the one a key acts on
+            <button type="button" role="menuitem" tabIndex={-1} key={x.id} onPointerEnter={(e) => e.currentTarget.focus()}
+              onClick={() => { onPick(x.id); close(true); }}>
+              <span>{x.name}</span><small>{x.note}</small>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -714,72 +723,81 @@ function MirrorOptions() {
   );
 }
 
-/** The team queue at the top of the Mirror Dungeon options (#878, spec #871 「隊伍佇列（只在鏡牢選項裡）」, ADR 0014):
- * team_queue in its order, dragged or moved with Alt (its moves change team_queue only; the Agent's show once the window reads
+/** The team queue at the top of the Mirror Dungeon options (#878, #954, spec #871 「隊伍佇列（只在鏡牢選項裡）」, ADR 0014,
+ * ADR 0016): team_queue as the user put it together, dragged or moved with Alt (the Agent's moves show once the window reads
  * them). Every row on the list's own columns (index.css): its place, the team's name (cut short), its slot, its usage when kept
- * to one difficulty, the next-run mark against the flag, and the flag. A disabled team is struck through in its place; an id
- * that names no team (a hand edit, which the check names) is a row of its own. The flag writes run.start_team: on, off, one
- * team at most. A disabled team is never the start team (disabling one takes its flag off, model.ts setTeamEnabled): its
- * flag sets nothing, its words saying why, and one already there (a hand edit, an old file) has no effect, dimmed as the
- * row is, and only clears. How the queue turns is the list's tooltip; under it, while a flag that counts is set, what it
- * costs. A run locks the order and the flags (LockContext). */
+ * to one difficulty, the next-run mark, on the team's first row, then to the top and out of the queue, the latter with an Undo
+ * as the task list's. An id that names no team (a hand edit, which the check names) is a row of its own. 「加入隊伍」 under the
+ * list adds any team at the end, as often as it is picked. How the queue turns is the list's tooltip. A run locks it all
+ * (LockContext). */
 function MirrorTeams() {
   const { s, update, t, tv, bad } = useEditor();
   const locked = useContext(LockContext);
   const byId = new Map(s.teams.map((x) => [x.id, x]));
-  // an id twice (a hand edit, which the check names) still gets a row of its own, keyed as a task's second entry is
+  // a team's second place is keyed as a task's second entry is
   const ids = s.team_queue.map((id) => ({ id }));
   const rows = ids.map((x, j) => ({ ...x, key: entryKey(ids, j), first: nthOf(ids, j) === 0 }));
   const next = nextRuns(s), split = splitRuns(next);
-  const start = s.run.start_team;
-  const setStart = (id: string | null) => update((d) => { d.run.start_team = id; });
+  const nameOf = (id: string) => { const team = byId.get(id); return team ? team.name || "—" : `? ${id}`; };
+  const box = useRef<HTMLFieldSetElement>(null);
+  const focusRow = useRowFocus(box);
+  // the queue before the removal the Undo note is of, while only the Agent moved it since: its moves are then made around the
+  // place put back too. Null once the user arranged the queue: the place goes back to its old number.
+  const before = useRef<string[] | null>(null);
+  const arrange = (fn: (queue: string[]) => string[]) => { before.current = null; update((d) => { d.team_queue = fn(d.team_queue); }); };
+  const [undoNote, removeRow] = useUndoRow<string>((fn) => update((d) => fn(d.team_queue)), "", {
+    undone: (_, at) => focusRow(at), said: "queue.removed",
+    place: (at) => (before.current ? placeBack(before.current, at, s.team_queue) : at),
+  });
+  const takeOut = (j: number) => {
+    removeRow(s.team_queue, j, nameOf(s.team_queue[j]));
+    before.current = s.team_queue;
+    focusRow(j);
+  };
+  const toTop = (j: number) => {
+    arrange((queue) => [queue[j], ...queue.filter((_, k) => k !== j)]);
+    focusRow(0);
+  };
   return (
-    <fieldset className="mirror-teams" data-path="team_queue">
+    <fieldset className="mirror-teams" data-path="team_queue" ref={box}>
       <legend>{t("queue.title")}</legend>
-      <div className="mt-order" data-path="run/start_team">
-        {rows.length > 0 && (
+      {rows.length > 0 && (
+        <div className="mt-order">
           <ReorderList items={rows} keyOf={(x) => x.key} badAt={(j) => bad(`team_queue/${j}`)}
             label={t("queue.title")} help={t("queue.help")}
-            onChange={(moved) => update((d) => { d.team_queue = moved.map((x) => x.id); })}
+            onChange={(moved) => arrange(() => moved.map((x) => x.id))}
             render={(x, j) => {
-              const team = byId.get(x.id), first = x.first;
-              const on = first && start === x.id, off = team !== undefined && !team.enabled;
-              const setsNothing = off && !on; // a disabled team is never the start team: its flag only clears one already there
-              const tip = setsNothing ? "queue.flag_tip_off" : off ? "queue.flag_tip_off_on" : on ? "queue.flag_tip_on" : "queue.flag_tip";
-              const name = team ? team.name || "—" : `? ${x.id}`;
+              const team = byId.get(x.id), name = nameOf(x.id);
               // the runs this row's team plays next, on its first row
-              const marks = first ? next.filter((p) => p.team === x.id) : [];
+              const marks = x.first ? next.filter((p) => p.team === x.id) : [];
               return (
                 // the cells a space apart, which a grid does not draw, so the row reads as words; the name takes a problem's jump
-                <span className={"mt-row" + (off ? " off" : "")} title={off ? t("queue.off_tip") : undefined}>
+                <span className="mt-row">
                   <span className="place">{j + 1}</span>{" "}
-                  <span className="mt-name" data-path={`team_queue/${j}`} tabIndex={-1}>
-                    {name}{off && <span className="sr-only">{t("team.off_read")}</span>}
-                  </span>{" "}
+                  <span className="mt-name" data-path={`team_queue/${j}`} tabIndex={-1}>{name}</span>{" "}
                   <small className="mt-slot">{team && `TEAMS #${team.game_team}`}</small>{" "}
                   <span className="mt-use">{team && team.usage !== "any" && <em className="qtag">{tv("usage", team.usage)}</em>}</span>{" "}
                   <span className="mt-mark">
                     {marks.length > 0 && <span className="mt-next">{t("queue.next")}{split && marks.map((p) => <DiffPlate key={p.difficulty} d={p.difficulty} />)}</span>}
                   </span>
-                  {team ? (
-                    // its words are drawn over it (index.css .start-flag::after). title="" keeps the list's own tooltip (how
-                    // the queue turns, and how to drag, over every row) from showing over them; the list keeps it. One that
-                    // sets nothing is aria-disabled, not disabled: the keyboard's focus still reaches it, to show why, and a
-                    // screen reader hears why on a disabled team (aria-description). A run disables every flag (locked).
-                    <button type="button" className={"start-flag" + (on ? " on" : "")} aria-pressed={on}
-                      aria-label={fill(t(on ? "queue.flag_clear" : "queue.flag_set"), { name })} title=""
-                      data-tip={t(tip)} aria-description={off ? t(tip) : undefined}
-                      aria-disabled={(setsNothing && !locked) || undefined} disabled={locked}
-                      onClick={(e) => { e.stopPropagation(); if (!setsNothing) setStart(on ? null : x.id); }}>
-                      <Glyph d={FLAG} filled={on} size={16} />
-                    </button>
-                  ) : <span />}
+                  <button type="button" className="icon" title={t("queue.to_top")} disabled={locked || j === 0}
+                    aria-label={fill(t("queue.to_top_row"), { n: j + 1, name })} onClick={() => toTop(j)}><Glyph d={TO_TOP} /></button>
+                  <button type="button" className="icon remove" title={t("queue.remove")} disabled={locked}
+                    aria-label={fill(t("queue.remove_row"), { n: j + 1, name })}
+                    onClick={() => takeOut(j)}><Glyph d={CROSS} /></button>
                 </span>
               );
             }} />
-        )}
-      </div>
-      {startTeamApplies(s) && <p className="muted mt-note">{t("queue.flag_kept")}</p>}
+        </div>
+      )}
+      {!rows.length && <p className="mt-note">{t(s.teams.length ? "queue.empty" : "queue.empty_no_teams")}</p>}
+      {/* an Undo during a run would change the queue it reads: it waits for the run's end */}
+      {!locked && undoNote}
+      <AddMenu label={t("queue.add")} onPick={(id) => arrange((queue) => [...queue, id])}
+        items={s.teams.map((x) => {
+          const n = s.team_queue.filter((id) => id === x.id).length;
+          return { id: x.id, name: x.name || "—", note: fill(t(n ? "queue.add_listed" : "queue.add_unlisted"), { slot: x.game_team, n }) };
+        })} />
     </fieldset>
   );
 }

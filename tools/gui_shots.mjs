@@ -75,7 +75,7 @@ const SHOTS = [
   { name: "themepacks-images", steps: `await $.tab("themepacks", ${TAB.themepacks}); await $.pick("aside li", "Mine"); await $.click(".seg.view button:last-child");` },
   { name: "events", steps: `await $.tab("events", ${TAB.events});` },
   { name: "trials", steps: `await $.tab("trials", ${TAB.trials});` },
-  // Save refused: two enabled teams on one TEAMS slot (validate.ts crossCheck), so the banner, the marked tab and field show.
+  // Save refused: two teams of the queue on one TEAMS slot (validate.ts crossCheck), so the banner, the marked tab and field show.
   { name: "save-blocked", settings: "clash", steps: `await $.tab("teams", ${TAB.teams}); await $.click("header button.primary");` },
   // Unsaved changes: a team renamed and not saved, so the header shows what an edit leaves before Save.
   { name: "unsaved", steps: `await $.tab("teams", ${TAB.teams}); await $.pick("aside li", "Team b"); await $.type(".bar input", "Team b (edited)");` },

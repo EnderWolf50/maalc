@@ -178,6 +178,11 @@ class Watchdog:
             return "the screen did not change"
         return None
 
+    def restart_streak(self):
+        """The screen just handled went on and comes back the same on purpose (an event page a press shows again, #959):
+        the next look at it starts a new streak."""
+        self.first = None
+
     def hold(self, now, seconds):
         """A download was confirmed: nothing is stuck for the next seconds, until its progress screen is up."""
         self.hold_until = now + seconds

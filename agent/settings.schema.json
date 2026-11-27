@@ -24,7 +24,7 @@
     "schedules"
   ],
   "properties": {
-    "version": { "const": 23 },
+    "version": { "const": 24 },
     "language": { "enum": ["zh_tw", "en_us"], "default": "zh_tw" },
     "run": {
       "type": "object",
@@ -44,8 +44,7 @@
         "theme_pack_refresh",
         "auto_accept_terms",
         "auto_download",
-        "keep_dismissed_screens",
-        "start_team"
+        "keep_dismissed_screens"
       ],
       "properties": {
         "difficulty": { "enum": ["hard", "normal", "auto"], "default": "auto" },
@@ -65,13 +64,7 @@
         },
         "auto_accept_terms": { "type": "boolean", "default": true, "description": "tick both boxes of the title's User Agreement and Confirm; off: stop" },
         "auto_download": { "type": "boolean", "default": true, "description": "accept game data downloads and updates; off: stop" },
-        "keep_dismissed_screens": { "type": "boolean", "default": true, "description": "save the screen to logs/dismissed/ before the bot closes a notice, popup, mailbox, settings menu, help page or parallel-mode prompt, or before recovery presses back" },
-        "start_team": {
-          "type": ["string", "null"],
-          "minLength": 1,
-          "default": null,
-          "description": "the team the Mirror Dungeon task starts from, moved to the head of team_queue before its first new run (#805); null: follow the team queue. A team deleted or disabled is ignored and logged, and the task follows the queue (task_options.start_team_ignored_line, #878); the settings GUI takes the flag off a team it disables"
-        }
+        "keep_dismissed_screens": { "type": "boolean", "default": true, "description": "save the screen to logs/dismissed/ before the bot closes a notice, popup, mailbox, settings menu, help page or parallel-mode prompt, or before recovery presses back" }
       }
     },
     "deployment_order_plans": {
@@ -149,7 +142,6 @@
         "required": [
           "id",
           "name",
-          "enabled",
           "game_team",
           "usage",
           "hard_from_floor",
@@ -173,7 +165,6 @@
         "properties": {
           "id": { "$ref": "#/$defs/id" },
           "name": { "$ref": "#/$defs/name" },
-          "enabled": { "type": "boolean", "default": true },
           "game_team": { "type": "integer", "minimum": 1, "maximum": 40 },
           "usage": { "enum": ["any", "hard_only", "normal_only"], "default": "any" },
           "hard_from_floor": {
@@ -313,7 +304,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/id" },
       "default": [],
-      "description": "The team queue: the rotation order, each teams[] id once (agent/settings.py cross_check; ADR 0014)."
+      "description": "The team queue: teams[] ids in the order they play, as the user put them in: a team may be in it more than once or not at all (agent/settings.py cross_check; ADR 0016)."
     },
     "event_overrides": {
       "type": "array",

@@ -54,15 +54,15 @@ const screens: [image: string, hits: string[]][] = [
   // Live 2026-11-22 (#852): the prompt after floor 5 over the floor-5 map, the boss beaten (TEAMS #3, HARD, the
   // entry switch ON). The map's buttons read under it, its bus does not: live, RouteMap looked for the bus for 7.7 s
   // under it before its guard gave the map up. The prompt comes first in the hub.
-  ['ParallelModePromptOverMap.png', ['ParallelModePrompt', 'MirrorMap']],
+  ['ParallelModePromptOverMap.png', ['ParallelModePrompt', 'MirrorMap', 'HomeMirror']],
   // Synthetic (#434, until #854 brings a live one): the help-sheet dialog cut out and put at the screen's centre over
   // the floor-5 map dimmed to 35%.
-  ['ParallelModeExtremeOverMap.synthetic.png', ['ExtremeModePrompt', 'MapBus', 'MirrorMap']],
+  ['ParallelModeExtremeOverMap.synthetic.png', ['ExtremeModePrompt', 'MapBus', 'MirrorMap', 'HomeMirror']],
   // Synthetic (#850, until #855 brings a live one): #434's synthetic ParallelModePromptOverMap (since replaced by the
   // live one, #852) with its text repainted as the Hidden Battle window's (EN_MirrorDungeonUI_6: the COGNITION ERROR
   // WARNING title, Skip / Enter). Where the window sits is not known; the map reads under it, and the window comes
   // first in the hub.
-  ['HiddenBattleOverMap.synthetic.png', ['HiddenBattle', 'MapBus', 'MirrorMap']],
+  ['HiddenBattleOverMap.synthetic.png', ['HiddenBattle', 'MapBus', 'MirrorMap', 'HomeMirror']],
   // Live 2026-10-21 (#85, 1080p captures scaled to 720p): the main window's own popups and the help pager behind
   // every "i" button (Mirror Dungeon page 1 and its last page, Extract, Sinners). The tab bar dimmed under the
   // notices and the Mailbox misses NavMainTabs' 0.9; under the menu it still reads. The popups come first in the hub.
@@ -114,6 +114,8 @@ const screens: [image: string, hits: string[]][] = [
   ['Drive.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
   // Live 2026-11-22, client 1.119.1 (#884): Walpurgis Night redrew the Drive buttons smaller and higher.
   ['DriveWalpurgis.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
+  // Live 2026-11-27 (#853): after the 2026-11-26 update the Mirror Dungeons card is drawn dark blue, Refraction Railway below it.
+  ['DriveRefraction.png', ['GoToMirrorEntry', 'NavDrive', 'HomeWindowTab', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
   // #496: a frame of a daily task's recording, the Drive page just after the Window tab's tap: the tab glows and the
   // page has not changed yet (0.23 and 0.37 s on the recording's 2 taps). Neither Window template reads this frame.
   ['WindowTabPressed.png', ['GoToMirrorEntry', 'NavDrive', 'NavLuxcavation', 'EnkephalinBar', 'ModuleIcon']],
@@ -179,7 +181,7 @@ const screens: [image: string, hits: string[]][] = [
   ['GiftGet.png', ['GiftGet']],
   // Live 2026-10-21 (#213): after an abnormality fight, over the map. The map's buttons read through (MirrorMap), so
   // RouteMap's guard looks for GiftGet first (COVERS in actions.py), as for the other windows the map reads under.
-  ['GiftGetOverMap.png', ['GiftGet', 'MirrorMap']],
+  ['GiftGetOverMap.png', ['GiftGet', 'MirrorMap', 'HomeMirror']],
   ['StartingGiftSearchOff.png', ['StartingGift']],  // Activate Gift Search switched off (1.117.0, blue season)
   ['GiftSearch.png', ['GiftSearch', 'GiftChoice']],  // same Refuse Gift button; GiftSearch comes first in the hub
   // 3 gifts picked, Select 3/3. Its Selected E.G.O Gift header reads like the starting gift page's, but only that page
@@ -207,18 +209,18 @@ const screens: [image: string, hits: string[]][] = [
   // at the top, the cards centred, the Challenge band at the bottom, the tutorial's dimming lifted. Challenge is read by
   // PassAdversity (tests/test_adversity_screens.py).
   ['AdversityPage.synthetic.png', ['AdversityPage']],
-  ['MirrorMap.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
+  ['MirrorMap.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
   // Map marks: the default ROIs fit a map at rest; RouteMap moves them with the bus.
-  ['MapEvent.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
-  ['MapFocused.png', ['MirrorMap', 'MapBus', 'MapLinkMid', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedHex']],
-  ['MapPanned.png', ['MirrorMap', 'MapBus', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedHex', 'MapNodeEvent']],
-  ['MapRock.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedRound', 'MapNodeEvent']],
-  ['MapCards.png', ['MirrorMap', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedRound', 'MapNodeEvent']],
-  ['MapShop.png', ['MirrorMap', 'MapBus', 'MapLinkDown', 'MapNodeShop']],
-  ['MapBoss.png', ['MirrorMap', 'MapBus', 'MapLinkMid', 'MapNodeCost', 'MapNodeGift', 'MapNodeBoss']],
+  ['MapEvent.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeEvent']],
+  ['MapFocused.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkMid', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedHex']],
+  ['MapPanned.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedHex', 'MapNodeEvent']],
+  ['MapRock.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedRound', 'MapNodeEvent']],
+  ['MapCards.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkUp', 'MapLinkMid', 'MapLinkDown', 'MapNodeCost', 'MapNodeGift', 'MapNodeFocusedRound', 'MapNodeEvent']],
+  ['MapShop.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkDown', 'MapNodeShop']],
+  ['MapBoss.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'MapLinkMid', 'MapNodeCost', 'MapNodeGift', 'MapNodeBoss']],
   ['MapNodePanel.png', ['MapNodePanel', 'MapBusZoomed']],  // the panel zooms the camera in on the bus
   // Live 2026-10-20 (#194): the map after backing out of a node's formation, zoomed in ~1.8x on the bus.
-  ['MapZoomed.png', ['MirrorMap', 'MapBusZoomed']],
+  ['MapZoomed.png', ['MirrorMap', 'HomeMirror', 'MapBusZoomed']],
   // Battle. The forfeit screens (settings panel, Quit exploring) are read inside RouteMap's forfeit,
   // not by the hub, and the map icons still show through them.
   ['Formation.png', ['Formation']],
@@ -261,15 +263,15 @@ const screens: [image: string, hits: string[]][] = [
   ['Victory.png', ['Victory']],
   // AssembleBefore reads its "1/12": it is read only in the Enkephalin window (AssemblePanel).
   ['WipeDialog.png', ['WipeDialog', 'AssembleBefore']],
-  ['DungeonProgress.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
+  ['DungeonProgress.png', ['MirrorMap', 'HomeMirror', 'ProgressPanel', 'RecoverToWindow']],
   // Live 2026-10-22 (#215): the back key on the map, NORMAL floor 2. Synthetic: the same panel over a dimmed event
   // result page (live the back key opens it there too, #118); the page's own Continue button still reads.
-  ['DungeonProgressNormal.png', ['MirrorMap', 'MapBus', 'ProgressPanel', 'RecoverToWindow']],
+  ['DungeonProgressNormal.png', ['MirrorMap', 'HomeMirror', 'MapBus', 'ProgressPanel', 'RecoverToWindow']],
   ['EventProgressPanel.synthetic.png', ['Event', 'ProgressPanel', 'RecoverToWindow']],
-  ['ForfeitDialog.png', ['MirrorMap']],
+  ['ForfeitDialog.png', ['MirrorMap', 'HomeMirror']],
   // Recovery L2 (run by Recover, not the hub): Dungeon Progress -> To Window -> Pause Exploration.
-  ['ProgressPanel.png', ['MirrorMap', 'ProgressPanel', 'RecoverToWindow']],
-  ['PauseExploration.png', ['MirrorMap', 'RecoverPauseConfirm']],
+  ['ProgressPanel.png', ['MirrorMap', 'HomeMirror', 'ProgressPanel', 'RecoverToWindow']],
+  ['PauseExploration.png', ['MirrorMap', 'HomeMirror', 'RecoverPauseConfirm']],
   // The mirror's run end reads Victory / Defeat where the Luxcavation results page does: LuxWon and LuxLost are read
   // only on a page LuxResult already matched (Clear Rewards, Module Cost), which these are not.
   ['DefeatScreen.png', ['DefeatScreen', 'LuxLost']],
@@ -298,6 +300,7 @@ const screens: [image: string, hits: string[]][] = [
   ['EventStory.png', ['Event']],
   ['EventChoices.png', ['Event']],
   ['EventChoicesUsed.png', ['Event']],  // floor 5 boss's second round of questions: the first answer greyed out (#34)
+  ['EventFactoryButton.png', ['Event']],  // live 2026-11-25 (#959): the augmentation factory's button page mid-battle, SKIP grey
   // Live 2026-10-20 (#196): a drag lifts one card, lit orange; the list scrolled to its top, bottom and back.
   ['EventChoicesLitTop.png', ['Event']],
   ['EventChoicesLitBottom.png', ['Event']],

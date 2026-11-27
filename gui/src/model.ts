@@ -314,7 +314,7 @@ export function importGiftList(text: string, taken: string[], suffix: string): {
 
 export type Ref<T> = { plan: string } | { custom: T };
 export interface Team {
-  id: string; name: string; enabled: boolean; game_team: number; usage: string;
+  id: string; name: string; game_team: number; usage: string;
   hard_from_floor: number | null; deployment_order: Ref<Order>; starlight: Ref<StarlightValues>;
   theme_pack_plan: string; reward_cards: string[]; shop_refresh_keyword: number; shop_refresh_normal: number; heal: string;
   reserve_cost: number; min_alive: number; guard_turns: number;
@@ -332,8 +332,8 @@ export interface Settings {
   gift_lists: GiftList[];
   /** The team list, in the order the user arranged it; the queue is team_queue (#803). */
   teams: Team[];
-  /** The team queue (ADR 0014): each team's id once, in the order the teams play; the Agent moves a team to its end after a
-   * claim. */
+  /** The team queue (ADR 0014, ADR 0016): the ids of the teams the user put in it, in the order they play, a team once for each
+   * place it has; the Agent moves a team's first place to its end after a claim. */
   team_queue: string[];
   event_overrides: { question: string; option: string }[];
   trial_risk_overrides: { trial: string; risk: number }[];
@@ -351,7 +351,7 @@ export interface RunOptions {
   difficulty: string; target_floor: number; runs: number | null; weekly_bonus_use: string; weekly_bonus_amount: string;
   stop_when_weekly_bonus_out: boolean; starlight_unaffordable: string; wipe_retries: number; after_retries: string;
   webhook_url: string; theme_pack_refresh: string; auto_accept_terms: boolean; auto_download: boolean;
-  keep_dismissed_screens: boolean; start_team: string | null;
+  keep_dismissed_screens: boolean;
 }
 export interface LuxOptions { mode: string; count: number; team: string | null; retries: number; consecutive: boolean }
 
@@ -392,7 +392,7 @@ export const defaultStarlight = (): StarlightValues => ({
 export function newTeam(n: number, name: string): Team {
   const d = defaultsOf(TEAM);
   return {
-    ...d, id: newId(), name, enabled: true, game_team: Math.min(n, 40),
+    ...d, id: newId(), name, game_team: Math.min(n, 40),
     deployment_order: { custom: structuredClone(SINNERS) }, starlight: { custom: defaultStarlight() },
   } as Team;
 }
@@ -414,7 +414,10 @@ export const MIGRATIONS: Record<number, (d: Record<string, unknown>) => Record<s
   20: (d) => ({ ...d }),
   21: (d) => ({ ...d, team_queue: queueInListOrder(d.teams) }),
   22: (d) => sectionsBack(d),
+  23: (d) => queueAsPutIn(d),
 };
+/** The first version whose file holds its run values (#813): an older one's come back from outside the file once (readBack.ts). */
+export const SECTIONS_VERSION = 23;
 
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === "object" && !Array.isArray(x);
 
@@ -441,6 +444,21 @@ function sectionsBack(d: Record<string, unknown>): Record<string, unknown> {
 function queueInListOrder(teams: unknown): unknown[] {
   if (!Array.isArray(teams)) return [];
   return teams.filter((t) => t !== null && typeof t === "object" && !Array.isArray(t) && "id" in t).map((t) => t.id);
+}
+
+/** 23 -> 24 (#954): the queue is the teams the user put in it, so the disabled teams leave it, the rest in their order, and no
+ * team has the switch; run.start_team goes and moves nothing (agent/settings.py _queue_as_put_in). What a hand edit broke
+ * stays, for the schema check to name it. */
+function queueAsPutIn(d: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...d };
+  const without = (x: unknown, key: string) => (isObject(x) ? Object.fromEntries(Object.entries(x).filter(([k]) => k !== key)) : x);
+  if (Array.isArray(d.teams)) {
+    const off = d.teams.filter((t) => isObject(t) && t.enabled === false).map((t) => t.id);
+    out.teams = d.teams.map((t) => without(t, "enabled"));
+    if (Array.isArray(d.team_queue)) out.team_queue = d.team_queue.filter((id) => !off.includes(id));
+  }
+  if ("run" in d) out.run = without(d.run, "start_team");
+  return out;
 }
 
 /** Each task id once, in the order a new file lists them (a task listed twice at its first entry's place): the order a
@@ -480,20 +498,26 @@ export function parseSettings(text: string): {
   return { data, unknown, old: migrated ? { version: asRead.version, data: asRead } : null };
 }
 
-/** The ids `after` moved to its end, in order, when that explains every difference from `before` (the Agent moves a
- * team to the end of the queue after a claim, #501, and a team picked to start a Mirror Dungeon task to its head, which moves
- * the teams before it to the end, #802); the fewest such moves; null when no moves do (a team deleted). */
+/** The queue with, for each of `ids` in turn, the first place of that id moved to the end (agent/team_queue.py requeue); an id
+ * the queue lacks moves nothing. */
+export const moveToEnd = (queue: string[], ids: string[]) => ids.reduce((q, id) => {
+  const i = q.indexOf(id);
+  return i < 0 ? q : [...q.slice(0, i), ...q.slice(i + 1), id];
+}, queue);
+
+/** The ids whose first place `after` moved to the end of `before`, in order: the fewest such moves (moveToEnd) that give
+ * `after`. The Agent makes one at each claim (#501); a team's places are alike, so which one moved is always its first. Null
+ * when `after` is not the same places in another order (a place added or taken out). */
 export function movedToEnd(before: string[], after: string[]): string[] | null {
   for (let k = 0; k <= after.length; k++) {
-    const tail = after.slice(after.length - k);
-    const rest = before.filter((id) => !tail.includes(id));
-    if (rest.length === after.length - k && rest.every((id, i) => id === after[i])) return tail;
+    const tail = after.slice(after.length - k), moved = moveToEnd(before, tail);
+    if (moved.length === after.length && moved.every((id, i) => id === after[i])) return tail;
   }
   return null;
 }
 
 /** The editor's settings once another writer changed the file from `base` to `disk` under it (#501): with no unsaved
- * edit, the file; otherwise the edits stay, and the teams the file moved to the end of the queue go there in them too. The
+ * edit, the file; otherwise the edits stay, and the places the file moved to the end of the queue go there in them too. The
  * Agent writes team_queue only (#803): the team list keeps the draft's order. */
 export function rebase(base: Settings, draft: Settings, disk: Settings): Settings {
   if (JSON.stringify(draft) === JSON.stringify(base)) return disk;
@@ -501,7 +525,7 @@ export function rebase(base: Settings, draft: Settings, disk: Settings): Setting
   const moved = movedToEnd(base.team_queue ?? [], disk.team_queue ?? []) ?? [];
   const queue = draft.team_queue;
   if (!moved.length || !Array.isArray(queue)) return draft;
-  return { ...draft, team_queue: [...queue.filter((id) => !moved.includes(id)), ...moved.filter((id) => queue.includes(id))] };
+  return { ...draft, team_queue: moveToEnd(queue, moved) };
 }
 
 /** The difficulties a team's usage lets it play (agent/team_queue.py USAGE_FITS; tests/settings_cases.json next_run holds
@@ -511,40 +535,39 @@ const USAGE_FITS: Record<string, string[]> = { any: ["hard", "normal"], hard_onl
 export type Difficulty = "normal" | "hard";
 
 /** The Mirror Dungeon task's next new run, for each difficulty it plays (run.difficulty: auto plays either), Normal first:
- * the team that plays it, the first enabled team in team_queue whose usage fits that difficulty (agent/team_queue.py
- * pick_team), the queue counted from run.start_team when the queue holds it (headed: the task picks its first new run with
- * that team at the head). `team` null: no team plays it. */
+ * the team that plays it, the first team in team_queue whose usage fits that difficulty (agent/team_queue.py pick_team).
+ * `team` null: no team plays it. */
 export type NextRun = { difficulty: Difficulty; team: string | null };
 export function nextRuns(s: Settings): NextRun[] {
-  const start = s.run.start_team;
-  const queue = start !== null && s.team_queue.includes(start) ? [start, ...s.team_queue.filter((id) => id !== start)] : s.team_queue;
   const d = s.run.difficulty;
   const played: Difficulty[] = d === "normal" || d === "hard" ? [d] : ["normal", "hard"];
   return played.map((difficulty) => ({
     difficulty,
-    team: queue.find((id) => {
+    team: s.team_queue.find((id) => {
       const team = s.teams.find((t) => t.id === id);
-      return !!team?.enabled && !!USAGE_FITS[team.usage]?.includes(difficulty);
+      return !!team && !!USAGE_FITS[team.usage]?.includes(difficulty);
     }) ?? null,
   }));
 }
 
-/** The settings with run.start_team null when it names no team (a team deleted since its flag was set): the flag has no
- * effect (agent task_options.start_team_ignored_line, #878), and a save drops it. The settings themselves when it names one. */
-export function withoutGoneStart(s: Settings): Settings {
-  const start = s.run.start_team;
-  return start === null || s.teams.some((t) => t.id === start) ? s : { ...s, run: { ...s.run, start_team: null } };
+/** The queue with the places of team `id` back in it, once the delete that took them out is undone: `was` the queue before the
+ * delete, `now` as it is. What the Agent moved since (movedToEnd) is moved in `was` too; places added or taken out since leave
+ * `now` as it is, each of the team's back at its old index. */
+export function queueWithTeam(was: string[], now: string[], id: string): string[] {
+  const moved = movedToEnd(was.filter((x) => x !== id), now);
+  if (moved) return moveToEnd(was, moved);
+  const queue = [...now];
+  was.forEach((x, j) => { if (x === id) queue.splice(Math.min(j, queue.length), 0, id); });
+  return queue;
 }
 
-/** The settings with team `i` switched on or off. Switched off, it takes the start team's flag with it when it carries it
- * (#878): a disabled team is never the start team, and switched on again it does not get the flag back. */
-export function setTeamEnabled(s: Settings, i: number, on: boolean) {
-  s.teams[i].enabled = on;
-  if (!on && s.run.start_team === s.teams[i].id) s.run.start_team = null;
-}
-
-/** The settings with team `team` added: last in the team list and last in the queue (#803). */
-export function addTeam(s: Settings, team: Team) {
-  s.teams.push(team);
-  s.team_queue.push(team.id);
+/** Where place `at` of `was`, taken out of it, goes back in `now`, what the queue became since by the Agent's moves alone: the
+ * place it has once those are made in `was` (movedToEnd); `at` when `now` is no such thing. */
+export function placeBack(was: string[], at: number, now: string[]): number {
+  const without = (queue: string[], j: number) => queue.filter((_, k) => k !== j);
+  const moved = movedToEnd(without(was, at), now);
+  if (!moved) return at;
+  const full = moveToEnd(was, moved);
+  const back = full.findIndex((id, j) => id === was[at] && without(full, j).every((x, k) => x === now[k]));
+  return back < 0 ? at : back;
 }

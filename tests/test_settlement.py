@@ -257,7 +257,7 @@ def settle(context, monkeypatch, tmp_path, window, target, floors_hard=None, tog
     patch_all(monkeypatch, "ROOT", tmp_path)
     patch_all(monkeypatch, "address", lambda context: "emulator")
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
-    team = {"id": "a", "name": "A", "enabled": True}
+    team = {"id": "a", "name": "A"}
     actions.RUN.update(settings={"teams": [team]}, team=team, planned=True, floors_hard=floors_hard or {})
     monkeypatch.setitem(actions.TASK, "options", {"weekly_bonus_use": use, "weekly_bonus_amount": amount, "target_floor": target})
     taps, switches, on_at_claim = [], list(toggles_on or [False] * 3), []
@@ -357,7 +357,7 @@ def timed_settle(context, monkeypatch, tmp_path, window, use, answers, reads=Non
     patch_all(monkeypatch, "ROOT", tmp_path)
     patch_all(monkeypatch, "address", lambda context: "emulator")
     patch_all(monkeypatch, "TASK", {"runs": 0, "done": None})  # a run given up here is no later test's forfeit in a row
-    team = {"id": "a", "name": "A", "enabled": True}
+    team = {"id": "a", "name": "A"}
     actions.RUN.update(settings={"teams": [team]}, team=team, planned=True, floors_hard={f: True for f in range(1, 6)})
     monkeypatch.setitem(actions.TASK, "options", {"weekly_bonus_use": use, "weekly_bonus_amount": "one", "target_floor": 5})
     game = test_actions.TimedGame(monkeypatch, context, {
@@ -562,7 +562,7 @@ def child():
 
     def body(context, actions, out):
         import settle_actions
-        team = {"id": "a", "name": "A", "enabled": True, "hard_from_floor": None}
+        team = {"id": "a", "name": "A", "hard_from_floor": None}
         asked, real = [], settlement.bonus_toggles
 
         def bonus(use, amount, hard, left, all_hard):

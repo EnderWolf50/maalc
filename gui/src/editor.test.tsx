@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import capability from "../src-tauri/capabilities/default.json";
 import App from "./App";
 import { TEXT, fill, type Key } from "./i18n";
-import { GIFT_KEYWORDS, addTeam, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
-import { pickInList, queuedTeams } from "./testing";
+import { GIFT_KEYWORDS, defaultGorder, defaultStarlight, newPackPlan, newSettings, newTeam, SINNERS, type Settings } from "./model";
+import { addQueued, pickInList, queuedTeams } from "./testing";
 
 const file = vi.hoisted(() => ({ text: "", saved: [] as string[], keepOpen: undefined as (() => boolean) | undefined, closed: 0, reloaded: 0 }));
 vi.mock("./api", async (original) => ({
@@ -30,7 +30,7 @@ const settings = (): Settings => ({
   theme_pack_plans: two("p").map((p) => ({ ...p, ...newPackPlan() })),
 });
 
-const tab = (name: string) => screen.getByRole("tab", { name });
+const tab = (name: string | RegExp) => screen.getByRole("tab", { name });
 const nameBox = () => screen.getByRole("textbox", { name: zh.name });
 
 describe("a tab switch", () => {
@@ -105,7 +105,7 @@ describe("a problem shows while editing, before any save", () => {
     s.teams[1].game_team = 1;
     await openOn(s, zh["tab.teams"]);
     marked(slot(), zh["tab.teams"]);
-    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+    expect(problem(/隊伍「Ta」、「Tb」都在隊伍佇列裡，也都用 TEAMS #1/)).toBeInTheDocument();
     expect(file.saved).toEqual([]);
   });
 
@@ -122,16 +122,21 @@ describe("a problem shows while editing, before any save", () => {
   test("a choice made wrong, at once; put right, every mark goes at once", async () => {
     const s = settings();
     s.teams[1].game_team = 1;
-    s.teams[1].enabled = false;
+    s.team_queue = ["a"]; // Tb, out of the queue, may share Ta's TEAMS #1
+    const runTab = new RegExp(`^${zh["tab.run"]}`);
     const user = await openOn(s, zh["tab.teams"]);
-    await pickInList(user, "Tb");
-    const enabled = screen.getByRole("checkbox", { name: zh["team.enabled"] });
     unmarked(slot(), zh["tab.teams"]);
-    await user.click(enabled);
-    marked(slot(), zh["tab.teams"]);
-    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+    await user.click(tab(runTab));
+    await user.click(within(document.querySelector(".task-list")!).getByText(zh["task.MirrorDungeon"]));
+    await user.click(screen.getByRole("button", { name: zh["queue.add"] }));
+    await user.click(screen.getByRole("menuitem", { name: /^Tb/ }));
+    expect(problem(/隊伍「Ta」、「Tb」都在隊伍佇列裡，也都用 TEAMS #1/)).toBeInTheDocument();
     expect(plate()).toHaveTextContent(fill(zh["saveState.toFix"], { n: 1 }));
-    await user.click(enabled);
+    await user.click(tab(zh["tab.teams"]));
+    marked(slot(), zh["tab.teams"]);
+    await user.click(tab(runTab));
+    await user.click(screen.getByRole("button", { name: fill(zh["queue.remove_row"], { n: 2, name: "Tb" }) }));
+    await user.click(tab(zh["tab.teams"]));
     unmarked(slot(), zh["tab.teams"]);
   });
 
@@ -157,7 +162,7 @@ describe("a problem shows while editing, before any save", () => {
     unmarked(slot(), zh["tab.teams"]);
     await user.tab();
     marked(slot(), zh["tab.teams"]);
-    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #12/)).toBeInTheDocument();
+    expect(problem(/隊伍「Ta」、「Tb」都在隊伍佇列裡，也都用 TEAMS #12/)).toBeInTheDocument();
   });
 
   test("what another writer puts in the file shows at once, also while a field is typed in", async () => {
@@ -172,11 +177,9 @@ describe("a problem shows while editing, before any save", () => {
     expect(nameBox()).toHaveFocus();
   });
 
-  test("a field gone with the focus in it holds nothing back: a gift list renamed with Enter, then a team switched on", async () => {
+  test("a field gone with the focus in it holds nothing back: a gift list renamed with Enter, then a team put on another's slot", async () => {
     const s = settings();
     s.gift_lists = [{ id: "g1", name: "G1", order: [...GIFT_KEYWORDS], want: [], keep: [], gorder: defaultGorder(), fusion_condition: "any" }];
-    s.teams[0].game_team = 2;
-    s.teams[0].enabled = false;
     const user = await openOn(s, zh["tab.gifts"]);
     await user.selectOptions(screen.getByRole("combobox", { name: zh["gl.list"] }), "g1");
     await user.click(screen.getByRole("button", { name: new RegExp("^" + zh["gl.opts"]) }));
@@ -184,15 +187,15 @@ describe("a problem shows while editing, before any save", () => {
     await user.type(screen.getByRole("textbox", { name: zh["gl.opt_rename"] }), "x{Enter}");
     expect(screen.queryByRole("textbox", { name: zh["gl.opt_rename"] })).toBeNull(); // gone, and no blur said so
     await user.click(tab(zh["tab.teams"])); // the focus goes to the tab bar, outside the editor's panel: no blur there either
-    // a change that moves no focus: Ta switched on, now on Tb's TEAMS #2
-    fireEvent.click(screen.getByRole("checkbox", { name: zh["team.enabled"] }));
+    // a change that moves no focus: Ta on Tb's TEAMS #2
+    fireEvent.change(slot(), { target: { value: "2" } });
     marked(slot(), zh["tab.teams"]);
   });
 
   test("a problem already shown keeps its marks while typing brings the typed field into it; the field is marked once left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 });
+    addQueued(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tc");
     await user.type(slot(), "{Backspace}"); // Tc's TEAMS #12 becomes #1
@@ -207,7 +210,7 @@ describe("a problem shows while editing, before any save", () => {
   test("typing a field out of one clash into another: the first goes at once, the second waits until the field is left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 });
+    addQueued(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tb");
     await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12, Tc's
@@ -221,8 +224,8 @@ describe("a problem shows while editing, before any save", () => {
   test("typing a field from one shown clash into another: the first goes at once, the field joins the second once left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 }); // Tc, Td #12
-    addTeam(s, { ...newTeam(4, "Td"), id: "d", game_team: 12 });
+    addQueued(s, { ...newTeam(3, "Tc"), id: "c", game_team: 12 }); // Tc, Td #12
+    addQueued(s, { ...newTeam(4, "Td"), id: "d", game_team: 12 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tb");
     await user.type(slot(), "2"); // Tb's TEAMS #1 becomes #12
@@ -237,7 +240,7 @@ describe("a problem shows while editing, before any save", () => {
     + "new like any mark the typing makes, shown when the field is left", async () => {
     const s = settings();
     s.teams[1].game_team = 1; // Ta and Tb share TEAMS #1
-    addTeam(s, { ...newTeam(3, "Tc"), id: "c", game_team: 4 });
+    addQueued(s, { ...newTeam(3, "Tc"), id: "c", game_team: 4 });
     const user = await openOn(s, zh["tab.teams"]);
     await pickInList(user, "Tc");
     await user.type(slot(), "5"); // #45: above the game's 40
@@ -246,17 +249,17 @@ describe("a problem shows while editing, before any save", () => {
     expect(bad()).toEqual([false, false, false]);
     await user.tab();
     expect(bad()).toEqual([true, true, false]);
-    expect(problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+    expect(problem(/隊伍「Ta」、「Tb」都在隊伍佇列裡，也都用 TEAMS #1/)).toBeInTheDocument();
   });
 
   test("a problem already shown stays while typing takes one of its fields out of it", async () => {
     const s = settings();
-    addTeam(s, { ...newTeam(3, "Tc"), id: "c" });
+    addQueued(s, { ...newTeam(3, "Tc"), id: "c" });
     s.teams.forEach((x) => { x.game_team = 1; });
     const user = await openOn(s, zh["tab.teams"]);
     await user.type(slot(), "2"); // the first team leaves TEAMS #1 for #12; the other two still share #1
     expect(bad()).toEqual([false, true, true]);
-    expect(problem(/隊伍「Tb」、「Tc」都啟用，也都用 TEAMS #1/)).toBeInTheDocument();
+    expect(problem(/隊伍「Tb」、「Tc」都在隊伍佇列裡，也都用 TEAMS #1/)).toBeInTheDocument();
   });
 
   test("a problem the field already showed stays while it is typed in", async () => {
@@ -291,9 +294,9 @@ describe("the problems block", () => {
     const s = settings();
     s.teams[1].game_team = 1;
     await openOn(s, zh["tab.events"]);
-    const item = problem(/隊伍「Ta」、「Tb」都啟用，也都用 TEAMS #1/).closest("li")!;
+    const item = problem(/隊伍「Ta」、「Tb」都在隊伍佇列裡，也都用 TEAMS #1/).closest("li")!;
     expect(item).not.toHaveTextContent("teams:");
-    expect(item).toHaveAttribute("title", "teams: enabled teams 'Ta', 'Tb' all use TEAMS #1");
+    expect(item).toHaveAttribute("title", "teams: teams in the queue 'Ta', 'Tb' all use TEAMS #1");
   });
 });
 
@@ -305,8 +308,6 @@ describe("a field marked red", () => {
     ["a team's switch", (s: Settings) => { s.teams[0].guard_turns = 9; }, "tab.teams", /teams\/0\/guard_turns/, box("checkbox", "team.guard_turns")],
     ["a cell of an override table", (s: Settings) => { s.event_overrides = [{ question: "q", option: "a" }, { question: "q", option: "b" }]; },
       "tab.events", /事件覆寫有 2 列是同一個問題「q」/, () => screen.getAllByDisplayValue("q")[1]],
-    ["a team's on switch", (s: Settings) => { Object.assign(s.teams[0], { enabled: "yes" }); }, "tab.teams", /teams\/0\/enabled/,
-      box("checkbox", "team.enabled")],
     ["the gift search switch", (s: Settings) => { Object.assign(s.teams[0].gift_search, { enabled: "yes" }); }, "tab.teams",
       /teams\/0\/gift_search\/enabled/, box("checkbox", "gift.enabled")],
     ["a starlight plan's leftover switch", (s: Settings) => { Object.assign(s.starlight_plans[0], { convert_leftover: "yes" }); },

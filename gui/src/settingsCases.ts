@@ -20,12 +20,14 @@ export function applyEdits(data: unknown, edits: Edit[]) {
   return out;
 }
 
-/** The valid file at an older version, these edits made to it (tests/test_settings.py older): without the sections version
- * 23 added (#813), without the team_queue version 22 added below it (#803), and version 20's with the three sections it
- * had. */
-export function olderFile(version: 20 | 21 | 22, edits: Edit[] = []) {
-  const old = Object.fromEntries(Object.entries(cases.valid).filter(([k]) =>
-    !cases.added_v23.includes(k) && (version >= 22 || k !== "team_queue")));
+/** The valid file at an older version, these edits made to it (tests/test_settings.py older): each team with the switch version
+ * 24 dropped, and run with version 23's start_team (#954); below version 23 without the sections it added (#813), below 22
+ * without its team_queue (#803), and version 20's with the three sections it had. */
+export function olderFile(version: 20 | 21 | 22 | 23, edits: Edit[] = []) {
+  const teams = cases.valid.teams.map((t) => ({ ...t, enabled: true }));
+  const all = { ...cases.valid, teams, run: { ...cases.valid.run, start_team: null } };
+  const old = Object.fromEntries(Object.entries(all).filter(([k]) =>
+    version === 23 || (!cases.added_v23.includes(k) && (version === 22 || k !== "team_queue"))));
   return applyEdits({ ...old, version, ...(version === 20 ? cases.v20 : {}) }, edits);
 }
 export const v20File = (edits: Edit[] = []) => olderFile(20, edits);
