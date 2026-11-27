@@ -402,7 +402,7 @@ def test_event_table_keeps_each_gift_id_with_how_it_is_given():
 
 def test_event_table_gift_ids_are_gifts_and_match_the_keyword_pairs():
     events = json.loads((DATA / "event_table.json").read_text(encoding="utf-8"))["events"]
-    assert len(events) == 203  # 1.119.0 added the six of pack 1129 (971121-971125, 97112302)
+    assert len(events) == 212  # 1.119.0 added the six of pack 1129 (971121-971125, 97112302); #969 the nine pages that lacked text
     for e in events:
         for o in e["options"]:
             assert ("gifts" in o) == ("gift_ids" in o)
