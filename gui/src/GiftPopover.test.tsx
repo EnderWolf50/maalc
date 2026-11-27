@@ -403,7 +403,8 @@ describe("hover card: the effect of the gift's + and ++, switched on the card (#
     expect(popover()!.querySelector(".gl-tip-head")!.contains(levels())).toBe(false);
     expect(effectOf().nextElementSibling).toBe(levels());
     expect(style(popover()!, "width")).toBe("340px");
-    expect(giftCss).not.toMatch(/\.gl-tip:has/); // no rule widens a card that has the switch
+    expect(giftCss).not.toMatch(/\.gl-tip:has/); // no rule widens a card that has the switch (cssValueOf reads no :has)
+    expect(style(levels()!.nextElementSibling!, "border-top")).toBe("1px solid var(--gl-line)"); // "set to" keeps its separator
     expect(within(levels()!).getAllByRole("button").map((b) => b.textContent)).toEqual(["−", "＋", "＋＋"]);
     expect(levelButton("base")).toHaveAttribute("aria-pressed", "true");
     expect(effectOf()).toHaveTextContent(/隨機使敵方單位增加共計3級燒傷強度。/);

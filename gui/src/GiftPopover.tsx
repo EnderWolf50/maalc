@@ -118,8 +118,7 @@ const LEVEL_GLYPHS: Record<Level, string> = { base: "−", plus: "＋", plus2: "
  * as the game's panel draws it; its name on the plate of its sin (#786) and, in Chinese, its English name under the plate;
  * its effect; under it, when the gift has a + (#961), a row that switches the effect between −, ＋ and ＋＋ (the levels it has),
  * at − each time the card opens or shows another gift, the card as wide as without it (the user, 2026-11-27); then `children`
- * (on the Gift Search,
- * why it cannot be picked). Placed against its tile (`place`) and kept open while the pointer is on it; focus going anywhere
+ * (on the Gift Search, why it cannot be picked). Placed against its tile (`place`) and kept open while the pointer is on it; focus going anywhere
  * but its tile or itself closes it. */
 export function GiftCard({ id, anchor, tip, children }: { id: number; anchor: HTMLElement; tip: GiftTip; children?: ReactNode }) {
   const { t, zh } = useEditor();
